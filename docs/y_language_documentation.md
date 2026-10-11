@@ -81,7 +81,7 @@ You need the following tools installed:
 ### Step 1: Build the Compiler
 
 ```bash
-git clone https://github.com/ismail0098-lang/Y.git
+git clone https://github.com/NadezhdaaYSU/Y.git
 cd Y
 cargo build --release
 ```
