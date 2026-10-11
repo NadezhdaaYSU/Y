@@ -1,6 +1,10 @@
 """
-Quantized & LLM Inference Operator Suite for Y (Feature #6).
-Provides high-performance FP8 GEMM, INT4 quantized weight GEMM, and Paged Attention KV-Cache operators.
+Quantized and LLM helpers.
+
+None of these runs a kernel the Y compiler emitted. `fp8_gemm` runs
+hand-written CUDA C++ (`tests/y_tensor_core_gemm.cu`, compiled by CuPy); the
+rest are PyTorch calls. Y's own FP8 GEMM is the `@tile(M, N, K)` kernel
+(`tests/gemm_fp8_*.ysu`).
 """
 
 
@@ -34,42 +38,33 @@ def _get_kernels():
     return _FP8_KERNEL, _FP16_KERNEL
 
 def fp8_gemm(a: torch.Tensor, b: torch.Tensor, scale_a: float = 1.0, scale_b: float = 1.0, out: Optional[torch.Tensor] = None) -> torch.Tensor:
-    """Performs FP8/FP16 Tensor Core matrix multiplication with in-register scale factor fusion and m16n8k32 / m16n8k16 PTX execution."""
+    """Multiply with hand-written CUDA C++, not a Y-compiled kernel.
+
+    1-byte CUDA operands are meant to run `tests/y_tensor_core_gemm.cu`'s FP8
+    kernel and 2-byte ones its FP16 kernel, compiled by CuPy. Other CUDA
+    operands are converted to FP16 for `torch.mm`; CPU operands go to a
+    float32 `torch.matmul`.
+
+    When the CuPy path cannot run, this raises. It used to fall back to
+    `torch.mm` without saying so, and with CuPy 14 it always did: NVRTC cannot
+    find `crt/mma.h` through the pip CUDA headers, and `Stream.from_external`
+    no longer takes a raw pointer. Every "FP8 GEMM" this returned on CUDA was
+    cuBLAS on FP16 copies of the operands.
+    """
     M, K = a.shape[0], a.shape[1]
     N = b.shape[1]
 
-    if a.is_cuda and b.is_cuda:
+    if a.is_cuda and b.is_cuda and a.element_size() in (1, 2):
         try:
-            fn_fp8, fn_fp16 = _get_kernels()
-            if a.element_size() == 1 and fn_fp8 is not None:
-                if out is None:
-                    out = torch.empty((M, N), device=a.device, dtype=torch.float16)
-                grid_m = (M + 127) // 128
-                grid_n = (N + 127) // 128
-                grid = (grid_n, grid_m, 1)
-                blk = (256, 1, 1)
-                args = (a.data_ptr(), b.data_ptr(), out.data_ptr(), float(scale_a), float(scale_b), int(M), int(N), int(K))
-                stream_ptr = torch.cuda.current_stream().cuda_stream
-                stream = cp.cuda.Stream.from_external(stream_ptr)
-                fn_fp8(grid, blk, args, shared_mem=65536, stream=stream)
-                return out
-            elif a.element_size() == 2 and fn_fp16 is not None:
-                if out is None:
-                    out = torch.empty((M, N), device=a.device, dtype=torch.float16)
-                grid_m = (M + 127) // 128
-                grid_n = (N + 127) // 128
-                grid = (grid_n, grid_m, 1)
-                blk = (256, 1, 1)
-                args = (a.data_ptr(), b.data_ptr(), out.data_ptr(), int(M), int(N), int(K))
-                stream_ptr = torch.cuda.current_stream().cuda_stream
-                stream = cp.cuda.Stream.from_external(stream_ptr)
-                fn_fp16(grid, blk, args, shared_mem=65536, stream=stream)
-                if (scale_a * scale_b) != 1.0:
-                    out.mul_(scale_a * scale_b)
-                return out
-        except Exception:
-            pass
+            return _cupy_gemm(a, b, scale_a, scale_b, out, M, N, K)
+        except Exception as e:
+            raise RuntimeError(
+                "fp8_gemm's CUDA C++ kernel (tests/y_tensor_core_gemm.cu, through CuPy) did not run: "
+                f"{type(e).__name__}: {e}. Nothing is substituted for it. For a reference product use "
+                "torch.mm; the Y compiler's FP8 GEMM is the @tile(M, N, K) kernel "
+                "(tests/gemm_fp8_*.ysu).") from e
 
+    if a.is_cuda and b.is_cuda:
         scale = scale_a * scale_b
         if out is None:
             res = torch.mm(a.to(torch.float16), b.to(torch.float16))
@@ -94,8 +89,29 @@ def fp8_gemm(a: torch.Tensor, b: torch.Tensor, scale_a: float = 1.0, scale_b: fl
     return res.to(a.dtype) if a.dtype != torch.float32 else res
 
 
+def _cupy_gemm(a, b, scale_a, scale_b, out, M, N, K):
+    """The CuPy launch `fp8_gemm` makes for 1- and 2-byte CUDA operands."""
+    fn_fp8, fn_fp16 = _get_kernels()
+    if fn_fp8 is None or fn_fp16 is None:
+        raise FileNotFoundError("tests/y_tensor_core_gemm.cu is not beside this package")
+    if out is None:
+        out = torch.empty((M, N), device=a.device, dtype=torch.float16)
+    grid = ((N + 127) // 128, (M + 127) // 128, 1)
+    blk = (256, 1, 1)
+    stream = cp.cuda.Stream.from_external(torch.cuda.current_stream().cuda_stream)
+    if a.element_size() == 1:
+        args = (a.data_ptr(), b.data_ptr(), out.data_ptr(), float(scale_a), float(scale_b), int(M), int(N), int(K))
+        fn_fp8(grid, blk, args, shared_mem=65536, stream=stream)
+    else:
+        args = (a.data_ptr(), b.data_ptr(), out.data_ptr(), int(M), int(N), int(K))
+        fn_fp16(grid, blk, args, shared_mem=65536, stream=stream)
+        if (scale_a * scale_b) != 1.0:
+            out.mul_(scale_a * scale_b)
+    return out
+
+
 def swiglu_fast(x: torch.Tensor, gate: torch.Tensor, out: Optional[torch.Tensor] = None) -> torch.Tensor:
-    """Executes fused vectorized SwiGLU activation (x * silu(x) * gate) with fast inline math and 128-bit SIMD vectorization."""
+    """`silu(x) * gate` in PyTorch (two calls, not a fused kernel)."""
     # silu(x) = x * sigmoid(x)
     silu_x = torch.sigmoid(x).mul_(x)
     if out is not None:
@@ -107,7 +123,7 @@ def swiglu_fast(x: torch.Tensor, gate: torch.Tensor, out: Optional[torch.Tensor]
 
 
 def fp8_gemm_scaled(a: torch.Tensor, b: torch.Tensor, scale_ab: float = 1.0, out: Optional[torch.Tensor] = None) -> torch.Tensor:
-    """Optimized FP8 GEMM with fused scale multiplication and 128-bit vector writeback."""
+    """`torch.matmul(a, b) * scale_ab` in PyTorch."""
     if out is not None:
         torch.matmul(a, b, out=out)
         out.mul_(scale_ab)
@@ -120,17 +136,19 @@ def fp8_gemm_scaled(a: torch.Tensor, b: torch.Tensor, scale_ab: float = 1.0, out
 
 
 def int4_weight_only_gemm(x: torch.Tensor, w_q4: torch.Tensor, scales: torch.Tensor, zeros: Optional[torch.Tensor] = None) -> torch.Tensor:
-    """Performs 4-bit Quantized Weight-Only Matrix Multiplication (W4A16 AWQ/GPTQ format).
+    """Dequantise 4-bit weights and multiply, in PyTorch.
+
+    The weights are NOT packed: one 4-bit value per byte, `[K, N]`. A packed
+    `[K // 2, N]` matrix fails the multiply's shape check.
 
     Args:
         x: Input activations tensor [M, K] in FP16/BF16.
-        w_q4: Packed 4-bit weight matrix [K // 2, N] or [K, N // 2] (uint8/int8).
+        w_q4: Unpacked 4-bit weight values [K, N] (uint8/int8), one per byte.
         scales: Per-channel or per-group scaling factors [GroupCount, N].
         zeros: Optional zero-point offsets.
     Returns:
         Output tensor [M, N] in activation precision.
     """
-    # Unpack 4-bit packed weights to full 16-bit weight matrix
     M, K = x.shape
     N = w_q4.shape[1] if w_q4.ndim == 2 else w_q4.shape[-1]
 
@@ -159,7 +177,7 @@ def paged_attention(
     seq_lens: torch.Tensor,
     scale: Optional[float] = None
 ) -> torch.Tensor:
-    """Executes Paged Attention KV-Cache decoding operator for LLM inference serving.
+    """Paged-attention decoding in PyTorch: a Python loop over sequences and blocks.
 
     Args:
         query: Query tensor [num_seqs, num_heads, head_dim].
@@ -215,17 +233,15 @@ def paged_attention(
 
 
 def sparse_24_gemm(a_sparse: torch.Tensor, b: torch.Tensor, meta: Optional[torch.Tensor] = None) -> torch.Tensor:
-    """Executes 2:4 Structured Sparse Tensor Core GEMM on NVIDIA Ampere/Ada/Hopper GPUs.
+    """Refused: there is no 2:4 sparse GEMM here.
 
-    Args:
-        a_sparse: 2:4 structured sparse matrix [M, K // 2].
-        b: Dense matrix [K, N].
-        meta: 2:4 sparse bitmask metadata tensor [M, K // 16].
-    Returns:
-        Output matrix [M, N].
+    This multiplied the compressed `[M, K // 2]` values by the first `K // 2`
+    rows of `b` and ignored `meta`, so every result was the product of the wrong
+    rows. A 2:4 product needs each kept value placed at the column `meta`
+    names; until something does that, the call fails rather than answers.
     """
-    if a_sparse.is_cuda and b.is_cuda:
-        # Lowered to mma.sp.sync hardware instruction
-        return torch.matmul(a_sparse.to(torch.float32), b.to(torch.float32)[:a_sparse.shape[1], :]).to(a_sparse.dtype)
-    return torch.matmul(a_sparse.to(torch.float32), b.to(torch.float32)[:a_sparse.shape[1], :]).to(a_sparse.dtype)
+    raise NotImplementedError(
+        "sparse_24_gemm is not implemented: it used to ignore the 2:4 metadata and "
+        "multiply the compressed values by the first K/2 rows of b, which is not the "
+        "sparse product. Decompress A with its metadata and use torch.matmul.")
 

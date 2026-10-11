@@ -5006,37 +5006,26 @@ This section documents the major high-performance compiler optimizations added t
 
 ---
 
-### 33.8 Live Head-to-Head Empirical Benchmark Suite (NVIDIA RTX 4070 Ti SUPER)
+### 33.8 Head-to-head benchmark
 
-| Operator Workload | Y Compiler ($\mu$s) | OpenAI Triton ($\mu$s) | PyTorch CUDA ($\mu$s) | Y Speedup Advantage vs Triton |
-| :--- | :---: | :---: | :---: | :--- |
-| **Vector Addition** (100K elements) | **6.85 $\mu$s** | 7.05 $\mu$s | 8.70 $\mu$s | **1.03x faster** vs OpenAI Triton<br>**1.27x faster** vs PyTorch CUDA |
-| **RMSNorm** ($128 \times 1024$ tile) | **7.15 $\mu$s** | 9.58 $\mu$s | 83.96 $\mu$s | **1.34x faster** vs OpenAI Triton<br>**11.74x faster** vs PyTorch CUDA |
-| **SwiGLU Activation** (100K elements) | **7.28 $\mu$s** | 7.49 $\mu$s | 17.02 $\mu$s | **1.03x faster** vs OpenAI Triton<br>**2.34x faster** vs PyTorch CUDA |
-
-#### Cold JIT Compilation Latency Comparison
-
-| Benchmark Metric | Y Compiler | OpenAI Triton | PyTorch Inductor | Advantage |
-| :--- | :---: | :---: | :---: | :--- |
-| **Cold JIT Compile Latency** | **0.068 ms** (68 $\mu$s) | ~200–500 ms | ~1,000–3,000 ms | **>3,000x faster** cold compilation |
-| **Compiled PTX Output Size** | **2,283 bytes** | ~15–45 KB CUBIN | ~100+ KB C++ DLL | **Lightweight binary footprint** |
-
-#### Compiler Unit Test Suite Status
-
-```
-test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-  - PTX Emitter & Vectorization Tests: 18 / 18 Passed
-  - Bank Conflict & Swizzle Tests: 4 / 4 Passed
-  - Operator Fusion Pass Tests: 1 / 1 Passed
-  - Base Language & ZK Tests: 28 / 28 Passed
-```
-
+This section used to publish a table from
+`python/examples/run_head_to_head_comparison.py` with Y 1.03x-1.34x faster than
+Triton and up to 11.74x faster than PyTorch, a cold compile ">3,000x faster"
+than Triton's, and a unit-test count of 51. None of it was a like-for-like
+measurement: Y's kernels were timed by replaying a CUDA graph and the others as
+plain launches, the Triton and Inductor compile times were never measured, and
+the test count was stale. The table is withdrawn; see §34.6 for what the script
+measures now.
 
 ---
 
 ## §34 — Triton Parity & Python GPU Engine Architecture (July 2026 Release)
 
-This section documents the Python GPU engine extensions, PyTorch Inductor compiler backend, zero-allocation launch runtime, and high-level block primitives added to Y to achieve full feature parity and performance superiority over **OpenAI Triton 3.7.0**.
+This section documents the Python GPU engine extensions: the PyTorch Inductor
+compiler backend, the launch runtime, and the `y_lang.ops` helpers. It used to
+say they gave Y "full feature parity and performance superiority" over Triton
+3.7.0; nothing measured that, and §34.6 says what the head-to-head script
+measures.
 
 **Where it lives.** The package is `python/` in this repository: `y_lang`, its
 tests in `python/tests` and `python/y_lang/tests`, and benchmark scripts in
@@ -5081,53 +5070,72 @@ checker does not know), so the scripts that load it stop there.
   original graph wrapped in `torch.no_grad()`, which also broke training
   (outputs had `requires_grad=False`, and `backward()` raised).
 
-### 34.2 High-Level Parallel Block Primitives (`y_lang.ops.block`)
-* **Overview**: Provides parallel block-level operations exposed directly in the Y Python package:
-  * `block_scan(x, dim=-1, op="sum", out=None)`: Parallel prefix scan across tensor blocks.
-  * `block_sort(x, dim=-1, descending=False)`: Parallel block-level bitonic sorting.
-  * `block_where(condition, x, y)`: Elementwise conditional block selector.
-  * `associative_reduce(x, dim=-1, op="sum", combine_fn=None)`: Associative reduction tree operator.
-* **Implementation**: Located in `python/y_lang/ops/block.py`.
+### 34.2 Block helpers (`y_lang.ops.block`)
+* `block_scan`, `block_sort`, `block_where` and `associative_reduce` are PyTorch
+  calls (`torch.cumsum`/`cumprod`/`cummax`/`cummin`, `torch.sort`,
+  `torch.where`, `torch.sum`/`amax` or a Python loop over `combine_fn`). No Y
+  kernel runs. This section used to describe a parallel scan and a bitonic sort.
+* **Implementation**: `python/y_lang/ops/block.py`.
 
 ### 34.3 Zero-Allocation Host Launch Pointer Caching (`TorchKernel.launch`)
 * **Overview**: Pre-allocates and caches `ctypes.addressof` storage arrays on `TorchKernel` instances.
-* **Impact**: Completely eliminates CPython heap allocations and `ctypes.cast` calls during kernel invocation loops, reducing C-ABI launch dispatch latency from $\sim 4.0\ \mu\text{s} \rightarrow \mathbf{< 0.4\ \mu\text{s}}$.
+* **Impact**: avoids re-allocating the argument array on every call. The
+  "$\sim 4.0 \rightarrow < 0.4\ \mu$s" dispatch figure this section gave was
+  never measured. The head-to-head script's *launch* column times back-to-back
+  calls through `TorchKernel.launch` beside PyTorch's and Triton's own launches.
 
 ### 34.4 CPU Interpreter & Memory Bounds Debugger (`CPUInterpreter`)
 * **Overview**: Software CPU execution runtime for Y kernels with out-of-bounds array access validation.
 * **Usage**: Enabled via `Y_INTERPRETER=1` or `debug_interpret()`. Performs shape rank validation and array axis range checking (`validate_tensor_bounds`) to catch memory corruption before CUDA deployment.
 * **Implementation**: Located in `python/y_lang/interpreter.py`.
 
-### 34.5 Quantized & LLM Operator Suite (`y_lang.ops.quant`)
-* **Overview**: Pre-packaged high-performance operators for LLM inference serving and quantized neural networks:
-  * `fp8_gemm(a, b, scale_a, scale_b)`: FP8 (`float8_e4m3fn`) matrix multiplication with scaling factors.
-  * `int4_weight_only_gemm(x, w_q4, scales, zeros)`: 4-bit quantized weight matrix multiplication (W4A16 AWQ/GPTQ format).
-  * `paged_attention(query, key_cache, value_cache, block_tables, seq_lens)`: Paged Attention KV-cache decoding operator for LLM serving engines.
-* **Implementation**: Located in `python/y_lang/ops/quant.py`.
+### 34.5 Quantized and LLM helpers (`y_lang.ops.quant`)
+None of these runs a kernel the Y compiler emitted:
+* `fp8_gemm(a, b, scale_a, scale_b)`: for 1-byte CUDA operands, hand-written CUDA
+  C++ (`tests/y_tensor_core_gemm.cu`) compiled by CuPy; for 2-byte ones the
+  same file's FP16 kernel. Other CUDA operands are converted to FP16 for
+  `torch.mm`, and CPU operands go to a float32 `torch.matmul`. Until 2026-10-11
+  any failure of the CuPy path silently fell back to `torch.mm`; it raises
+  now. Y's own FP8 GEMM is the `@tile(M, N, K)` kernel (`tests/gemm_fp8_*.ysu`).
+* `fp8_gemm_scaled`, `swiglu_fast`, `int4_weight_only_gemm` (which takes
+  unpacked 4-bit values, one per byte) and `paged_attention` are PyTorch calls.
+* `sparse_24_gemm` is refused: it ignored the 2:4 metadata and multiplied the
+  compressed values by the first half of `B`'s rows.
+* **Implementation**: `python/y_lang/ops/quant.py`.
 
 ---
 
-### 34.6 Live Head-to-Head Benchmark Suite (NVIDIA GeForce RTX 4070 Ti SUPER)
+### 34.6 Head-to-head benchmark
 
-> **Hardware**: NVIDIA GeForce RTX 4070 Ti SUPER (16GB GDDR6X)  
-> **Environment**: PyTorch 2.12.0+cu130 | OpenAI Triton 3.7.0 | CUDA 13.0  
-> **Optimization Note**: Figures below reflect the **Phase-2 Zero-Allocation Host Launch Optimization Pass** (`TorchKernel.launch` static pointer buffer caching in `torch_interop.py`), which eliminated CPython heap overhead and reduced overall kernel latency from the §33 baseline figures (SwiGLU: $7.28\ \mu\text{s} \rightarrow 3.95\ \mu\text{s}$; RMSNorm: $7.15\ \mu\text{s} \rightarrow 4.99\ \mu\text{s}$).
+`python/examples/run_head_to_head_comparison.py` compares kernels the Y compiler
+emits with Triton and PyTorch: vector add, SwiGLU and RMSNorm, the FP8 GEMM at
+1024-8192, and a SwiGLU module through `y_inductor` against `torch.compile` and
+eager. Every column is checked against a reference first (exactly, where the
+arithmetic allows: the FP8 inputs are chosen so every implementation's answer
+is exact) and timed both as plain launches and as CUDA-graph replays, in
+interleaved rounds. It writes every sample, the toolchain and the GPU's state
+to `build_artifacts/head_to_head/`, and marks a run during which another process
+used the GPU.
 
-| Operator Workload | Y Latency ($\mu$s) | OpenAI Triton ($\mu$s) | PyTorch CUDA ($\mu$s) | Y Speedup Advantage vs Triton |
-| :--- | :---: | :---: | :---: | :--- |
-| **Vector Add** (100K) | **2.08 $\mu$s** | 5.70 $\mu$s | 2.19 $\mu$s | **2.74x FASTER** vs OpenAI Triton |
-| **RMSNorm** ($128 \times 1024$) | **1.73 $\mu$s** | 11.69 $\mu$s | 15.70 $\mu$s | **6.75x FASTER** vs OpenAI Triton |
-| **SwiGLU Activation** (100K) | **1.98 $\mu$s** | 5.74 $\mu$s | 4.64 $\mu$s | **2.90x FASTER** vs OpenAI Triton |
-| **Block Scan** (100K prefix sum) | **4.79 $\mu$s** | 5.32 $\mu$s | 5.36 $\mu$s | **1.11x FASTER** vs OpenAI Triton |
-| **3D Block Pointer Volume** ($32 \times 256 \times 1024$) | **7.04 $\mu$s** | 17.74 $\mu$s | N/A | **2.52x FASTER** vs OpenAI Triton |
-| **FP8 GEMM** ($1024 \times 1024$) | **27.84 $\mu$s** | 30.88 $\mu$s | 29.42 $\mu$s | **1.11x FASTER** vs OpenAI Triton<br>**1.06x FASTER** vs PyTorch CUDA |
-| **FP8 GEMM** ($2048 \times 2048$) | **208.57 $\mu$s** | 209.03 $\mu$s | 208.58 $\mu$s | **Sub-209 $\mu$s**, beating OpenAI Triton & PyTorch CUDA |
-| **FP8 GEMM** ($4096 \times 4096$) | **1,598.58 $\mu$s** | 1,639.48 $\mu$s | 1,646.81 $\mu$s | **1.60 ms**, **1.03x FASTER** vs OpenAI Triton |
-| **FP8 GEMM** ($8192 \times 8192$) | **12.68 ms** | 25.44 ms | 13.11 ms | **1.91x FASTER** vs OpenAI Triton (12.68 ms vs 25.44 ms) |
-| **FP8 GEMM** ($16384 \times 16384$) | **102.02 ms** | 223.75 ms | 102.88 ms | **2.18x FASTER** vs OpenAI Triton (102.02 ms vs 223.75 ms)<br>**121.7 ms FASTER** per call |
-| **Cold JIT Compilation** | **0.055 ms** | ~200–500 ms | ~1,000+ ms | **>3,000x FASTER** cold compilation latency |
-| **Compiled PTX Size** | **2,283 bytes** | ~15–45 KB CUBIN | N/A | Compact PTX code emission |
+The table this section published was not a measurement of Y against Triton:
 
+- Y's columns were CUDA-graph replays; Triton's and PyTorch's were plain
+  launches. Launch overhead is most of a 100,000-element kernel's time, so the
+  "2.74x"-"6.75x faster" rows measured the graph.
+- The "Block Scan" Y column was `torch.cumsum` (`y_lang.ops.block_scan`), and
+  its "Triton" column was `torch.cumsum` too.
+- The "FP8 GEMM" Y column was `y_lang.ops.fp8_gemm`, the CuPy-compiled CUDA C++
+  above, and the other two columns timed FP16 matmuls. At 16384 its inputs were
+  FP16, so the Y column ran the FP16 kernel.
+- The vector-add and SwiGLU launches covered 100,352 elements of 100,000-element
+  buffers; nothing guarded the last 352.
+- The Triton and Inductor compile times were ranges nobody measured.
+- The "3D Block Pointer Volume" row came from
+  `python/examples/benchmark_3d_block_ptr.py`, which checks no output. It was
+  not re-run for this correction.
+
+No replacement figures are published here yet: this run would need a GPU no
+other process is using.
 
 ---
 
