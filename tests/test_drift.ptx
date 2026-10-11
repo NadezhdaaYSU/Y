@@ -12,7 +12,7 @@
     .reg .b32 %r<19>;
     .reg .f32 %f<2>;
     .reg .b64 %rd<4>;
-    .reg .pred %p<3>;
+    .reg .pred %p<7>;
     .reg .f64 %fd<8>;
 
     // [Y ZERO DRIFT] acc: Q32.32 accumulated exactly as Q32.32
@@ -22,22 +22,30 @@
     setp.lt.f64 %p0, %fd1, 0d0000000000000000;
     selp.f64 %fd2, 0dBFE0000000000000, 0d3FE0000000000000, %p0;
     add.f64 %fd3, %fd1, %fd2;
+    setp.geu.f64 %p1, %fd3, 0d43E0000000000000;
+    @%p1 trap;
+    setp.ltu.f64 %p2, %fd3, 0dC3E0000000000000;
+    @%p2 trap;
     cvt.rzi.s64.f64 %rd1, %fd3;
     mov.s64 %rd0, %rd1;
     // [Y ZERO DRIFT] fast_acc: F16 accumulated exactly as Q32.32
     mov.f32 %f1, 0.0;
     cvt.f64.f32 %fd4, %f1;
     mul.f64 %fd5, %fd4, 0d41F0000000000000;
-    setp.lt.f64 %p1, %fd5, 0d0000000000000000;
-    selp.f64 %fd6, 0dBFE0000000000000, 0d3FE0000000000000, %p1;
+    setp.lt.f64 %p3, %fd5, 0d0000000000000000;
+    selp.f64 %fd6, 0dBFE0000000000000, 0d3FE0000000000000, %p3;
     add.f64 %fd7, %fd5, %fd6;
+    setp.geu.f64 %p4, %fd7, 0d43E0000000000000;
+    @%p4 trap;
+    setp.ltu.f64 %p5, %fd7, 0dC3E0000000000000;
+    @%p5 trap;
     cvt.rzi.s64.f64 %rd3, %fd7;
     mov.s64 %rd2, %rd3;
     mov.u32 %r0, 1;
-    // [HEURISTIC] Branch Divergence Penalty is 4.53 cycles.
+    // [HEURISTIC] Branch Divergence Penalty is 4.5 cycles.
     // if: emitting BRANCH execution (block cost 3 cy).
-    setp.eq.u32 %p2, %r0, 0;
-    @%p2 bra $IF_ELSE_0;
+    setp.eq.u32 %p6, %r0, 0;
+    @%p6 bra $IF_ELSE_0;
     mov.u32 %r1, 10;
     mov.u32 %r2, %r1;
     mov.u32 %r3, 20;
@@ -51,7 +59,7 @@
     mov.u32 %r8, 20;
     mul.lo.s32 %r9, %r7, %r8;
     mov.u32 %r10, %r9;
-    // [BARRIER HOISTING] Found barrier stall of 205.25 cycles.
+    // [BARRIER HOISTING] Found barrier stall of 205 cycles.
     // [BARRIER HOISTING] Hoisted 2 independent ALU instructions into the shadow.
     mov.u32 %r11, 10;
     mov.u32 %r12, 20;

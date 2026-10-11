@@ -843,17 +843,25 @@ This section also described a C backend, which has been removed: `--emit-c`
 reports that and exits 1.
 
 ### 9.6 `@ZeroDrift`
-* **Syntax**: `@ZeroDrift`
-* **Usage**: Let-bindings for float accumulations.
-* **Function**: Inserts software compensation blocks (Kahan summation algorithm) to eliminate precision loss caused by floating-point rounding errors.
-* **Example**:
-```ysu
-@ZeroDrift
-let sum: F32 = 0.0;
-for i in 0..1000000 {
-    sum += data[i]; // Compensated mathematically at runtime
-}
-```
+* **Syntax**: `@ZeroDrift` on a `let`, with `@bounds(min, max)` stating the accumulator's range.
+* **Usage**: Accumulators whose total must not depend on the order the terms arrive in.
+* **Function**: The accumulator is held in an exact integer or fixed-point
+  representation (Q16.16, Q32.32 or I64) chosen to hold the declared range at
+  the type's resolution. Each `+=` or `-=` (or `acc = acc ± e`) converts its term
+  once and adds exactly, so the total is the same in every order. Any other
+  assignment is refused. A float accumulator needs `@bounds`, since no exact
+  representation holds F32's whole range; an `F16` or integer one does not.
+* **Checked when the program runs**: a term the representation cannot hold,
+  an accumulation that overflows it, and a value outside the declared `@bounds`
+  each stop the program - a message and exit code 1 on the LLVM backend and the
+  JIT, a `trap` on the GPU. Until 2026-10-11 none was checked: the accumulate
+  wrapped, the GPU's conversion saturated a term (a NaN became `i64::MIN`), and
+  the LLVM backend's turned an oversized one into an arbitrary value (one term of
+  1e12 gave a total of 0). `tests/zero_drift_runtime_checks.rs`.
+* **History**: this entry said `@ZeroDrift` inserted Kahan compensation. It
+  never did: Kahan summation is not exact, and the representation selector
+  refuses it.
+* **Example**: see §14.8.
 
 ### 9.7 `@ptx_emit`, `@avx_emit`, and `@hdl_emit` — NOT IMPLEMENTED
 
@@ -3208,25 +3216,26 @@ The RTX 4070 Ti SUPER has **255 registers per thread**. If you chain more than ~
 
 ### 14.8 ZeroDrift Fixed-Point Accumulation
 
-For long-running accumulation loops (e.g. computing dot products over 1M+ elements), standard F32 accumulation accumulates floating-point rounding error that compounds with iteration count. Y's `@ZeroDrift` annotation enforces drift-free accumulation using Q32.32 fixed-point arithmetic:
+For long-running accumulation loops (e.g. computing dot products over 1M+ elements), standard F32 accumulation accumulates floating-point rounding error that compounds with iteration count, and the error depends on the order of the terms. Y's `@ZeroDrift` annotation accumulates in an exact fixed-point or integer representation instead (§9.6):
 
 ```ysu
-fn safe_sum(data: [Q32.32; 1000000]) -> Q32.32 {
+fn total(values: [F32; 8]) -> F32 {
     @ZeroDrift
-    let acc: Q32.32 = 0.0;
-
-    for i in 0..1000000 {
-        acc += data[i];
+    @bounds(-1024.0, 1024.0)
+    let acc: F32 = 0.0;
+    @invariant(i >= 0)
+    for i in 0..8 {
+        acc += values[i];
     }
     return acc;
 }
 ```
 
-The compiler verifies that `Q32.32` never overflows the 64-bit fixed-point range given the bounds of `data`. If it might, a compile-time error is emitted:
-```
-error[D0001]: ZeroDrift accumulator may overflow Q32.32 range
-hint: reduce iteration count or use Q16.48 for higher fractional precision
-```
+Nothing proves at compile time that the accumulator stays inside its
+representation; it is checked when the program runs, and a term or a total that
+does not fit stops the program (§9.6). This section used to show a compile-time
+`error[D0001]` for an accumulator that "may overflow", and an example over an
+array of `Q32.32`. No such error exists, and arrays of a Q format are refused.
 
 ---
 
@@ -3986,7 +3995,7 @@ All compiler error codes, their meanings, and the section where they are demonst
 | `L0001` | Linear obligation | A `Transfer` token was not consumed by `pipe.wait()` before its buffer was read (data race) | §6.2 |
 | `S0002` | Safety violation | A variable was declared but never assigned before being read inside a `@safe` block | §6.4 |
 | `B0002` | Bounds violation | A `@bounds(min, max)` annotation was violated by a constant index at compile time | §6.5 |
-| `D0001` | Drift overflow | A `@ZeroDrift` accumulator may overflow the fixed-point range given the loop bounds | §14.8 |
+| `D0001` | Drift overflow | **Not emitted.** Nothing proves an accumulator's range at compile time; a `@ZeroDrift` overflow stops the program when it runs | §9.6 |
 | `R0001` | Require unsatisfied | A `@require(feature >= N)` hardware requirement is not met by the current `.ysu_hw_profile` | §9 |
 
 ### Co-Processor Errors
