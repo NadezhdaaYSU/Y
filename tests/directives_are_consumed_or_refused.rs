@@ -412,6 +412,65 @@ fn headers(text: &str) -> std::collections::BTreeSet<String> {
         .collect()
 }
 
+/// Paths git ignores, relative to `root` (directories without their `/`).
+/// Empty when `root` is not a git checkout, so nothing is skipped.
+fn ignored_by_git(root: &std::path::Path) -> Vec<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["ls-files", "--others", "--ignored", "--exclude-standard", "--directory"])
+        .output();
+    match out {
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .map(|l| l.trim_end_matches('/').to_string())
+            .filter(|l| !l.is_empty())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn is_ignored(ignored: &[String], rel: &str) -> bool {
+    ignored.iter().any(|i| rel == i || rel.starts_with(&format!("{i}/")))
+}
+
+/// Is `rel` a snapshot sealed as evidence: does an `evidence-manifest.json`
+/// in one of its ancestor directories record its path and its current
+/// SHA-256? An edited snapshot no longer matches and counts as a copy again.
+fn sealed_as_evidence(root: &std::path::Path, rel: &str) -> bool {
+    use sha2::{Digest, Sha256};
+    let path = root.join(rel);
+    let Ok(bytes) = std::fs::read(&path) else { return false };
+    let hash = format!("{:x}", Sha256::digest(&bytes));
+    let mut dir = path.parent();
+    while let Some(d) = dir.filter(|d| d.starts_with(root)) {
+        if let Ok(manifest) = std::fs::read_to_string(d.join("evidence-manifest.json")) {
+            let key = path.strip_prefix(d).unwrap().to_string_lossy().replace('\\', "/");
+            if manifest_records(&manifest, &key, &hash) {
+                return true;
+            }
+        }
+        dir = d.parent();
+    }
+    false
+}
+
+/// Does the manifest's JSON hold `"key": "hash"`? Read as text, because the
+/// crate has no JSON parser; a format this misreads only flags the copy.
+fn manifest_records(manifest: &str, key: &str, hash: &str) -> bool {
+    let needle = format!("\"{key}\"");
+    let mut rest = manifest;
+    while let Some(i) = rest.find(&needle) {
+        rest = &rest[i + needle.len()..];
+        let Some(v) = rest.trim_start().strip_prefix(':') else { continue };
+        let Some(v) = v.trim_start().strip_prefix('"') else { continue };
+        if v.len() > 64 && v[..64].eq_ignore_ascii_case(hash) && v[64..].starts_with('"') {
+            return true;
+        }
+    }
+    false
+}
+
 /// A documentation file a gate reads must not have a second copy elsewhere.
 ///
 /// A second copy of the language reference lived under `tests/` — deliberately
@@ -464,7 +523,10 @@ fn no_gated_document_has_a_second_copy() {
     // yet committed would be invisible - which is how the first version of
     // this gate reported a restored fossil as clean. `target/` and `.git/` are
     // excluded because a build tree legitimately contains vendored copies of
-    // other people's documents.
+    // other people's documents, and so is anything git ignores
+    // (`build_artifacts/`): it can never be committed, so no correction is
+    // owed to it.
+    let ignored = ignored_by_git(&repo());
     let mut all: Vec<String> = Vec::new();
     let mut stack = vec![repo()];
     while let Some(p) = stack.pop() {
@@ -472,14 +534,16 @@ fn no_gated_document_has_a_second_copy() {
         for e in rd.flatten() {
             let path = e.path();
             let name = path.file_name().unwrap().to_string_lossy().to_string();
+            let rel = path.strip_prefix(repo()).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default();
+            if is_ignored(&ignored, &rel) {
+                continue;
+            }
             if path.is_dir() {
                 if name != "target" && name != ".git" && name != "node_modules" {
                     stack.push(path);
                 }
             } else if path.extension().is_some_and(|x| x == "md") {
-                if let Ok(rel) = path.strip_prefix(repo()) {
-                    all.push(rel.to_string_lossy().to_string());
-                }
+                all.push(rel);
             }
         }
     }
@@ -500,6 +564,12 @@ fn no_gated_document_has_a_second_copy() {
             let Ok(otext) = std::fs::read_to_string(repo().join(other)) else { continue };
             let oh = headers(&otext);
             if oh.len() < 5 {
+                continue;
+            }
+            // A frozen "before" snapshot kept as evidence is meant to stay
+            // as it was; a correction must NOT land in it. It counts as
+            // frozen only while its manifest's hash still matches.
+            if sealed_as_evidence(&repo(), other) {
                 continue;
             }
             compared += 1;
@@ -526,6 +596,47 @@ fn no_gated_document_has_a_second_copy() {
          (Compared {compared} pairs.)",
         copies.join("\n  ")
     );
+}
+
+/// The two exemptions are narrow: a sealed snapshot only while its hash
+/// matches, and only what git itself ignores.
+#[test]
+fn only_sealed_or_ignored_copies_are_exempt() {
+    use sha2::{Digest, Sha256};
+    let root = std::env::temp_dir().join(format!("y_second_copy_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join("evidence/before")).unwrap();
+    std::fs::create_dir_all(root.join("build_out")).unwrap();
+    std::fs::create_dir_all(root.join("loose")).unwrap();
+    for f in ["evidence/before/README.md", "evidence/before/EDITED.md", "evidence/before/NEW.md", "loose/README.md", "build_out/README.md"] {
+        std::fs::write(root.join(f), format!("# {f}\n")).unwrap();
+    }
+    let hash = |f: &str| format!("{:x}", Sha256::digest(std::fs::read(root.join(f)).unwrap()));
+    std::fs::write(
+        root.join("evidence/evidence-manifest.json"),
+        format!(
+            "{{\n \"sha256\": {{\n  \"before/README.md\": \"{}\",\n  \"before/EDITED.md\": \"{}\"\n }}\n}}\n",
+            hash("evidence/before/README.md"),
+            hash("evidence/before/EDITED.md")
+        ),
+    )
+    .unwrap();
+    // Edited after it was sealed.
+    std::fs::write(root.join("evidence/before/EDITED.md"), "# changed\n").unwrap();
+
+    assert!(sealed_as_evidence(&root, "evidence/before/README.md"), "a sealed, unchanged snapshot");
+    assert!(!sealed_as_evidence(&root, "evidence/before/EDITED.md"), "a snapshot edited after sealing is a copy again");
+    assert!(!sealed_as_evidence(&root, "evidence/before/NEW.md"), "a file the manifest does not record");
+    assert!(!sealed_as_evidence(&root, "loose/README.md"), "a file under no manifest");
+
+    let git = |args: &[&str]| Command::new("git").arg("-C").arg(&root).args(args).output().unwrap();
+    assert!(git(&["init", "-q"]).status.success());
+    std::fs::write(root.join(".gitignore"), "build_out/\n").unwrap();
+    let ignored = ignored_by_git(&root);
+    assert!(is_ignored(&ignored, "build_out/README.md"), "{ignored:?}");
+    assert!(!is_ignored(&ignored, "loose/README.md"), "an untracked file git does not ignore stays visible: {ignored:?}");
+    assert!(!is_ignored(&ignored, "build_outside/README.md"), "a prefix of a name is not its directory");
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 // ---------------------------------------------------------------------------

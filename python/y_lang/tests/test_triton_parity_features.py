@@ -120,9 +120,22 @@ def test_feature_6_quantized_and_llm_ops():
     paged_res = paged_attention(query, key_cache, value_cache, block_tables, seq_lens)
     assert paged_res.shape == (num_seqs, num_heads, head_dim)
 
+class TritonParityFeatures(unittest.TestCase):
+    """`unittest` discovery collects TestCase methods, not bare `test_*`
+    functions: until 2026-10-11 neither Python suite ran any test above."""
+
+    def test_feature_2_pytorch_inductor_backend(self):
+        test_feature_2_pytorch_inductor_backend()
+
+    def test_feature_3_block_primitives(self):
+        test_feature_3_block_primitives()
+
+    def test_feature_5_cpu_interpreter_debugger(self):
+        test_feature_5_cpu_interpreter_debugger()
+
+    def test_feature_6_quantized_and_llm_ops(self):
+        test_feature_6_quantized_and_llm_ops()
+
+
 if __name__ == "__main__":
-    test_feature_2_pytorch_inductor_backend()
-    test_feature_3_block_primitives()
-    test_feature_5_cpu_interpreter_debugger()
-    test_feature_6_quantized_and_llm_ops()
-    print("ALL TRITON PARITY FEATURE TESTS PASSED SUCCESSFULLY!")
+    unittest.main()
