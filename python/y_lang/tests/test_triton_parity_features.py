@@ -84,9 +84,22 @@ def test_feature_5_cpu_interpreter_debugger():
     assert interp.bounds_checks_failed == 1
 
 
-    # Run interpreter loop
-    res = debug_interpret("dummy", (1, 1, 1), (256, 1, 1), [t])
-    assert res["status"] == "SUCCESS"
+    # debug_interpret runs a kernel; a name alone is refused. It used to
+    # return SUCCESS for `debug_interpret("dummy", ...)` without running anything.
+    out = torch.zeros(256)
+    res = debug_interpret("""
+kernel fill(Out: GlobalMemory<F32>) {
+    let t: I32 = global_thread_id();
+    Out[t] = 2.0;
+}
+""", (1, 1, 1), (256, 1, 1), [out], target_sm="sm_80")
+    assert res["status"] == "SUCCESS" and bool((out == 2.0).all())
+    refused = False
+    try:
+        debug_interpret("dummy", (1, 1, 1), (256, 1, 1), [t])
+    except CPUInterpreterError:
+        refused = True
+    assert refused
 
 def test_feature_6_quantized_and_llm_ops():
     """Tests feature #6: Quantized Operators (FP8 GEMM, INT4 GEMM, Paged Attention)."""

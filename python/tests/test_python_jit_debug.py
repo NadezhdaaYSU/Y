@@ -146,20 +146,30 @@ class TestPythonJITAndDebugMode(unittest.TestCase):
         )
 
     def test_cpu_debug_interpreter_mode(self):
+        # Under Y_INTERPRETER=1 the launch runs the kernel's PTX on the CPU
+        # and writes the output. This used to pass a list for the buffer and
+        # a launcher named `debug_kernel` for a kernel named `debug_k`, which
+        # nothing could run - and passed, because debug mode ran nothing.
+        import torch
+
+        saved = os.environ.get("Y_INTERPRETER")
         os.environ["Y_INTERPRETER"] = "1"
-        self.assertTrue(y_lang.is_interpreter_enabled())
+        try:
+            self.assertTrue(y_lang.is_interpreter_enabled())
 
-        @y_lang.jit
-        def debug_kernel():
-            return """
-            kernel debug_k(A: GlobalMemory<F32>) {
-                store(A, 1.0);
-            }
-            """
+            @y_lang.jit
+            def debug_k():
+                return """
+                kernel debug_k(A: GlobalMemory<F32>) {
+                    store(A, 1.0);
+                }
+                """
 
-        # Under Y_INTERPRETER=1, launch prints debug diagnostics without throwing CUDA errors
-        debug_kernel[1]([1.0, 2.0, 3.0])
-
+            a = torch.zeros(3)
+            debug_k[1](a)
+            self.assertEqual(a.tolist(), [1.0, 0.0, 0.0])
+        finally:
+            os.environ["Y_INTERPRETER"] = saved if saved is not None else "0"
         os.environ["Y_INTERPRETER"] = "0"
         self.assertFalse(y_lang.is_interpreter_enabled())
 

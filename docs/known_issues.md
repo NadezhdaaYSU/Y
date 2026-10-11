@@ -9,6 +9,14 @@ Reviewed 2026-10-11 against every report in [the archived backlog](claude-histor
 most reproduced against the compiler built from the tree rather than read from
 source; each entry there now carries its status. What is still open:
 
+### Undefined on the GPU, not refused
+
+- `warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` emit `shfl.sync` with
+  the full mask `0xffffffff` wherever they are written, including inside a
+  branch some lanes skip (`if t < 20 { warp_reduce_sum(x) }`). That is
+  undefined on the GPU; the compiler accepts it and the CPU interpreter stops
+  at it (`test_a_shuffle_whose_mask_names_absent_lanes_is_reported`).
+
 ### Benchmarks
 
 - `python/examples/benchmark_3d_block_ptr.py` has been run only on a busy GPU
@@ -32,6 +40,16 @@ source; each entry there now carries its status. What is still open:
   sync per block. The other helpers are single PyTorch calls.
 
 ### Refused loudly, not implemented
+
+- The CPU interpreter (`y_lang.interpreter`) does not model the tensor-core
+  instructions (`mma`, `ldmatrix`, `wmma`), the packed FP8/FP16 conversions,
+  `vote`, `.param`-space calls, `bar.sync` with a thread count, `bar.arrive`,
+  `barrier.sync` without `.aligned`, or any modifier outside its per-instruction
+  list (`.relu`, `.xorsign`, `.shared::cluster` ...). It refuses each by name,
+  so the GEMM and attention kernels built on them are refused there. Its
+  `.approx` functions match the GPU's only within the GPU's documented error,
+  not bit for bit; every other modelled instruction form matches bit for bit
+  (`python/y_lang/tests/test_interpreter_ops.py`).
 
 - No conversion between integers and floats (§20.4); no type aliases or generic
   functions; `for i in 0..v.size` (a field access as a range bound) does not
@@ -90,6 +108,7 @@ source; each entry there now carries its status. What is still open:
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| The CPU interpreter interpreted nothing | `CPUInterpreter.run` printed its arguments and returned `SUCCESS`; with `Y_INTERPRETER=1` every `TorchKernel.launch` printed "Executed safely under software bounds validation" and wrote no output; `debug_interpret("dummy", ...)` succeeded with no kernel; the C entry point `y_interpret_kernel` only type-checked. It now runs the kernel's PTX on the CPU in SIMT lockstep and stops at out-of-bounds and misaligned accesses, `trap`, divergent barriers and shuffles, conflicting stores and unmodelled instructions, naming the thread and PTX line. Each of the 518 instruction forms it models agrees with the GPU bit for bit over its operands' edge values and random bits, NaN payloads and signed zeros included, except that `.approx` functions agree within the GPU's documented error. The first version got 142 of those forms wrong, 137 of them without an error: canonical and propagated NaNs, `.ftz` tininess, signed zeros in `min`/`max`/`.sat`, NaN-to-integer conversions, `cvt.rni.f32.f32`, `sub.sat`, signed carries, `div.approx` and `sin`/`cos.approx` argument reduction. It also read a `cp.async` source size held in a register as the full copy, which raised spurious out-of-bounds errors and copied data the GPU zero-fills, and zero-extended `ld.global.s32` into a 64-bit register. `python/y_lang/tests/test_interpreter.py` (22 tests) and `test_interpreter_ops.py`; each of 41 mutants of the interpreter, and one returning the debug-mode launch to a no-op, fails a test. |
 | `benchmark_3d_block_ptr.py` compared unequal work | Y's kernel wrote 32,768 of the 8,388,608 elements it named and Triton's 524,288; neither output was checked, the script printed "FASTER" whatever the ratio, and it deleted `~/.ysu/cache` on import. Both kernels now cover the volume and must equal `2x + 1` exactly before they are timed; a busy GPU is reported. |
 | The second-copy gate failed in a checkout holding evidence snapshots | `no_gated_document_has_a_second_copy` flagged Codex's frozen "before" copies of `README.md`. It now skips what git ignores (`build_artifacts/`, like `target/`) and a copy whose current SHA-256 an ancestor's `evidence-manifest.json` records; an edited, unrecorded or untracked copy still fails it. `only_sealed_or_ignored_copies_are_exempt`. |
 | The parity tests never ran | `python/y_lang/tests/test_triton_parity_features.py` defined bare functions, which `unittest` discovery does not collect; a `TestCase` runs them now (the suite went from 26 to 30 tests, and a broken `block_sort` fails it). |
