@@ -1,7 +1,7 @@
 // tests/test_align.ysu
 
 struct AlignStruct {
-    @align(64) @atomic head: I32,
+    @atomic head: I32,
     _pad_i32: I32,
     _pad1: I64,
     _pad2: I64,
@@ -10,7 +10,7 @@ struct AlignStruct {
     _pad5: I64,
     _pad6: I64,
     _pad7: I64,
-    @align(64) @atomic tail: I32,
+    @atomic tail: I32,
     _pad_i32_2: I32,
     _pad8: I64,
     _pad9: I64,

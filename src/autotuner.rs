@@ -493,12 +493,8 @@ fn store_persisted(
     // profile, and a torn write does not merely lose a cached tile: a
     // truncated `.ysu_hw_profile` still *exists*, so `check_or_probe_hardware`
     // would skip probing and silently compile against half-parsed defaults.
-    // The rename is atomic within a filesystem, and the temp file is a
-    // sibling so it is always on the same one.
-    let tmp_path = format!("{}.tmp", PROFILE_PATH);
-    if let Err(e) = std::fs::write(&tmp_path, out).and_then(|_| std::fs::rename(&tmp_path, PROFILE_PATH)) {
+    if let Err(e) = crate::sentinel::write_profile_atomically(PROFILE_PATH, &out) {
         eprintln!("[Y autotuner] could not persist tuning result to {}: {}", PROFILE_PATH, e);
-        let _ = std::fs::remove_file(&tmp_path);
     }
 }
 

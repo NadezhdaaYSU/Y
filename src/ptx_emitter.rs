@@ -4288,7 +4288,6 @@ declare it as a Q format.\n{}",
                 end,
                 step,
                 body,
-                tile,
                 ..
             } => {
                 let loop_reg = self.alloc_reg32();
@@ -4298,12 +4297,6 @@ declare it as a Q format.\n{}",
                 let loop_end = self.alloc_label("LOOP_END");
 
                 writeln!(&mut self.ptx_buffer, "    // for {} in ...", crate::lexical_scope::source_name(loop_var)).unwrap();
-                if let Some(t) = tile {
-                    writeln!(&mut self.ptx_buffer, "    // [Y TILE OPTIMIZATION] Tiled loop dimensions: M={:?}, N={:?}, K={:?}", t.block_m, t.block_n, t.block_k).unwrap();
-                }
-                if let Some(t) = tile {
-                    writeln!(&mut self.ptx_buffer, "    // [Y TILE OPTIMIZATION] Tiled loop dimensions: M={:?}, N={:?}, K={:?}", t.block_m, t.block_n, t.block_k).unwrap();
-                }
                 // A `step` this arm could not read used to fall through to
                 // `_ => 1`, silently. So `for i in w..N step nworkers` - the
                 // grid-stride loop, the canonical way to write a kernel whose

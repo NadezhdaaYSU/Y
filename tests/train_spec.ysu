@@ -13,7 +13,6 @@ kernel train_step_gpu(weights: GlobalMemory<F32>, size: I32) {
 
         @invariant(i >= 0)
         @divergence(uniform)
-        @tile(16, 16, 8)
         for i in 0..1024 step 1 {
             // Explicitly bounded variable verified mathematically via loop range
             @bounds(0, 1024)

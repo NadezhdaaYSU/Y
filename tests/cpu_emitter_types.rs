@@ -84,3 +84,44 @@ fn emit_cpu_computes_what_the_llvm_backend_computes() {
         assert_eq!(code, Some(*want), "{tag} through --emit-cpu:\n{blob}");
     }
 }
+
+/// A struct field is typed too. `p.a + 100` on a `U8` field was written with
+/// Rust's `+` because the emitter knew no field's type, so a debug build of
+/// the blob panicked where Y wraps (`200 + 100` is 44 in a `U8`). The CPU
+/// backend cannot build a struct literal, so the blob is called from a Rust
+/// `main` that does, and built WITHOUT `-O`: overflow checks on.
+#[test]
+fn field_arithmetic_wraps_in_a_debug_build_as_the_llvm_backend_does() {
+    let fns = "struct Pair {\n    a: U8,\n    b: I32,\n}\n\nfn sum(p: &Pair) -> I32 {\n    return p.a + p.b;\n}\n\n\
+               fn bump(p: &mut Pair) {\n    p.a = p.a + 100;\n}\n";
+    let llvm = format!("{fns}\nfn main() -> I32 {{\n    let p = Pair {{ a: 200, b: 5 }};\n    bump(&mut p);\n    return sum(&p);\n}}\n");
+    let dir = pinned::pinned_scratch("cputy_fields_llvm", pinned::SM_PINNED);
+    let bin = dir.join("fields.bin");
+    compile(&dir, "fields", &llvm, &["-o", bin.to_str().unwrap()]);
+    assert_eq!(Command::new(&bin).status().unwrap().code(), Some(49), "the LLVM backend's answer moved");
+
+    let dir = pinned::pinned_scratch("cputy_fields_cpu", pinned::SM_PINNED);
+    let out = compile(&dir, "fields", fns, &["--emit-cpu"]);
+    let blob: Vec<&str> = out
+        .lines()
+        .skip_while(|l| !l.contains("GENERATED RUST BLOB"))
+        .skip(1)
+        .take_while(|l| !(l.trim_start_matches('=').is_empty() && l.len() > 20 && !l.starts_with("//")))
+        .collect();
+    let blob = blob.join("\n");
+    let rs = dir.join("fields.rs");
+    std::fs::write(
+        &rs,
+        format!("#![allow(unused, non_snake_case)]\n{blob}\nfn main() {{\n    let mut p = Pair {{ a: 200, b: 5 }};\n    \
+                 bump(&mut p);\n    std::process::exit(sum(&p));\n}}\n"),
+    )
+    .unwrap();
+    let rbin = dir.join("fields");
+    let Ok(built) = Command::new("rustc").args(["--edition", "2021", "-o"]).arg(&rbin).arg(&rs).output() else {
+        eprintln!("SKIP: no rustc, so the emitted Rust was not run");
+        return;
+    };
+    assert!(built.status.success(), "the emitted Rust does not compile:\n{}\n{blob}", String::from_utf8_lossy(&built.stderr));
+    let run = Command::new(&rbin).output().unwrap();
+    assert_eq!(run.status.code(), Some(49), "--emit-cpu, debug build:\n{}\n{blob}", String::from_utf8_lossy(&run.stderr));
+}

@@ -125,7 +125,8 @@ fn boolean_conditions_still_work() {
     );
     accept(
         "if a comparison",
-        "fn main(n: I32) -> I32 {\n    if n > 0 {\n        return 2;\n    }\n    return 3;\n}\n",
+        // In a helper: a host `fn main` takes no parameters (`tests/host_main_contract.rs`).
+        "fn f(n: I32) -> I32 {\n    if n > 0 {\n        return 2;\n    }\n    return 3;\n}\nfn main() -> I32 { return f(1); }\n",
     );
     accept(
         "while a comparison",

@@ -526,6 +526,29 @@ pub struct HardwareProfile {
     pub fma_ilp_cycles_per_op: f64,
 }
 
+/// Replaces `path` with `contents` so that no reader ever sees a partial file.
+///
+/// `.ysu_hw_profile` is read by every compile, and a truncated one still
+/// EXISTS, so `check_or_probe_hardware` skips the probe and compiles against
+/// whatever fields survived. The probe used to `fs::write` it - truncate, then
+/// write - so a compile starting in that window (a parallel test run on a
+/// fresh checkout, or two builds in one directory) could read it empty. The
+/// autotuner already wrote-then-renamed, through a FIXED temp name, which two
+/// writers share: one could rename the other's half-written file into place.
+///
+/// The temp file is a sibling, so the rename stays on one filesystem and is
+/// atomic, and its name is unique to this process and call.
+pub(crate) fn write_profile_atomically(path: &str, contents: &str) -> std::io::Result<()> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let tmp = format!("{path}.tmp.{}.{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
+    let result = fs::write(&tmp, contents).and_then(|_| fs::rename(&tmp, path));
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    result
+}
+
 fn parse_profile_value<'a>(contents: &'a str, key: &str) -> Option<&'a str> {
     for line in contents.lines() {
         if let Some((found_key, value)) = line.split_once('=') {
@@ -856,17 +879,22 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
     log_info!("Measuring CPU Thread Scheduling/Context Switch Handoff Cost...");
     let thread_scheduling_cost_cycles = measure_thread_scheduling_cost();
 
-    // Try to find the probe executable. First try current working directory, 
-    // then try the folder of the running compiler binary itself.
+    // Try to find the probe executable. First try current working directory,
+    // then the folder of the file this compiler was loaded from: the `Y`
+    // executable, or `liby.so` inside another process. That used to be
+    // `current_exe()`, which inside Python names the interpreter - so a
+    // compile through the C API, anywhere without a profile, ran no probe and
+    // wrote `GPU_NAME=Unknown GPU` / `SM_VERSION=0.0` into the working
+    // directory on a machine with a GPU, and every later compile there read it.
     let mut probe_path = std::path::PathBuf::from("./ysu_gpu_probe");
     if cfg!(target_os = "windows") {
         probe_path.set_extension("exe");
     }
-    
+
     if !probe_path.exists() {
-        if let Ok(exe_path) = std::env::current_exe() {
-            if let Some(exe_dir) = exe_path.parent() {
-                let local_probe = exe_dir.join(if cfg!(target_os = "windows") { "ysu_gpu_probe.exe" } else { "ysu_gpu_probe" });
+        if let Some(object) = crate::type_checker::own_object_path() {
+            if let Some(dir) = object.parent() {
+                let local_probe = dir.join(if cfg!(target_os = "windows") { "ysu_gpu_probe.exe" } else { "ysu_gpu_probe" });
                 if local_probe.exists() {
                     probe_path = local_probe;
                 }
@@ -1269,7 +1297,7 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
         profile.cp_async_latency_cycles,
         profile.fma_ilp_throughput, profile.fma_ilp_cycles_per_op
     );
-    fs::write(profile_path, serialized).expect("Failed to write profile");
+    write_profile_atomically(profile_path, &serialized).expect("Failed to write profile");
 
     profile
 }
@@ -1296,3 +1324,68 @@ pub fn probe_cpu_hardware_profile() -> crate::cpu_specializer::CpuHardwareProfil
     }
 }
 
+
+#[cfg(test)]
+mod profile_write_tests {
+    use super::write_profile_atomically;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    /// A profile-sized body whose LAST line is the field a compile needs, so a
+    /// read that lost the tail is detectable.
+    fn body(tag: &str) -> String {
+        let mut s = String::new();
+        for i in 0..200 {
+            s.push_str(&format!("FIELD_{i}_{tag}=0.000\n"));
+        }
+        s.push_str(&format!("SM_VERSION={tag}\n"));
+        s
+    }
+
+    /// Two writers replacing the file while a reader reads it: every read must
+    /// be one writer's complete text. With `fs::write` (truncate, then write)
+    /// the reader sees an empty or cut file within a few hundred rounds, and a
+    /// shared temp name lets one writer rename the other's partial file.
+    #[test]
+    fn a_reader_never_sees_a_partial_profile() {
+        let dir = std::env::temp_dir().join(format!("y_profile_write_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".ysu_hw_profile").to_string_lossy().into_owned();
+        let (a, b) = (body("8.9"), body("9.0"));
+        write_profile_atomically(&path, &a).unwrap();
+        let stop = Arc::new(AtomicBool::new(false));
+        let writers: Vec<_> = [a.clone(), b.clone()]
+            .into_iter()
+            .map(|text| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..2000 {
+                        write_profile_atomically(&path, &text).unwrap();
+                    }
+                })
+            })
+            .collect();
+        let reader = {
+            let (path, stop, a, b) = (path.clone(), stop.clone(), a.clone(), b.clone());
+            std::thread::spawn(move || {
+                let mut reads = 0usize;
+                while !stop.load(Ordering::Relaxed) {
+                    let seen = std::fs::read_to_string(&path).unwrap();
+                    assert!(seen == a || seen == b, "read a partial profile ({} bytes)", seen.len());
+                    reads += 1;
+                }
+                reads
+            })
+        };
+        for w in writers {
+            w.join().unwrap();
+        }
+        stop.store(true, Ordering::Relaxed);
+        let reads = reader.join().unwrap();
+        assert!(reads > 100, "the reader only ran {reads} times, too few to see a race");
+        let leftovers: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(leftovers.len(), 1, "temp files were left behind: {leftovers:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
