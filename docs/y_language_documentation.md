@@ -3773,6 +3773,14 @@ intrinsics (`block_tile_*`, `BlockTile::*`, the 3-D block pointers, the v4
 forms, `vec_add_v4`, `rmsnorm_v4`, `swiglu_v4`) refuse any buffer that is not
 `F32`.
 
+`rmsnorm_v4(X[idx], W[col], Out[idx], hidden_dim, eps)` normalises one row per
+block, four elements per thread: `idx` is `row * hidden_dim + 4 * thread_idx_x()`.
+The launch must be `(hidden_dim / 4, 1, 1)` threads, a whole number of warps;
+any other shape traps, because the block-wide sum would cover something other
+than the row. Until 2026-10-11 it took three operands and assumed a 1024-wide
+row, `eps = 1e-5` and 256 threads, whatever the kernel declared; other shapes
+were silently wrong (`tests/ptx_rmsnorm_v4.rs`).
+
 ### 20.6 Storing and Loading in a PTX Kernel
 
 | Operation | Spelling | Width |

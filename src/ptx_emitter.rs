@@ -2475,8 +2475,12 @@ impl PtxEmitter {
             "ld_global_v4_f32" | "load_v4" | "warp_reduce_sum" | "warp_reduce_max"
             | "u64_lo32" | "u64_hi32" | "shared_alloc_u32" => Arity::Exactly(1),
             "store" | "mul_wide_u32" | "mul_wide_s32" | "shared_load_v4" => Arity::Exactly(2),
-            "atomic_add" | "atomic_max" | "rmsnorm_v4" | "rmsnorm_fast" | "swiglu_v4"
-            | "swiglu_fast" | "vec_add_unrolled4" => Arity::Exactly(3),
+            "atomic_add" | "atomic_max" | "swiglu_v4" | "swiglu_fast" | "vec_add_unrolled4" => {
+                Arity::Exactly(3)
+            }
+            // `(x, w, out, hidden_dim, eps)`: the row length and epsilon were
+            // constants, 1024 and 1e-5, whatever the kernel declared.
+            "rmsnorm_v4" | "rmsnorm_fast" => Arity::Exactly(5),
             // A 4th argument used to select 4x unrolling by its mere PRESENCE,
             // its value discarded: `vec_add_v4(a, b, c, 0)` unrolled too.
             // `vec_add_unrolled4` is the spelling that says it.
@@ -5074,6 +5078,44 @@ declare it as a Q format.\n{}",
                             let x_ptr = if !args.is_empty() { self.emit_addr(&args[0], cache_policy, hw_profile) } else { "%rd0".to_string() };
                             let w_ptr = if args.len() >= 2 { self.emit_addr(&args[1], cache_policy, hw_profile) } else { "%rd1".to_string() };
                             let out_ptr = if args.len() >= 3 { self.emit_addr(&args[2], cache_policy, hw_profile) } else { "%rd2".to_string() };
+                            // The row length and epsilon are operands. This used
+                            // to take three and assume both: the mean was
+                            // `sum * 0.0009765625` (a 1024-wide row) and epsilon
+                            // `1e-5`, and the second reduction read exactly eight
+                            // warp partials. A 512-wide row, a 128-thread block or
+                            // any other epsilon got a wrong answer, and the
+                            // kernel's own `hidden_dim`/`eps` parameters were read
+                            // by nothing.
+                            let hidden_v = self.emit_expr(&args[3], cache_policy, hw_profile);
+                            let hidden = self.emit_convert(&hidden_v, ScalarTy::I32);
+                            let eps_v = self.emit_expr(&args[4], cache_policy, hw_profile);
+                            let eps = self.emit_convert(&eps_v, ScalarTy::F32);
+
+                            // One row per block, four elements per thread, every
+                            // lane present: `hidden_dim == 4 * ntid.x`, `ntid.x` a
+                            // whole number of warps (the shuffles name all 32
+                            // lanes), and a one-dimensional block. A launch that
+                            // is not that shape would reduce a different set of
+                            // elements than the row, so it traps.
+                            let ntid = self.alloc_reg32();
+                            let row_len = self.alloc_reg32();
+                            let lane_tail = self.alloc_reg32();
+                            let ntid_y = self.alloc_reg32();
+                            let ntid_z = self.alloc_reg32();
+                            let bad = self.alloc_pred();
+                            let bad_tail = self.alloc_pred();
+                            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ntid.x;", ntid).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ntid.y;", ntid_y).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ntid.z;", ntid_z).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 2;", row_len, ntid).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    setp.ne.s32 {}, {}, {};", bad, row_len, hidden).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 31;", lane_tail, ntid).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    setp.ne.u32 {}, {}, 0;", bad_tail, lane_tail).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    or.pred {}, {}, {};", bad, bad, bad_tail).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", ntid_y, ntid_y, ntid_z).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    setp.ne.u32 {}, {}, 1;", bad_tail, ntid_y).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    or.pred {}, {}, {};", bad, bad, bad_tail).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    @{} trap;", bad).unwrap();
 
                             let x0 = self.alloc_regf32();
                             let x1 = self.alloc_regf32();
@@ -5105,7 +5147,7 @@ declare it as a Q format.\n{}",
 
                             let warp_sum = self.emit_warp_reduce_sum(&sum_sq);
 
-                            writeln!(&mut self.ptx_buffer, "    .shared .align 4 .f32 smem_reduce[8];").unwrap();
+                            writeln!(&mut self.ptx_buffer, "    .shared .align 4 .f32 smem_reduce[32];").unwrap();
                             let lane_id = self.alloc_reg32();
                             let warp_id = self.alloc_reg32();
                             let pred_first_lane = self.alloc_pred();
@@ -5144,7 +5186,9 @@ declare it as a Q format.\n{}",
                             writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", tid_u64, tid).unwrap();
                             writeln!(&mut self.ptx_buffer, "    shl.b64 {}, {}, 2;", tid_offset, tid_u64).unwrap();
                             writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", smem_read_addr, smem_base, tid_offset).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, 8;", pred_warp0_threads, tid).unwrap();
+                            let nwarps = self.alloc_reg32();
+                            writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 5;", nwarps, ntid).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", pred_warp0_threads, tid, nwarps).unwrap();
                             writeln!(&mut self.ptx_buffer, "    @{} ld.shared.f32 {}, [{}];", pred_warp0_threads, val_warp_sum, smem_read_addr).unwrap();
                             writeln!(&mut self.ptx_buffer, "    @!{} mov.f32 {}, 0.0;", pred_warp0_threads, val_warp_sum).unwrap();
 
@@ -5154,8 +5198,10 @@ declare it as a Q format.\n{}",
                             let mean = self.alloc_regf32();
                             let pred_tid0 = self.alloc_pred();
                             writeln!(&mut self.ptx_buffer, "    setp.eq.u32 {}, {}, 0;", pred_tid0, tid).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, 0.0009765625;", mean, block_sum).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, 0.00001;", mean, mean).unwrap();
+                            let hidden_f = self.alloc_regf32();
+                            writeln!(&mut self.ptx_buffer, "    cvt.rn.f32.s32 {}, {};", hidden_f, hidden).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    div.rn.f32 {}, {}, {};", mean, block_sum, hidden_f).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", mean, mean, eps).unwrap();
                             writeln!(&mut self.ptx_buffer, "    rsqrt.approx.f32 {}, {};", inv_rms, mean).unwrap();
 
                             let smem_root = self.alloc_reg64();

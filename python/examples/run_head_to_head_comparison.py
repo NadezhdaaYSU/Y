@@ -117,7 +117,7 @@ kernel rmsnorm(X: GlobalMemory<F32>, Weight: GlobalMemory<F32>, Out: GlobalMemor
     let row: I32 = block_idx_x();
     let col: I32 = thread_idx_x() * 4;
     let idx: I32 = row * hidden_dim + col;
-    rmsnorm_v4(X[idx], Weight[col], Out[idx]);
+    rmsnorm_v4(X[idx], Weight[col], Out[idx], hidden_dim, eps);
 }
 """
 
