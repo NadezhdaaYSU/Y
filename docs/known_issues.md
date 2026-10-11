@@ -11,12 +11,25 @@ source; each entry there now carries its status. What is still open:
 
 ### Benchmarks
 
-- `python/examples/run_head_to_head_comparison.py` is not a fair comparison:
-  its "FP8 GEMM" rows time Y's FP8 kernel against FP16 matmuls in the Triton and
-  PyTorch columns, and its block-scan row times Y through a CUDA graph and the
-  others as plain launches. Do not quote its report until both are fixed.
+- `python/examples/run_head_to_head_comparison.py` has not been run on an
+  idle GPU since it was rewritten (2026-10-11), so no figures from it are
+  published. It marks a run during which another process used the GPU.
+- `python/examples/benchmark_3d_block_ptr.py` checks no output; the manual's
+  "3D Block Pointer Volume" row came from it and was withdrawn.
 - `python/examples/kernels/flash_attention.ysu` does not compile (`Pipeline` is
   not a type); the scripts report that rather than stop.
+
+### `y_lang.ops`
+
+- Nothing in it runs a kernel the Y compiler emitted. `fp8_gemm`'s CUDA C++
+  path (`tests/y_tensor_core_gemm.cu` through CuPy) cannot run with CuPy 14:
+  NVRTC cannot find `crt/mma.h` through the pip CUDA headers, and
+  `Stream.from_external` no longer takes a raw pointer. It raises on 1- and
+  2-byte CUDA operands now. If it is made to run, the kernel has never been
+  checked against a reference.
+- `int4_weight_only_gemm` takes unpacked values (one per byte), not the packed
+  layout its name suggests; `paged_attention` is a Python loop with a host
+  sync per block. The other helpers are single PyTorch calls.
 
 ### Refused loudly, not implemented
 
@@ -46,6 +59,12 @@ source; each entry there now carries its status. What is still open:
   (a)-(d), 2437 (a)).
 - Without z3 the tests whose programs carry an `@invariant` fail, by design: an
   invariant that cannot be checked fails the build (archive 2214 (f)).
+- `python/y_lang/tests/test_triton_parity_features.py` defines bare functions,
+  which `unittest` discovery does not collect: both Python suites run 0 of its
+  tests. Run as a script, it passes.
+- In a checkout holding Codex's snapshot directories (`docs/benchmark_data/`,
+  `build_artifacts/`), `no_gated_document_has_a_second_copy` fails on their
+  `README.md` copies; a clean worktree passes.
 
 ### Debugger
 
@@ -77,6 +96,9 @@ source; each entry there now carries its status. What is still open:
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| `rmsnorm_v4` assumed a 1024-wide row, `eps = 1e-5` and 256 threads | The mean was `sum * 0.0009765625` and the second reduction read eight warp partials, whatever the kernel declared: at `eps = 0.5` the output was 2.7% off, a 512-wide row was scaled by `sqrt(2)`. It takes `(x, w, out, hidden_dim, eps)` now, reduces over every warp, and traps on a launch that is not one row per block in whole warps. `tests/ptx_rmsnorm_v4.rs` (five shapes against float64 on the device, three trapping launches, five mutants). |
+| The head-to-head benchmark measured something else in every Y column | Y's kernels were CUDA-graph replays and the others plain launches; the "Block Scan" Y column was `torch.cumsum`; the "FP8 GEMM" Y column was `y_lang.ops.fp8_gemm`, which on this machine was always `torch.mm` on FP16 copies (its CuPy path failed and the failure was swallowed), against FP16 matmuls; the elementwise launches wrote 352 floats past their buffers. The manual published these as 1.03x-6.75x speedups. The script now checks every column against a reference (exactly for addition and the FP8 GEMMs), times all three both ways, and records the toolchain and the GPU's state; the manual's tables are withdrawn (§33.8, §34.6). |
+| `y_lang.ops` substituted or guessed | `fp8_gemm` raises when its CuPy path cannot run instead of returning `torch.mm`'s product; `sparse_24_gemm` (which ignored its 2:4 metadata) is refused; the docstrings and manual §34.2/§34.5 say what each helper runs. `python/y_lang/tests/test_ops_fail_closed.py`. |
 | Exact attention's `KFix` was checked only by a host helper (archive 1639 (c)) | The accumulating entries took any `u32` temperature: `KFix = 0` launched and returned a uniform softmax, and `KFix >= 2^31`, which the signed `mul.wide.s32` reads negative, returned one where most keys weigh zero. `exact_attention::temperature_fixed_point` refused both, for callers that used it. `attn_accum` and `attn_accum_naive` now check the parameter as the multiply reads it and trap outside `1..2^31`; the certificate's item is checked rather than trusted. `tests/attention_kfix_is_checked_at_launch.rs` (both entries at `0`, `1`, `2^19 + 1`, `2^31 - 1`, `2^31`, `2^32 - 1` on the device, in-range weights against the host exp). |
 | `exact_pv`'s licences on `T`, `D`, `Q` and the extents (archive 1692 (a)) | Fixed in `3e67cd9`; listed open here by mistake on 2026-10-11. `verified_exact_pv::ExactPvShape` refuses non-positive dimensions, element counts past `i32::MAX` and a contraction past the i64 accumulator licence; `check_launch_buffers` refuses null, misaligned, short and overlapping buffers; `proofs/ExactPvLaunchContract.v` derives the dot-product theorem's premises from the checked domain. Launching the PTX through `load_ptx` claims none of this. `tests/exact_pv_launch_contract.rs`, the driver-spy tests in `src/cuda_runtime.rs`. |
 | Python GPU PTX cache omitted compiler identity | The key holds a SHA-256 of the loaded `liby.so`, its path, the target, the hardware profile's hash and the `Y_`/`YSU_` environment. A rebuilt or re-pointed library refuses cache hits until Python restarts. The loaded mapping is matched by path and inode, not device: btrfs reports different devices to `stat()` and `/proc/self/maps`, and comparing devices refused every real library. `python/tests/test_ptx_cache.py`. |

@@ -1,6 +1,9 @@
 """
-High-Level Block Operations for Y.
-Provides parallel block-level primitives: cdiv, arange, load, store, dot, block_scan, block_sort, block_where, and associative_reduce.
+Block helpers named after Triton's: cdiv, arange, load, store, dot, block_scan,
+block_sort, block_where and associative_reduce.
+
+They are PyTorch calls on whole tensors; no Y kernel runs. `block_scan` is
+`torch.cumsum` and its relatives, `block_sort` is `torch.sort`.
 """
 
 from typing import Optional, Callable, Any, Union
@@ -87,9 +90,8 @@ def where(
     return torch.where(condition, x, y)
 
 def block_scan(x: torch.Tensor, dim: int = -1, op: str = "sum", out: Optional[torch.Tensor] = None) -> torch.Tensor:
-    """Performs parallel prefix scan across a tensor block along specified dimension with warp butterfly shuffle tree acceleration."""
+    """`torch.cumsum` / `cumprod` / `cummax` / `cummin` along `dim`."""
     if x.is_cuda:
-        # CUDA Warp Butterfly Shuffle & Decoupled Lookback Vectorized Scan
         if op == "sum":
             if out is not None:
                 torch.cumsum(x, dim=dim, out=out)
@@ -118,7 +120,7 @@ def block_scan(x: torch.Tensor, dim: int = -1, op: str = "sum", out: Optional[to
 
 
 def block_sort(x: torch.Tensor, dim: int = -1, descending: bool = False) -> torch.Tensor:
-    """Performs parallel block-level sorting along specified dimension."""
+    """`torch.sort` along `dim`, values only."""
     values, _ = torch.sort(x, dim=dim, descending=descending)
     return values
 
@@ -127,7 +129,7 @@ def block_where(condition: torch.Tensor, x: torch.Tensor, y: torch.Tensor) -> to
     return torch.where(condition, x, y)
 
 def associative_reduce(x: torch.Tensor, dim: int = -1, op: str = "sum", combine_fn: Optional[Callable] = None) -> torch.Tensor:
-    """Applies a custom or built-in associative reduction tree over tensor blocks."""
+    """`torch.sum`/`amax`/`amin`/`mean` along `dim`, or a Python loop folding `combine_fn` over the slices."""
     if combine_fn is not None:
         slices = torch.unbind(x, dim=dim)
         res = slices[0]
