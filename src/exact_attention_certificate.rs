@@ -69,8 +69,8 @@ use crate::exact_gemm_certificate::{render_trust_boundary_of, Check, TrustItem};
 /// The compile-time parameters of one emitted attention kernel.
 ///
 /// `KFix` is deliberately absent: it is a `.param .u32` read at LAUNCH, so no
-/// compilation fixes it and the certificate states it as a precondition on the
-/// caller instead. See [`TRUST_BOUNDARY`].
+/// compilation fixes it. The kernel checks its range when it starts; see
+/// [`TRUST_BOUNDARY`].
 #[derive(Debug, Clone, Copy)]
 pub struct Certificate {
     /// The per-lane vector width the kernel was emitted for.
@@ -117,20 +117,18 @@ pub const TRUST_BOUNDARY: &[TrustItem] = &[
         stated_in: Some((CAPSTONE, "The exp's accuracy is a hypothesis")),
     },
     TrustItem {
-        claim: "That the caller passes a `KFix` in range. The kernel reads it as a \
+        claim: "That a `KFix` out of range stops the kernel. The kernel reads it as a \
                 `.param .u32` at LAUNCH, so no compilation fixes it and this certificate \
                 cannot instantiate it.",
         because: "Both failure modes are proved rather than supposed: `KFix = 0` makes every \
                   weight identical, so the softmax carries no information about the scores \
                   at all; and at `KFix >= 2^31` the SIGNED `mul.wide.s32` reads the \
                   parameter negative and a key's weight becomes ZERO - the key vanishes. \
-                  `exact_attention::temperature_fixed_point` refuses both, and it is a HOST \
-                  helper: a caller that computes the multiplier some other way is not \
-                  checked by anything.",
-        check: Check::Unchecked(
-            "a check at the launch boundary rather than in a host helper the caller may not \
-             use - the kernel cannot check a runtime parameter and say why",
-        ),
+                  Both accumulating entries check the parameter as that multiply reads it \
+                  and trap below 1, so a launch outside `1..2^31` fails instead of \
+                  answering. `exact_attention::temperature_fixed_point` refuses the same \
+                  values on the host and says why; the kernel cannot.",
+        check: Check::Pinned("tests/attention_kfix_is_checked_at_launch.rs"),
         stated_in: Some((CAPSTONE, "`KFix` is itself a rounded temperature")),
     },
     TrustItem {

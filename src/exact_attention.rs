@@ -36,9 +36,11 @@ pub const MAX_EXACT_SEQ_LEN: usize = ((1usize << 63) - 1) / ((1usize << 28) * 12
 /// The smallest multiplier the kernel's `mul.wide.s32` reads as positive.
 ///
 /// The parameter is declared `.param .u32 q6` and consumed by a SIGNED wide
-/// multiply, so the two readings diverge at `2^31`. Nothing in the emitter can
-/// check a runtime value; [`temperature_fixed_point`] is where the check goes,
-/// and `proofs/SoftmaxErrorBound.v`'s
+/// multiply, so the two readings diverge at `2^31`. No compilation can check a
+/// runtime value, so the accumulating entries check it when they start and
+/// trap outside `1..2^31` (`tests/attention_kfix_is_checked_at_launch.rs`);
+/// [`temperature_fixed_point`] refuses the same values on the host and says
+/// why. `proofs/SoftmaxErrorBound.v`'s
 /// `the_two_readings_of_the_multiplier_disagree_above_two_to_the_thirty_one`
 /// exhibits the divergence: at `KFix = 2^31` and one unit of score delta, the
 /// unsigned reading gives argument `32768` (a weight of `2^28 * 2^-0.5`) and
@@ -492,6 +494,17 @@ ZSKIP:
     ld.param.u64 %rd5, [q4];
     ld.param.u64 %rd6, [q5];
     ld.param.u32 %r50, [q6];
+    // The temperature's range, checked by the kernel that reads it. KFix must
+    // be at least 1 AS THE MULTIPLY BELOW READS IT, which is signed: 0 gives
+    // every key the argument 0, so every weight is 2^28 and the softmax is
+    // uniform; at or above 2^31 the `mul.wide.s32` reads a negative
+    // multiplier and keys get the weight of an unrelated argument (zero, at
+    // one unit of delta). Both are proved wrong answers
+    // (`SoftmaxErrorBound.v`), and `exact_attention::temperature_fixed_point`
+    // refuses both - but only for a caller that uses it. A kernel cannot say
+    // why it stopped, so it traps; the launch fails instead of answering.
+    setp.lt.s32 %p7, %r50, 1;
+    @%p7 trap;
     cvta.to.global.u64 %rd1, %rd1;
     cvta.to.global.u64 %rd2, %rd2;
     cvta.to.global.u64 %rd3, %rd3;
@@ -649,6 +662,8 @@ FSKIP:
     ld.param.u64 %rd5, [q4];
     ld.param.u64 %rd6, [q5];
     ld.param.u32 %r50, [q6];
+    setp.lt.s32 %p7, %r50, 1;           // KFix out of range: see `attn_accum`
+    @%p7 trap;
     cvta.to.global.u64 %rd1, %rd1;
     cvta.to.global.u64 %rd2, %rd2;
     cvta.to.global.u64 %rd3, %rd3;

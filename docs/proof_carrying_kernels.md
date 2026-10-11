@@ -4328,6 +4328,12 @@ name and says why, and both are theorems
 discharged from the exp's own early-return hypothesis, so it is the *proof* that
 says the key vanishes, not an observation).
 
+Since 2026-10-11 the kernel refuses them as well: `temperature_fixed_point` is a
+host helper a caller may skip, so `attn_accum` and `attn_accum_naive` check the
+parameter as the `mul.wide.s32` reads it (`setp.lt.s32 %p7, %r50, 1`) and trap.
+`tests/attention_kfix_is_checked_at_launch.rs` launches both entries at `0`, `1`,
+`2^19 + 1`, `2^31 - 1`, `2^31` and `2^32 - 1`.
+
 **The quantization error itself is NOT refused**, and saying so is the point of
 having the bound: it is bounded rather than catastrophic, so a compiler that
 refused it would be refusing every temperature.

@@ -92,7 +92,9 @@
     _thirty_one], [the_signed_reading_zeroes_a_weight_the_unsigned_one_keeps]).
     Both bounds were already in `tools/ptx_bridge.py` as a bare `continue` -
     a silent skip of a measurement. They are derived here and enforced by
-    `exact_attention::temperature_fixed_point`.
+    `exact_attention::temperature_fixed_point` on the host, and by the
+    accumulating entries themselves, which trap on a multiplier outside
+    `1..2^31` (`tests/attention_kfix_is_checked_at_launch.rs`).
 
     ** Does the Decomposition schema extend to approximate arithmetic?
 
@@ -959,7 +961,8 @@ Qed.
     _same_weight] and [the_two_readings_of_the_multiplier_disagree_above_two
     _to_the_thirty_one]. Both bounds were already in `tools/ptx_bridge.py` as a
     bare `continue`; what is new is that they are derived, enforced in the
-    compiler by `exact_attention::temperature_fixed_point`, and stated. *)
+    compiler by `exact_attention::temperature_fixed_point` and in the kernel
+    by a trap, and stated. *)
 
 Definition TWO32Q : Q := inject_Z TWO32.
 
