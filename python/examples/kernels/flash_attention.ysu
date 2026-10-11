@@ -5,8 +5,10 @@
 //  STATUS (measured 2026-09-29): THIS KERNEL DOES NOT COMPILE. It declares a
 //  `Pipeline<...>` type, and the type checker refuses it: "unknown generic
 //  type `Pipeline`". Benchmarks.py, benchmark_pytorch_y.py and
-//  run_head_to_head_comparison.py compile it first, so they stop at that
-//  error. rmsnorm.ysu and swiglu.ysu compile.
+//  run_head_to_head_comparison.py used to compile it first and stopped at
+//  that error; they report it now and go on. rmsnorm.ysu and swiglu.ysu
+//  compile. (The loop also carried `@tile(64, 64, 16)`, which tiled nothing
+//  and is refused now; it was removed so the error above is the first.)
 //
 //  Hardware-aware fused attention kernel with online softmax scaling,
 //  multi-stage software pipelining (cp.async), and Tensor Core MMA.
@@ -28,7 +30,6 @@ kernel flash_attention(
     let pipe: Pipeline<stages=2, layout=QK_Tile> = Pipeline::init();
 
     @invariant(kv_tile >= 0)
-    @tile(64, 64, 16)
     for kv_tile in 0..64 step 16 {
         let tx_Q: Transfer<Global, Shared, Async<1>, 128> = cp_async(Q[kv_tile], smem_Q);
         let tx_K: Transfer<Global, Shared, Async<1>, 128> = cp_async(K[kv_tile], smem_K);

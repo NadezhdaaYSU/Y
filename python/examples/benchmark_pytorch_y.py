@@ -33,14 +33,21 @@ def main():
     with open(flash_path, "r") as f:
         flash_code = f.read()
 
+    # This kernel does not compile (see its header), and this step used to
+    # stop the script there. The failure is the result, so it is reported.
+    failures = []
     start_t = time.perf_counter()
-    flash_ptx = y_lang.compile_to_ptx(flash_code, target_sm="sm_90a")
-    compile_ms = (time.perf_counter() - start_t) * 1000.0
-
-    print(f"    -> Compiled to sm_90a PTX in {compile_ms:.2f} ms.")
-    print(f"    -> PTX Output snippet (first 10 lines):")
-    for line in flash_ptx.splitlines()[:10]:
-        print(f"       {line}")
+    try:
+        flash_ptx = y_lang.compile_to_ptx(flash_code, target_sm="sm_89")
+    except ValueError as error:
+        failures.append(flash_path.name)
+        print(f"    -> DOES NOT COMPILE: {str(error).strip().splitlines()[-1]}")
+    else:
+        compile_ms = (time.perf_counter() - start_t) * 1000.0
+        print(f"    -> Compiled to sm_89 PTX in {compile_ms:.2f} ms.")
+        print(f"    -> PTX Output snippet (first 10 lines):")
+        for line in flash_ptx.splitlines()[:10]:
+            print(f"       {line}")
     print()
 
     # 3. Test RMSNorm Kernel JIT Compilation
@@ -64,7 +71,10 @@ def main():
     print()
 
     print("============================================================")
-    print(" All Y Wafer AI production components validated!")
+    if failures:
+        print(f" Did not compile: {', '.join(failures)}. Everything else above did.")
+    else:
+        print(" Every kernel above compiled.")
     print("============================================================")
 
 if __name__ == "__main__":

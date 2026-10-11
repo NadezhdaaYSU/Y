@@ -5,9 +5,9 @@ Runs rigorous performance, compilation throughput, JIT latency, autotuning scali
 and live GPU CUDA execution benchmarks on NVIDIA GeForce RTX 4070 Ti SUPER.
 """
 
+import platform
 import sys
 import time
-import json
 from pathlib import Path
 
 # Add python module path
@@ -22,6 +22,14 @@ try:
 except ImportError:
     HAS_TORCH = False
 
+# Every number the summary report states, filled in by the sections below. The
+# report used to be a fixed template - its figures, its GPU and its software
+# versions were literals, written out the same whatever this run measured, and
+# it listed a FlashAttention kernel as "emitted" that does not compile.
+RESULTS = {}
+KERNELS = repo_root / "python" / "examples" / "kernels"
+
+
 def print_header(title):
     print("\n" + "=" * 70)
     print(f"  {title}")
@@ -30,25 +38,29 @@ def print_header(title):
 def benchmark_jit_compilation_speed():
     print_header("1. JIT Compilation Latency & Cache Throughput")
 
-    flash_path = repo_root / "python" / "examples" / "kernels" / "flash_attention.ysu"
-    with open(flash_path, "r") as f:
-        source = f.read()
+    # This used to compile `flash_attention.ysu`, which does not compile (see
+    # its header), so the whole suite stopped at its first call.
+    kernel_path = KERNELS / "rmsnorm.ysu"
+    with open(kernel_path, "r") as f:
+        # A source the disk cache has never seen, or "cold" is a lookup.
+        source = f.read() + f"\n// cold-{time.time_ns()}\n"
 
     # Cold Compilation
     t0 = time.perf_counter()
-    ptx_cold = y_lang.compile_to_ptx(source, target_sm="sm_90a")
+    ptx_cold = y_lang.compile_to_ptx(source, target_sm="sm_89")
     t_cold_ms = (time.perf_counter() - t0) * 1000.0
 
     # Warm Compilation (Cache Hit)
     iterations = 10000
     t0 = time.perf_counter()
     for _ in range(iterations):
-        ptx_warm = y_lang.compile_to_ptx(source, target_sm="sm_90a")
+        ptx_warm = y_lang.compile_to_ptx(source, target_sm="sm_89")
     t_warm_total_s = time.perf_counter() - t0
     t_warm_avg_us = (t_warm_total_s / iterations) * 1e6
     ops_per_sec = iterations / t_warm_total_s
+    RESULTS["jit"] = (kernel_path.name, t_cold_ms, t_warm_avg_us, ops_per_sec)
 
-    print(f"  * Source Kernel       : {flash_path.name} ({len(source)} bytes)")
+    print(f"  * Source Kernel       : {kernel_path.name} ({len(source)} bytes)")
     print(f"  * Cold JIT Latency    : {t_cold_ms:.3f} ms")
     print(f"  * Warm Cache Latency  : {t_warm_avg_us:.3f} µs per call")
     print(f"  * JIT Cache Throughput: {ops_per_sec:,.0f} compiles/sec")
@@ -68,21 +80,23 @@ def benchmark_autotuner_search_scaling():
     print(f"  {'Matrix Size':<18} | {'Candidates Generated':<20} | {'Generation Latency (µs)':<22}")
     print("-" * 68)
 
+    RESULTS["autotune"] = []
     for m, n, k in matrix_dims:
         t0 = time.perf_counter()
         for _ in range(100):
             candidates = y_lang.generate_autotune_search_space(m, n, k)
         t_avg_us = ((time.perf_counter() - t0) / 100) * 1e6
         dim_str = f"{m}x{n}x{k}"
+        RESULTS["autotune"].append((dim_str, len(candidates), t_avg_us))
         print(f"  {dim_str:<18} | {len(candidates):<20} | {t_avg_us:<22.2f}")
 
 def benchmark_ptx_codegen_targets():
     print_header("3. PTX Codegen Throughput Across Architecture Targets")
 
     kernels = [
-        ("FlashAttention-2", repo_root / "python" / "examples" / "kernels" / "flash_attention.ysu"),
-        ("RMSNorm",          repo_root / "python" / "examples" / "kernels" / "rmsnorm.ysu"),
-        ("SwiGLU",            repo_root / "python" / "examples" / "kernels" / "swiglu.ysu"),
+        ("FlashAttention-2", KERNELS / "flash_attention.ysu"),
+        ("RMSNorm",          KERNELS / "rmsnorm.ysu"),
+        ("SwiGLU",           KERNELS / "swiglu.ysu"),
     ]
 
     targets = ["sm_80", "sm_86", "sm_89", "sm_90a"]
@@ -95,10 +109,17 @@ def benchmark_ptx_codegen_targets():
             code = f.read()
 
         for sm in targets:
-            # Clear cache for fair benchmark by varying prompt dummy space if needed
+            # A source the disk cache has never seen, so this is a compile.
             t0 = time.perf_counter()
-            ptx = y_lang.compile_to_ptx(code + f" // {sm}", target_sm=sm)
+            try:
+                ptx = y_lang.compile_to_ptx(code + f"\n// {sm} {time.time_ns()}\n", target_sm=sm)
+            except ValueError as error:
+                reason = str(error).strip().splitlines()[-1].strip()
+                RESULTS.setdefault("codegen", []).append((kname, sm, None, reason))
+                print(f"  {kname:<18} | {sm:<8} | DOES NOT COMPILE: {reason}")
+                continue
             t_ms = (time.perf_counter() - t0) * 1000.0
+            RESULTS.setdefault("codegen", []).append((kname, sm, t_ms, len(ptx)))
             print(f"  {kname:<18} | {sm:<8} | {len(ptx):<10} | {t_ms:<18.3f}")
 
 def benchmark_pytorch_gpu_execution():
@@ -112,7 +133,9 @@ def benchmark_pytorch_gpu_execution():
     print(f"  * Active GPU Accelerator : {device_name}")
     print(f"  * CUDA Memory Allocator  : PyTorch CUDACachingAllocator")
 
-    # Simple vector add kernel in Y
+    # A launch-latency probe, not a vector add: every thread runs the loop
+    # below over the first elements, and nothing reads `C` back. The number
+    # it measures is the cost of a launch.
     y_vecadd_source = """
     kernel vec_add(A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>, N: I32) {
         @invariant(i >= 0)
@@ -125,7 +148,7 @@ def benchmark_pytorch_gpu_execution():
     }
     """
 
-    print("\n  [+] Compiling Y vector addition kernel to PTX for sm_89...")
+    print("\n  [+] Compiling Y launch-latency kernel to PTX for sm_89...")
     kernel = y_lang.TorchKernel(y_vecadd_source, kernel_name="vec_add", target_sm="sm_89")
     print("      -> PTX compiled and loaded into CUDA module successfully.")
 
@@ -158,42 +181,53 @@ def benchmark_pytorch_gpu_execution():
     print(f"  * Total GPU Time         : {total_time_ms:.2f} ms")
     print(f"  * Avg Launch Latency     : {avg_latency_us:.2f} µs")
     print(f"  * Kernel Launch Rate     : {launches / (total_time_ms / 1000.0):,.0f} launches/sec")
+    RESULTS["launch"] = (device_name, launches, avg_latency_us, launches / (total_time_ms / 1000.0))
 
 def generate_benchmark_summary_report():
     print_header("5. Summary Report Artifact Generation")
     report_path = repo_root / "benchmark_wafer_features_results.md"
-    
-    report_content = f"""# Y Engine — Wafer AI Features Benchmark Results
 
-**Hardware Platform**: NVIDIA GeForce RTX 4070 Ti SUPER (16GB GDDR6X)  
-**Execution Environment**: Python 3.10 / PyTorch 2.12.0+cu130 / CUDA 13.0  
-**Compiler Backend**: Y C-ABI shared library (`liby.so`)
+    lines = ["# Y Engine — Wafer AI Features Benchmark Results", ""]
+    gpu = RESULTS["launch"][0] if "launch" in RESULTS else "not measured (no PyTorch CUDA)"
+    torch_version = torch.__version__ if HAS_TORCH else "not installed"
+    lines += [
+        f"**GPU**: {gpu}  ",
+        f"**Execution Environment**: Python {platform.python_version()} / PyTorch {torch_version}  ",
+        "**Compiler Backend**: Y C-ABI shared library (`liby.so`)",
+        "",
+        "Every figure below was measured by this run of `python/examples/Benchmarks.py`.",
+        "",
+    ]
+    if "jit" in RESULTS:
+        name, cold_ms, warm_us, per_sec = RESULTS["jit"]
+        lines += [
+            "## JIT Compilation Latency",
+            f"* Cold compile of `{name}`: {cold_ms:.3f} ms",
+            f"* Warm cache lookup: {warm_us:.3f} µs ({per_sec:,.0f} lookups/sec)",
+            "",
+        ]
+    if "launch" in RESULTS:
+        _, launches, latency_us, rate = RESULTS["launch"]
+        lines += [
+            "## Kernel Launch Latency",
+            f"* {launches:,} launches of a trivial kernel: {latency_us:.2f} µs each ({rate:,.0f} launches/sec)",
+            "",
+        ]
+    if "autotune" in RESULTS:
+        lines += ["## Autotuning Candidate Generation", ""]
+        lines += [f"* {dims}: {count} candidates in {us:.2f} µs" for dims, count, us in RESULTS["autotune"]]
+        lines.append("")
+    if "codegen" in RESULTS:
+        lines += ["## PTX Emission", ""]
+        for kname, sm, t_ms, detail in RESULTS["codegen"]:
+            if t_ms is None:
+                lines.append(f"* {kname} (`{sm}`): does not compile - {detail}")
+            else:
+                lines.append(f"* {kname} (`{sm}`): {t_ms:.3f} ms, {detail} bytes")
+        lines.append("")
 
----
-
-## Performance Summary
-
-### 1. JIT Compilation Latency
-* **Cold JIT Compilation**: `6.37 ms` (Full parse, type-check, bank-conflict verification, and PTX codegen).
-* **Warm Cache Lookup**: `0.18 µs` (Over `5,500,000` cached JIT compiles/sec throughput).
-
-### 2. PyTorch GPU Zero-Copy Launch Latency
-* **Average Kernel Launch Latency**: `~12.4 µs` per launch directly on PyTorch GPU Tensors.
-* **Kernel Launch Throughput**: `~80,600 launches/sec` on NVIDIA RTX 4070 Ti SUPER.
-
-### 3. Autotuning Candidate Tile Generation
-* **Candidate Space Generation**: `< 3.5 µs` for matrix dimensions up to $8192 \\times 8192$.
-
-### 4. LLM Reference Kernel PTX Emission
-* **FlashAttention-2 (`sm_90a` Hopper)**: Emitted in `6.37 ms` (Verified 0 shared memory bank conflicts).
-* **RMSNorm (`sm_80` Ampere)**: Emitted in `1.21 ms`.
-* **SwiGLU (`sm_89` Ada)**: Emitted in `0.95 ms`.
-
----
-*Report generated automatically by `python/examples/run_full_wafer_benchmarks.py`.*
-"""
     with open(report_path, "w") as f:
-        f.write(report_content)
+        f.write("\n".join(lines))
     print(f"  -> Benchmark report written to: {report_path.name}")
 
 def main():
