@@ -83,10 +83,10 @@ sed -n 'START,ENDp' docs/claude-history/project-before-2026-10-10.md
   Status (2026-10-11): Research queue (proof programme / translation validator): no wrong answer; not re-measured, see known_issues "Performance, the proof programme".
 - Line 1639: THE GPU KERNEL CARRIES A CERTIFICATE NOW, AND IT STATES WHAT `ptxas` IS
   Preview: (a) This covers the exact-attention kernel only. The tensor-core GEMMs Phase 3 is really about have no proofs to carry yet, and `loopgap.py` says 32 of 48 loop kernels are behin...
-  Status (2026-10-11): (c) OPEN: `KFix` is unchecked at launch (known_issues, first item); the rest is research.
+  Status (2026-10-11): (c) fixed: the accumulating entries trap on a `KFix` outside `1..2^31` (`tests/attention_kfix_is_checked_at_launch.rs`); the rest is research.
 - Line 1692: THE PROVED SET AND THE VALIDATED SET NOW OVERLAP BY ONE KERNEL, AND THE CEILING THAT KERNEL NEEDS WAS WRITTEN DOWN NOWHERE
   Preview: (a) Neither licence is checked at the launch boundary and no compilation can check either - `T`, `D`, `Q` and the extents are runtime parameters, exactly the `KFix` shape. (b) T...
-  Status (2026-10-11): (a) OPEN: `exact_pv`'s licences are unchecked at launch (known_issues, first item); the rest is research.
+  Status (2026-10-11): (a) fixed in `3e67cd9` (`verified_exact_pv::ExactPvShape` and `check_launch_buffers` for checked launches, `tests/exact_pv_launch_contract.rs`); the rest is research.
 - Line 1712: A SHIPPED KERNEL IS REFUTED, THE FIRST GEMM IS VALIDATED, AND THE "LARGEST LEVER" UNBLOCKS NOTHING
   Preview: (a) The emitter should emit `fma.rn.f32` where it emits `mul.f32`+`add.f32`, and the measurement says it is free - byte-identical SASS on the one kernel checked, and 26 corpus k...
   Status (2026-10-11): (a) fixed by later entries (the emitter states `fma.rn`); the rest is research.

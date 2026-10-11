@@ -9,16 +9,6 @@ Reviewed 2026-10-11 against every report in [the archived backlog](claude-histor
 most reproduced against the compiler built from the tree rather than read from
 source; each entry there now carries its status. What is still open:
 
-### A wrong answer under a precondition nothing checks
-
-- **Exact attention's `KFix`** (archive 1639 (c)) and **`exact_pv`'s licences
-  on `T`, `D`, `Q` and the extents** (archive 1692 (a)) are kernel parameters.
-  `KFix = 0` makes the softmax uniform and `KFix >= 2^31` makes a key vanish;
-  nothing at the launch boundary checks either, and `temperature_fixed_point`
-  is a host helper a caller may skip. The certificates name them as trust
-  items. The remedy is the exact GEMM's: check them when the kernel starts.
-  That changes PTX that is proved and validated, so it is its own increment.
-
 ### Benchmarks
 
 - `python/examples/run_head_to_head_comparison.py` is not a fair comparison:
@@ -87,6 +77,8 @@ source; each entry there now carries its status. What is still open:
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| Exact attention's `KFix` was checked only by a host helper (archive 1639 (c)) | The accumulating entries took any `u32` temperature: `KFix = 0` launched and returned a uniform softmax, and `KFix >= 2^31`, which the signed `mul.wide.s32` reads negative, returned one where most keys weigh zero. `exact_attention::temperature_fixed_point` refused both, for callers that used it. `attn_accum` and `attn_accum_naive` now check the parameter as the multiply reads it and trap outside `1..2^31`; the certificate's item is checked rather than trusted. `tests/attention_kfix_is_checked_at_launch.rs` (both entries at `0`, `1`, `2^19 + 1`, `2^31 - 1`, `2^31`, `2^32 - 1` on the device, in-range weights against the host exp). |
+| `exact_pv`'s licences on `T`, `D`, `Q` and the extents (archive 1692 (a)) | Fixed in `3e67cd9`; listed open here by mistake on 2026-10-11. `verified_exact_pv::ExactPvShape` refuses non-positive dimensions, element counts past `i32::MAX` and a contraction past the i64 accumulator licence; `check_launch_buffers` refuses null, misaligned, short and overlapping buffers; `proofs/ExactPvLaunchContract.v` derives the dot-product theorem's premises from the checked domain. Launching the PTX through `load_ptx` claims none of this. `tests/exact_pv_launch_contract.rs`, the driver-spy tests in `src/cuda_runtime.rs`. |
 | Python GPU PTX cache omitted compiler identity | The key holds a SHA-256 of the loaded `liby.so`, its path, the target, the hardware profile's hash and the `Y_`/`YSU_` environment. A rebuilt or re-pointed library refuses cache hits until Python restarts. The loaded mapping is matched by path and inode, not device: btrfs reports different devices to `stat()` and `/proc/self/maps`, and comparing devices refused every real library. `python/tests/test_ptx_cache.py`. |
 | LLVM data-carrying enums | Constructors store each field in its own slot with its declared type, `match` tests the tag and binds typed payloads per arm, and `x.data.Variant._N` reads and writes a field. Payloads are scalars or references, at most 8; aggregate, generic and Q payloads and ambiguous constructor names are refused by name. `tests/llvm_enum_payloads.rs`. |
 | Ordinary LLVM Q formats were computed as integers | `let x: Q16.16 = 1.5` stored 1 and `x > 1.0` was false. A Q value is `value * 2^frac` in 8/16/32/64-bit storage; literals, `*` and `/` round to nearest with ties away from zero; overflow and division by zero trap; struct fields keep the scale; arrays of a Q format, `match` on a Q value and Q arguments to built-ins are refused by name. Manual §20.3; `tests/llvm_fixed_point.rs` (independent oracle, four formats, -O0 and -O2). |
