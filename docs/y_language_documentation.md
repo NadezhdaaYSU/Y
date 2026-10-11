@@ -5084,10 +5084,54 @@ checker does not know), so the scripts that load it stop there.
   never measured. The head-to-head script's *launch* column times back-to-back
   calls through `TorchKernel.launch` beside PyTorch's and Triton's own launches.
 
-### 34.4 CPU Interpreter & Memory Bounds Debugger (`CPUInterpreter`)
-* **Overview**: Software CPU execution runtime for Y kernels with out-of-bounds array access validation.
-* **Usage**: Enabled via `Y_INTERPRETER=1` or `debug_interpret()`. Performs shape rank validation and array axis range checking (`validate_tensor_bounds`) to catch memory corruption before CUDA deployment.
-* **Implementation**: Located in `python/y_lang/interpreter.py`.
+### 34.4 CPU interpreter (`y_lang.interpreter`)
+Runs the PTX a kernel compiles to on the CPU, so a kernel can be debugged
+without a GPU and its memory errors are reported instead of corrupting memory.
+
+* **Usage**: set `Y_INTERPRETER=1` (or `Y_DEBUG=1`) and every
+  `TorchKernel.launch` - and so every `@y_lang.jit` launch - runs on the CPU and
+  writes its outputs into the tensors as the GPU would; or call
+  `debug_interpret(source_or_kernel, grid, block, args)` for one launch.
+* **What stops a kernel**, with the thread, block, buffer and PTX line: an
+  access outside every buffer it was given or past one's end; a misaligned
+  access; a shared variable indexed past its end; `trap` (a failed `@bounds`
+  check, an out-of-range exact-attention temperature, an `rmsnorm_v4` launch of
+  the wrong shape); `bar.sync` reached by part of a block; `shfl.sync` whose
+  mask names lanes that are elsewhere; two different values stored to one
+  address by one instruction; an integer division by zero; and any instruction
+  or modifier it does not model - the tensor-core instructions (`mma`,
+  `ldmatrix`, `wmma`), the packed FP8/FP16 conversions, `.relu`, `bar.arrive`
+  and `barrier.sync` without `.aligned` among them. Those are refused, not
+  approximated.
+* **Fidelity**: threads run a block (or several) at a time in SIMT lockstep,
+  lowest program counter first. Each of the 518 instruction forms it models
+  was run on this machine's RTX 4070 Ti SUPER and on the interpreter over its
+  operand types' edge values and random bits, and the results agree bit for
+  bit, NaN payloads and signed zeros included
+  (`python/y_lang/tests/test_interpreter_ops.py`). That comparison found 142
+  forms wrong in the interpreter's first version. The GPU's rules it now
+  follows:
+  * float32 and float16 instructions write one NaN (`0x7FFFFFFF`, `0x7FFF`),
+    `neg` and `abs` included. Float64 ones pass on an operand's NaN, quieted:
+    `add`, `sub`, `mul`, `min` and `max` the second operand's first, `div` the
+    first's, `fma` b's, then c's, then a's.
+  * `.ftz` flushes a result that is still below 2^-126 after rounding to 24
+    bits.
+  * `min`/`max` order -0 below +0, and `.sat` writes +0 for -0.
+  * A float NaN converts to 0, or to `0x80...` from float64 or to a 64-bit
+    integer.
+  * `div.approx.f32` returns 0 for divisors above 2^126.
+  * `sin.approx` and `cos.approx` reduce their argument in float32 first, which
+    loses the whole fraction of a turn for large arguments.
+
+  The other `.approx` functions are computed accurately, so they agree with
+  the GPU's only within its documented error. Exact attention, BN254 field
+  multiplication, and `cp.async` zero-fill by source size agree bit for bit
+  as whole kernels (`python/y_lang/tests/test_interpreter.py`).
+* **History**: until 2026-10-11 this section described a runtime that did not
+  exist. The interpreter printed its arguments and returned `SUCCESS`; a
+  debug-mode launch printed "Executed safely under software bounds validation"
+  and wrote nothing.
 
 ### 34.5 Quantized and LLM helpers (`y_lang.ops.quant`)
 None of these runs a kernel the Y compiler emitted:

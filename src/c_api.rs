@@ -174,7 +174,10 @@ pub unsafe extern "C" fn y_autotune_search_space_json(m: u32, n: u32, k: u32, is
     CString::new(json_output).unwrap().into_raw()
 }
 
-/// Executes a Y kernel using CPU Interpreter & Debugger Mode with boundary checks.
+/// Checks that a Y program parses, type-checks and lowers through the CPU
+/// emitter; returns 0 if it does. It executes nothing, whatever its name says:
+/// the CPU interpreter that runs kernels is `python/y_lang/interpreter.py`,
+/// which interprets the PTX `y_compile_to_ptx` returns.
 ///
 /// # Safety
 /// `source_ptr` must be a valid, null-terminated C string.

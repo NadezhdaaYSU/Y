@@ -79,17 +79,16 @@ class TorchKernel:
         self._cuLaunchKernel = cuLaunchKernel
 
     def launch(self, grid: Tuple[int, int, int], block: Tuple[int, int, int], args: list, stream: Any = None):
-        """Launches the compiled Y PTX kernel with PyTorch tensors or primitive args, or executes CPU Interpreter in debug mode."""
+        """Launch the compiled kernel on the GPU, or, with `Y_INTERPRETER=1` or
+        `Y_DEBUG=1`, run the same PTX on the CPU interpreter, which writes the
+        outputs and stops at the first out-of-bounds access, `trap` or
+        divergent barrier (`y_lang.interpreter`)."""
         from .compiler import is_interpreter_enabled
         if is_interpreter_enabled():
-            # CPU Interpreter & Debug Mode execution
-            print(f"[Y DEBUG INTERPRETER] Launching kernel '{self.kernel_name}' with grid={grid}, block={block}")
-            for idx, arg in enumerate(args):
-                if hasattr(arg, "data_ptr") and callable(arg.data_ptr):
-                    print(f"  Arg [{idx}]: PyTorch Tensor shape={tuple(arg.shape)}, dtype={arg.dtype}, ptr={hex(arg.data_ptr())}")
-                else:
-                    print(f"  Arg [{idx}]: Scalar value={arg}")
-            print(f"[Y DEBUG INTERPRETER] Executed safely under software bounds validation.")
+            # This used to print "Executed safely under software bounds
+            # validation" and return, running nothing and writing nothing.
+            from .interpreter import CPUInterpreter
+            CPUInterpreter(self.kernel_name, ptx=self.ptx).run(grid, block, args)
             return
 
         self._ensure_loaded()
