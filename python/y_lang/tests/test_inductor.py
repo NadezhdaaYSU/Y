@@ -129,9 +129,10 @@ class YInductorTest(unittest.TestCase):
             out = cm(x, y, z)
             ref = Elementwise()(x, y, z)
         kernels = reports[-1].kernels
-        self.assertEqual([k.ops for k in kernels], [["add", "relu", "mul"], ["sub"]],
-                         "the multiply feeding the subtract must start a new kernel")
-        self.assertEqual([k.launches for k in kernels], [1, 1], "every kernel must have run")
+        # One kernel: a multiply feeding a subtract is fused now that its
+        # product is rounded first (it started a second kernel until 2026-10-11).
+        self.assertEqual([k.ops for k in kernels], [["add", "relu", "mul", "sub"]])
+        self.assertEqual([k.launches for k in kernels], [1], "every kernel must have run")
         self.assertIn("kernel y_kernel(", kernels[0].source)
         self.assertTrue(torch.equal(bits(out), bits(ref)), "a lowered result differs from eager")
 
@@ -155,7 +156,7 @@ class YInductorTest(unittest.TestCase):
         self.assertTrue(torch.equal(bits(b), bits(ref)), "F.relu differs from eager")
 
     @unittest.skipUnless(CUDA, NO_CUDA)
-    def test_a_multiply_is_never_fused_into_the_add_it_feeds(self):
+    def test_a_multiply_shares_a_kernel_with_the_add_it_feeds(self):
         n = 1 << 20
         torch.manual_seed(7)
         a, b, c = (torch.randn(n, device="cuda") for _ in range(3))
@@ -167,21 +168,21 @@ class YInductorTest(unittest.TestCase):
         cm, reports = compile_with_reports(MulAdd())
         with torch.no_grad():
             s, d = cm(a, b, c)
+        # Fused - and still eager's answer in every bit, because the kernel's
+        # `let`-bound product is rounded before the add (the premise below).
+        # Kept apart until 2026-10-11, when ptxas contracted the pair.
         ops = [k.ops for k in reports[-1].kernels]
-        for group in ops:
-            self.assertFalse("mul" in group and ("add" in group or "sub" in group),
-                             f"a multiply shares a kernel with an add or subtract: {ops}")
+        self.assertTrue(any("mul" in g and "add" in g for g in ops), f"the multiply-add was not fused: {ops}")
+        self.assertTrue(any("mul" in g and "sub" in g for g in ops), f"the multiply-subtract was not fused: {ops}")
         self.assertTrue(torch.equal(bits(s), bits(a * b + c)))
         self.assertTrue(torch.equal(bits(d), bits(c - a * b)))
 
-        # The premise, re-measured 2026-10-11. This block asserted that the pair
-        # differs from eager when fused, because ptxas contracted the `let`-bound
-        # form this module writes into one FMA (245,999 of 1,048,576 results
-        # differed). The PTX emitter now rounds a `let`-bound product first
-        # (`mul.rn`, which ptxas does not contract), so that form matches eager
-        # in every result and the rule above is conservative: fusing the pair
-        # would now be exact. The syntactic `a * b + c` is still one `fma.rn` by
-        # design and still differs - the control that this comparison can fail.
+        # The premise of the fusion above, measured: the `let`-bound form this
+        # module writes matches eager in every result (the PTX emitter rounds a
+        # `let`-bound product first, `mul.rn`), where until 2026-10-11 ptxas
+        # contracted it into one FMA and 245,999 of 1,048,576 results differed.
+        # The syntactic `a * b + c` is still one `fma.rn` by design and still
+        # differs - the control that this comparison can fail.
         def mad(body: str) -> torch.Tensor:
             kernel = TorchKernel(
                 "kernel y_mad(xa: GlobalMemory<F32>, xb: GlobalMemory<F32>, xc: GlobalMemory<F32>, "
@@ -296,7 +297,7 @@ class YInductorTest(unittest.TestCase):
         # `y_inductor(module, inputs)`, the call the package's examples make.
         x, y, z = (t[: 64 * 64].reshape(64, 64) for t in operands(3))
         compiled = y_inductor(Elementwise(), [x, y, z])
-        self.assertEqual([k.ops for k in compiled.y_report.kernels], [["add", "relu", "mul"], ["sub"]])
+        self.assertEqual([k.ops for k in compiled.y_report.kernels], [["add", "relu", "mul", "sub"]])
         with torch.no_grad():
             self.assertTrue(torch.equal(bits(compiled(x, y, z)), bits(Elementwise()(x, y, z))))
             # A non-contiguous input with the compiled shape takes the original

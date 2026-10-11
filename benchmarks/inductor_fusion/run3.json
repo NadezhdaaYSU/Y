@@ -1,0 +1,291 @@
+{
+ "meta": {
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER, 615.71.09, 3120 MHz",
+  "torch": "2.13.0+cu130",
+  "python": "3.14.7",
+  "rounds": 15,
+  "calls_per_round": 20,
+  "statistic": "min over rounds"
+ },
+ "results": [
+  {
+   "model": "MulAdd",
+   "n": 1048576,
+   "us": {
+    "eager": 38.758400082588196,
+    "rule": 53.5040020942688,
+    "fused": 22.37440049648285
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add"
+     ],
+     [
+      "mul"
+     ],
+     [
+      "sub"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add"
+     ],
+     [
+      "mul",
+      "sub"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "MulAdd",
+   "n": 4194304,
+   "us": {
+    "eager": 248.30560684204102,
+    "rule": 254.05440330505368,
+    "fused": 221.13280296325684
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add"
+     ],
+     [
+      "mul"
+     ],
+     [
+      "sub"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add"
+     ],
+     [
+      "mul",
+      "sub"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "MulAdd",
+   "n": 16777216,
+   "us": {
+    "eager": 1376.6143798828125,
+    "rule": 1369.5487976074219,
+    "fused": 916.2752151489258
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add"
+     ],
+     [
+      "mul"
+     ],
+     [
+      "sub"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add"
+     ],
+     [
+      "mul",
+      "sub"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "Axpy",
+   "n": 1048576,
+   "us": {
+    "eager": 11.164800077676773,
+    "rule": 10.90560033917427,
+    "fused": 16.53759926557541
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "Axpy",
+   "n": 4194304,
+   "us": {
+    "eager": 124.10880327224731,
+    "rule": 125.96960067749025,
+    "fused": 109.31199789047241
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "Axpy",
+   "n": 16777216,
+   "us": {
+    "eager": 654.694414138794,
+    "rule": 668.4160232543945,
+    "fused": 433.5696220397949
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "Chain",
+   "n": 1048576,
+   "us": {
+    "eager": 26.72640085220337,
+    "rule": 27.262398600578308,
+    "fused": 28.05759906768799
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add",
+      "relu",
+      "mul"
+     ],
+     [
+      "sub"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add",
+      "relu",
+      "mul",
+      "sub"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "Chain",
+   "n": 4194304,
+   "us": {
+    "eager": 217.4976110458374,
+    "rule": 218.4704065322876,
+    "fused": 108.7488055229187
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add",
+      "relu",
+      "mul"
+     ],
+     [
+      "sub"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add",
+      "relu",
+      "mul",
+      "sub"
+     ]
+    ]
+   }
+  },
+  {
+   "model": "Chain",
+   "n": 16777216,
+   "us": {
+    "eager": 1651.6544342041016,
+    "rule": 1152.511978149414,
+    "fused": 488.50879669189453
+   },
+   "kernels": {
+    "rule": [
+     [
+      "mul"
+     ],
+     [
+      "add",
+      "relu",
+      "mul"
+     ],
+     [
+      "sub"
+     ]
+    ],
+    "fused": [
+     [
+      "mul",
+      "add",
+      "relu",
+      "mul",
+      "sub"
+     ]
+    ]
+   }
+  }
+ ]
+}
