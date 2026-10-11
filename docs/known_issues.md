@@ -6,8 +6,9 @@ exhaustive bug audit. No compiler behavior was changed by this documentation wor
 
 ## Issues still visible in current source
 
-| Issue | Evidence and consequence | Historical project snapshot lines |
-| --- | --- | --- |
+None from this review remains open (2026-10-11): each is in the table below
+with the test that pins its fix. The backlog under "Remaining reported issues"
+still holds unreviewed historical reports.
 
 ## Fixed since this review
 
