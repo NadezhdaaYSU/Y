@@ -174,7 +174,6 @@ kernel train_step_gpu(weights: GlobalMemory<F32>, size: I32) {
 
         @invariant(i >= 0)
         @divergence(uniform)
-        @tile(16, 16, 8)
         for i in 0..1024 step 1 {
             @bounds(0, 1024)
             let idx: I32 = i;
@@ -398,7 +397,7 @@ ExprStmt        = Expr , ";" ;
 Attr            = "@require" , "(" , Expr , ")"
                 | "@cache_policy" , "(" , Ident , [ "," , KeyVal ] , ")"
                 | "@atomic"
-                | "@align" , "(" , IntLiteral , ")"
+                (* "@align" is lexed and REFUSED -- see 9.4. *)
                 | "@gpu_uncached"
                 | "@ZeroDrift"
                 | "@ptx_emit" | "@avx_emit" | "@hdl_emit"
@@ -406,7 +405,8 @@ Attr            = "@require" , "(" , Expr , ")"
                 | "@safe" | "@unsafe"
                 | "@bounds" , "(" , Expr , ")"
                 | "@invariant" , "(" , Expr , ")"
-                | "@tile" | "@ghost" | "@divergence"
+                | "@tile" (* on a kernel only; on a loop or fn REFUSED -- see 9.12 *)
+                | "@ghost" | "@divergence"
                 | "@clock_domain" , [ "(" , Expr , ")" ]
                 (* "@prefetch_stride" is lexed and REFUSED -- see 9.14. *)
                 | "@zk_target" , "(" , KeyValList , ")"
@@ -612,7 +612,7 @@ The following table details how high-level Y structures map directly to target L
 |---|---|
 | `@atomic` (Field Load) | `%val = load atomic i32, ptr %ptr seq_cst, align 4` |
 | `@atomic` (Field Store) | `store atomic i32 %val, ptr %ptr seq_cst, align 4` |
-| `@align(N)` | `load i32, ptr %ptr, align N` or `store i32 %val, ptr %ptr, align N` |
+| `@align(N)` | refused (§9.4): it used to claim `align N` on every access without laying the field out at it |
 | `@gpu_uncached` | `%val = load volatile i32, ptr %ptr` (no `!nontemporal`: see §9.5) |
 | Zero Initialization `{}` | `call void @llvm.memset.p0.i64(ptr %var, i8 0, i64 %size, i1 false)` |
 | Array Indexing `arr[idx]` | `%ptr = getelementptr i32, ptr %arr, i32 %idx` |
@@ -780,36 +780,58 @@ host `load` reads nothing from global memory), and the LLVM backend accepted it
 and dropped the policy.
 
 ### 9.3 `@atomic`
-* **Syntax**: `@atomic`
-* **Usage**: Attribute on struct field declarations or variable bindings.
-* **Function**:
-  * **C Backend**: Translates to `_Atomic`.
-  * **LLVM Backend**: Translates to atomic instructions (`load atomic ... seq_cst`, `store atomic ... seq_cst`).
-* **Example**:
+* **Syntax**: `@atomic` or `@atomic(ordering)`, where `ordering` is `relaxed`,
+  `acquire`, `release`, `acq_rel` or `seq_cst` (the default).
+* **Usage**: Attribute on struct field declarations.
+* **Function**: every load and store of the field is a single atomic access.
+  * **LLVM backend**: `load atomic ... seq_cst` / `store atomic ... seq_cst`
+    (or the stated ordering; a load cannot release and a store cannot acquire,
+    so `acq_rel` is `acquire` on a load and `release` on a store).
+  * **Other backends**: `--emit-cpu` refuses it by name - it emits an ordinary
+    Rust field, so the access would not be atomic. `--emit-native` and
+    `--target=r1cs` have no struct field access, and the PTX backend has none.
+    (This section used to describe a C backend; it was removed.)
+* **Example**: one atomic load or store is not a lock. Publishing a value
+  through a flag is what a single atomic field does correctly:
 ```ysu
-struct Lock {
-    @atomic state: I32,
+struct Mailbox {
+    data: I32,
+    @atomic(release) ready: I32,
 }
 
-fn lock_acquire(l: &mut Lock) {
-    while l.state == 1 {
-        // Spin lock
-    }
-    l.state = 1; // Atomic write
+fn publish(m: &mut Mailbox, v: I32) {
+    m.data = v;
+    m.ready = 1; // release store: `data` is visible before `ready` is
 }
 ```
+This example used to be a "spin lock": `while l.state == 1 {}` followed by
+`l.state = 1`. Each access was atomic but the pair was not, so two threads
+could both read 0 and both take the lock. Y has no compare-and-swap.
 
-### 9.4 `@align`
-* **Syntax**: `@align(ByteBoundary)`
-* **Usage**: Applied to struct fields or variables.
-* **Function**: Prevents cache-line false sharing in multi-threaded environments.
-  * **C Backend**: Lowers to C11 `_Alignas(ByteBoundary)`.
-  * **LLVM Backend**: Generates `, align ByteBoundary` qualifiers on loads and stores.
-* **Example**:
+### 9.4 `@align` — **refused**
+
+`@align(N)` on a struct field is a syntax error that names it:
+"`@align` is not implemented".
+
+It used to parse, and the LLVM backend put `align N` on every load and store of
+the field - while laying nothing out. The struct type kept the field at its
+natural offset (`%S = type { i32, i32, ... }` put an `@align(64)` second field
+at offset 4), and the struct's storage was an `alloca` at its natural
+alignment. A load or store that claims an alignment its address does not have
+is undefined behaviour in LLVM, which the optimizer is entitled to act on, and
+the padding this section promised ("resides in a separate cache line to
+prevent false sharing") was never there. The only other backend that read it,
+`--emit-cpu`, dropped it.
+
+To keep two fields off one cache line, pad between them by hand: two fields
+64 bytes apart can never share a 64-byte line, wherever the struct starts.
+`tests/ring_buffer.ysu` does exactly that:
 ```ysu
-struct ThreadState {
-    @align(64) @atomic head: I32, // Cache line size alignment (64 bytes)
-    @align(64) @atomic tail: I32, // Resides in a separate cache line to prevent false-sharing
+struct SpscBuffer {
+    @atomic(acq_rel) head: I64,
+    _pad1: I64, _pad2: I64, _pad3: I64, _pad4: I64, _pad5: I64, _pad6: I64, _pad7: I64,
+    @atomic(acq_rel) tail: I64,
+    // ...
 }
 ```
 
@@ -828,10 +850,10 @@ struct ThreadState {
     become visible before an earlier store. So `c.data = v; c.status = 1;` could
     publish the flag ahead of the data it guards. On the load side
     `!nontemporal` compiled to the same `mov` as without it.
-  * **Other backends**: only the LLVM backend reads it. `--emit-cpu`,
-    `--emit-native` and `--target=r1cs` read no struct-field attribute - this
-    one, `@atomic` or `@align` - and currently emit an ordinary field. That is
-    recorded, not yet refused. The PTX backend has no struct field access.
+  * **Other backends**: only the LLVM backend lowers it. `--emit-cpu`, which
+    emits an ordinary Rust field, refuses it - and `@atomic` - by name; it used
+    to drop both with a clean compile. `--emit-native` and `--target=r1cs`
+    have no struct field access, and neither has the PTX backend.
 * **Example**:
 ```ysu
 struct IPCChannel {
@@ -964,17 +986,17 @@ for i in 0..100 {
 }
 ```
 
-### 9.12 `@tile`
-* **Syntax**: `@tile(dimension_size, stride_step)`
-* **Usage**: Nested loops or parallel iterations.
-* **Function**: Optimizes layout caches by breaking 2D/3D operations into smaller block execution units.
-* **Example**:
-```ysu
-for i in 0..1024 {
-    @tile(16, 4)
-    do_compute(i);
-}
-```
+### 9.12 `@tile` — **on a `kernel` only**
+* **Syntax**: `@tile(M, N, K)` immediately before a `kernel`.
+* **Function**: selects the tensor-core GEMM lowering for that kernel, with
+  `M`, `N` and `K` as its block shape; see the `@tile`-dispatched kernels in
+  `tests/gemm_f16_*.ysu`.
+* **On a loop, a statement or a `fn` it is refused.** It used to parse there
+  and change nothing: on a `for`, the LLVM and PTX backends wrote it into their
+  output as a comment (`[Y TILE OPTIMIZATION] Tiled loop dimensions`, the PTX
+  one twice) and emitted the loop unchanged; on a `fn`, its one reader excluded
+  the function from a helper analysis. This section used to show
+  `@tile(16, 4)` above a call statement, which never parsed.
 
 ### 9.13 `@ghost` — **emitted, NOT stripped; block form only**
 
@@ -1106,7 +1128,7 @@ without a note fails the test, and so does a note on an example that compiles.
 `--emit-llvm`): the type checker refuses it before any backend runs. The
 indices into `rb.buffer` on lines 19 and 36 of the listing have no provable
 bounds, and line 36 dereferences a raw pointer (`Raw pointer dereferencing is
-forbidden in safe blocks`). It is kept as a sketch of the intended surface.
+forbidden in safe blocks`). It is kept as a sketch of the intended surface. Since 2026-10-11 the parser stops earlier still, at the listing's first `@align`, which is refused (§9.4).
 
 ```ysu
 // Lock-Free Single-Producer Single-Consumer Ring Buffer
@@ -1527,7 +1549,7 @@ fn step_synchronization(state: &mut SyncState, signal: I32) {
 **Status: this example does not compile** (checked 2026-09-28, verbatim, with
 `--emit-llvm`): the parser does not accept `@cache_policy` on a struct field
 (line 3 of the listing); the directive applies to a `let` (§9.2). It is kept as
-a sketch of the intended surface.
+a sketch of the intended surface. Since 2026-10-11 the parser stops earlier still, at the listing's first `@align`, which is refused (§9.4).
 
 ```ysu
 struct BiquadFilter {
@@ -1574,7 +1596,7 @@ fn process_audio_frame(filter: &mut BiquadFilter, input: GlobalMemory<F32>, outp
 
 **Status: this example does not compile** (checked 2026-09-28, verbatim, with
 `--emit-llvm`): the parser stops at `0 as ptr` on line 26 of the listing: Y has
-no `as` cast (§20.4). It is kept as a sketch of the intended surface.
+no `as` cast (§20.4). It is kept as a sketch of the intended surface. Since 2026-10-11 the parser stops earlier still, at the listing's first `@align`, which is refused (§9.4).
 
 ```ysu
 struct HazardPointer {
@@ -1616,7 +1638,7 @@ fn release_hazard_ptr(registry: &mut HazardRegistry, thread_id: I32) {
 **Status: this example does not compile** (checked 2026-09-28, verbatim, with
 `--emit-llvm`): the parser refuses `@bounds(0 <= size <= 512)` on line 14 of
 the listing. `@bounds` takes two numbers, `@bounds(min, max)` (§9.10). It is
-kept as a sketch of the intended surface.
+kept as a sketch of the intended surface. Since 2026-10-11 the parser stops earlier still, at the listing's first `@align`, which is refused (§9.4).
 
 ```ysu
 struct SharedIPCChannel {
@@ -1684,7 +1706,7 @@ fn monte_carlo_step(paths: GlobalMemory<F32>, strikes: GlobalMemory<F32>, result
 **Status: this example does not compile** (checked 2026-09-28, verbatim, with
 `--emit-llvm`): the parser does not accept a generic function: `fn
 try_enqueue_mpmc<T>(...)` on line 12 of the listing is `Expected '(' but found
-Lt`. It is kept as a sketch of the intended surface.
+Lt`. It is kept as a sketch of the intended surface. Since 2026-10-11 the parser stops earlier still, at the listing's first `@align`, which is refused (§9.4).
 
 ```ysu
 struct QueueNode<T> {
@@ -1788,6 +1810,13 @@ kernel fft_radix2_butterfly(data: GlobalMemory<F32>, N: I32) {
 ---
 
 ### Example 17: GPU Thermal and Power-Aware Execution
+
+**Status: this example does not compile** (checked 2026-10-11, verbatim):
+`--emit-llvm` writes a module, but the `chisel` block's `nanosleep.u32` is a
+PTX instruction in a host function, so it reaches clang as x86 inline assembly
+and clang rejects it ("invalid instruction mnemonic"); the default build fails
+the same way. It is kept as a sketch of the intended surface.
+
 ```ysu
 struct DeviceState {
     temperature: I32,
@@ -2768,7 +2797,7 @@ This section maps common CUDA C++ and standard C++ patterns directly to their Y 
 | `__shared__ float buf[4096];` | `let buf = SharedMemory::alloc<SmemLayout<F32, ...>>();` | Y requires an explicit layout type |
 | `__global__ float* ptr` | `data: GlobalMemory<F32>` | Global memory is a first-class type |
 | `__device__ float val;` | `let val: F32 = ...;` | Regular variable in kernel scope |
-| `alignas(128) float x;` | `@align(128) let x: F32 = ...;` | `alignas` sets allocation alignment; `@align(N)` in Y sets LLVM `align N` on load/store instructions (access alignment hint), not allocation alignment. Effect is equivalent for most GPU memory patterns. |
+| `alignas(128) float x;` | none | Y has no alignment directive: `@align` is refused (§9.4). It never set allocation alignment, and on the LLVM backend it claimed `align N` on accesses whose addresses did not have it. |
 | `volatile float* ptr;` | a struct field `@gpu_uncached status: I32,` | `volatile` loads and stores on the LLVM backend; it bypasses no cache (§9.5). A struct-field attribute only: `@gpu_uncached let ...` is a syntax error. This row used to say "Non-temporal / bypass cache" and show the `let` form. |
 
 ### 13.2 Synchronization
@@ -3095,7 +3124,7 @@ After the Sentinel probe runs, `.ysu_hw_profile` contains cycle-accurate measure
 | `TENSOR_F16_LATENCY` | Tensor Core MMA latency (F16) | Used to schedule overlap between RT traversal and register initialization |
 | `BRANCH_DIVERGENCE_PENALTY` | Extra cycles per divergent warp branch | If high, use `@divergence(uniform)` to assert non-divergent paths |
 | `WARP_SHUFFLE_LATENCY` | Cycles for `__shfl_sync` | If lower than `SMEM_LATENCY`, compiler prefers warp-shuffle reductions |
-| `L2_CACHE_LINE` | L2 cache line size in bytes | Used to compute `@align(N)` for struct fields in SPSC buffers |
+| `L2_LINE` | L2 cache line size in bytes | Recorded; nothing lays a struct out by it (`@align` is refused, §9.4). This row used to name the key `L2_CACHE_LINE`, which the profile does not contain |
 | `FMA_LATENCY` | FP32 FMA latency | Determines IMAD.WIDE vs IMAD selection for integer multiply-accumulate |
 
 ### 14.2 Choosing a Cache Policy
@@ -5331,6 +5360,16 @@ The debugger calls it `main` in backtraces, but `break main` resolves to the
 runtime's `main` and stops there first, with no source to show. Use
 `break ysu_main`, a `file:line`, or `--debug`, which does that for you.
 
+The runtime calls `int32_t ysu_main(void)` and exits with its result, so on
+this backend - and on `--emit-native`, whose `_start` does the same - `fn main`
+takes no parameters and returns an integer type (or `bool`), or nothing, which
+exits 0. Anything else is refused: a parameter would read whatever its
+argument register held (`fn main(x: I32) -> I32 { return x + 5; }` exited 5),
+and a float result sits in a register the runtime does not read
+(`fn main() -> F64 { return 7.0; }` exited 0). Parameters on `main` are a
+circuit's inputs, for `--target=r1cs`; the CPU JIT calls `main` with explicit
+arguments and has its own check (`tests/host_main_contract.rs`).
+
 With the extension running, `bt` is the Y backtrace: Y frames, a method by its
 Y name, no return addresses, and nothing below `fn main`:
 
@@ -5426,15 +5465,17 @@ not exercised.
   or as `<optimized out>`. Near a scope edge the optimiser merged code across,
   a variable may be listed as `<optimized out>` slightly before or after its
   block.
-- **A data-carrying enum cannot be constructed on the LLVM backend yet**: the
-  constructor call is refused by name, so there is no such value to show.
+- **A data-carrying enum shows its payload as raw words.** For
+  `let s = Shape::Rect(2, 3);`, `print s` gives
+  `{tag = Rect, payload = {2, 3, 0, 0, 0, 0, 0, 0}}` (measured 2026-10-11): the
+  tag by name, the fields neither named nor typed. (This entry used to say
+  such an enum could not be constructed on the LLVM backend; it can now.)
 - A kernel the LLVM backend substitutes with the packed GEMM runs that GEMM
   when its buffers do not overlap, and its body as written otherwise - decided
   when the program runs. Its body's lines and variables belong to the second
   path only, so a breakpoint on them is not hit when the GEMM runs.
-- A `fn main` with no return type leaves the process's exit status undefined,
-  in any build: the runtime exits with whatever the return register holds.
-  Declare `fn main() -> I32` when the status matters.
+- A `fn main` with no return type exits 0. (It used to leave the status
+  undefined: the runtime exited with whatever the return register held.)
 
 ### 38.7 GPU kernels: which PTX and SASS a line became
 

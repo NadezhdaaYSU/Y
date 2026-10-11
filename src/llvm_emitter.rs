@@ -289,7 +289,10 @@ pub struct LlvmEmitter {
     /// declared value is an integer. Integer values stay in their integer
     /// domain on reads and writes; fixed-point floats require conversion.
     zero_drift: BTreeMap<String, (crate::zero_drift::DriftRepr, bool)>,
-    /// Measured accumulate costs from the device, driving the choice.
+    /// Always empty, so `@ZeroDrift` takes the narrowest sufficient
+    /// representation. The costs `.ysu_hw_profile` records are GPU timings;
+    /// `--emit-llvm` used to load them and the default build did not, so the
+    /// two chose differently for one program.
     drift_costs: crate::zero_drift::CostTable,
     /// Constructs this backend refuses to emit: `@ZeroDrift` bindings it
     /// cannot honour, and block-pointer intrinsics whose shape or element
@@ -889,7 +892,6 @@ impl LlvmEmitter {
         let mut is_atomic = false;
         let mut atomic_ordering = "seq_cst".to_string();
         let mut is_volatile = false;
-        let mut align_val = None;
 
         if let Some(attrs_list) = attrs {
             for attr in attrs_list {
@@ -907,18 +909,11 @@ impl LlvmEmitter {
                         }
                     }
                     FieldAttrKind::GpuUncached => is_volatile = true,
-                    FieldAttrKind::Align(expr) => {
-                        if let Expr::IntLit(val, _) = expr {
-                            align_val = Some(val);
-                        }
-                    }
                 }
             }
         }
 
-        let align_str = if let Some(a) = align_val {
-            format!(", align {}", a)
-        } else if is_atomic {
+        let align_str = if is_atomic {
             let default_align = match ty {
                 "i8" | "i1" => "1",
                 "i16" => "2",
@@ -973,7 +968,6 @@ impl LlvmEmitter {
         let mut is_atomic = false;
         let mut atomic_ordering = "seq_cst".to_string();
         let mut is_volatile = false;
-        let mut align_val = None;
 
         if let Some(attrs_list) = attrs {
             for attr in attrs_list {
@@ -991,18 +985,11 @@ impl LlvmEmitter {
                         }
                     }
                     FieldAttrKind::GpuUncached => is_volatile = true,
-                    FieldAttrKind::Align(expr) => {
-                        if let Expr::IntLit(val, _) = expr {
-                            align_val = Some(val);
-                        }
-                    }
                 }
             }
         }
 
-        let align_str = if let Some(a) = align_val {
-            format!(", align {}", a)
-        } else if is_atomic {
+        let align_str = if is_atomic {
             let default_align = match ty {
                 "i8" | "i1" => "1",
                 "i16" => "2",
@@ -1044,16 +1031,6 @@ impl LlvmEmitter {
             )
             .unwrap();
         }
-    }
-
-    /// Insert an LLVM conversion instruction when src_ty != dst_ty.
-    /// Returns the new SSA name holding the converted value, or the
-    /// original `val` if no conversion is needed.
-    /// Supplies measured accumulate costs so `@ZeroDrift` chooses on evidence.
-    /// Without this the selector falls back to narrowest-sufficient, which is
-    /// deterministic but not informed.
-    pub fn set_drift_costs(&mut self, costs: crate::zero_drift::CostTable) {
-        self.drift_costs = costs;
     }
 
     /// Converts a `double` into `repr`'s integer domain.
@@ -3730,6 +3707,37 @@ impl LlvmEmitter {
             None if self.aot_entry_status && f.name == "main" && self.current_impl_target.is_none() => "i32".into(),
             None => "void".into(),
         };
+        // Under the AOT entry the C runtime owns the process's `main`: it calls
+        // `int32_t ysu_main(void)` and passes the result to `exit`. So a
+        // parameter of `fn main` read whatever its argument register held
+        // (`fn main(x: I32) -> I32 { return x + 5; }` exited 5 on one machine
+        // and is undefined on any other), and a float result sat in `xmm0`
+        // while the runtime read `eax` (`fn main() -> F64 { return 7.0; }`
+        // exited 0). A circuit's `main` does take its inputs as parameters, but
+        // that is `--target=r1cs`, which does not come through here, and the
+        // JIT calls `main` with explicit arguments and does not set the flag.
+        if self.aot_entry_status && f.name == "main" && self.current_impl_target.is_none() {
+            if !f.params.is_empty() {
+                self.emit_errors.push(format!(
+                    "Line {}: [LLVM host backend] `fn main` takes {} parameter(s), but the C runtime \
+                     calls it with none, so each would read an uninitialised register. Parameters on \
+                     `main` are a circuit's inputs (`--target=r1cs`); here, take no parameters.",
+                    f.span.line,
+                    f.params.len()
+                ));
+            }
+            // `exit` keeps the low byte, which every integer width (and an
+            // `i1`, returned as 0 or 1 in `al`) delivers in `eax`.
+            if !matches!(ret_type.as_str(), "i1" | "i8" | "i16" | "i32" | "i64") {
+                let declared = f.ret_ty.as_ref().map(ast_type_to_string).unwrap_or_default();
+                self.emit_errors.push(format!(
+                    "Line {}: [LLVM host backend] `fn main` returns `{}`, but the C runtime passes \
+                     main's result to `exit` as a 32-bit integer, so the process would not exit with \
+                     it. Return an integer type, or nothing.",
+                    f.span.line, declared
+                ));
+            }
+        }
         // An array evaluates to its storage's address, and a local's storage
         // is this function's own stack frame: `return v;` would hand the
         // caller a pointer into a frame that no longer exists. (It returned 0
@@ -5442,7 +5450,6 @@ representation, and whether that is lossless depends on the expression.",
                 step,
                 body,
                 is_uniform_branch,
-                tile,
                 span,
                 ..
             } => {
@@ -5475,15 +5482,6 @@ representation, and whether that is lossless depends on the expression.",
                 let cond_lbl = self.fresh_label("for.cond");
                 let body_lbl = self.fresh_label("for.body");
                 let end_lbl = self.fresh_label("for.end");
-
-                if let Some(t) = tile {
-                    writeln!(
-                        &mut self.output,
-                        "  ; [Y TILE OPTIMIZATION] Tiled loop dimensions: M={:?}, N={:?}, K={:?}",
-                        t.block_m, t.block_n, t.block_k
-                    )
-                    .unwrap();
-                }
 
                 // `@prefetch_stride` never reaches here: the type checker
                 // refuses it, because no backend lowers it. This arm used to

@@ -1194,72 +1194,14 @@ fn main() {
             }
         }
     } else {
-        log_info!("No input file provided. Running internal test harness.");
-        // A hardcoded mock Y source based on the specification document
-        r#"
-        @require(avx512 >= 1)
-
-        enum TokenKind {
-            Kernel, Let, Type, Ident, Eof
-        }
-
-        struct Token {
-            kind: TokenKind,
-            line: I32,
-            lexeme: String,
-        }
-
-        struct Lexer {
-            tokens: Vec<Token, PageAllocator>,
-        }
-
-        @safe
-        fn load_source(path: String) -> String {
-            let content = File::read(path);
-            return content;
-        }
-
-        @safe
-        fn test_structs() {
-            let t = Token { kind: 0, line: 42, lexeme: "EOF" };
-            println(t.lexeme);
-            print_int(t.line);
-        }
-
-        @require(avx512 >= 1)
-        kernel matmul(A: GlobalMemory<F16>, B: GlobalMemory<F16>, C: GlobalMemory<F32>) {
-            type ATile = SmemLayout<F16, rows=16, cols=64, swizzle=330>;
-            let smem_A = SharedMemory::alloc<ATile>();
-
-            @cache_policy(L2_PERSIST)
-            let weights: F16 = load(A);
-
-            @cache_policy(L2_EVICT_FIRST)
-            let act: F16 = load(B);
-            
-            let acc: Fragment<MMA_m16n8k16, D, F32> = Fragment::zero();
-            let pipe: Pipeline<stages=2, layout=ATile> = Pipeline::init();
-
-            for k in 0..1024 step 16 {
-                let tx_A: Transfer<Global, Shared, Async<1>, 128> = cp_async(A[k], smem_A);
-                pipe.wait(tx_A);
-                barrier::sync();
-                
-                let frag_A: Fragment<MMA_m16n8k16, A, F16> = ldmatrix(smem_A);
-                let frag_B: Fragment<MMA_m16n8k16, B, F16> = ldmatrix(smem_A);
-                let frag_C: Fragment<MMA_m16n8k16, C, F32> = ldmatrix(smem_A);
-                
-                chisel {
-                    "ldmatrix.sync.aligned.m8n8.x4.shared.b16 {r0,r1,r2,r3}, [smem_ptr];";
-                }
-
-                acc = mma_sync(frag_A, frag_B, frag_C); 
-            }
-
-            store(acc, C);
-        }
-        "#
-        .to_string()
+        // This used to compile a built-in "test harness": a hardcoded mock
+        // program, used whenever no file was given. It had stopped parsing
+        // (`@require` before a `struct`), so `Y` with no arguments printed a
+        // syntax error about source the user never wrote, and exited 1.
+        log_error!("no input file");
+        eprintln!("    usage: Y <program.ysu> [options]");
+        eprintln!("    Known options: {}", KNOWN_FLAGS.join(" "));
+        exit(2);
     };
 
     // ────────────────────────────────────────────────────────
@@ -2080,7 +2022,12 @@ fn main() {
             );
             emitter.set_guarantees(guarantees.clone());
         }
-        emitter.set_drift_costs(load_or_measure_drift_costs(&hw_profile.gpu_name));
+        // No drift costs here, deliberately. They are GPU timings, keyed by
+        // the GPU's name, and this backend emits CPU code; the default build
+        // below never loaded them either, so the two paths of one backend
+        // chose a `@ZeroDrift` representation from different inputs and
+        // `--emit-llvm` could show a module other than the one the binary
+        // runs. Both take the narrowest sufficient representation now.
         let ll_output = emitter.emit_program(&ast, &hw_profile);
         for line in &emitter.drift_report {
             println!("      -> @ZeroDrift {}", line);
@@ -2269,6 +2216,9 @@ fn main() {
             emitter.set_guarantees(guarantees.clone());
         }
         let ll_output = emitter.emit_program(&ast, &hw_profile);
+        for line in &emitter.drift_report {
+            println!("      -> @ZeroDrift {}", line);
+        }
 
         // This path did not check the emitter's errors at all, so a construct
         // the backend refused still produced a binary and exited 0 — the same

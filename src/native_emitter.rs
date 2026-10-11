@@ -294,6 +294,16 @@ impl NativeEmitter {
         if let Some(rt) = &f.ret_ty {
             self.check_declared_type(rt, "a return value", &f.body.span);
         }
+        // `_start` calls `main` with no arguments, so a parameter of `main`
+        // was stored from whatever its register held at process entry
+        // (`fn main(x: I32) -> I32 { return x + 5; }` exited 5).
+        if f.name == "main" && !f.params.is_empty() {
+            self.unsupported(
+                "`fn main` with parameters (`_start` calls it with none, so each would read an \
+                 unset register; parameters on `main` are a circuit's inputs, for `--target=r1cs`)",
+                &f.span,
+            );
+        }
         for (i, param) in f.params.iter().enumerate() {
             if i >= ARG_STORE.len() {
                 let _ = param;

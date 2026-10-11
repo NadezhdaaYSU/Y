@@ -52,6 +52,13 @@ pub struct CpuEmitter {
     ret_scalar: Option<&'static str>,
     /// Every function's parameter scalar types and return scalar type.
     fn_sigs: std::collections::HashMap<String, (Vec<Option<&'static str>>, Option<&'static str>)>,
+    /// Each struct's scalar fields, by name, so `p.a + p.b` computes in the
+    /// field's type: unknown, it was written with Rust's `+`, which panics on
+    /// overflow in a debug build where Y wraps.
+    struct_fields: std::collections::HashMap<String, std::collections::HashMap<String, &'static str>>,
+    /// The struct each struct-typed parameter of the current function holds,
+    /// by value or by reference.
+    local_structs: std::collections::HashMap<String, String>,
 }
 
 /// What a `@bounds` checked when the program runs calls: the LLVM and PTX
@@ -234,6 +241,8 @@ impl CpuEmitter {
             local_types: std::collections::HashMap::new(),
             ret_scalar: None,
             fn_sigs: std::collections::HashMap::new(),
+            struct_fields: std::collections::HashMap::new(),
+            local_structs: std::collections::HashMap::new(),
             host_buffer: buffer,
             indent_level: 0,
             emit_errors: Vec::new(),
@@ -276,6 +285,10 @@ impl CpuEmitter {
                     for m in &b.methods {
                         self.known_fns.insert(m.name.clone());
                     }
+                }
+                Item::Struct(s) => {
+                    let fields = s.fields.iter().filter_map(|f| scalar_of(&f.ty).map(|t| (f.name.clone(), t))).collect();
+                    self.struct_fields.insert(s.name.clone(), fields);
                 }
                 _ => {}
             }
@@ -383,6 +396,24 @@ impl CpuEmitter {
         writeln!(&mut self.host_buffer, "pub struct {} {{", s.name).unwrap();
         self.indent_level += 1;
         for field in &s.fields {
+            // A field attribute changes how every access to the field is made
+            // (`@atomic` makes it atomic, `@gpu_uncached` makes it volatile),
+            // and this backend writes an ordinary Rust
+            // field, so each was dropped with a clean compile: a struct passed
+            // by reference emitted `pub a: i32` for `@atomic a: I32`. Only the
+            // LLVM backend lowers them.
+            for attr in &field.attrs {
+                let name = match &attr.kind {
+                    FieldAttrKind::Atomic(_) => "@atomic",
+                    FieldAttrKind::GpuUncached => "@gpu_uncached",
+                };
+                self.emit_errors.push(format!(
+                    "[CPU Backend] `{}` on field `{}.{}` (line {}, col {}) cannot be lowered to host \
+                     code: this backend emits an ordinary Rust field, so the attribute would be \
+                     dropped. Only the LLVM backend lowers field attributes.",
+                    name, s.name, field.name, attr.span.line, attr.span.col
+                ));
+            }
             self.indent();
             let ty_str = self.emit_type(&field.ty);
             writeln!(&mut self.host_buffer, "pub {}: {},", field.name, ty_str).unwrap();
@@ -420,6 +451,22 @@ impl CpuEmitter {
 
     fn emit_func(&mut self, f: &FuncDecl) {
         self.local_types = f.params.iter().filter_map(|p| scalar_of(&p.ty).map(|t| (p.name.clone(), t))).collect();
+        self.local_structs = f
+            .params
+            .iter()
+            .filter_map(|p| {
+                let ty = match &p.ty {
+                    Type::Reference { inner, .. } => &**inner,
+                    other => other,
+                };
+                match ty {
+                    Type::Ident(s, _) | Type::Primitive(s, _) if self.struct_fields.contains_key(s) => {
+                        Some((p.name.clone(), s.clone()))
+                    }
+                    _ => None,
+                }
+            })
+            .collect();
         self.ret_scalar = f.ret_ty.as_ref().and_then(scalar_of);
         self.indent();
         let safe_prefix = if f.is_safe { "" } else { "unsafe " };
@@ -451,6 +498,7 @@ impl CpuEmitter {
 
     fn emit_kernel(&mut self, kernel: &KernelDecl) {
         self.local_types = kernel.params.iter().filter_map(|p| scalar_of(&p.ty).map(|t| (p.name.clone(), t))).collect();
+        self.local_structs.clear();
         self.ret_scalar = None;
         self.indent();
         write!(&mut self.host_buffer, "pub unsafe fn {}(", kernel.name).unwrap();
@@ -835,6 +883,15 @@ impl CpuEmitter {
     fn rust_type_of(&self, expr: &Expr) -> Option<&'static str> {
         match expr {
             Expr::Ident(n, _) => self.local_types.get(n).copied(),
+            Expr::MemberAccess { base, member, .. } => match &**base {
+                Expr::Ident(n, _) => self
+                    .local_structs
+                    .get(n)
+                    .and_then(|s| self.struct_fields.get(s))
+                    .and_then(|fields| fields.get(member))
+                    .copied(),
+                _ => None,
+            },
             Expr::BoolLit(..) => Some("bool"),
             Expr::BinaryOp { op, left, right, .. } => match op {
                 BinaryOp::Eq | BinaryOp::NotEq | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge

@@ -90,11 +90,20 @@ fn compile(dir: &PathBuf, name: &str, src: &str, flag: &str) -> (bool, String) {
     (out.status.success(), text)
 }
 
-/// Scalar code every non-GPU backend accepts, circuits included: the ZK
-/// backend needs an input, or the output is a constant and the circuit has no
-/// constraint to prove.
-const SCALAR_CTL: &str = "fn main(a: I32) -> I32 {\n    let t: I32 = a * a;\n    let v: I32 = t;\n    return v;\n}\n";
-const SCALAR_POLICY: &str = "fn main(a: I32) -> I32 {\n    let t: I32 = a * a;\n    @cache_policy(L2_STREAM)\n    let v: I32 = t;\n    return v;\n}\n";
+/// Scalar code every non-GPU backend accepts, circuits included. A circuit's
+/// inputs are `main`'s parameters, and without one its output is a constant
+/// with no constraint to prove; a host backend calls `main` with no arguments
+/// and refuses a `main` that takes any, so there the input comes through a
+/// helper instead.
+fn scalar_program(flag: &str, policy: bool) -> String {
+    let directive = if policy { "    @cache_policy(L2_STREAM)\n" } else { "" };
+    let body = format!("    let t: I32 = a * a;\n{directive}    let v: I32 = t;\n    return v;\n");
+    if matches!(flag, "--emit-r1cs" | "--target=r1cs" | "--emit-zk-ptx" | "--target=zk-ptx") {
+        format!("fn main(a: I32) -> I32 {{\n{body}}}\n")
+    } else {
+        format!("fn sq(a: I32) -> I32 {{\n{body}}}\n\nfn main() -> I32 {{\n    return sq(3);\n}}\n")
+    }
+}
 
 /// The JIT runs `main`, so its programs take no argument, and the control's
 /// result is its exit status: 3 * 3 = 9, which no refusal or crash exits with.
@@ -226,13 +235,13 @@ fn every_backend_honours_or_refuses_a_cache_policy() {
         let d = scratch("census");
         match classify(flag).unwrap() {
             Class::ScalarCode => {
-                let (ok, out) = compile(&d, "ctl", SCALAR_CTL, flag);
+                let (ok, out) = compile(&d, "ctl", &scalar_program(flag, false), flag);
                 if !ok && out.contains("not compiled into this binary") {
                     skipped.push(format!("{shown}: backend not in this build"));
                     continue;
                 }
                 assert!(ok, "{shown} must compile the control program, or a refusal below says nothing:\n{out}");
-                let (ok, out) = compile(&d, "pol", SCALAR_POLICY, flag);
+                let (ok, out) = compile(&d, "pol", &scalar_program(flag, true), flag);
                 assert!(
                     !ok && names_the_refusal(&out),
                     "{shown} accepted `@cache_policy` or refused it without naming it. It has no \
@@ -264,7 +273,7 @@ fn every_backend_honours_or_refuses_a_cache_policy() {
                 honoured += 1;
             }
             Class::Removed => {
-                let (ok, _) = compile(&d, "ctl", SCALAR_CTL, flag);
+                let (ok, _) = compile(&d, "ctl", &scalar_program(flag, false), flag);
                 assert!(!ok, "{shown} is a removed backend and must still refuse every program");
             }
             Class::Jit => {
@@ -283,7 +292,7 @@ fn every_backend_honours_or_refuses_a_cache_policy() {
             }
             Class::NoSource => skipped.push(format!("{shown}: compiles no source program")),
             Class::NoCode => {
-                let (ok, out) = compile(&d, "pol", SCALAR_POLICY, flag);
+                let (ok, out) = compile(&d, "pol", &scalar_program(flag, true), flag);
                 assert!(ok, "{shown} writes the front end's table and must accept the program:\n{out}");
                 let table = std::fs::read_to_string(d.join("pol.out")).expect("read the table");
                 assert!(table.starts_with("{\"version\": 1"), "{shown} wrote something other than its table:\n{table}");

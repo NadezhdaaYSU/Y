@@ -22,7 +22,13 @@
 //!
 //! An example is compiled with `--emit-ptx` if it declares a `kernel` and with
 //! `--emit-llvm` otherwise, from a COPY in a temp directory: both backends
-//! write next to the source.
+//! write next to the source. A host example's module is then built with
+//! `clang -c`, because `--emit-llvm` succeeding is not the program compiling:
+//! Example 17 put PTX's `nanosleep.u32` in a host `chisel` block, which
+//! `--emit-llvm` wrote out as x86 inline assembly and clang rejects - the
+//! default build fails - and this gate counted it as compiling. Without clang
+//! that stage cannot be checked, and a noted example that passes `--emit-llvm`
+//! is reported as unverified rather than as a stale note.
 //!
 //! **What this does not cover.** Only chapter 10: its examples are complete
 //! programs. The fragments elsewhere in the manual (the §9 directive examples,
@@ -138,6 +144,19 @@ fn compile(code: &str, name: &str, dir: &Path) -> Result<(), String> {
         .output()
         .expect("run Y");
     if out.status.success() {
+        if flag == "--emit-llvm" && clang_available() {
+            let built = Command::new("clang")
+                .args(["-c", "-Wno-override-module", "-o"])
+                .arg(dir.join(format!("{name}.o")))
+                .arg(dir.join(format!("{name}.ll")))
+                .output()
+                .expect("run clang");
+            if !built.status.success() {
+                let text = String::from_utf8_lossy(&built.stderr).into_owned();
+                let first = text.lines().find(|l| l.contains("error")).unwrap_or("<no diagnostic>");
+                return Err(format!("clang: {}", first.trim()));
+            }
+        }
         return Ok(());
     }
     let text = strip_ansi(&format!(
@@ -146,6 +165,10 @@ fn compile(code: &str, name: &str, dir: &Path) -> Result<(), String> {
         String::from_utf8_lossy(&out.stderr)
     ));
     Err(first_diagnostic(&text))
+}
+
+fn clang_available() -> bool {
+    Command::new("clang").arg("--version").output().is_ok_and(|o| o.status.success())
 }
 
 /// The first `Line <n>:` diagnostic, else the first line mentioning an error.
@@ -179,6 +202,9 @@ fn every_example_compiles_or_says_it_does_not() {
         let name = format!("example_{}", ex.number);
         match (compile(&ex.code, &name, &dir), ex.noted) {
             (Ok(()), false) | (Err(_), true) => {}
+            (Ok(()), true) if !clang_available() && !ex.code.lines().any(|l| l.trim_start().starts_with("kernel ")) => {
+                eprintln!("UNVERIFIED: Example {} passes --emit-llvm; without clang its note cannot be checked", ex.number)
+            }
             (Ok(()), true) => problems.push(format!(
                 "Example {} says it does not compile, and it compiles verbatim - remove the note",
                 ex.number
@@ -207,5 +233,12 @@ fn the_compile_helper_can_tell_the_two_apart() {
     assert_eq!(compile(good, "good", &dir), Ok(()));
     let why = compile(bad, "bad", &dir).expect_err("the old @bounds form must not compile");
     assert!(why.contains("@bounds"), "unexpected diagnostic: {why}");
+    // A module `--emit-llvm` writes and clang rejects: PTX inside a host
+    // `chisel` block (Example 17's shape).
+    let clang_only = "fn main() -> I32 {\n    chisel {\n        \"nanosleep.u32 1000;\";\n    }\n    return 0;\n}\n";
+    if clang_available() {
+        let why = compile(clang_only, "clang_only", &dir).expect_err("a module clang rejects must not count as compiling");
+        assert!(why.starts_with("clang:"), "unexpected diagnostic: {why}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

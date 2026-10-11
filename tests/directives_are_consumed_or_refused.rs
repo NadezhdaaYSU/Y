@@ -9,9 +9,9 @@
 //!   and a byte-identical `--emit-cpu` blob.
 //! * `@hdl_emit` names an HDL backend that **does not exist**, so there is
 //!   nothing for it to lower to, ever.
-//! * `@ghost` is real at a different SYNTACTIC SITE: `@ghost { .. }` and
-//!   `@ghost let ..` are lowered by six backends, while the function attribute
-//!   parses and is dropped. That is `feedback-guards-consulted-at-one-site`
+//! * `@ghost` is real at a different SYNTACTIC SITE: `@ghost { .. }` is
+//!   lowered by six backends (`@ghost let ..` does not parse), while the
+//!   function attribute parsed and was dropped. That is `feedback-guards-consulted-at-one-site`
 //!   read across syntax rather than across call sites, and it is the worse
 //!   direction — a user who has used the block form successfully will
 //!   reasonably expect the function form to work.
@@ -526,4 +526,46 @@ fn no_gated_document_has_a_second_copy() {
          (Compared {compared} pairs.)",
         copies.join("\n  ")
     );
+}
+
+// ---------------------------------------------------------------------------
+// `@tile` is real on a `kernel` only.
+// ---------------------------------------------------------------------------
+
+/// `@tile(M, N, K)` on a `kernel` selects the tensor-core GEMM lowering. On a
+/// loop it was stored and read by nothing that tiles - the LLVM and PTX
+/// backends wrote it into their output as a comment, `[Y TILE OPTIMIZATION]
+/// Tiled loop dimensions`, the PTX one twice - and on a `fn` its one reader
+/// excluded the function from a helper analysis. Both are refused now; the
+/// kernel form is the control.
+#[test]
+fn tile_is_refused_on_a_loop_and_a_fn_and_kept_on_a_kernel() {
+    let on_loop = "fn main() -> I32 {\n    let mut s: I32 = 0;\n    @invariant(i >= 0)\n    @tile(16, 16, 8)\n    \
+                   for i in 0..4 {\n        s = s + i;\n    }\n    return s;\n}\n";
+    let before_let = "fn main() -> I32 {\n    @tile(16, 16)\n    let s: I32 = 3;\n    return s;\n}\n";
+    let on_fn = "@tile(16, 16)\nfn helper() -> I32 {\n    return 3;\n}\n\nfn main() -> I32 {\n    return helper();\n}\n";
+    for (tag, src, phrase) in [
+        ("tileloop", on_loop, "`@tile` on a loop is not implemented"),
+        ("tilelet", before_let, "`@tile` on a loop is not implemented"),
+        ("tilefn", on_fn, "`@tile` on a function (`helper`) is not implemented"),
+    ] {
+        for flag in ["--emit-llvm", "--emit-ptx", "--emit-cpu"] {
+            let (ok, text) = compile(tag, src, flag);
+            assert!(!ok, "{tag} {flag}: `@tile` was accepted where nothing tiles:\n{text}");
+            assert!(text.contains(phrase), "{tag} {flag}: refused without naming it:\n{text}");
+        }
+    }
+    // The control: the same loop without the attribute compiles.
+    let (ok, text) = compile("tilectl", &on_loop.replace("    @tile(16, 16, 8)\n", ""), "--emit-llvm");
+    assert!(ok, "the loop without `@tile` must compile:\n{text}");
+
+    // The kernel form is untouched: a committed `@tile`d GEMM still selects
+    // the tensor-core lowering.
+    let gemm = read("tests/gemm_f16_1024.ysu");
+    assert!(gemm.contains("@tile("), "the fixture no longer carries a kernel `@tile`");
+    let (ok, text) = compile("tilekernel", &gemm, "--emit-ptx");
+    assert!(ok, "a `@tile`d kernel must still compile:\n{text}");
+    let dir = std::env::temp_dir().join(format!("y_directives_tilekernel_{}", std::process::id()));
+    let ptx = std::fs::read_to_string(dir.join("p.ptx")).expect("read the kernel's PTX");
+    assert!(ptx.contains("mma.sync"), "the `@tile`d kernel no longer uses the tensor-core lowering");
 }

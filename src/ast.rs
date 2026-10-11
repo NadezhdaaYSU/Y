@@ -80,7 +80,6 @@ pub struct GenericParam {
 pub enum FieldAttrKind {
     GpuUncached,
     Atomic(Option<String>),
-    Align(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -619,7 +618,6 @@ fn walk_item(item: &Item, f: &mut dyn FnMut(&Stmt)) {
             for field in &s.fields {
                 for attr in &field.attrs {
                     match &attr.kind {
-                        FieldAttrKind::Align(e) => walk_expr(e, f),
                         FieldAttrKind::GpuUncached | FieldAttrKind::Atomic(_) => {}
                     }
                 }

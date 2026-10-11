@@ -1,9 +1,9 @@
 // tests/ring_buffer.ysu
 
 struct SpscBuffer {
-    @align(64) @atomic(acq_rel) head: I64,
+    @atomic(acq_rel) head: I64,
     _pad1: I64, _pad2: I64, _pad3: I64, _pad4: I64, _pad5: I64, _pad6: I64, _pad7: I64,
-    @align(64) @atomic(acq_rel) tail: I64,
+    @atomic(acq_rel) tail: I64,
     _pad8: I64, _pad9: I64, _pad10: I64, _pad11: I64, _pad12: I64, _pad13: I64, _pad14: I64,
     buffer: [I64; 1024],
 }

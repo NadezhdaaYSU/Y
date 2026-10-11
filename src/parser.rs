@@ -457,14 +457,24 @@ impl Parser {
                         kind: FieldAttrKind::Atomic(ordering),
                         span: attr_span,
                     });
-                } else if self.match_token(TokenKind::AtAlign) {
-                    self.expect(TokenKind::LParen, "'(' after @align")?;
-                    let align_expr = self.parse_primary_expr()?;
-                    self.expect(TokenKind::RParen, "')' after @align value")?;
-                    attrs.push(FieldAttr {
-                        kind: FieldAttrKind::Align(align_expr),
-                        span: attr_span,
-                    });
+                } else if self.check(TokenKind::AtAlign) {
+                    // `@align(N)` put `align N` on every load and store of the
+                    // field and laid nothing out: `%S = type { i32, i32, ... }`
+                    // kept the field at its natural offset, and the struct's
+                    // storage was an `alloca` at its natural alignment. So the
+                    // LLVM backend promised an alignment the address did not
+                    // have - undefined behaviour the optimizer may act on - and
+                    // the padding the attribute was documented to provide (one
+                    // cache line per field) was never there. The only other
+                    // reader, `--emit-cpu`, dropped it.
+                    return Err(format!(
+                        "Line {}: `@align` is not implemented. No backend lays a field out at an \
+                         alignment: the LLVM backend used to claim `align N` on every access while \
+                         leaving the field at its natural offset, which is undefined behaviour.\n  \
+                         hint: remove the attribute; to keep two fields off one cache line, pad \
+                         between them (64 bytes apart can never share a 64-byte line).",
+                        attr_span.line
+                    ));
                 } else {
                     break;
                 }
@@ -940,9 +950,10 @@ impl Parser {
         let mut bounds = None;
         let mut invariant = None;
         let mut is_uniform_branch = false;
-        let mut tile = None;
-        // Always `None`: `@prefetch_stride` is refused in the attribute loop
-        // below. The AST keeps the field, so this is what fills it.
+        // Always `None`: `@tile` on a statement and `@prefetch_stride` are
+        // refused in the attribute loop below. The AST keeps the fields, so
+        // this is what fills them.
+        let tile: Option<TileAttr> = None;
         let prefetch_stride: Option<PrefetchStrideAttr> = None;
         let mut max_iterations = None;
 
@@ -1032,26 +1043,23 @@ impl Parser {
                 self.expect(TokenKind::RParen, "')' after @invariant")?;
             } else if self.match_token(TokenKind::AtDivergenceUniform) {
                 is_uniform_branch = true;
-            } else if self.match_token(TokenKind::AtTile) {
-                let start_tok = self.peek().clone();
-                self.expect(TokenKind::LParen, "'(' after @tile")?;
-                let block_m = Box::new(self.parse_expr()?);
-                self.expect(TokenKind::Comma, "',' in @tile")?;
-                let block_n = Box::new(self.parse_expr()?);
-                let mut block_k = None;
-                if self.match_token(TokenKind::Comma) {
-                    block_k = Some(Box::new(self.parse_expr()?));
-                }
-                self.expect(TokenKind::RParen, "')' after @tile")?;
-                tile = Some(TileAttr {
-                    block_m,
-                    block_n,
-                    block_k,
-                    span: Span {
-                        line: start_tok.line,
-                        col: start_tok.col,
-                    },
-                });
+            } else if self.check(TokenKind::AtTile) {
+                // `@tile` on a statement is not the `@tile(M, N, K)` on a
+                // `kernel`, which selects the tensor-core GEMM lowering. On a
+                // `for` it was stored and read by nothing that tiles: the LLVM
+                // and PTX backends wrote it into their output as a comment
+                // ("[Y TILE OPTIMIZATION] Tiled loop dimensions", the PTX one
+                // twice) and emitted the loop unchanged, and the other
+                // backends ignored it. Before any other statement it was
+                // dropped. Same shape as `@prefetch_stride` below.
+                return Err(format!(
+                    "Line {}: `@tile` on a loop is not implemented. No backend tiles a loop for it: \
+                     it used to parse and change nothing - the LLVM and PTX backends wrote it into \
+                     their output as a comment - so the program compiled as if it were absent.\n  \
+                     hint: remove the attribute. `@tile(M, N, K)` on a `kernel` is a different \
+                     directive: it selects the tensor-core GEMM lowering.",
+                    self.peek().line
+                ));
             } else if self.check(TokenKind::AtPrefetchStride) {
                 // No backend lowers `@prefetch_stride`, so it is refused here,
                 // the one place that sees every statement it can precede. It
@@ -2466,7 +2474,7 @@ mod tests {
     #[test]
     fn test_parse_fn_level_tile_directive_still_works() {
         // Regression guard: kernel-level @tile speculative parse+rewind must
-        // not disturb the pre-existing fn-level @tile path (tests/tile_test.ysu).
+        // not disturb the fn-level @tile parse, which the type checker refuses.
         let src = "
             @tile(16, 16)
             fn tiled_matmul() {

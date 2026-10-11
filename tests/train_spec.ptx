@@ -38,8 +38,6 @@
     setp.gt.s64 %p4, %rd1, 4503599627370496;
     @%p4 trap;
     // for i in ...
-    // [Y TILE OPTIMIZATION] Tiled loop dimensions: M=IntLit(16, Span { line: 16, col: 15 }), N=IntLit(16, Span { line: 16, col: 19 }), K=Some(IntLit(8, Span { line: 16, col: 23 }))
-    // [Y TILE OPTIMIZATION] Tiled loop dimensions: M=IntLit(16, Span { line: 16, col: 15 }), N=IntLit(16, Span { line: 16, col: 19 }), K=Some(IntLit(8, Span { line: 16, col: 23 }))
     mov.u32 %r1, 0;
     mov.u32 %r2, 1024;
     $LOOP_START_0:

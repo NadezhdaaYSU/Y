@@ -106,3 +106,19 @@ fn the_bare_invocation_still_works() {
     let (ok, text) = run(&[]);
     assert!(ok && !text.contains("unrecognised option"), "{text}");
 }
+
+/// With no input file the compiler used to compile a built-in mock program
+/// that no longer parsed: `Y` alone printed a syntax error about source the
+/// user never wrote (`@require(...)` before a `struct`) and exited 1. It is a
+/// usage error now, and it names what is missing.
+#[test]
+fn no_input_file_is_a_usage_error() {
+    let dir = pinned::pinned_scratch("no_input", pinned::SM_PINNED);
+    for extra in [&[][..], &["--emit-ptx"][..]] {
+        let out = Command::new(env!("CARGO_BIN_EXE_Y")).args(extra).current_dir(&dir).output().expect("run Y");
+        let text = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        assert_eq!(out.status.code(), Some(2), "{extra:?}: wrong exit status:\n{text}");
+        assert!(text.contains("no input file") && text.contains("usage: Y <program.ysu>"), "{extra:?}:\n{text}");
+        assert!(!text.contains("Syntax Error") && !text.contains("Running Lexer"), "{extra:?} compiled something:\n{text}");
+    }
+}

@@ -1752,9 +1752,9 @@ not know its length",
     ///
     /// * `@hdl_emit` names a backend that **does not exist**. There is no HDL
     ///   emitter in this compiler and nothing for it to lower to, ever.
-    /// * `@ghost` is real at a different SYNTACTIC SITE. `@ghost { .. }` and
-    ///   `@ghost let ..` are the documented forms and are lowered by six
-    ///   backends; the function attribute parses and is dropped. That is
+    /// * `@ghost` is real at a different SYNTACTIC SITE. `@ghost { .. }` is
+    ///   the documented form and is lowered by six backends (`@ghost let ..`
+    ///   does not parse); the function attribute parsed and was dropped. That is
     ///   "a guard consulted at one site" read across syntax rather than across
     ///   call sites, and it is the worse direction, because a user who has used
     ///   the block form successfully will reasonably expect the function form
@@ -1782,12 +1782,25 @@ not know its length",
             self.errors.push(format!(
                 "Line {}: `@ghost` on a function (`{}`) is not implemented and was silently \
                  ignored.\n  \
-                 hint: `@ghost` applies to a BLOCK (`@ghost {{ .. }}`) or a variable \
-                 (`@ghost let ..`); both of those work. Delete the function instead, or move \
-                 its body into a `@ghost` block at the call site.\n  \
+                 hint: `@ghost` applies to a BLOCK (`@ghost {{ .. }}`); `@ghost let ..` does not \
+                 parse. Delete the function instead, or move its body into a `@ghost` block at \
+                 the call site.\n  \
                  note: a `@ghost` block is EMITTED, not stripped - it costs the cycles its \
                  statements cost.",
                 f.span.line, f.name
+            ));
+        }
+        // `@tile(M, N, K)` on a `kernel` selects the tensor-core GEMM
+        // lowering. On a `fn` it was stored and read by nothing that tiles:
+        // its one reader excluded the function from the LLVM backend's scalar
+        // helper analysis, and the emitted code was otherwise unchanged.
+        if let Some(t) = &f.tile {
+            self.errors.push(format!(
+                "Line {}: `@tile` on a function (`{}`) is not implemented. Nothing tiles a `fn` \
+                 for it: it used to parse and change nothing.\n  \
+                 hint: remove the attribute. `@tile(M, N, K)` on a `kernel` is a different \
+                 directive: it selects the tensor-core GEMM lowering.",
+                t.span.line, f.name
             ));
         }
     }
@@ -4880,7 +4893,9 @@ pub fn z3_candidates() -> Vec<String> {
 /// Python interpreter, so on Linux the mapping holding this function is
 /// looked up instead. Its path field is the rest of the line after five
 /// fields and may contain spaces (this repository's own path does).
-fn own_object_path() -> Option<std::path::PathBuf> {
+///
+/// Also how `sentinel` finds `ysu_gpu_probe` beside the compiler.
+pub(crate) fn own_object_path() -> Option<std::path::PathBuf> {
     #[cfg(target_os = "linux")]
     {
         let here = own_object_path as fn() -> Option<std::path::PathBuf> as usize;
