@@ -18,14 +18,15 @@ many calls launched it and how many fell back to the original subgraph.
 Every lowered result is bit-for-bit what eager PyTorch computes. That is a
 constraint on the design, not luck, and it decides the op set:
 
-* **A multiply never feeds an add or a subtract inside one kernel.** ptxas
-  contracted that pair into one fused multiply-add, rounding once where eager
-  rounds twice: a Y kernel computing `let p = a * b; let s = p + c;` differed
-  from eager `(a * b) + c` in 245,999 of 1,048,576 results. Since 2026-10-11
-  the PTX emitter rounds a `let`-bound product first (`mul.rn`), and the same
-  kernel matches eager in every result, so this rule is now conservative:
-  the `let`-per-node source this module writes would be exact if fused. It
-  stays until fusing the pair is measured.
+* **A multiply shares a kernel with the add or subtract it feeds**, because
+  the kernel binds every node with a `let` and the PTX emitter rounds a
+  `let`-bound product before the add (`mul.rn`, which ptxas does not
+  contract): the pair rounds twice, as eager does, in every result. Until
+  2026-10-11 ptxas contracted it into one fused multiply-add (245,999 of
+  1,048,576 results differed from eager) and this module kept the two in
+  separate kernels. Fusing them measured 0.38-0.87x of the separate kernels'
+  time at 2^22 and 2^24 elements, every model and run
+  (`benchmarks/inductor_fusion/`).
 * **Negation is not lowered.** Eager `-x` canonicalises a NaN to 0x7fffffff; a
   negation ptxas folds into a select keeps the payload and flips its sign.
 * **Division is not lowered.** Y's F32 `/` is `div.approx.f32`; eager's is
@@ -205,19 +206,11 @@ def _classify(gm: torch.fx.GraphModule, node: torch.fx.Node) -> Tuple[Optional[s
     return kind, None
 
 
-def _fusable(producer_kind: str, consumer_kind: str) -> bool:
-    # ptxas contracted a multiply feeding an add or a subtract into one FMA,
-    # rounding once where eager rounds twice. The emitter now rounds the
-    # `let`-bound product first, so this is conservative (module docstring).
-    return not (producer_kind == MUL and consumer_kind in (ADD, SUB))
-
-
 def _partition(gm: torch.fx.GraphModule, kinds: Dict[torch.fx.Node, str]) -> List[List[torch.fx.Node]]:
     """Greedy grouping in graph order, acyclic between groups by construction.
 
-    A node joins a producer's group only when every producer already in that
-    group feeds it through a fusable edge, and the group is not an ancestor of
-    any producer outside it - otherwise the fused kernel would need its own
+    A node joins a producer's group when the group is not an ancestor of any
+    producer outside it - otherwise the fused kernel would need its own
     output. The ancestry is tracked between GROUPS, not nodes: a group runs as
     one kernel, so it depends on everything any member depends on, and a check
     between nodes misses a cycle through two groups."""
@@ -251,9 +244,6 @@ def _partition(gm: torch.fx.GraphModule, kinds: Dict[torch.fx.Node, str]) -> Lis
         for p in producers:
             g = group_of.get(p)
             if g is None:
-                continue
-            inside = [q for q in producers if group_of.get(q) == g]
-            if not all(_fusable(kinds[q], kinds[node]) for q in inside):
                 continue
             outside = set().union(*(contribution(q) for q in producers if group_of.get(q) != g))
             if is_ancestor(g, outside):
