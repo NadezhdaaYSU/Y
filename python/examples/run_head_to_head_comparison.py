@@ -27,8 +27,8 @@ What this does not time, and why:
 
 Writes `results.json` (every sample, every check, the toolchain and the GPU's
 state before and after) and `report.md` to --out, by default
-`build_artifacts/head_to_head/<UTC time>/`, which git ignores. A run during
-which another process used the GPU is marked as contended.
+`build_artifacts/head_to_head/<UTC time>/`, which git ignores. A run that
+starts with the GPU more than 5% busy is marked as contended.
 
     PYTHONPATH=python python3 python/examples/run_head_to_head_comparison.py
 """
@@ -402,9 +402,10 @@ def rows(target, y_ptx, gen):
             "PyTorch": lambda: got.__setitem__("PyTorch", module(gate, up))},
            {name: (lambda name=name: got[name]) for name in ("Y", "Triton", "PyTorch")},
            module(gate.double(), up.double()), 1e-6, False,
-           "Y column: y_inductor (silu runs eagerly, the multiply is a Y kernel). "
-           "Triton column: torch.compile, whose Inductor backend generates Triton. "
-           "PyTorch column: eager. " + y_compiled.y_report.summary().replace("\n", " "))
+           # Read after the timed calls, so the report's launch counts are the run's.
+           lambda: "Y column: y_inductor (silu runs eagerly, the multiply is a Y kernel). "
+                   "Triton column: torch.compile, whose Inductor backend generates Triton. "
+                   "PyTorch column: eager. " + y_compiled.y_report.summary().replace("\n", " "))
 
 
 # ----------------------------------------------------------------------
@@ -477,11 +478,15 @@ def write_report(out_dir, result):
                  f"CUDA {ident['cuda_runtime']}, PyTorch {ident['torch']}, Triton {ident['triton']}, "
                  f"Python {ident['python']}. Y {ident['y_commit'][:10]}{' (dirty tree)' if ident['y_tree_dirty'] else ''}, "
                  f"`liby.so` sha256 {ident['liby_sha256'][:12]}, target {ident['y_target']}. {result['utc']}.\n")
+    before = result["gpu_before"]
     if result["contended"]:
         lines.append("> **Contended run.** Another process was using the GPU "
-                     f"(mean utilisation {result['gpu_before']['mean_utilization']}% before starting; "
-                     f"compute processes: {result['gpu_before']['other_compute_apps']}). "
+                     f"(mean utilisation {before['mean_utilization']}% before starting; "
+                     f"other processes on it: {before['other_compute_apps']}). "
                      "These timings are not a clean measurement.\n")
+    else:
+        lines.append(f"GPU utilisation before starting: {before['mean_utilization']}% (mean of 10 samples); "
+                     f"other processes holding a context: {before['other_compute_apps']}.\n")
     lines.append("Microseconds per call: minimum / median over "
                  f"{result['rounds']} interleaved rounds. *launch*: back-to-back calls from Python; "
                  "*graph*: the same calls replayed from a CUDA graph. A column that failed its check is not timed.\n")
@@ -547,6 +552,7 @@ def main():
         for t in timing.values():
             t["launch_summary"] = summary(t["launch"])
             t["graph_summary"] = summary(t["graph"])
+        notes = notes() if callable(notes) else notes
         results.append({"name": name, "notes": notes, "checks": checks, "timing": timing})
         cell = lambda c: (f"{timing[c]['launch_summary']['min']:.2f}/"
                           + (f"{timing[c]['graph_summary']['min']:.2f}" if timing[c]["graph_summary"] else "n/a")
@@ -564,7 +570,9 @@ def main():
         "seed": args.seed,
         "gpu_before": before,
         "gpu_after": after,
-        "contended": bool(before["other_compute_apps"]) or (before["mean_utilization"] or 0) > 5,
+        # Utilisation, not the process list: a desktop's compositor always
+        # holds a context, so "any other process" would mark every run.
+        "contended": (before["mean_utilization"] or 0) > 5,
         "rows": results,
         "cold_compile": {"y": [], "triton": []} if args.skip_cold else cold_compile(target),
     }

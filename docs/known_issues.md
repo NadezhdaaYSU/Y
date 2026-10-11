@@ -11,11 +11,11 @@ source; each entry there now carries its status. What is still open:
 
 ### Benchmarks
 
-- `python/examples/run_head_to_head_comparison.py` has not been run on an
-  idle GPU since it was rewritten (2026-10-11), so no figures from it are
-  published. It marks a run during which another process used the GPU.
-- `python/examples/benchmark_3d_block_ptr.py` checks no output; the manual's
-  "3D Block Pointer Volume" row came from it and was withdrawn.
+- `python/examples/benchmark_3d_block_ptr.py` has been run only on a busy GPU
+  since its rewrite (2026-10-11); no figure from it is published.
+- Y's FP8 GEMM takes 2.1-2.6x as long as a fused Triton kernel for the same
+  function, and a Y launch from Python costs about 3x PyTorch's per call
+  (`docs/benchmarks/head_to_head_2026-10-11/`). Performance, not correctness.
 - `python/examples/kernels/flash_attention.ysu` does not compile (`Pipeline` is
   not a type); the scripts report that rather than stop.
 
@@ -59,12 +59,6 @@ source; each entry there now carries its status. What is still open:
   (a)-(d), 2437 (a)).
 - Without z3 the tests whose programs carry an `@invariant` fail, by design: an
   invariant that cannot be checked fails the build (archive 2214 (f)).
-- `python/y_lang/tests/test_triton_parity_features.py` defines bare functions,
-  which `unittest` discovery does not collect: both Python suites run 0 of its
-  tests. Run as a script, it passes.
-- In a checkout holding Codex's snapshot directories (`docs/benchmark_data/`,
-  `build_artifacts/`), `no_gated_document_has_a_second_copy` fails on their
-  `README.md` copies; a clean worktree passes.
 
 ### Debugger
 
@@ -96,6 +90,9 @@ source; each entry there now carries its status. What is still open:
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| `benchmark_3d_block_ptr.py` compared unequal work | Y's kernel wrote 32,768 of the 8,388,608 elements it named and Triton's 524,288; neither output was checked, the script printed "FASTER" whatever the ratio, and it deleted `~/.ysu/cache` on import. Both kernels now cover the volume and must equal `2x + 1` exactly before they are timed; a busy GPU is reported. |
+| The second-copy gate failed in a checkout holding evidence snapshots | `no_gated_document_has_a_second_copy` flagged Codex's frozen "before" copies of `README.md`. It now skips what git ignores (`build_artifacts/`, like `target/`) and a copy whose current SHA-256 an ancestor's `evidence-manifest.json` records; an edited, unrecorded or untracked copy still fails it. `only_sealed_or_ignored_copies_are_exempt`. |
+| The parity tests never ran | `python/y_lang/tests/test_triton_parity_features.py` defined bare functions, which `unittest` discovery does not collect; a `TestCase` runs them now (the suite went from 26 to 30 tests, and a broken `block_sort` fails it). |
 | `rmsnorm_v4` assumed a 1024-wide row, `eps = 1e-5` and 256 threads | The mean was `sum * 0.0009765625` and the second reduction read eight warp partials, whatever the kernel declared: at `eps = 0.5` the output was 2.7% off, a 512-wide row was scaled by `sqrt(2)`. It takes `(x, w, out, hidden_dim, eps)` now, reduces over every warp, and traps on a launch that is not one row per block in whole warps. `tests/ptx_rmsnorm_v4.rs` (five shapes against float64 on the device, three trapping launches, five mutants). |
 | The head-to-head benchmark measured something else in every Y column | Y's kernels were CUDA-graph replays and the others plain launches; the "Block Scan" Y column was `torch.cumsum`; the "FP8 GEMM" Y column was `y_lang.ops.fp8_gemm`, which on this machine was always `torch.mm` on FP16 copies (its CuPy path failed and the failure was swallowed), against FP16 matmuls; the elementwise launches wrote 352 floats past their buffers. The manual published these as 1.03x-6.75x speedups. The script now checks every column against a reference (exactly for addition and the FP8 GEMMs), times all three both ways, and records the toolchain and the GPU's state; the manual's tables are withdrawn (§33.8, §34.6). |
 | `y_lang.ops` substituted or guessed | `fp8_gemm` raises when its CuPy path cannot run instead of returning `torch.mm`'s product; `sparse_24_gemm` (which ignored its 2:4 metadata) is refused; the docstrings and manual §34.2/§34.5 say what each helper runs. `python/y_lang/tests/test_ops_fail_closed.py`. |

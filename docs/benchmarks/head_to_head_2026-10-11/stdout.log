@@ -1,0 +1,10 @@
+Vector add (100,000 f32)                                Y: 6.62/1.07 | Triton: 4.82/1.07 | PyTorch: 2.02/1.10  (min us, launch/graph)
+SwiGLU (100,000 f32)                                    Y: 6.72/1.13 | Triton: 5.72/1.13 | PyTorch: 3.69/2.43  (min us, launch/graph)
+RMSNorm (128 x 1024 f32)                                Y: 5.72/1.40 | Triton: 3.87/1.33 | PyTorch: 16.59/8.87  (min us, launch/graph)
+FP8 GEMM 1024^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 82.48/81.87 | Triton: 32.67/31.86 | PyTorch: 47.62/44.22  (min us, launch/graph)
+FP8 GEMM 2048^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 418.27/413.21 | Triton: 200.93/198.54 | PyTorch: 270.22/276.82  (min us, launch/graph)
+FP8 GEMM 4096^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 3749.89/3730.43 | Triton: 1575.94/1566.72 | PyTorch: 1753.09/1796.10  (min us, launch/graph)
+FP8 GEMM 8192^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 33799.17/33523.71 | Triton: 15277.70/15538.18 | PyTorch: 10328.42/10321.92  (min us, launch/graph)
+SwiGLU module through a graph compiler (2^22 f32)       Y: 91.92/91.82 | Triton: 80.70/80.31 | PyTorch: 90.45/90.16  (min us, launch/graph)
+wrote /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/build_artifacts/head_to_head/clean_20261011T193120Z/report.md and results.json
+exit=0
