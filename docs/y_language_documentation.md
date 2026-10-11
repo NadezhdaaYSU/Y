@@ -5131,11 +5131,28 @@ The table this section published was not a measurement of Y against Triton:
   buffers; nothing guarded the last 352.
 - The Triton and Inductor compile times were ranges nobody measured.
 - The "3D Block Pointer Volume" row came from
-  `python/examples/benchmark_3d_block_ptr.py`, which checks no output. It was
-  not re-run for this correction.
+  `python/examples/benchmark_3d_block_ptr.py`, whose two kernels did different
+  work: Y's wrote 32,768 of the 8,388,608 elements it named and Triton's
+  524,288, and neither output was checked. Rewritten 2026-10-11 (both cover the
+  volume and must equal `2x + 1` exactly); it has been run only on a busy GPU
+  since, where the two took the same time within 2%.
 
-No replacement figures are published here yet: this run would need a GPU no
-other process is using.
+Measured 2026-10-11 with nothing else using the GPU
+([report and raw samples](benchmarks/head_to_head_2026-10-11/report.md)); each
+column's better regime is compared:
+
+- Replayed from a CUDA graph, Y's vector add and SwiGLU take the same time as
+  Triton's (1.07 and 1.13 us), and its RMSNorm 1.40 us against Triton's 1.33.
+  Launched from Python, each Y call costs more than Triton's:
+  `TorchKernel.launch` makes vector add 6.6 us a call, against Triton's 4.8 and
+  PyTorch's 2.0.
+- Y's FP8 GEMM takes 2.1-2.6x as long as a fused Triton kernel computing the
+  same function, and 1.5-3.3x as long as `torch._scaled_mm` with the
+  quantisation done in separate kernels.
+- Through `y_inductor`, a SwiGLU module runs within 2% of eager PyTorch (its
+  multiply is the one Y kernel); `torch.compile` is 11-13% faster than either.
+- Cold compilation of one kernel: Y 0.6 ms to PTX plus 10 ms for the driver to
+  load it; Triton's first call with an empty cache, 500 ms.
 
 ---
 

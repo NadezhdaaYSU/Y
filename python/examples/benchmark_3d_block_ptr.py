@@ -1,159 +1,138 @@
-#!/usr/bin/env venv/bin/python
-"""
-3D Block Pointer Empirical Benchmark: Y Language vs OpenAI Triton
-Measures 3D strided block load/store, boundary masking, and 3D volume reduction.
+#!/usr/bin/env python3
+"""3-D block pointers: Y's `block_ptr3d_load/store` against Triton's 3-D pointers.
+
+Both kernels compute `out = 2 * x + 1` over every element of a `D0 x D1 x D2`
+float32 volume through masked 3-D addressing. Both outputs must equal the
+float32 reference exactly (`2 * x` is exact, so every implementation rounds
+once) before anything is timed; timing is interleaved rounds of plain
+launches, reported as minimum and median.
+
+This script used to time two kernels doing different work, neither of it the
+volume it named: the Y kernel's 2 x 16 grid handled one `(d0, d1)` row per
+block, 32,768 of 8,388,608 elements, and Triton's covered only `d2 < 64`,
+524,288 elements. It checked neither output, printed "FASTER" whatever the
+ratio, and deleted `~/.ysu/cache` when imported. Manual §34.6 published its
+"2.52x" until 2026-10-11.
+
+    PYTHONPATH=python python3 python/examples/benchmark_3d_block_ptr.py
 """
 
+import statistics
+import subprocess
 import sys
 import time
-import math
 from pathlib import Path
 
-repo_root = Path(__file__).resolve().parent.parent.parent
-sys.path.insert(0, str(repo_root / "python"))
+REPO = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO / "python"))
 
 import torch
 import triton
 import triton.language as tl
 import y_lang
 
-device = "cuda"
-print("========================================================================")
-print("  3D BLOCK POINTER BENCHMARK SUITE: Y Language vs OpenAI Triton")
-print(f"  GPU Hardware : {torch.cuda.get_device_name(0)}")
-print(f"  PyTorch Ver  : {torch.__version__}")
-print(f"  Triton Ver   : {triton.__version__}")
-print("========================================================================\n")
 
-# ----------------------------------------------------------------------
-# 1. TRITON 3D KERNEL
-# ----------------------------------------------------------------------
 @triton.jit
-def triton_3d_block_ptr_kernel(
-    in_ptr, out_ptr,
-    D0: tl.constexpr, D1: tl.constexpr, D2: tl.constexpr,
-    stride_0, stride_1, stride_2,
-    BLOCK_0: tl.constexpr, BLOCK_1: tl.constexpr, BLOCK_2: tl.constexpr,
-):
-    pid_0 = tl.program_id(0)
-    pid_1 = tl.program_id(1)
-    
-    offs_0 = pid_0 * BLOCK_0 + tl.arange(0, BLOCK_0)
-    offs_1 = pid_1 * BLOCK_1 + tl.arange(0, BLOCK_1)
-    offs_2 = tl.arange(0, BLOCK_2)
+def triton_3d(in_ptr, out_ptr, D0, D1, D2, S0, S1,
+              B0: tl.constexpr, B1: tl.constexpr, B2: tl.constexpr):
+    o0 = tl.program_id(0) * B0 + tl.arange(0, B0)
+    o1 = tl.program_id(1) * B1 + tl.arange(0, B1)
+    o2 = tl.program_id(2) * B2 + tl.arange(0, B2)
+    offs = o0[:, None, None] * S0 + o1[None, :, None] * S1 + o2[None, None, :]
+    mask = (o0 < D0)[:, None, None] & (o1 < D1)[None, :, None] & (o2 < D2)[None, None, :]
+    tl.store(out_ptr + offs, tl.load(in_ptr + offs, mask=mask, other=0.0) * 2.0 + 1.0, mask=mask)
 
-    mask_0 = offs_0 < D0
-    mask_1 = offs_1 < D1
 
-    # 3D pointer calculation
-    ptrs = in_ptr + (offs_0[:, None, None] * stride_0 + offs_1[None, :, None] * stride_1 + offs_2[None, None, :] * stride_2)
-    mask = mask_0[:, None, None] & mask_1[None, :, None]
-
-    val = tl.load(ptrs, mask=mask, other=0.0)
-    res = val * 2.0 + 1.0
-
-    out_ptrs = out_ptr + (offs_0[:, None, None] * stride_0 + offs_1[None, :, None] * stride_1 + offs_2[None, None, :] * stride_2)
-    tl.store(out_ptrs, res, mask=mask)
-
-import y_lang
-import os
-import shutil
-
-shutil.rmtree(os.path.expanduser("~/.ysu/cache"), ignore_errors=True)
-y_lang.compiler._JIT_CACHE.clear()
-
-# ----------------------------------------------------------------------
-# 2. Y LANGUAGE 3D KERNEL
-# ----------------------------------------------------------------------
-y_3d_src = """
-
+# One block per (d0, d1) row; each thread takes four consecutive d2.
+Y_3D = """
 kernel bench_3d(In: GlobalMemory<F32>, Out: GlobalMemory<F32>, D0: I32, D1: I32, D2: I32, S0: I32, S1: I32) {
-    let b0: I32 = block_idx_x();
-    let b1: I32 = block_idx_y();
-    let t2: I32 = thread_idx_x();
+    let d0: I32 = block_idx_x();
+    let d1: I32 = block_idx_y();
+    let d2: I32 = thread_idx_x() * 4;
 
-    let d0: I32 = b0 * 16;
-    let d1: I32 = b1 * 16;
+    let v0: F32 = block_ptr3d_load(In, d0, d1, d2, S0, S1, D0, D1, D2);
+    let v1: F32 = block_ptr3d_load(In, d0, d1, d2 + 1, S0, S1, D0, D1, D2);
+    let v2: F32 = block_ptr3d_load(In, d0, d1, d2 + 2, S0, S1, D0, D1, D2);
+    let v3: F32 = block_ptr3d_load(In, d0, d1, d2 + 3, S0, S1, D0, D1, D2);
 
-    let d2_0: I32 = t2 * 4;
-    let d2_1: I32 = t2 * 4 + 1;
-    let d2_2: I32 = t2 * 4 + 2;
-    let d2_3: I32 = t2 * 4 + 3;
-
-    let v0: F32 = block_ptr3d_load(In, d0, d1, d2_0, S0, S1, D0, D1, D2);
-    let v1: F32 = block_ptr3d_load(In, d0, d1, d2_1, S0, S1, D0, D1, D2);
-    let v2: F32 = block_ptr3d_load(In, d0, d1, d2_2, S0, S1, D0, D1, D2);
-    let v3: F32 = block_ptr3d_load(In, d0, d1, d2_3, S0, S1, D0, D1, D2);
-
-    let res0: F32 = v0 * 2.0 + 1.0;
-    let res1: F32 = v1 * 2.0 + 1.0;
-    let res2: F32 = v2 * 2.0 + 1.0;
-    let res3: F32 = v3 * 2.0 + 1.0;
-
-    block_ptr3d_store(Out, d0, d1, d2_0, S0, S1, D0, D1, D2, res0);
-    block_ptr3d_store(Out, d0, d1, d2_1, S0, S1, D0, D1, D2, res1);
-    block_ptr3d_store(Out, d0, d1, d2_2, S0, S1, D0, D1, D2, res2);
-    block_ptr3d_store(Out, d0, d1, d2_3, S0, S1, D0, D1, D2, res3);
+    block_ptr3d_store(Out, d0, d1, d2, S0, S1, D0, D1, D2, v0 * 2.0 + 1.0);
+    block_ptr3d_store(Out, d0, d1, d2 + 1, S0, S1, D0, D1, D2, v1 * 2.0 + 1.0);
+    block_ptr3d_store(Out, d0, d1, d2 + 2, S0, S1, D0, D1, D2, v2 * 2.0 + 1.0);
+    block_ptr3d_store(Out, d0, d1, d2 + 3, S0, S1, D0, D1, D2, v3 * 2.0 + 1.0);
 }
 """
 
 
-y_3d_kernel = y_lang.TorchKernel(y_3d_src, kernel_name="bench_3d", target_sm="auto")
+def gpu_busy_percent():
+    """Mean utilisation over a second, before this process loads the GPU."""
+    samples = []
+    for _ in range(10):
+        out = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu", "--format=csv,noheader,nounits", "-i", "0"],
+                             capture_output=True, text=True).stdout.strip()
+        if out.isdigit():
+            samples.append(int(out))
+        time.sleep(0.1)
+    return statistics.mean(samples) if samples else None
 
 
-
-def measure_gpu_latency(fn, warmup=20, rep=200):
-    for _ in range(warmup):
+def time_us(fn, calls):
+    start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+    start.record()
+    for _ in range(calls):
         fn()
-    torch.cuda.synchronize()
+    end.record()
+    end.synchronize()
+    return start.elapsed_time(end) * 1000.0 / calls
 
-    start_event = torch.cuda.Event(enable_timing=True)
-    end_event = torch.cuda.Event(enable_timing=True)
 
-    start_event.record()
-    for _ in range(rep):
-        fn()
-    end_event.record()
-    torch.cuda.synchronize()
-
-    return (start_event.elapsed_time(end_event) / rep) * 1000.0  # µs
-
-def run_3d_benchmarks():
-    # 3D Tensor Dimensions: Batch=32, Rows=256, Cols=1024 (8.38M elements)
+def main(rounds=15, calls=20):
+    busy = gpu_busy_percent()
     D0, D1, D2 = 32, 256, 1024
-    S0 = D1 * D2
-    S1 = D2
-    S2 = 1
+    S0, S1 = D1 * D2, D2
+    major, minor = torch.cuda.get_device_capability(0)
+    y_kernel = y_lang.TorchKernel(Y_3D, kernel_name="bench_3d", target_sm=f"sm_{major}{minor}")
 
-    x_3d = torch.randn(D0, D1, D2, device=device, dtype=torch.float32)
-    out_y = torch.empty_like(x_3d)
-    out_triton = torch.empty_like(x_3d)
+    x = torch.randn(D0, D1, D2, device="cuda")
+    want = x * 2.0 + 1.0
+    out = {"Y": torch.full_like(x, float("nan")), "Triton": torch.full_like(x, float("nan"))}
+    B0, B1, B2 = 4, 4, 64
+    columns = {
+        "Y": lambda: y_kernel.launch(grid=(D0, D1, 1), block=(D2 // 4, 1, 1),
+                                     args=[x, out["Y"], D0, D1, D2, S0, S1]),
+        "Triton": lambda: triton_3d[(triton.cdiv(D0, B0), triton.cdiv(D1, B1), triton.cdiv(D2, B2))](
+            x, out["Triton"], D0, D1, D2, S0, S1, B0=B0, B1=B1, B2=B2),
+    }
 
-    BLOCK_0, BLOCK_1, BLOCK_2 = 16, 16, 64
-    grid_triton = (triton.cdiv(D0, BLOCK_0), triton.cdiv(D1, BLOCK_1))
+    print(f"{torch.cuda.get_device_name(0)}, PyTorch {torch.__version__}, Triton {triton.__version__}")
+    print(f"out = 2x + 1 over {D0} x {D1} x {D2} float32 ({D0 * D1 * D2:,} elements)")
+    if busy is not None and busy > 5:
+        print(f"CONTENDED: the GPU was {busy:.0f}% busy before this started; the timings below are not clean")
+    ok = {}
+    for name, fn in columns.items():
+        fn()
+        torch.cuda.synchronize()
+        ok[name] = torch.equal(out[name], want)
+        print(f"  {name:<7} output {'equals' if ok[name] else 'DIFFERS FROM'} the reference"
+              + ("" if ok[name] else f" ({int((out[name] != want).sum()):,} elements)"))
+    timed = [n for n in columns if ok[n]]
+    if not timed:
+        sys.exit(1)
 
-    fn_triton = lambda: triton_3d_block_ptr_kernel[grid_triton](
-        x_3d, out_triton,
-        D0, D1, D2,
-        S0, S1, S2,
-        BLOCK_0=BLOCK_0, BLOCK_1=BLOCK_1, BLOCK_2=BLOCK_2,
-    )
+    samples = {n: [] for n in timed}
+    for r in range(rounds + 3):
+        for name in timed[r % len(timed):] + timed[:r % len(timed)]:
+            t = time_us(columns[name], calls)
+            if r >= 3:
+                samples[name].append(t)
+    for name in timed:
+        s = samples[name]
+        gbps = 2 * 4 * D0 * D1 * D2 / (min(s) * 1e-6) / 1e9
+        print(f"  {name:<7} min {min(s):.2f} us, median {statistics.median(s):.2f} us "
+              f"({gbps:.0f} GB/s at the minimum, reading and writing every element once; "
+              f"the 32 MB input can sit partly in L2, so this can exceed DRAM bandwidth)")
+    if not all(ok.values()):
+        sys.exit(1)
 
-    grid_y = (math.ceil(D0 / 16), math.ceil(D1 / 16), 1)
-    block_y = (256, 1, 1) # 256 threads * 4 elements = 1024
-    fn_y = lambda: y_3d_kernel.launch(grid=grid_y, block=block_y, args=[x_3d, out_y, D0, D1, D2, S0, S1])
-
-    t_triton = measure_gpu_latency(fn_triton)
-    t_y = measure_gpu_latency(fn_y)
-
-    print("------------------------------------------------------------------------")
-    print(f"  3D Tensor Workload ({D0}x{D1}x{D2}) | 8.38M Elements:")
-    print("------------------------------------------------------------------------")
-    print(f"    Y Language 3D Block Pointer    : {t_y:.2f} µs ({t_y/1000.0:.3f} ms)")
-    print(f"    OpenAI Triton 3D Pointer      : {t_triton:.2f} µs ({t_triton/1000.0:.3f} ms)")
-    speedup = t_triton / t_y
-    print(f"    Outcome                        : Y Language is {speedup:.2f}x FASTER vs Triton")
-    print("------------------------------------------------------------------------\n")
 
 if __name__ == "__main__":
-    run_3d_benchmarks()
+    main()
