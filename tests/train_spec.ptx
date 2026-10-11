@@ -6,15 +6,15 @@
     .param .u64 weights_0,
     .param .b32 size_1
 )
-    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 14
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 22
     // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 32 (to maximize SM occupancy)
     // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 100.00% (6 active blocks per SM)
 .maxnreg 32
 {
     .reg .b32 %r<4>;
     .reg .f32 %f<2>;
-    .reg .b64 %rd<4>;
-    .reg .pred %p<3>;
+    .reg .b64 %rd<8>;
+    .reg .pred %p<12>;
     .reg .f64 %fd<8>;
 
     ld.param.u64 %rd0, [weights_0];
@@ -27,24 +27,46 @@
     setp.lt.f64 %p0, %fd1, 0d0000000000000000;
     selp.f64 %fd2, 0dBFE0000000000000, 0d3FE0000000000000, %p0;
     add.f64 %fd3, %fd1, %fd2;
+    setp.geu.f64 %p1, %fd3, 0d43E0000000000000;
+    @%p1 trap;
+    setp.ltu.f64 %p2, %fd3, 0dC3E0000000000000;
+    @%p2 trap;
     cvt.rzi.s64.f64 %rd2, %fd3;
     mov.s64 %rd1, %rd2;
+    setp.lt.s64 %p3, %rd1, -4503599627370496;
+    @%p3 trap;
+    setp.gt.s64 %p4, %rd1, 4503599627370496;
+    @%p4 trap;
     // for i in ...
     // [Y TILE OPTIMIZATION] Tiled loop dimensions: M=IntLit(16, Span { line: 16, col: 15 }), N=IntLit(16, Span { line: 16, col: 19 }), K=Some(IntLit(8, Span { line: 16, col: 23 }))
     // [Y TILE OPTIMIZATION] Tiled loop dimensions: M=IntLit(16, Span { line: 16, col: 15 }), N=IntLit(16, Span { line: 16, col: 19 }), K=Some(IntLit(8, Span { line: 16, col: 23 }))
     mov.u32 %r1, 0;
     mov.u32 %r2, 1024;
     $LOOP_START_0:
-    setp.ge.s32 %p1, %r1, %r2;
-    @%p1 bra $LOOP_END_1;
+    setp.ge.s32 %p5, %r1, %r2;
+    @%p5 bra $LOOP_END_1;
     mov.u32 %r3, %r1;   // own register: `%r1` is another binding's
     cvt.f64.f32 %fd4, %f0;
     mul.f64 %fd5, %fd4, 0d41F0000000000000;
-    setp.lt.f64 %p2, %fd5, 0d0000000000000000;
-    selp.f64 %fd6, 0dBFE0000000000000, 0d3FE0000000000000, %p2;
+    setp.lt.f64 %p6, %fd5, 0d0000000000000000;
+    selp.f64 %fd6, 0dBFE0000000000000, 0d3FE0000000000000, %p6;
     add.f64 %fd7, %fd5, %fd6;
+    setp.geu.f64 %p7, %fd7, 0d43E0000000000000;
+    @%p7 trap;
+    setp.ltu.f64 %p8, %fd7, 0dC3E0000000000000;
+    @%p8 trap;
     cvt.rzi.s64.f64 %rd3, %fd7;
-    add.s64 %rd1, %rd1, %rd3;
+    add.s64 %rd4, %rd1, %rd3;
+    xor.b64 %rd5, %rd3, %rd4;
+    xor.b64 %rd6, %rd1, %rd4;
+    and.b64 %rd7, %rd5, %rd6;
+    setp.lt.s64 %p9, %rd7, 0;
+    @%p9 trap;
+    mov.s64 %rd1, %rd4;
+    setp.lt.s64 %p10, %rd1, -4503599627370496;
+    @%p10 trap;
+    setp.gt.s64 %p11, %rd1, 4503599627370496;
+    @%p11 trap;
     add.u32 %r1, %r1, 1;
     bra $LOOP_START_0;
     $LOOP_END_1:

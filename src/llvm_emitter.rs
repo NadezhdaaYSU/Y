@@ -65,6 +65,10 @@ const PRELUDE_DECLARED: &[&str] = &[
     "llvm.memset.p0.i64",
     "llvm.memmove.p0.p0.i64",
     "llvm.trap",
+    "llvm.sadd.with.overflow.i32",
+    "llvm.sadd.with.overflow.i64",
+    "llvm.ssub.with.overflow.i32",
+    "llvm.ssub.with.overflow.i64",
     "llvm.prefetch.p0",
     "load",
     "malloc",
@@ -322,6 +326,9 @@ pub struct LlvmEmitter {
     /// The exact GEMM scans its operands against their `@bounds` before it
     /// reads them, through one helper defined at the end of the module.
     needs_operand_scan: bool,
+    /// Each `@ZeroDrift` accumulator's declared `@bounds`, in its fixed-point
+    /// representation; tested after every store to it.
+    drift_range: BTreeMap<String, (i128, i128)>,
     /// DWARF debug information (`-g`), when requested. `None` leaves every
     /// emitted module byte-for-byte as it was; see `crate::debug_info`.
     debug: Option<crate::debug_info::DebugInfo>,
@@ -653,6 +660,7 @@ impl LlvmEmitter {
             needs_exact_gemm_module: None,
             needs_bounds_messages: false,
             needs_operand_scan: false,
+            drift_range: BTreeMap::new(),
             debug: None,
         }
     }
@@ -1071,9 +1079,10 @@ impl LlvmEmitter {
         crate::zero_drift::running_sum(target, value)
     }
 
-    fn emit_to_fixed(&mut self, val: &str, repr: crate::zero_drift::DriftRepr) -> String {
+    fn emit_to_fixed(&mut self, val: &str, repr: crate::zero_drift::DriftRepr, line: usize) -> String {
         let ity = repr.llvm_type();
         if repr.frac_bits() == 0 {
+            self.emit_fixed_fits(val, ity, line);
             let out = self.fresh_tmp();
             writeln!(
                 &mut self.output,
@@ -1113,6 +1122,7 @@ impl LlvmEmitter {
             rounded, scaled, bias
         )
         .unwrap();
+        self.emit_fixed_fits(&rounded, ity, line);
         let out = self.fresh_tmp();
         writeln!(
             &mut self.output,
@@ -1121,6 +1131,79 @@ impl LlvmEmitter {
         )
         .unwrap();
         out
+    }
+
+    /// `fptosi` of a value the integer type cannot hold is POISON in LLVM: one
+    /// oversized (or NaN) term made the accumulator arbitrary. A term is
+    /// tested before it is converted, ordered so a NaN fails, and one that
+    /// does not fit the accumulator's exact representation stops the program.
+    fn emit_fixed_fits(&mut self, value: &str, ity: &str, line: usize) {
+        let half = if ity == "i64" { 2f64.powi(63) } else { 2f64.powi(31) };
+        let (low, high, fits) = (self.fresh_tmp(), self.fresh_tmp(), self.fresh_tmp());
+        writeln!(&mut self.output, "  {low} = fcmp oge double {value}, 0x{:016X}", (-half).to_bits()).unwrap();
+        writeln!(&mut self.output, "  {high} = fcmp olt double {value}, 0x{:016X}", half.to_bits()).unwrap();
+        writeln!(&mut self.output, "  {fits} = and i1 {low}, {high}").unwrap();
+        self.emit_stop_unless(&fits, "@.y_drift_term", &format!("i64 {line}, double {value}"));
+    }
+
+    /// `br` on `ok`, and outside it print `message` with `args` and exit 1.
+    fn emit_stop_unless(&mut self, ok: &str, message: &str, args: &str) {
+        let (stop, cont) = (self.fresh_label("drift.stop"), self.fresh_label("drift.ok"));
+        writeln!(&mut self.output, "  br i1 {ok}, label %{cont}, label %{stop}").unwrap();
+        writeln!(&mut self.output, "{stop}:").unwrap();
+        let printed = self.fresh_tmp();
+        writeln!(&mut self.output, "  {printed} = call i32 (ptr, ...) @printf(ptr {message}, {args})").unwrap();
+        writeln!(&mut self.output, "  call void @exit(i32 1)").unwrap();
+        writeln!(&mut self.output, "  unreachable").unwrap();
+        writeln!(&mut self.output, "{cont}:").unwrap();
+        self.block_terminated = false;
+        self.needs_bounds_messages = true;
+    }
+
+    /// `acc + term` (or `-`) that stops the program on overflow. It was a
+    /// plain `add`, which wraps: an accumulator past its representation's
+    /// range silently became a different number under a directive promising
+    /// an exact total.
+    fn emit_drift_accumulate(&mut self, sub: bool, ity: &str, acc: &str, term: &str, line: usize) -> String {
+        let intrinsic = format!("llvm.{}.with.overflow.{ity}", if sub { "ssub" } else { "sadd" });
+        if !self.called_functions.iter().any(|f| *f == intrinsic) {
+            self.called_functions.push(intrinsic.clone());
+        }
+        let (pair, value, overflow, ok) = (self.fresh_tmp(), self.fresh_tmp(), self.fresh_tmp(), self.fresh_tmp());
+        writeln!(&mut self.output, "  {pair} = call {{ {ity}, i1 }} @{intrinsic}({ity} {acc}, {ity} {term})").unwrap();
+        writeln!(&mut self.output, "  {value} = extractvalue {{ {ity}, i1 }} {pair}, 0").unwrap();
+        writeln!(&mut self.output, "  {overflow} = extractvalue {{ {ity}, i1 }} {pair}, 1").unwrap();
+        writeln!(&mut self.output, "  {ok} = xor i1 {overflow}, true").unwrap();
+        self.emit_stop_unless(&ok, "@.y_drift_overflow", &format!("i64 {line}"));
+        value
+    }
+
+    /// The accumulator's declared `@bounds`, tested after a store. The
+    /// representation was sized for that range and nothing else, so a value
+    /// outside it stops the program as a `let`'s unprovable bound does.
+    fn emit_drift_range_check(&mut self, name: &str, value: &str, ity: &str, line: usize) {
+        let Some(&(lo, hi)) = self.drift_range.get(name) else { return };
+        let Some(&(repr, _)) = self.zero_drift.get(name) else { return };
+        let (wide, low, high, outside, inside) =
+            (self.fresh_tmp(), self.fresh_tmp(), self.fresh_tmp(), self.fresh_tmp(), self.fresh_tmp());
+        writeln!(&mut self.output, "  {wide} = sext {ity} {value} to i128").unwrap();
+        writeln!(&mut self.output, "  {low} = icmp slt i128 {wide}, {lo}").unwrap();
+        writeln!(&mut self.output, "  {high} = icmp sgt i128 {wide}, {hi}").unwrap();
+        writeln!(&mut self.output, "  {outside} = or i1 {low}, {high}").unwrap();
+        writeln!(&mut self.output, "  {inside} = xor i1 {outside}, true").unwrap();
+        let (real, shown) = (self.fresh_tmp(), self.fresh_tmp());
+        writeln!(&mut self.output, "  {real} = sitofp i128 {wide} to double").unwrap();
+        writeln!(&mut self.output, "  {shown} = fdiv double {real}, 0x{:016X}", repr.scale().to_bits()).unwrap();
+        let scale = repr.scale();
+        self.emit_stop_unless(
+            &inside,
+            "@.y_drift_range",
+            &format!(
+                "i64 {line}, double {shown}, double 0x{:016X}, double 0x{:016X}",
+                (lo as f64 / scale).to_bits(),
+                (hi as f64 / scale).to_bits()
+            ),
+        );
     }
 
     /// Converts a value out of `repr`'s integer domain back to `double`.
@@ -1160,6 +1243,14 @@ impl LlvmEmitter {
         if integer_domain {
             let value = self.emit_expr(expr, None, None);
             let ty = self.infer_type(expr);
+            // The integer accumulator is an I64: a U64 term at or above 2^63
+            // would be read as a negative one.
+            if ty == "i64" && self.expr_is_unsigned(expr) {
+                let (fits, shown) = (self.fresh_tmp(), self.fresh_tmp());
+                writeln!(&mut self.output, "  {fits} = icmp sge i64 {value}, 0").unwrap();
+                writeln!(&mut self.output, "  {shown} = uitofp i64 {value} to double").unwrap();
+                self.emit_stop_unless(&fits, "@.y_drift_term", &format!("i64 {}, double {shown}", expr.span().line));
+            }
             return self.emit_coerce_from(
                 &value,
                 &ty,
@@ -1168,7 +1259,7 @@ impl LlvmEmitter {
             );
         }
         let value = self.emit_expr_as_double(expr);
-        self.emit_to_fixed(&value, repr)
+        self.emit_to_fixed(&value, repr, expr.span().line)
     }
 
     /// Emits an expression in the conversion domain of a fixed-point float.
@@ -2181,6 +2272,14 @@ impl LlvmEmitter {
         if self.called_functions.iter().any(|name| name == "llvm.trap") {
             self.wln("declare void @llvm.trap() cold noreturn nounwind");
         }
+        for op in ["sadd", "ssub"] {
+            for ty in ["i32", "i64"] {
+                let name = format!("llvm.{op}.with.overflow.{ty}");
+                if self.called_functions.iter().any(|f| *f == name) {
+                    self.wln(&format!("declare {{ {ty}, i1 }} @{name}({ty}, {ty})"));
+                }
+            }
+        }
         self.wln("declare { i64, i1 } @llvm.umul.with.overflow.i64(i64, i64)");
         self.wln("declare { i64, i1 } @llvm.uadd.with.overflow.i64(i64, i64)");
         for ty in ["i8", "i16", "i32", "i64"] {
@@ -2315,6 +2414,19 @@ impl LlvmEmitter {
                 ("@.y_bounds_uint", "Y: line %ld: %llu lies outside @bounds(%lld, %lld); stopping\n"),
                 ("@.y_bounds_real", "Y: line %ld: %g lies outside @bounds(%lld, %lld); stopping\n"),
                 (
+                    "@.y_drift_term",
+                    "Y: line %ld: a @ZeroDrift term (%g in the accumulator's units) does not fit its exact \
+                     representation; stopping\n",
+                ),
+                (
+                    "@.y_drift_overflow",
+                    "Y: line %ld: a @ZeroDrift accumulator overflowed its exact representation; stopping\n",
+                ),
+                (
+                    "@.y_drift_range",
+                    "Y: line %ld: a @ZeroDrift accumulator reached %g, outside its @bounds(%g, %g); stopping\n",
+                ),
+                (
                     "@.y_operand_bounds",
                     "Y: the exact GEMM's operand %c[%lld][%lld] is %lld, outside its @bounds(%lld, %lld); \
                      stopping before computing anything\n",
@@ -2429,6 +2541,7 @@ impl LlvmEmitter {
         self.mem_storage_types.clear();
         self.mem_ast_types.clear();
         self.zero_drift.clear();
+        self.drift_range.clear();
         self.loop_exit_stack.clear();
         self.block_terminated = false;
         self.current_load_hint = None;
@@ -3788,6 +3901,22 @@ impl LlvmEmitter {
                                 );
                             self.zero_drift
                                 .insert(name.clone(), (decision.repr, integer_domain));
+                            // The representation was chosen to hold this range,
+                            // so a value outside it is outside what the
+                            // accumulator was sized for: tested after every
+                            // store (`emit_drift_range_check`).
+                            match range {
+                                Some((lo, hi)) => {
+                                    let scale = decision.repr.scale();
+                                    self.drift_range.insert(
+                                        name.clone(),
+                                        ((lo * scale).ceil() as i128, (hi * scale).floor() as i128),
+                                    );
+                                }
+                                None => {
+                                    self.drift_range.remove(name);
+                                }
+                            }
                             writeln!(
                                 &mut self.output,
                                 "  %{} = alloca {}",
@@ -4815,7 +4944,11 @@ nest as written"
         if let Stmt::Let { name, span, .. } = stmt {
             let checked = crate::type_checker::RUNTIME_BOUNDS
                 .with(|m| m.borrow().get(&(span.line, span.col)).copied());
-            if let (Some((lo, hi)), false) = (checked, self.block_terminated) {
+            // A `@ZeroDrift` accumulator's range is tested after EVERY store
+            // (`emit_drift_range_check`), its initial one included.
+            if let (Some((lo, hi)), false, false) =
+                (checked, self.block_terminated, self.drift_range.contains_key(name))
+            {
                 self.emit_let_bounds_check(name, span.line, lo, hi);
             }
             self.dbg_bind(name, span, true);
@@ -4949,13 +5082,14 @@ nest as written"
 
     fn emit_stmt_inner(&mut self, stmt: &Stmt, ret_type: &str) {
         match stmt {
-            Stmt::Let { name, init, .. } if self.zero_drift.contains_key(name) => {
+            Stmt::Let { name, init, span, .. } if self.zero_drift.contains_key(name) => {
                 let (repr, integer_domain) = self.zero_drift[name];
                 let fixed = match init {
                     Some(e) => self.emit_drift_term(e, repr, integer_domain),
                     None => "0".to_string(),
                 };
                 self.emit_store(&fixed, &format!("%{}", name), repr.llvm_type());
+                self.emit_drift_range_check(name, &fixed, repr.llvm_type(), span.line);
             }
             Stmt::Let { name, init: Some(init_expr), .. } if self.local_q_format(name).is_some() => {
                 let fmt = self.local_q_format(name).unwrap();
@@ -5081,20 +5215,10 @@ nest as written"
                 let ity = repr.llvm_type();
                 let addr = format!("%{}", name);
                 let loaded = self.emit_load(&addr, ity);
-                let result = self.fresh_tmp();
-                let instr = if matches!(op, BinaryOp::Sub) {
-                    "sub"
-                } else {
-                    "add"
-                };
-                writeln!(
-                    &mut self.output,
-                    "  {} = {} {} {}, {}",
-                    result, instr, ity, loaded, rhs_fixed
-                )
-                .unwrap();
+                let result =
+                    self.emit_drift_accumulate(matches!(op, BinaryOp::Sub), ity, &loaded, &rhs_fixed, span.line);
                 writeln!(&mut self.output, "  store {} {}, ptr {}", ity, result, addr).unwrap();
-                let _ = span;
+                self.emit_drift_range_check(&name, &result, ity, span.line);
             }
             // Any OTHER assignment to a drift accumulator is refused rather
             // than converted. `sum = <expr>` that is not a running sum would
@@ -5443,19 +5567,10 @@ representation, and whether that is lossless depends on the expression.",
                 let ity = repr.llvm_type();
                 let addr = format!("%{}", name);
                 let loaded = self.emit_load(&addr, ity);
-                let result = self.fresh_tmp();
-                let instr = if matches!(op, BinaryOp::Sub) {
-                    "sub"
-                } else {
-                    "add"
-                };
-                writeln!(
-                    &mut self.output,
-                    "  {} = {} {} {}, {}",
-                    result, instr, ity, loaded, rhs_fixed
-                )
-                .unwrap();
+                let result =
+                    self.emit_drift_accumulate(matches!(op, BinaryOp::Sub), ity, &loaded, &rhs_fixed, span.line);
                 self.emit_store(&result, &addr, ity);
+                self.emit_drift_range_check(&name, &result, ity, span.line);
             }
             Stmt::CompoundAssign { target, op, value, .. } if self.q_format(target).is_some() => {
                 let fmt = self.q_format(target).unwrap();

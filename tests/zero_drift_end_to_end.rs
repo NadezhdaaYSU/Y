@@ -203,13 +203,14 @@ fn annotation_changes_the_generated_ir() {
     let ir_without = emit("without", without);
 
     assert_ne!(ir_with, ir_without, "@ZeroDrift must affect codegen");
+    // Exact integer arithmetic, checked for overflow: a bare `add i64` wrapped.
     assert!(
-        ir_with.contains("add i64"),
-        "the accumulator should be accumulating in exact integer arithmetic:\n{}",
+        ir_with.contains("@llvm.sadd.with.overflow.i64"),
+        "the accumulator should be accumulating in exact, overflow-checked integer arithmetic:\n{}",
         ir_with
     );
     assert!(
-        !ir_without.contains("add i64"),
+        !ir_without.contains("add i64") && !ir_without.contains("sadd.with.overflow"),
         "the unannotated version should not be using a fixed-point accumulator"
     );
 }

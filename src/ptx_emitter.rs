@@ -877,6 +877,9 @@ pub struct PtxEmitter {
     >,
     /// Measured accumulate costs driving that choice.
     drift_costs: crate::zero_drift::CostTable,
+    /// Each `@ZeroDrift` accumulator's declared `@bounds`, in its fixed-point
+    /// representation; tested after every store to it.
+    drift_range: std::collections::HashMap<String, (i128, i128)>,
     /// One line per `@ZeroDrift` binding.
     pub drift_report: Vec<String>,
     /// Anything the emitter was asked to lower and could not lower correctly -
@@ -1066,6 +1069,7 @@ impl PtxEmitter {
             element_value_regs: std::collections::HashSet::new(),
             type_aliases: std::collections::HashMap::new(),
             zero_drift: std::collections::HashMap::new(),
+            drift_range: std::collections::HashMap::new(),
             drift_costs: crate::zero_drift::CostTable::new(),
             drift_report: Vec::new(),
             emit_errors: Vec::new(),
@@ -1230,6 +1234,14 @@ impl PtxEmitter {
         value_ty: ScalarTy,
     ) -> String {
         if integer_domain {
+            // A U64 term at or above 2^63 would be read as a negative I64.
+            // Only a register known to hold a U64: an unrecorded `%rd` reads
+            // as U64 by default (addresses) and may hold a signed value.
+            if self.reg_ty.get(src) == Some(&ScalarTy::U64) {
+                let pred = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    setp.gt.u64 {pred}, {src}, {};", i64::MAX).unwrap();
+                writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+            }
             return self.emit_convert(src, ScalarTy::I64);
         }
         let widened = if value_ty != ScalarTy::F64 && self.ty_of(src) == ScalarTy::F32 {
@@ -1244,6 +1256,7 @@ impl PtxEmitter {
         };
         let out = self.alloc_reg64();
         if repr.frac_bits() == 0 {
+            self.emit_drift_fits_s64(&widened);
             writeln!(&mut self.ptx_buffer, "    cvt.rzi.s64.f64 {}, {};", out, widened).unwrap();
             return out;
         }
@@ -1277,8 +1290,57 @@ impl PtxEmitter {
         .unwrap();
         let rounded = self.alloc_regf64();
         writeln!(&mut self.ptx_buffer, "    add.f64 {}, {}, {};", rounded, scaled, bias).unwrap();
+        self.emit_drift_fits_s64(&rounded);
         writeln!(&mut self.ptx_buffer, "    cvt.rzi.s64.f64 {}, {};", out, rounded).unwrap();
         out
+    }
+
+    /// Before `cvt.rzi.s64.f64`: a value outside the s64 range converts
+    /// SATURATED and a NaN converts to 0 - one bad term made the accumulator a
+    /// different number without a word. Unordered compares, so a NaN traps.
+    fn emit_drift_fits_s64(&mut self, value: &str) {
+        for (cmp, bound) in [("geu", 2f64.powi(63)), ("ltu", -(2f64.powi(63)))] {
+            let pred = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.{cmp}.f64 {pred}, {value}, {};", Self::ptx_f64(bound)).unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+        }
+    }
+
+    /// `acc += term` (or `-=`) on the s64 accumulator, trapping on signed
+    /// overflow. It was a bare `add.s64`, which wraps.
+    fn emit_drift_accumulate(&mut self, acc: &str, term: &str, sub: bool) {
+        let (sum, x1, x2, both) = (self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64());
+        writeln!(&mut self.ptx_buffer, "    {}.s64 {sum}, {acc}, {term};", if sub { "sub" } else { "add" }).unwrap();
+        // Overflowed exactly when the sign bit of this is set: for a sum,
+        // both operands disagree in sign with the result; for a difference,
+        // the operands disagree with each other and the result with `acc`.
+        if sub {
+            writeln!(&mut self.ptx_buffer, "    xor.b64 {x1}, {acc}, {term};").unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    xor.b64 {x1}, {term}, {sum};").unwrap();
+        }
+        writeln!(&mut self.ptx_buffer, "    xor.b64 {x2}, {acc}, {sum};").unwrap();
+        writeln!(&mut self.ptx_buffer, "    and.b64 {both}, {x1}, {x2};").unwrap();
+        let pred = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {pred}, {both}, 0;").unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+        writeln!(&mut self.ptx_buffer, "    mov.s64 {acc}, {sum};").unwrap();
+    }
+
+    /// The accumulator's declared `@bounds`, tested after a store: the
+    /// representation was sized for that range and nothing else.
+    fn emit_drift_range_check(&mut self, name: &str, acc: &str) {
+        let Some(&(lo, hi)) = self.drift_range.get(name) else { return };
+        if lo > i64::MIN as i128 {
+            let pred = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {pred}, {acc}, {lo};").unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+        }
+        if hi < i64::MAX as i128 {
+            let pred = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.gt.s64 {pred}, {acc}, {hi};").unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+        }
     }
 
     /// Converts a fixed-point accumulator back to a readable register.
@@ -3075,6 +3137,7 @@ or `shared_alloc_u32` for a shared-memory array.",
         self.element_value_regs.clear();
         self.type_aliases.clear();
         self.zero_drift.clear();
+        self.drift_range.clear();
         self.record_pointer_element_types(kernel);
 
         // Reset register counters
@@ -3896,7 +3959,9 @@ or `shared_alloc_u32` for a shared-memory array.",
         if let Stmt::Let { name, span, .. } = stmt {
             let checked = crate::type_checker::RUNTIME_BOUNDS
                 .with(|m| m.borrow().get(&(span.line, span.col)).copied());
-            if let Some((lo, hi)) = checked {
+            // A `@ZeroDrift` accumulator's range is tested after EVERY store
+            // (`emit_drift_range_check`), its initial one included.
+            if let (Some((lo, hi)), false) = (checked, self.drift_range.contains_key(name)) {
                 self.emit_let_bounds_check(name, span.line, lo, hi);
             }
         }
@@ -3990,6 +4055,21 @@ or `shared_alloc_u32` for a shared-memory array.",
                 match crate::zero_drift::select_repr(&req, &self.drift_costs) {
                     Ok(decision) => {
                         let repr = decision.repr;
+                        // The representation was chosen to hold this range,
+                        // so a value outside it is outside what the
+                        // accumulator was sized for: tested after every store.
+                        match range {
+                            Some((lo, hi)) => {
+                                let scale = repr.scale();
+                                self.drift_range.insert(
+                                    name.clone(),
+                                    ((lo * scale).ceil() as i128, (hi * scale).floor() as i128),
+                                );
+                            }
+                            None => {
+                                self.drift_range.remove(name);
+                            }
+                        }
                         self.drift_report.push(crate::zero_drift::report_line(
                             name,
                             &ty_name,
@@ -4054,6 +4134,7 @@ or `shared_alloc_u32` for a shared-memory array.",
                                     let fixed =
                                         self.emit_drift_to_fixed(&v, repr, integer_domain, value_ty);
                                     writeln!(&mut self.ptx_buffer, "    mov.s64 {}, {};", acc, fixed).unwrap();
+                                    self.emit_drift_range_check(name, &acc);
                                 } else {
                                     writeln!(&mut self.ptx_buffer, "    mov.u64 {}, 0;", acc).unwrap();
                                 }
@@ -4324,8 +4405,8 @@ declare it as a Q format.\n{}",
                 }
                 let rhs = self.emit_expr(value, None, hw_profile);
                 let fixed = self.emit_drift_to_fixed(&rhs, repr, integer_domain, value_ty);
-                let instr = if matches!(op, BinaryOp::Sub) { "sub.s64" } else { "add.s64" };
-                writeln!(&mut self.ptx_buffer, "    {} {}, {}, {};", instr, acc, acc, fixed).unwrap();
+                self.emit_drift_accumulate(&acc, &fixed, matches!(op, BinaryOp::Sub));
+                self.emit_drift_range_check(&name, &acc);
             }
             // Every OTHER compound assignment fell through every arm below
             // and landed in this function's `_ => {}`, so `s += 7;` on an
@@ -4416,13 +4497,8 @@ declare it as a Q format.\n{}",
                     Some((op, term)) => {
                         let rhs = self.emit_expr(term, None, hw_profile);
                         let fixed = self.emit_drift_to_fixed(&rhs, repr, integer_domain, value_ty);
-                        let instr = if matches!(op, BinaryOp::Sub) { "sub.s64" } else { "add.s64" };
-                        writeln!(
-                            &mut self.ptx_buffer,
-                            "    {} {}, {}, {};",
-                            instr, acc, acc, fixed
-                        )
-                        .unwrap();
+                        self.emit_drift_accumulate(&acc, &fixed, matches!(op, BinaryOp::Sub));
+                        self.emit_drift_range_check(&name, &acc);
                     }
                     None => {
                         // Refusing is the fix, not a stopgap. Lowering this as
