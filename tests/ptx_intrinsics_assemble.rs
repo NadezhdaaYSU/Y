@@ -183,7 +183,7 @@ fn supported_intrinsics_emit_assemblable_ptx() {
         ("i_block_tile_store", "block_tile_store(A, N, B);"),
         ("i_vec_add_v4", "vec_add_v4(A, B, A);"),
         ("i_swiglu_v4", "swiglu_v4(A, B, A);"),
-        ("i_rmsnorm_v4", "rmsnorm_v4(A, B, A);"),
+        ("i_rmsnorm_v4", "rmsnorm_v4(A, B, A, N, 0.00001);"),
     ];
 
     let mut passed = 0;
