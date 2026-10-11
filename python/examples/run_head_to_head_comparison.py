@@ -129,17 +129,11 @@ kernel swiglu(Gate: GlobalMemory<F32>, Up: GlobalMemory<F32>, Out: GlobalMemory<
 }
 """
 
-y_matmul_src = """
-kernel matmul(A: GlobalMemory<F16>, B: GlobalMemory<F16>, C: GlobalMemory<F32>, M: I32, N: I32, K: I32) {
-    let row: I32 = block_idx_y() * 128 + thread_idx_y();
-    let col: I32 = block_idx_x() * 128 + thread_idx_x();
-    let tile_a: Fragment<MMA_m16n8k16, A, F16> = load_v4(A[row]);
-    let tile_b: Fragment<MMA_m16n8k16, B, F16> = load_v4(B[col]);
-    let tile_c: Fragment<MMA_m16n8k16, D, F32> = Fragment::zero();
-    let acc: Fragment<MMA_m16n8k16, D, F32> = mma_sync(tile_a, tile_b, tile_c);
-    store_v4(C[row * N + col], acc);
-}
-"""
+# A `matmul` kernel built from `Fragment::zero()`/`mma_sync(...)` used to be
+# compiled here. The PTX backend refuses those forms (they emitted fixed
+# instructions with the wrong register counts), so the script raised at import
+# and ran nothing - and the kernel was never launched. Y's GEMM rows below go
+# through `y_lang.ops.fp8_gemm`.
 
 
 
@@ -147,7 +141,6 @@ kernel matmul(A: GlobalMemory<F16>, B: GlobalMemory<F16>, C: GlobalMemory<F32>, 
 y_vecadd_kernel = y_lang.TorchKernel(y_vecadd_src, kernel_name="vec_add", target_sm="auto")
 y_rmsnorm_kernel = y_lang.TorchKernel(y_rmsnorm_src, kernel_name="rmsnorm", target_sm="auto")
 y_swiglu_kernel = y_lang.TorchKernel(y_swiglu_src, kernel_name="swiglu", target_sm="auto")
-y_matmul_kernel = y_lang.TorchKernel(y_matmul_src, kernel_name="matmul", target_sm="auto")
 
 
 # ----------------------------------------------------------------------
@@ -473,15 +466,21 @@ def benchmark_cold_jit_compilation():
     print("  COLD JIT COMPILATION LATENCY BENCHMARK")
     print("========================================================================")
 
-    flash_path = repo_root / "python" / "examples" / "kernels" / "flash_attention.ysu"
-    with open(flash_path, "r") as f:
+    # This used to compile `flash_attention.ysu`, which does not compile (see
+    # its header), so the script raised here and never wrote its report.
+    kernel_path = repo_root / "python" / "examples" / "kernels" / "rmsnorm.ysu"
+    with open(kernel_path, "r") as f:
         y_source = f.read()
 
-    # Benchmark Y Cold JIT
+    # Benchmark Y Cold JIT. A source the cache has never seen: the disk cache
+    # outlives the process, so the same text would be a warm lookup on the
+    # second run.
+    y_source += f"\n// cold-{time.time_ns()}\n"
     t0 = time.perf_counter()
     y_ptx = y_lang.compile_to_ptx(y_source, target_sm="auto")
     t_y_cold_ms = (time.perf_counter() - t0) * 1000.0
 
+    print(f"  * Kernel                              : {kernel_path.name}")
     print(f"  * Y Cold JIT Compilation Latency      : {t_y_cold_ms:.3f} ms")
     print(f"  * Y PTX Output Size                   : {len(y_ptx)} bytes")
     print("========================================================================\n")

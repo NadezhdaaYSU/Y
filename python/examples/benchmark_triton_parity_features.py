@@ -6,7 +6,6 @@ Measures latency, TFLOPS/GBps throughput, autotuner search times, and PyTorch In
 
 import sys
 import time
-import ctypes
 from pathlib import Path
 
 repo_root = Path(__file__).resolve().parent.parent.parent
@@ -149,30 +148,24 @@ def main():
     # ------------------------------------------------------------------
     print("\n--- [4/4] Native Rust C-ABI Autotuner Selection ---")
 
-    c_api_found = False
+    # This loaded `target/release/libY.so` - the library is `liby.so`, so on a
+    # case-sensitive filesystem it was never found - and declared the call
+    # with three arguments where it takes four (`is_fp8`), and when the load
+    # failed it appended a FIXED "0.001 µs (cached)" to the results as though
+    # measured. It goes through the package's own binding now, and a failure
+    # is reported as a failure.
     try:
-        lib_path = repo_root / "target" / "release" / "libY.so"
-        if not lib_path.exists():
-            lib_path = repo_root / "target" / "debug" / "libY.so"
-        if lib_path.exists():
-            y_lib = ctypes.CDLL(str(lib_path))
-            y_lib.y_autotune_select_config_json.restype = ctypes.c_char_p
-            y_lib.y_autotune_select_config_json.argtypes = [ctypes.c_uint32, ctypes.c_uint32, ctypes.c_uint32]
-
-            t0 = time.perf_counter()
-            for _ in range(1000):
-                res = y_lib.y_autotune_select_config_json(2048, 2048, 2048)
-            t1 = time.perf_counter()
-            t_rust_search_us = ((t1 - t0) * 1e6) / 1000.0
-            print(f"  Native Rust C-ABI Autotuner Lookup: {t_rust_search_us:.3f} µs / query")
-            results.append(("Rust Autotuner Lookup", f"{t_rust_search_us:.3f} µs"))
-            c_api_found = True
+        y_lang.compiler.select_autotune_config(2048, 2048, 2048)  # load and warm once
+        t0 = time.perf_counter()
+        for _ in range(1000):
+            config = y_lang.compiler.select_autotune_config(2048, 2048, 2048)
+        t1 = time.perf_counter()
+        t_rust_search_us = ((t1 - t0) * 1e6) / 1000.0
+        print(f"  Native Rust C-ABI Autotuner Lookup: {t_rust_search_us:.3f} µs / query ({config})")
+        results.append(("Rust Autotuner Lookup", f"{t_rust_search_us:.3f} µs"))
     except Exception as e:
-        print(f"  Native Rust C-ABI DLL note: {e}")
-
-    if not c_api_found:
-        print("  Native Rust C-ABI DLL: Verified via Rust unit test suite (0.000s cached lookup)")
-        results.append(("Rust Autotuner Lookup", "0.001 µs (cached)"))
+        print(f"  Native Rust C-ABI Autotuner Lookup: NOT MEASURED ({e})")
+        results.append(("Rust Autotuner Lookup", "not measured"))
 
     # ------------------------------------------------------------------
     # SUMMARY TABLE
