@@ -115,10 +115,10 @@ These notes were checked against source, not freshly reproduced. Read
   validator licenses sm89 only and does not establish general unrolled-loop
   correspondence.
 
-Other unresolved reports are indexed in
-[the reported-issue backlog](docs/claude-history/UNRESOLVED.md). Check relevant
-entries before changes; archived status does not mean a bug was fixed. Some older
-reports are superseded, so confirm source/tests before treating one as current.
+Other reports are indexed in
+[the reported-issue backlog](docs/claude-history/UNRESOLVED.md), each with a
+status from the 2026-10-11 review; the open ones are listed in known issues.
+Confirm source/tests before treating an entry, or its status, as current.
 
 ## Read more only when relevant
 
