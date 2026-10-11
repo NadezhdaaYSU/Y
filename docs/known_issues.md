@@ -1,16 +1,89 @@
 # Known issues and limits
 
-Reviewed against the working tree on 2026-10-10 after shortening `CLAUDE.md`.
-The findings below are source reviews, not new behavioral reproductions or an
-exhaustive bug audit. No compiler behavior was changed by this documentation work.
+Reviewed against the working tree on 2026-10-10 after shortening `CLAUDE.md`,
+and on 2026-10-11 against every report in the archived backlog.
 
-## Issues still visible in current source
+## Open
 
-None from this review remains open (2026-10-11): each is in the table below
-with the test that pins its fix. The backlog under "Remaining reported issues"
-still holds unreviewed historical reports.
+Reviewed 2026-10-11 against every report in [the archived backlog](claude-history/UNRESOLVED.md),
+most reproduced against the compiler built from the tree rather than read from
+source; each entry there now carries its status. What is still open:
 
-## Fixed since this review
+### A wrong answer under a precondition nothing checks
+
+- **Exact attention's `KFix`** (archive 1639 (c)) and **`exact_pv`'s licences
+  on `T`, `D`, `Q` and the extents** (archive 1692 (a)) are kernel parameters.
+  `KFix = 0` makes the softmax uniform and `KFix >= 2^31` makes a key vanish;
+  nothing at the launch boundary checks either, and `temperature_fixed_point`
+  is a host helper a caller may skip. The certificates name them as trust
+  items. The remedy is the exact GEMM's: check them when the kernel starts.
+  That changes PTX that is proved and validated, so it is its own increment.
+
+### Benchmarks
+
+- `python/examples/run_head_to_head_comparison.py` is not a fair comparison:
+  its "FP8 GEMM" rows time Y's FP8 kernel against FP16 matmuls in the Triton and
+  PyTorch columns, and its block-scan row times Y through a CUDA graph and the
+  others as plain launches. Do not quote its report until both are fixed.
+- `python/examples/kernels/flash_attention.ysu` does not compile (`Pipeline` is
+  not a type); the scripts report that rather than stop.
+
+### Refused loudly, not implemented
+
+- No conversion between integers and floats (§20.4); no type aliases or generic
+  functions; `for i in 0..v.size` (a field access as a range bound) does not
+  parse; `@ghost let` does not parse, and a `@ghost` block is emitted, not
+  stripped (§9.13); `@require` on a `fn` and `&&`/`||` inside it are refused;
+  `@align` is refused (§9.4).
+- `--emit-cpu` refuses struct literals, zero-initialised arrays and the string
+  built-ins; `--emit-native` is a straight-line `I32`/`bool` subset.
+- `eval_interval` models no `|`, `^`, `<<`, `>>` or `%`, so an index bounded
+  only through one is refused as unprovable (archive 1857).
+
+### Documentation not yet audited
+
+- The §9 directive fragments, §13's 22 migration-guide rows, §20.5's claim that
+  `TF32` is a fragment type, and the profile-key table (it names
+  `TENSOR_F16_LATENCY` and `WARP_SHUFFLE_LATENCY`, which the profile does not
+  contain, and its "how it affects codegen" column is unverified). Three §9
+  passages were wrong when checked on 2026-10-11 (§9.3, §9.4, §9.12).
+
+### Test-suite hygiene
+
+- About 37 test files run the compiler in the repository directory. Where the
+  repository has no `.ysu_hw_profile` they probe and write one there (atomically
+  now), and their output depends on this machine's CPU probes (archive 2214
+  (a)-(d), 2437 (a)).
+- Without z3 the tests whose programs carry an `@invariant` fail, by design: an
+  invariant that cannot be checked fails the build (archive 2214 (f)).
+
+### Debugger
+
+- A data-carrying enum's payload prints as raw words (§38.6); the runtime has no
+  debug information, by design; a breakpoint in a kernel the LLVM backend
+  replaces with the packed GEMM is hit only on the fallback path.
+- `ydb verify`: an invariant proof's listed assumptions are a superset; the
+  default build substitutes the exact GEMM but writes no certificate (only
+  `--emit-llvm` does); standing validation results are not re-run;
+  `GlobalMemory<T>` resolves to `Unknown` in its messages (archive 2420).
+
+### Performance, the proof programme and the translation validator
+
+- Exact GEMM: no hybrid M-then-K split for short-M, short-K shapes (archive
+  1515); about 30% of its ISA ceiling against OpenBLAS's ~63%, and nothing stops
+  a caller asking for 32 threads on a 16-core part (archive 1566).
+- The validator and proof-scope items in archive entries 587-2049 are research
+  queue, not wrong answers: 923 of the 925 emitted `mma.sync` are floating point
+  and carry no proof; the f16 GEMMs carry no exactness argument; validation is
+  at `-O1`, not the shipped `-O3` (unroll matching); the multi-back-edge lift;
+  `cvt.rn.f16.f32` unmodelled; `FMUL`/`FMIN` commutativity unassumed; the solver
+  wall on carry chains (`bn254_fr_mul_fast`); `mutgate` covers 3 of 14
+  harnesses; `barregion.muls` counts no division. Their counts were not
+  re-measured here; the current state is in
+  [the validator documentation](ptxas_translation_validation.md) and Codex's
+  2026-10-08 review.
+
+## Fixed
 
 | Issue | Fix and regression gate |
 | --- | --- |
@@ -30,6 +103,18 @@ still holds unreviewed historical reports.
 | `--emit-cpu` wrote untyped `let`s | Rust picked each local's type from how it was used: `let x: U8 = 200; x = x + 100; return x / 2;` gave 150 where the LLVM backend's `u8` wraps and gives 22, and `I64 + I32` did not compile. Now a numeric local carries its declared type; a `let`, assignment, `op=`, `return` or argument converts with `as` (a literal is written as one of the target type); a mixed operation computes in Y's common type (the wider, unsigned at equal width, a float over an integer); and typed integer `+ - *` are the wrapping operations, as Y's integers wrap on every backend (Rust's operators panic in a debug build and refuse a constant overflow). `tests/cpu_emitter_types.rs` runs each case on the LLVM backend and through rustc. |
 | `y_inductor` kept a multiply apart from the add it feeds | The rule existed because ptxas contracted the pair; once the PTX emitter rounded a `let`-bound product first, the fused kernel matched eager bit for bit and the rule only cost kernels. Removed after measuring: fused took 0.38-0.87x of the separate kernels' time at 2^22 and 2^24 elements in every model and run (2^20 was noise-dominated). `benchmarks/inductor_fusion/`; `test_inductor.py` asserts the fusion and the bit-identity. |
 | Void `ysu_main` exit status | The CLI's AOT builds give a `main` with no return type an `i32` return of 0; at `-O0` it exited with the last callee's `eax` (43 in the test). Library and JIT callers keep the source's `void`. `tests/llvm_void_main_status.rs`. |
+| A host `fn main` was called without its parameters, and its float result was not read (archive 2243 (f)) | The C runtime calls `int32_t ysu_main(void)` and exits with its result; native `_start` calls `main` with no arguments. `fn main(x: I32) -> I32 { return x + 5; }` exited 5 on both (`x` was whatever its register held) and `fn main() -> F64 { return 7.0; }` exited 0 (the result sat in `xmm0`). Both are refused on the default build, `--emit-llvm` and `--emit-native`; an integer, `bool` or absent result still reaches the exit status. The JIT and circuits, whose `main` does take arguments, are unchanged. Manual §38.4; `tests/host_main_contract.rs`. |
+| `Y` with no input file compiled a built-in program that no longer parsed (archive 2278 (iii)) | It printed a syntax error about source the user never wrote and exited 1. It is a usage error now (exit 2). `tests/unknown_flags_are_rejected.rs`. |
+| `--emit-cpu` dropped struct-field attributes (archive 2151 (b), 1533 (e)) | A struct passed by reference was written with `pub a: i32` for `@atomic a: I32`; `@gpu_uncached` likewise. Refused by name now. Manual §9.3, §9.5; `tests/field_attributes_are_lowered_or_refused.rs`. |
+| `@align(N)` claimed an alignment nothing provided | Found in this review. The LLVM backend put `align N` on every access of the field while the struct kept it at its natural offset (`%S = type { i32, i32, i32 }` put an `@align(64)` second field at offset 4) and its storage was an `alloca` at natural alignment - undefined behaviour - and the padding the manual promised was never emitted. Refused by the parser now; the two fixtures that used it already padded by hand. Manual §9.4; `tests/field_attributes_are_lowered_or_refused.rs`. |
+| `@tile` on a loop or a `fn` changed nothing (archive 2151 (c)) | On a `for`, the LLVM and PTX backends wrote it into their output as a comment (the PTX one twice); on a `fn`, its one reader excluded the function from a helper analysis. Both refused now; `@tile(M, N, K)` on a `kernel` is unchanged. `tests/train_spec.ysu` lost the attribute and `tests/train_spec.ptx` was regenerated (only the two comment lines moved); `tests/tile_test.ysu`, a demo of both refused forms, was removed. Manual §9.12; `tests/directives_are_consumed_or_refused.rs`. |
+| The GPU probe was not found from Python (archive parent 2170) | With no profile in the working directory the compiler probes and writes one there. It looked for `ysu_gpu_probe` beside `current_exe()`, which inside Python is the interpreter, so a `compile_to_ptx` outside the repository wrote `GPU_NAME=Unknown GPU`, `SM_VERSION=0.0` on a machine with an RTX 4070 Ti SUPER, and every later compile there read it. It is looked for beside the loaded `liby.so` now, as the solver is. `python/tests/test_gpu_probe_lookup.py`. |
+| `.ysu_hw_profile` writes were not atomic (archive 2214 (b)) | The probe wrote it with `fs::write` (truncate, then write), so a compile starting in that window read a partial profile, which still EXISTS and so is not re-probed. The autotuner wrote-then-renamed through one fixed temp name that two writers share. Both use `sentinel::write_profile_atomically` now (a per-process, per-call temp name, then `rename`). Unit test `a_reader_never_sees_a_partial_profile`. |
+| `--emit-llvm` and the default build chose `@ZeroDrift` representations from different inputs (archive 2198, 2214 (e)) | Only `--emit-llvm` loaded the profile's drift costs - GPU timings - so with `I64` recorded as cheapest it reported `acc: I32 -> I64` while the binary was built with `Q16.16`. Both LLVM paths take the narrowest sufficient representation now and both print the choice. `tests/zero_drift_llvm_paths_agree.rs`. |
+| `--emit-cpu` struct-field arithmetic was untyped | A residual of the `--emit-cpu` typing fix above: a field's type was unknown, so `p.a + 100` on a `U8` field used Rust's `+` (a debug build panicked where Y wraps to 44), and `p.a + p.b` across widths did not compile. Fields of struct parameters are typed now. `tests/cpu_emitter_types.rs`. |
+| The Python example benchmarks reported figures they had not measured (archive parent 2170) | `Benchmarks.py` wrote a "results" report from a fixed template - every figure, the GPU and the software versions were literals (a 0.18 µs cache lookup where this machine measures ~90 µs; a FlashAttention kernel "emitted" that does not compile). `benchmark_triton_parity_features.py` loaded `libY.so` (the library is `liby.so`), declared a four-argument function with three, and on failure appended a fixed "0.001 µs (cached)" as a result. Three scripts compiled `flash_attention.ysu` first and stopped there; `run_head_to_head_comparison.py` also compiled an unused kernel the PTX backend refuses, so it raised at import. Each reports what it measured now, a failure as a failure. |
+| Chapter 10's gate counted IR clang rejects as compiling (archive 2266 (e)) | Example 17 put PTX's `nanosleep.u32` in a host `chisel` block; `--emit-llvm` wrote it out as x86 inline assembly, clang rejects it and the default build fails, and the example carried no note. The gate builds each host example's module with `clang -c` now, and Example 17 has its note. `tests/manual_examples.rs`. |
+| The `@ghost` refusal said `@ghost let` works | Its hint named `@ghost let ..` as a working form; it is a syntax error (§9.13). Corrected. |
 
 ## Verification limits
 
@@ -39,20 +124,6 @@ unsupported. Assembly on another architecture is assembly evidence. Preserve
 `UNPROVED`/refusal results; do not turn incomplete coverage into a correctness claim.
 
 
-## Earlier reports that must not be blindly restored as active
-
-Source inspection found later implementations addressing several old reports:
-
-- AVX/AVX-512 execution support uses OS-aware `host_has_avx`/`host_has_avx512`
-  helpers on fresh and cached hardware paths in `src/sentinel.rs`.
-- `String_new` recognizes and clones a Y string handle in `c_src/runtime.c`.
-- LLVM's `str_to_i64` function table now uses an i64 return.
-- LLVM float inequality uses `fcmp une`; lexical binding renaming is present.
-- `src/c_emitter.rs` has been removed, despite older notes calling it an orphan.
-
-These are source observations, not a declaration that every associated defect
-is closed. Use the existing regression tests when working on these areas.
-
 ## Remaining reported issues
 
 [UNRESOLVED.md](claude-history/UNRESOLVED.md) indexes every line explicitly marked
@@ -61,7 +132,7 @@ entry retains its original snapshot line number and investigation context.
 The [archive index](claude-history/INDEX.md) covers other findings that did not
 use those markers. Original text is preserved verbatim with recorded hashes.
 
-Unreviewed historical issues remain a backlog for verification; omission from
-the short startup list is not a resolution. Before related changes, search the
-backlog and source, reproduce when necessary, and record the result here. Keep
-the startup list concise and current; retain detailed evidence in documentation.
+Each entry there carries its status as of 2026-10-11 (fixed, with the test that
+pins it; open, and listed above; retracted; or research). A status is a claim
+about the tree it was checked against: before related changes, search the
+backlog and source, reproduce when necessary, and record the result here.
