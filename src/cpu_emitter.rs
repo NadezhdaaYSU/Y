@@ -44,6 +44,14 @@ pub struct CpuEmitter {
     /// A `let` whose `@bounds` is checked when the program runs was written,
     /// so the blob ends with [`Y_WITHIN`].
     needs_y_within: bool,
+    /// The Rust scalar type of each numeric or `bool` local and parameter of
+    /// the function being written. Names are unique within a function (the
+    /// lexical pass renames a shadowing binding), so one map per function.
+    local_types: std::collections::HashMap<String, &'static str>,
+    /// The Rust scalar type the function being written returns, if any.
+    ret_scalar: Option<&'static str>,
+    /// Every function's parameter scalar types and return scalar type.
+    fn_sigs: std::collections::HashMap<String, (Vec<Option<&'static str>>, Option<&'static str>)>,
 }
 
 /// What a `@bounds` checked when the program runs calls: the LLVM and PTX
@@ -94,6 +102,61 @@ fn rust_scalar(name: &str) -> Option<&'static str> {
         "bool" => "bool",
         _ => return None,
     })
+}
+
+/// The scalar type of a Y type, as this blob writes it: what `emit_type`
+/// names, for the scalars only.
+fn scalar_of(ty: &Type) -> Option<&'static str> {
+    match ty {
+        Type::Primitive(n, _) | Type::Ident(n, _) => rust_scalar(n),
+        _ => None,
+    }
+}
+
+/// `(bits, float, signed)` of a numeric Rust scalar.
+fn scalar_rank(t: &str) -> Option<(u32, bool, bool)> {
+    Some(match t {
+        "i8" => (8, false, true),
+        "i16" => (16, false, true),
+        "i32" => (32, false, true),
+        "i64" | "isize" => (64, false, true),
+        "u8" => (8, false, false),
+        "u16" => (16, false, false),
+        "u32" => (32, false, false),
+        "u64" | "usize" => (64, false, false),
+        "f32" => (32, true, true),
+        "f64" => (64, true, true),
+        _ => return None,
+    })
+}
+
+/// The type Y computes a mixed operation in - the LLVM backend's rule: a
+/// float beats an integer and the wider float wins; between integers the
+/// wider wins, and at equal width the unsigned one.
+fn common_scalar(a: &'static str, b: &'static str) -> &'static str {
+    let (ra, rb) = (scalar_rank(a).unwrap(), scalar_rank(b).unwrap());
+    match (ra.1, rb.1) {
+        (true, true) => {
+            if ra.0 >= rb.0 { a } else { b }
+        }
+        (true, false) => a,
+        (false, true) => b,
+        (false, false) if ra.0 != rb.0 => {
+            if ra.0 > rb.0 { a } else { b }
+        }
+        (false, false) => {
+            if !ra.2 { a } else { b }
+        }
+    }
+}
+
+/// A literal Rust types from where it is used, so it needs no conversion.
+fn is_literal(e: &Expr) -> bool {
+    match e {
+        Expr::IntLit(..) | Expr::FloatLit(..) | Expr::BoolLit(..) => true,
+        Expr::UnaryOp { op: UnaryOp::Neg, operand, .. } => is_literal(operand),
+        _ => false,
+    }
 }
 
 impl CpuEmitter {
@@ -168,6 +231,9 @@ impl CpuEmitter {
             unsafe_fns: std::collections::HashSet::new(),
             known_fns: PRELUDE_FNS.iter().map(|s| s.to_string()).collect(),
             needs_y_within: false,
+            local_types: std::collections::HashMap::new(),
+            ret_scalar: None,
+            fn_sigs: std::collections::HashMap::new(),
             host_buffer: buffer,
             indent_level: 0,
             emit_errors: Vec::new(),
@@ -197,6 +263,10 @@ impl CpuEmitter {
                         self.unsafe_fns.insert(f.name.clone());
                     }
                     self.known_fns.insert(f.name.clone());
+                    self.fn_sigs.insert(
+                        f.name.clone(),
+                        (f.params.iter().map(|p| scalar_of(&p.ty)).collect(), f.ret_ty.as_ref().and_then(scalar_of)),
+                    );
                 }
                 Item::Kernel(k) => {
                     self.unsafe_fns.insert(k.name.clone());
@@ -349,6 +419,8 @@ impl CpuEmitter {
     }
 
     fn emit_func(&mut self, f: &FuncDecl) {
+        self.local_types = f.params.iter().filter_map(|p| scalar_of(&p.ty).map(|t| (p.name.clone(), t))).collect();
+        self.ret_scalar = f.ret_ty.as_ref().and_then(scalar_of);
         self.indent();
         let safe_prefix = if f.is_safe { "" } else { "unsafe " };
         write!(&mut self.host_buffer, "pub {}fn {}(", safe_prefix, f.name).unwrap();
@@ -378,6 +450,8 @@ impl CpuEmitter {
     }
 
     fn emit_kernel(&mut self, kernel: &KernelDecl) {
+        self.local_types = kernel.params.iter().filter_map(|p| scalar_of(&p.ty).map(|t| (p.name.clone(), t))).collect();
+        self.ret_scalar = None;
         self.indent();
         write!(&mut self.host_buffer, "pub unsafe fn {}(", kernel.name).unwrap();
 
@@ -430,15 +504,22 @@ impl CpuEmitter {
                         span,
                     );
                 }
-                Stmt::Let { name, init, span, .. } => {
+                Stmt::Let { name, ty, init, span, .. } => {
+                    let declared = ty.as_ref().and_then(scalar_of);
                     self.indent();
-                    write!(&mut self.host_buffer, "let mut {} = ", name).unwrap();
+                    match declared {
+                        Some(t) => write!(&mut self.host_buffer, "let mut {}: {} = ", name, t).unwrap(),
+                        None => write!(&mut self.host_buffer, "let mut {} = ", name).unwrap(),
+                    }
                     // The two placeholder arms below wrote their own `;` and the
                     // real arm did not, so every `let` this backend has ever
                     // emitted for an actual expression was a syntax error. The
                     // terminator belongs to the statement, not to the arm.
                     if let Some(expr) = init {
-                        let expr_str = self.emit_expr(expr);
+                        let mut expr_str = self.emit_expr(expr);
+                        if let (Some(t), false) = (declared, expr_str.is_empty()) {
+                            expr_str = self.convert(expr, expr_str, t);
+                        }
                         if expr_str.is_empty() {
                             write!(&mut self.host_buffer, "0").unwrap();
                         } else {
@@ -448,6 +529,9 @@ impl CpuEmitter {
                         write!(&mut self.host_buffer, "Default::default()").unwrap();
                     }
                     writeln!(&mut self.host_buffer, ";").unwrap();
+                    if let Some(t) = declared {
+                        self.local_types.insert(name.clone(), t);
+                    }
                     // A `@bounds` the type checker could not prove is checked
                     // here, as every backend checks it.
                     let checked = crate::type_checker::RUNTIME_BOUNDS
@@ -482,6 +566,7 @@ impl CpuEmitter {
                         Some(st) => self.emit_expr(st),
                         None => "1".to_string(),
                     };
+                    self.local_types.insert(loop_var.clone(), "i32");
                     let end_name = format!("__y_end_{}", loop_var);
                     let step_name = format!("__y_step_{}", loop_var);
                     self.indent();
@@ -505,7 +590,10 @@ impl CpuEmitter {
                 Stmt::Assign { target, value, .. } => {
                     self.indent();
                     let t = self.emit_expr(target);
-                    let v = self.emit_expr(value);
+                    let mut v = self.emit_expr(value);
+                    if let Some(to) = self.rust_type_of(target) {
+                        v = self.convert(value, v, to);
+                    }
                     writeln!(&mut self.host_buffer, "{} = {};", t, v).unwrap();
                 }
                 Stmt::Expr(expr) => {
@@ -518,7 +606,10 @@ impl CpuEmitter {
                 Stmt::Return(val, _) => {
                     self.indent();
                     if let Some(v) = val {
-                        let ret_str = self.emit_expr(v);
+                        let mut ret_str = self.emit_expr(v);
+                        if let Some(to) = self.ret_scalar {
+                            ret_str = self.convert(v, ret_str, to);
+                        }
                         writeln!(&mut self.host_buffer, "return {};", ret_str).unwrap();
                     } else {
                         writeln!(&mut self.host_buffer, "return;").unwrap();
@@ -562,10 +653,30 @@ impl CpuEmitter {
                     target, op, value, ..
                 } => {
                     let t = self.emit_expr(target);
-                    let v = self.emit_expr(value);
+                    let mut v = self.emit_expr(value);
+                    // The LLVM backend computes `x op= e` in `x`'s type; a
+                    // shift's amount keeps its own.
+                    if let (Some(to), false) = (self.rust_type_of(target), matches!(op, BinaryOp::Shl | BinaryOp::Shr)) {
+                        v = self.convert(value, v, to);
+                    }
+                    let wrapping = match (self.rust_type_of(target), op) {
+                        (Some(ty), BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul)
+                            if scalar_rank(ty).is_some_and(|r| !r.1) =>
+                        {
+                            Some((ty, match op {
+                                BinaryOp::Add => "wrapping_add",
+                                BinaryOp::Sub => "wrapping_sub",
+                                _ => "wrapping_mul",
+                            }))
+                        }
+                        _ => None,
+                    };
                     let o = self.binop_to_rust(op);
                     self.indent();
-                    writeln!(&mut self.host_buffer, "{} {}= {};", t, o, v).unwrap();
+                    match wrapping {
+                        Some((ty, method)) => writeln!(&mut self.host_buffer, "{t} = {ty}::{method}({t}, {v});").unwrap(),
+                        None => writeln!(&mut self.host_buffer, "{} {}= {};", t, o, v).unwrap(),
+                    }
                 }
                 Stmt::Break { .. } => {
                     self.indent();
@@ -689,6 +800,62 @@ impl CpuEmitter {
         "/* unsupported */".into()
     }
 
+    /// `rendered` (the text of `expr`) as a value of the scalar `to`.
+    ///
+    /// The `let`s of this blob were untyped, so Rust picked each local's type
+    /// from how it was used: `let x: U8 = 200; x = x + 100; return x;` was an
+    /// `i32` returning 300 where the LLVM backend's `u8` wraps to 44. A
+    /// literal is written as one of `to`'s own (`(5000000000) as i64` would
+    /// make Rust type the literal `i32` first and reject it); anything else
+    /// converts with `as`, which truncates, extends by the source's
+    /// signedness and converts floats as the LLVM backend's casts do.
+    fn convert(&self, expr: &Expr, rendered: String, to: &'static str) -> String {
+        let Some((_, float, _)) = scalar_rank(to) else { return rendered };
+        if self.rust_type_of(expr) == Some(to) {
+            return rendered;
+        }
+        let int_literal = match expr {
+            Expr::IntLit(v, _) => Some(*v),
+            Expr::UnaryOp { op: UnaryOp::Neg, operand, .. } => match **operand {
+                Expr::IntLit(v, _) => Some(-v),
+                _ => None,
+            },
+            _ => None,
+        };
+        let float_literal = matches!(expr, Expr::FloatLit(..))
+            || matches!(expr, Expr::UnaryOp { op: UnaryOp::Neg, operand, .. } if matches!(**operand, Expr::FloatLit(..)));
+        match (int_literal, float_literal, float) {
+            (Some(_), _, false) | (None, true, true) => rendered,
+            (Some(v), _, true) => format!("({:?})", v as f64),
+            _ => format!("(({rendered}) as {to})"),
+        }
+    }
+
+    /// The Rust scalar type `expr` has in this blob, where it is known.
+    fn rust_type_of(&self, expr: &Expr) -> Option<&'static str> {
+        match expr {
+            Expr::Ident(n, _) => self.local_types.get(n).copied(),
+            Expr::BoolLit(..) => Some("bool"),
+            Expr::BinaryOp { op, left, right, .. } => match op {
+                BinaryOp::Eq | BinaryOp::NotEq | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge
+                | BinaryOp::And | BinaryOp::Or => Some("bool"),
+                BinaryOp::Shl | BinaryOp::Shr => self.rust_type_of(left),
+                _ => match (self.rust_type_of(left), self.rust_type_of(right)) {
+                    (Some(a), Some(b)) if scalar_rank(a).is_some() && scalar_rank(b).is_some() => Some(common_scalar(a, b)),
+                    (Some(a), None) if is_literal(right) => Some(a),
+                    (None, Some(b)) if is_literal(left) => Some(b),
+                    _ => None,
+                },
+            },
+            Expr::UnaryOp { op: UnaryOp::Neg | UnaryOp::Not, operand, .. } => self.rust_type_of(operand),
+            Expr::Call { func, .. } => match &**func {
+                Expr::Ident(name, _) => self.fn_sigs.get(name).and_then(|(_, ret)| *ret),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     fn binop_to_rust(&self, op: &BinaryOp) -> &'static str {
         match op {
             BinaryOp::Add => "+",
@@ -714,9 +881,14 @@ impl CpuEmitter {
 
     fn emit_call(&mut self, func: &Expr, args: &[Expr]) -> String {
         let fname = self.emit_expr(func);
+        let params = self.fn_sigs.get(&fname).map(|(p, _)| p.clone());
         let mut arg_strs = Vec::new();
-        for a in args {
-            arg_strs.push(self.emit_expr(a));
+        for (i, a) in args.iter().enumerate() {
+            let text = self.emit_expr(a);
+            arg_strs.push(match params.as_ref().and_then(|p| p.get(i).copied().flatten()) {
+                Some(to) => self.convert(a, text, to),
+                None => text,
+            });
         }
 
         // `store` joins them. Its lowering here was
@@ -779,8 +951,37 @@ impl CpuEmitter {
             Expr::BinaryOp {
                 op, left, right, ..
             } => {
-                let l = self.emit_expr(left);
-                let r = self.emit_expr(right);
+                let mut l = self.emit_expr(left);
+                let mut r = self.emit_expr(right);
+                // Rust has no mixed-type arithmetic or comparison, and the
+                // untyped `let`s used to hide that by making both sides one
+                // type. Y computes a mixed operation in the common type; a
+                // shift's amount keeps its own.
+                if !matches!(op, BinaryOp::Shl | BinaryOp::Shr | BinaryOp::And | BinaryOp::Or) {
+                    if let (Some(a), Some(b)) = (self.rust_type_of(left), self.rust_type_of(right)) {
+                        if a != b && scalar_rank(a).is_some() && scalar_rank(b).is_some() {
+                            let common = common_scalar(a, b);
+                            l = self.convert(left, l, common);
+                            r = self.convert(right, r, common);
+                        }
+                    }
+                }
+                // Y's integer `+ - *` wrap on every backend (LLVM's `add`
+                // without `nsw`, PTX's `add.s32`). Rust's operators panic in a
+                // debug build and are refused outright when the overflow is a
+                // constant, so a typed integer operation is written as the
+                // wrapping one, through the type so a literal operand takes it.
+                if let Some(t) = self.rust_type_of(expr).filter(|t| scalar_rank(t).is_some_and(|r| !r.1)) {
+                    let method = match op {
+                        BinaryOp::Add => Some("wrapping_add"),
+                        BinaryOp::Sub => Some("wrapping_sub"),
+                        BinaryOp::Mul => Some("wrapping_mul"),
+                        _ => None,
+                    };
+                    if let Some(method) = method {
+                        return format!("{t}::{method}({l}, {r})");
+                    }
+                }
                 format!("({} {} {})", l, self.binop_to_rust(op), r)
             }
             Expr::UnaryOp { op, operand, .. } => {

@@ -115,8 +115,9 @@ fn arithmetic_is_not_replaced_by_zero() {
          let p: I32 = s * 3;\n    \
          return p - 1;\n}\n",
     );
+    // A typed integer `+` is the wrapping one, as Y's integers wrap.
     assert!(
-        blob.contains("(a + b)"),
+        blob.contains("i32::wrapping_add(a, b)"),
         "the addition is missing from the blob:\n{}",
         blob
     );
@@ -146,7 +147,7 @@ fn control_flow_statements_are_not_dropped() {
          if i > 2 {\n            acc += i;\n        } else {\n            acc -= 1;\n        }\n    }\n    \
          return acc;\n}\n",
     );
-    for needed in ["if (i > 2)", "} else {", "acc += i;", "acc -= 1;"] {
+    for needed in ["if (i > 2)", "} else {", "acc = i32::wrapping_add(acc, i);", "acc = i32::wrapping_sub(acc, 1);"] {
         assert!(
             blob.contains(needed),
             "`{}` was dropped from the blob:\n{}",
