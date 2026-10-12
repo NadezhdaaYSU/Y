@@ -309,9 +309,29 @@ def select_autotune_config(m: int, n: int, k: int, is_fp8: bool = False) -> Dict
     lib.lib.y_free_string(json_ptr)
     return json.loads(json_str)
 
+_TRUTHY = ("1", "true", "yes")
+_INTERPRETER_VARS = ("Y_INTERPRETER", "Y_DEBUG")
+
+# `os.environ` keeps its contents in a dict with encoded keys, and every
+# change to it goes through that dict. Looking the encoded names up there
+# costs about 0.1 us; `name in os.environ` encodes the name and costs about
+# 0.3 us each time, and this is read on every launch. Where `os.environ` is
+# not CPython's mapping, or was replaced, the public lookup below decides.
+_ENVIRON = os.environ
+try:
+    _ENVIRON_DATA = _ENVIRON._data
+    _INTERPRETER_KEYS = tuple(_ENVIRON.encodekey(v) for v in _INTERPRETER_VARS)
+except AttributeError:
+    _ENVIRON_DATA = None
+
+
 def is_interpreter_enabled() -> bool:
     """Checks if CPU Interpreter / Debug Mode is enabled via Y_INTERPRETER=1 or Y_DEBUG=1 environment variables."""
-    return os.environ.get("Y_INTERPRETER", "0").lower() in ("1", "true", "yes") or os.environ.get("Y_DEBUG", "0").lower() in ("1", "true", "yes")
+    if _ENVIRON_DATA is not None and os.environ is _ENVIRON:
+        if _INTERPRETER_KEYS[0] not in _ENVIRON_DATA and _INTERPRETER_KEYS[1] not in _ENVIRON_DATA:
+            return False
+    env = os.environ
+    return any(env.get(v, "0").lower() in _TRUTHY for v in _INTERPRETER_VARS)
 
 class JITFunction:
     """Wrapper class for JIT-compiled Y functions supporting Triton-style grid launcher syntax kernel[grid](*args)."""
