@@ -177,12 +177,18 @@ kernel k(A: GlobalMemory<I32>, Out: GlobalMemory<I32>) {
         self.assert_stops(src, "k", (1, 1, 1), (1, 1, 1),
                           [torch.tensor([1000000], dtype=torch.int32), torch.zeros(1, dtype=torch.int32)], "`trap`")
 
+    # Written with `barrier_sync()` or the shuffle built-ins, these three
+    # kernels are refused by the compiler since 2026-10-12
+    # (tests/ptx_divergent_collectives.rs). A `chisel` block's PTX is not
+    # checked there, so the interpreter is what stops it.
     def test_a_barrier_in_divergent_code_is_reported(self):
         src = """
 kernel k(Out: GlobalMemory<I32>) {
     let t: I32 = thread_idx_x();
     if t < 16 {
-        barrier_sync();
+        chisel {
+            "bar.sync 0;";
+        }
     }
     Out[t] = t;
 }
@@ -194,7 +200,11 @@ kernel k(Out: GlobalMemory<I32>) {
 kernel k(A: GlobalMemory<F32>, Out: GlobalMemory<F32>) {
     let t: I32 = global_thread_id();
     if t < 20 {
-        let s: F32 = warp_reduce_sum(A[t]);
+        let x: F32 = A[t];
+        let s: F32 = 0.0;
+        chisel {
+            "shfl.sync.bfly.b32 %s, %x, 16, 0x1f, 0xffffffff;";
+        }
         Out[t] = s;
     }
 }
@@ -208,12 +218,29 @@ kernel k(A: GlobalMemory<F32>, Out: GlobalMemory<F32>) {
 kernel k(A: GlobalMemory<F32>, Out: GlobalMemory<F32>) {
     let t: I32 = global_thread_id();
     if t < 20 {
-        let s: F32 = shfl_sync_bfly(A[t], 1);
+        let x: F32 = A[t];
+        let s: F32 = 0.0;
+        chisel {
+            "shfl.sync.bfly.b32 %s, %x, 1, 0x1f, 0xffffffff;";
+        }
         Out[t] = s;
     }
 }
 """
         self.assert_stops(src, "k", (1, 1, 1), (32, 1, 1), [torch.zeros(32), torch.zeros(32)], "named in the mask")
+
+    def test_the_compiler_refuses_the_same_shuffle_written_with_a_builtin(self):
+        src = """
+kernel k(A: GlobalMemory<F32>, Out: GlobalMemory<F32>) {
+    let t: I32 = global_thread_id();
+    if t < 20 {
+        Out[t] = warp_reduce_sum(A[t]);
+    }
+}
+"""
+        with self.assertRaises(ValueError) as cm:
+            kernel(src, "k")
+        self.assertIn("all 32 lanes of a warp", str(cm.exception))
 
     def test_conflicting_stores_are_reported(self):
         src = """
