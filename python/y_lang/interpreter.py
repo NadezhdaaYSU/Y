@@ -591,11 +591,20 @@ class CPUInterpreter:
 
     # ------------------------------------------------------------------
     def run(self, grid: Tuple[int, int, int], block: Tuple[int, int, int], args: List[Any],
-            kernel_func: Callable = None, shared_bytes: int = 0) -> Dict[str, Any]:
+            kernel_func: Callable = None, shared_bytes: Optional[int] = None) -> Dict[str, Any]:
         """Run one launch. With `kernel_func` and no PTX, call that Python
         function instead (it is not Y; it gets this interpreter for
-        `validate_tensor_bounds`)."""
+        `validate_tensor_bounds`).
+
+        `shared_bytes` is the launch's dynamic shared memory, the size of an
+        unsized `.extern .shared` array. By default it is what the kernel's
+        PTX states, the size `TorchKernel.launch` gives the GPU: this was 0,
+        so a kernel staging through dynamic shared memory (the FP8 and F16
+        tile GEMMs) stopped at its first store there, reported out of bounds."""
         start = time.perf_counter()
+        if shared_bytes is None:
+            from .torch_interop import _dynamic_shared_bytes
+            shared_bytes = _dynamic_shared_bytes(self.ptx, self.kernel_name) if self.ptx else 0
         if self.ptx is None:
             if kernel_func is None or not callable(kernel_func):
                 raise CPUInterpreterError(
