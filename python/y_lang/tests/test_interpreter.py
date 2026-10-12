@@ -147,6 +147,73 @@ kernel k(A: GlobalMemory<F32>, Out: GlobalMemory<F32>) {
             debug_interpret("dummy", (1, 1, 1), (256, 1, 1), [torch.zeros(4)])
 
 
+# Each thread stores a[tid] into `.extern .shared` and reads its neighbour's.
+# The array is sized by the launch, here by the line TorchKernel reads.
+DYNAMIC_SHARED = """
+.version 7.8
+.target sm_80
+.address_size 64
+.extern .shared .align 16 .b8 dyn[];
+.visible .entry rot(.param .u64 a, .param .u64 out)
+{
+    // Dynamic shared memory required: 1024 bytes.
+    .reg .b32 %r<8>; .reg .b64 %rd<6>; .reg .f32 %f<2>;
+    mov.u32 %r0, %tid.x;
+    ld.param.u64 %rd0, [a];
+    mul.wide.u32 %rd1, %r0, 4;
+    add.s64 %rd2, %rd0, %rd1;
+    ld.global.f32 %f0, [%rd2];
+    mov.u32 %r1, dyn;
+    shl.b32 %r2, %r0, 2;
+    add.u32 %r3, %r1, %r2;
+    st.shared.f32 [%r3], %f0;
+    bar.sync 0;
+    add.u32 %r4, %r0, 1;
+    and.b32 %r4, %r4, 255;
+    shl.b32 %r5, %r4, 2;
+    add.u32 %r6, %r1, %r5;
+    ld.shared.f32 %f1, [%r6];
+    ld.param.u64 %rd3, [out];
+    add.s64 %rd4, %rd3, %rd1;
+    st.global.f32 [%rd4], %f1;
+    ret;
+}
+"""
+
+
+class DynamicSharedMemory(unittest.TestCase):
+    def test_an_extern_shared_array_has_the_size_the_launch_gives(self):
+        a, out = torch.arange(256, dtype=torch.float32), torch.full((256,), -1.0)
+        interpret(PtxKernel(DYNAMIC_SHARED, "rot"), (1, 1, 1), (256, 1, 1), [a, out])
+        self.assertTrue(torch.equal(out, a.roll(-1)))
+
+        saved = os.environ.get("Y_INTERPRETER")
+        os.environ["Y_INTERPRETER"] = "1"
+        try:
+            out.fill_(-1.0)
+            PtxKernel(DYNAMIC_SHARED, "rot").launch((1, 1, 1), (256, 1, 1), [a, out])
+        finally:
+            if saved is None:
+                del os.environ["Y_INTERPRETER"]
+            else:
+                os.environ["Y_INTERPRETER"] = saved
+        self.assertTrue(torch.equal(out, a.roll(-1)), "TorchKernel.launch under the interpreter")
+
+        # The control: a launch that gives the array less is refused at the
+        # first store past it, so the size above is what made it run.
+        with self.assertRaises(CPUInterpreterError) as cm:
+            CPUInterpreter("rot", ptx=DYNAMIC_SHARED).run((1, 1, 1), (256, 1, 1), [a, out], shared_bytes=1020)
+        self.assertIn("out-of-bounds", str(cm.exception))
+        self.assertIn("dyn", str(cm.exception))
+
+    @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
+    def test_the_gpu_gives_the_same_array(self):
+        a, out = torch.arange(256, dtype=torch.float32), torch.full((256,), -1.0)
+        gpu_out = out.cuda()
+        PtxKernel(DYNAMIC_SHARED, "rot").launch((1, 1, 1), (256, 1, 1), [a.cuda(), gpu_out])
+        self.assertTrue(torch.equal(gpu_out.cpu(), a.roll(-1)))
+
+
 class StopsAtWhatTheGpuGetsWrong(unittest.TestCase):
     def assert_stops(self, src, name, grid, block, args, *phrases, target="sm_80"):
         with self.assertRaises(CPUInterpreterError) as cm:
