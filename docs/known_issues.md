@@ -28,8 +28,9 @@ source; each entry there now carries its status. What is still open:
   3072, 4096 and 8192 (0.69-0.98x, 0.77x at 8192)
   (`docs/benchmarks/fp8_gemm_tiles_2026-10-12/`, measured with a game using
   part of the GPU). It was 2.1-2.6x before the two 2026-10-12 changes. A Y launch
-  from Python costs about 3x PyTorch's per call
-  (`docs/benchmarks/head_to_head_2026-10-11/`). Performance, not correctness.
+  from Python costs 2.9 us of CPU time per call, against Triton's 5.7 and
+  PyTorch's 2.0 (`docs/benchmarks/launch_2026-10-12/`); it was 6.6.
+  Performance, not correctness.
 - `python/examples/kernels/flash_attention.ysu` does not compile (`Pipeline` is
   not a type); the scripts report that rather than stop.
 
@@ -75,6 +76,17 @@ source; each entry there now carries its status. What is still open:
   contain, and its "how it affects codegen" column is unverified). Three §9
   passages were wrong when checked on 2026-10-11 (§9.3, §9.4, §9.12).
 
+### Autotuning
+
+- The autotuner's in-process tile cache (`AUTOTUNE_CACHE` in
+  `src/autotuner.rs`) is keyed by M, N and K alone. Within one process the
+  first compile of a shape decides the tile of every later one, whatever its
+  precision, GPU or `.ysu_hw_profile` (whose measured tiles, and whose
+  shared-memory limit, are read from the working directory). The tile is a
+  performance choice, but the emitted PTX then depends on what the process
+  compiled first. `python/y_lang/tests/test_launch.py` pins its tiles with
+  `Y_CTA_OVERRIDE` and its profile with a temporary one for this reason.
+
 ### Test-suite hygiene
 
 - About 37 test files run the compiler in the repository directory. Where the
@@ -114,6 +126,7 @@ source; each entry there now carries its status. What is still open:
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| Y's F16 tile GEMMs could not run from Python; a missing kernel name ran `main` | `TorchKernel.launch` passed no dynamic shared memory, so every kernel staging through `.extern .shared` died with an illegal address; it now passes what the kernel's PTX states and raises the function's limit above 48 KB. A kernel name the module lacked fell back to an entry named `main`; it is refused. The launch path also went from 6.6 to 2.9 us of CPU time per call (Triton 5.7, PyTorch 2.0; `docs/benchmarks/launch_2026-10-12/`). `python/y_lang/tests/test_launch.py` (F16 GEMMs below and above 48 KB exact against float64, the current and an explicit stream on a non-blocking stream, the interpreter switch); each of seven mutants fails it. |
 | A shuffle or a barrier only some threads reached was emitted | `warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` emit `shfl.sync` over all 32 lanes, and `barrier_sync` emits `bar.sync` for the whole block, wherever they were written: `if t < 20 { warp_reduce_sum(x) }` compiled, and the GPU leaves it undefined (the shuffle reads lanes that are not there; a barrier may hang). The PTX backend now works out how far each variable is the same across threads (`src/uniformity.rs`: block-wide, per warp, or per thread; every memory read per thread) and refuses a collective instruction - any `shfl`/`vote`/`mma` and other `.sync` or `.aligned` form, or `bar`/`barrier` - under a branch, loop or earlier `return` the threads can disagree on, naming the line, the branch and the value that decides it. It refuses some correct kernels: a branch on a thread index divided by 32 is per warp only for some block shapes, and is refused. A `chisel` block's PTX is not checked, and one that branches counts as a `return` some threads take. `tests/ptx_divergent_collectives.rs` (19 refused forms; the rewrites run on the device and are exact), `uniformity`'s unit tests, `test_the_compiler_refuses_the_same_shuffle_written_with_a_builtin`. |
 | The CPU interpreter interpreted nothing | `CPUInterpreter.run` printed its arguments and returned `SUCCESS`; with `Y_INTERPRETER=1` every `TorchKernel.launch` printed "Executed safely under software bounds validation" and wrote no output; `debug_interpret("dummy", ...)` succeeded with no kernel; the C entry point `y_interpret_kernel` only type-checked. It now runs the kernel's PTX on the CPU in SIMT lockstep and stops at out-of-bounds and misaligned accesses, `trap`, divergent barriers and shuffles, conflicting stores and unmodelled instructions, naming the thread and PTX line. Each of the 518 instruction forms it models agrees with the GPU bit for bit over its operands' edge values and random bits, NaN payloads and signed zeros included, except that `.approx` functions agree within the GPU's documented error. The first version got 142 of those forms wrong, 137 of them without an error: canonical and propagated NaNs, `.ftz` tininess, signed zeros in `min`/`max`/`.sat`, NaN-to-integer conversions, `cvt.rni.f32.f32`, `sub.sat`, signed carries, `div.approx` and `sin`/`cos.approx` argument reduction. It also read a `cp.async` source size held in a register as the full copy, which raised spurious out-of-bounds errors and copied data the GPU zero-fills, and zero-extended `ld.global.s32` into a 64-bit register. `python/y_lang/tests/test_interpreter.py` (22 tests) and `test_interpreter_ops.py`; each of 41 mutants of the interpreter, and one returning the debug-mode launch to a no-op, fails a test. |
 | `benchmark_3d_block_ptr.py` compared unequal work | Y's kernel wrote 32,768 of the 8,388,608 elements it named and Triton's 524,288; neither output was checked, the script printed "FASTER" whatever the ratio, and it deleted `~/.ysu/cache` on import. Both kernels now cover the volume and must equal `2x + 1` exactly before they are timed; a busy GPU is reported. |

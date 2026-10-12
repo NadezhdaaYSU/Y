@@ -5231,7 +5231,9 @@ column's better regime is compared:
   Triton's (1.07 and 1.13 us), and its RMSNorm 1.40 us against Triton's 1.33.
   Launched from Python, each Y call costs more than Triton's:
   `TorchKernel.launch` makes vector add 6.6 us a call, against Triton's 4.8 and
-  PyTorch's 2.0.
+  PyTorch's 2.0. Since 2026-10-12 a launch costs 2.9 us of CPU time, against
+  Triton's 5.7 and PyTorch's 2.0 measured alongside it
+  (`docs/benchmarks/launch_2026-10-12/`).
 - Y's FP8 GEMM took 2.1-2.6x as long as a fused Triton kernel computing the
   same function, and 1.5-3.3x as long as `torch._scaled_mm` with the
   quantisation done in separate kernels. A change on 2026-10-12 (B staged

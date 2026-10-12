@@ -1,7 +1,53 @@
 import ctypes
 import os
+import re
+import struct
 from typing import Dict, Tuple, Any
-from .compiler import compile_to_ptx
+from .compiler import compile_to_ptx, is_interpreter_enabled
+
+_F32 = struct.Struct("<f")
+_U32 = struct.Struct("<I")
+
+
+def _raw_stream_reader():
+    """A function returning the current CUDA stream's raw handle, resolved
+    once. `torch.cuda.current_stream()` builds a Stream object on every call
+    and was 40% of a launch; the raw accessor (Triton's launcher uses it too)
+    is a single C call. Without torch, the legacy default stream."""
+    try:
+        import torch
+    except ImportError:
+        return lambda: 0
+    get_raw = getattr(torch._C, "_cuda_getCurrentRawStream", None)
+    get_device = getattr(torch._C, "_cuda_getDevice", None)
+    if get_raw is not None and get_device is not None:
+        return lambda: get_raw(get_device())
+    return lambda: torch.cuda.current_stream().cuda_stream
+
+
+_current_raw_stream = None
+
+# What a kernel's PTX states it needs beyond its static `.shared`: the tile
+# GEMMs stage through `.extern .shared` and say how much in this line.
+_DYNAMIC_SHARED = re.compile(r"Dynamic shared memory required: (\d+) bytes")
+# The most a kernel may use without opting in through cuFuncSetAttribute.
+_DEFAULT_DYNAMIC_SHARED_LIMIT = 48 * 1024
+_CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8
+
+
+def _dynamic_shared_bytes(ptx: str, kernel_name: str) -> int:
+    """The dynamic shared memory `kernel_name`'s body says it needs, 0 if it
+    says nothing. Only that kernel's body is read: a module can hold
+    several entries."""
+    entry = re.search(r"\.entry\s+" + re.escape(kernel_name) + r"\b", ptx)
+    if entry is None:
+        return 0
+    body = ptx[entry.end():]
+    following = re.search(r"\.entry\s+\w+", body)
+    if following is not None:
+        body = body[:following.start()]
+    found = _DYNAMIC_SHARED.search(body)
+    return int(found.group(1)) if found else 0
 
 # Load CUDA Driver API (libcuda.so on Linux)
 _cuda_lib = None
@@ -57,10 +103,27 @@ class TorchKernel:
         function = ctypes.c_void_p()
         res = cuModuleGetFunction(ctypes.byref(function), module, self.kernel_name.encode("utf-8"))
         if res != 0:
-            # Fallback to searching first kernel
-            res = cuModuleGetFunction(ctypes.byref(function), module, b"main")
+            # This fell back to an entry named `main`, so a misspelt kernel
+            # name ran whatever else the module held under that name.
+            raise RuntimeError(
+                f"CUDA Error cuModuleGetFunction found no kernel '{self.kernel_name}' in the module (error code {res})"
+            )
+
+        # The launch used to pass no dynamic shared memory at all, so every
+        # kernel staging through `.extern .shared` (the F16 tile GEMMs) died
+        # with an illegal address when launched from Python.
+        shared_bytes = _dynamic_shared_bytes(self.ptx, self.kernel_name)
+        if shared_bytes > _DEFAULT_DYNAMIC_SHARED_LIMIT:
+            cuFuncSetAttribute = cuda.cuFuncSetAttribute
+            cuFuncSetAttribute.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+            cuFuncSetAttribute.restype = ctypes.c_int
+            res = cuFuncSetAttribute(function, _CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, shared_bytes)
             if res != 0:
-                raise RuntimeError(f"CUDA Error cuModuleGetFunction failed for '{self.kernel_name}' (error code {res})")
+                raise RuntimeError(
+                    f"'{self.kernel_name}' needs {shared_bytes} bytes of dynamic shared memory and "
+                    f"cuFuncSetAttribute refused them (error code {res})"
+                )
+        self._shared_bytes = shared_bytes
 
         self._module = module
         self._function = function
@@ -83,7 +146,6 @@ class TorchKernel:
         `Y_DEBUG=1`, run the same PTX on the CPU interpreter, which writes the
         outputs and stops at the first out-of-bounds access, `trap` or
         divergent barrier (`y_lang.interpreter`)."""
-        from .compiler import is_interpreter_enabled
         if is_interpreter_enabled():
             # This used to print "Executed safely under software bounds
             # validation" and return, running nothing and writing nothing.
@@ -101,30 +163,24 @@ class TorchKernel:
             for i in range(num_args):
                 self._args_array[i] = ctypes.addressof(self._storage_array[i])
 
-        for idx, arg in enumerate(args):
-            if hasattr(arg, "data_ptr") and callable(arg.data_ptr):
-                ptr_val = arg.data_ptr()
-                if self._storage_array[idx].value != ptr_val:
-                    self._storage_array[idx].value = ptr_val
+        for slot, arg in zip(self._storage_array, args):
+            data_ptr = getattr(arg, "data_ptr", None)
+            if data_ptr is not None and callable(data_ptr):
+                slot.value = data_ptr()
             elif isinstance(arg, int):
-                if self._storage_array[idx].value != arg:
-                    self._storage_array[idx].value = arg
+                slot.value = arg
             elif isinstance(arg, float):
-                import struct
-                f_val = struct.unpack('<I', struct.pack('<f', arg))[0]
-                if self._storage_array[idx].value != f_val:
-                    self._storage_array[idx].value = f_val
+                slot.value = _U32.unpack(_F32.pack(arg))[0]
             else:
                 raise TypeError(f"Unsupported argument type: {type(arg)}")
 
         if stream is not None and hasattr(stream, "cuda_stream"):
             stream_ptr = stream.cuda_stream
         else:
-            try:
-                import torch
-                stream_ptr = torch.cuda.current_stream().cuda_stream if torch.cuda.is_available() else ctypes.c_void_p(0)
-            except Exception:
-                stream_ptr = ctypes.c_void_p(0)
+            global _current_raw_stream
+            if _current_raw_stream is None:
+                _current_raw_stream = _raw_stream_reader()
+            stream_ptr = _current_raw_stream()
 
         grid_x, grid_y, grid_z = grid
         block_x, block_y, block_z = block
@@ -133,7 +189,7 @@ class TorchKernel:
             self._function,
             grid_x, grid_y, grid_z,
             block_x, block_y, block_z,
-            0,
+            self._shared_bytes,
             stream_ptr,
             self._args_array,
             None
