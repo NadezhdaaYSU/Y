@@ -5237,7 +5237,11 @@ column's better regime is compared:
   quantisation done in separate kernels. A change on 2026-10-12 (B staged
   transposed, the next tile prefetched into registers, CTAs launched in
   groups) made it 1.5-2.5x faster: 1.25-1.38x Triton's time from 512 to 4096,
-  1.02x at 8192, faster at 256 (`docs/benchmarks/fp8_gemm_2026-10-12/`);
+  1.02x at 8192, faster at 256 (`docs/benchmarks/fp8_gemm_2026-10-12/`). A
+  second (fragments loaded with `ldmatrix`, and a tile chosen per shape, up
+  to 256x128) made it up to 1.34x faster again: it takes 0.69-0.98x Triton's
+  time at 256, 768, 3072 and 4096, 0.77x at 8192, 1.04-1.07x at 1536-2560,
+  1.17x at 512 and 1.26x at 1024 (`docs/benchmarks/fp8_gemm_tiles_2026-10-12/`).
   `torch._scaled_mm` was not measured again.
 - Through `y_inductor`, a SwiGLU module runs within 2% of eager PyTorch (its
   multiply is the one Y kernel); `torch.compile` is 11-13% faster than either.
