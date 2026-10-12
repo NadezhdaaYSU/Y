@@ -21,8 +21,13 @@ source; each entry there now carries its status. What is still open:
 
 - `python/examples/benchmark_3d_block_ptr.py` has been run only on a busy GPU
   since its rewrite (2026-10-11); no figure from it is published.
-- Y's FP8 GEMM takes 2.1-2.6x as long as a fused Triton kernel for the same
-  function, and a Y launch from Python costs about 3x PyTorch's per call
+- Y's FP8 GEMM takes 1.25-1.38x as long as a fused Triton kernel for the same
+  function from 512 to 4096 (1.02x at 8192, faster at 256), since the
+  2026-10-12 change made it 1.5-2.5x faster; it was 2.1-2.6x
+  (`docs/benchmarks/fp8_gemm_2026-10-12/`, measured with a browser using part
+  of the GPU). What remains is scheduling: each K-step's loads, fragment
+  loads, mma and stores run as separate bursts (see that README). A Y launch
+  from Python costs about 3x PyTorch's per call
   (`docs/benchmarks/head_to_head_2026-10-11/`). Performance, not correctness.
 - `python/examples/kernels/flash_attention.ysu` does not compile (`Pipeline` is
   not a type); the scripts report that rather than stop.

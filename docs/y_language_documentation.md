@@ -5190,9 +5190,13 @@ column's better regime is compared:
   Launched from Python, each Y call costs more than Triton's:
   `TorchKernel.launch` makes vector add 6.6 us a call, against Triton's 4.8 and
   PyTorch's 2.0.
-- Y's FP8 GEMM takes 2.1-2.6x as long as a fused Triton kernel computing the
+- Y's FP8 GEMM took 2.1-2.6x as long as a fused Triton kernel computing the
   same function, and 1.5-3.3x as long as `torch._scaled_mm` with the
-  quantisation done in separate kernels.
+  quantisation done in separate kernels. A change on 2026-10-12 (B staged
+  transposed, the next tile prefetched into registers, CTAs launched in
+  groups) made it 1.5-2.5x faster: 1.25-1.38x Triton's time from 512 to 4096,
+  1.02x at 8192, faster at 256 (`docs/benchmarks/fp8_gemm_2026-10-12/`);
+  `torch._scaled_mm` was not measured again.
 - Through `y_inductor`, a SwiGLU module runs within 2% of eager PyTorch (its
   multiply is the one Y kernel); `torch.compile` is 11-13% faster than either.
 - Cold compilation of one kernel: Y 0.6 ms to PTX plus 10 ms for the driver to
