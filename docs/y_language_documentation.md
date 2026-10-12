@@ -1088,14 +1088,21 @@ struct Receiver {
 ```
 
 ### 9.16 `@divergence`
-* **Syntax**: `@divergence(uniform | branchy)`
-* **Usage**: Loop structures or branch decisions.
-* **Function**: Instructs GPGPU emitters on whether warp threads will trace parallel divergent paths, allowing register file and barrier optimizations.
+* **Syntax**: `@divergence(uniform)` before an `if` or `while`.
+* **Function**: Claims the branch is the same for every thread of a warp. The
+  claim is checked only by looking for identifiers containing `threadIdx` or
+  `laneId` in the condition, so `@divergence(uniform) if thread_idx_x() < 20`
+  is accepted. The LLVM backend attaches `!uniform_branch` metadata to the
+  branch; the PTX backend emits the same code with or without it.
+* **It does not admit a collective.** A shuffle (`warp_reduce_sum`,
+  `warp_reduce_max`, `shfl_sync_bfly`) or a barrier (`barrier_sync`) under a
+  condition the threads can disagree on is refused whether or not the branch
+  carries this annotation (§20.7).
 * **Example**:
 ```ysu
 @divergence(uniform)
-if global_thread_id < warp_limit {
-    execute_warp_op();
+if block_idx_x() < limit {
+    Out[t] = warp_reduce_sum(A[t]);
 }
 ```
 
@@ -3820,6 +3827,40 @@ before it. An element read, an element store and a `GlobalMemory::load` are not
 moved - reading `A[j]` after the barrier sees what other threads wrote before
 it.
 
+### 20.7 Shuffles and barriers run where the threads agree
+
+`warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` emit `shfl.sync` over
+all 32 lanes of the warp, which every lane must execute together, and
+`barrier_sync` emits `bar.sync`, which every thread of the block must reach.
+The GPU leaves either undefined where only some of them do. The PTX backend
+works out how far each value is the same across threads - for the whole block
+(constants, parameters, `block_idx_*`, `block_dim_*`, `grid_dim_*`), for each
+warp (anything a warp reduction's result enters), or not at all (thread
+indices, every value loaded from memory, anything assigned under a branch that
+is not) - and refuses, by line, a shuffle under an `if`, `while` or `for` whose
+condition or bounds can differ between the lanes of a warp, or after a
+`return` some lanes take; and a barrier where they can differ between any
+threads of the block:
+
+```ysu
+if t < n {
+    Out[t] = warp_reduce_sum(A[t]);   // refused: lanes t >= n are not there
+}
+
+let v: F32 = 0.0;                     // the same reduction, every lane taking part
+if t < n {
+    v = A[t];
+}
+Out[t] = warp_reduce_sum(v);
+```
+
+The analysis is conservative. A thread index divided by 32 is the same across
+a warp of a one-dimensional block, but the compiler does not know the block's
+shape, so `if thread_idx_x() / 32 == 0 { warp_reduce_sum(v) }` is refused; run
+the reduction in every warp instead. A `chisel` block's own PTX is not checked,
+and a `chisel` block that may branch or return counts as a `return` some
+threads take. `@divergence(uniform)` (§9.16) does not change any of this.
+
 ---
 
 ## 21. `SmemLayout` & `Pipeline` API Reference
@@ -4962,6 +5003,7 @@ This section documents the major high-performance compiler optimizations added t
 ### 33.2 In-Register Warp Butterfly Shuffle Reductions (`shfl.sync.bfly.b32`)
 * **Overview**: Performs parallel reductions across 32 threads inside register space without writing to shared memory or global memory.
 * **Implementation**: Implemented `emit_warp_butterfly_shuffle`, `emit_warp_reduce_sum` and `emit_warp_reduce_max` in `src/ptx_emitter.rs`. (`emit_warp_reduce_var` was listed here and has never existed; there is no warp variance reduction.)
+* **Where**: every lane of the warp must run the reduction; under a condition the lanes can disagree on it is refused (§20.7).
 * **Impact**: Reduces a 32-element warp vector in **5 GPU cycles** (1.02 cycles per shuffle stage).
 
 ### 33.3 – 33.5 Hopper TMA, `mbarrier` pipelining and WGMMA — **REMOVED, never worked**

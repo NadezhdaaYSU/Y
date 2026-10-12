@@ -904,6 +904,16 @@ pub struct PtxEmitter {
     /// outright - a build that looks green and produces a file no GPU can
     /// load. Refusing names the gap; guessing hides it.
     pub emit_errors: Vec<String>,
+    /// How far each variable of the kernel body being emitted is the same
+    /// across threads (`crate::uniformity`). `None` outside the generic
+    /// statement path: a specialised kernel is emitted whole.
+    uniformity: Option<crate::uniformity::Uniformity>,
+    /// The branches the code being emitted is inside of whose threads can
+    /// differ, innermost last: how far, and a description for errors.
+    divergent_regions: Vec<(crate::uniformity::Uniform, String)>,
+    /// A `return` (or a branching `chisel` block) only some threads took:
+    /// everything emitted after it runs without the others.
+    threads_left: Option<(crate::uniformity::Uniform, String)>,
     /// The resolved SM target (e.g. "sm_80") for PTX header emission.
     sm_target: String,
     /// Why `sm_target` is `PTX_FLOOR` rather than a probed architecture, when
@@ -1083,6 +1093,9 @@ impl PtxEmitter {
             drift_costs: crate::zero_drift::CostTable::new(),
             drift_report: Vec::new(),
             emit_errors: Vec::new(),
+            uniformity: None,
+            divergent_regions: Vec::new(),
+            threads_left: None,
             sm_target: target,
             target_assumed: decided.assumed,
             line_info: None,
@@ -3263,7 +3276,11 @@ or `shared_alloc_u32` for a shared-memory array.",
                 &kernel.name,
             ))
         } else {
+            self.uniformity = Some(crate::uniformity::Uniformity::of_body(&kernel.body));
+            self.divergent_regions.clear();
+            self.threads_left = None;
             self.emit_block(&kernel.body, hw_profile);
+            self.uniformity = None;
             None
         };
 
@@ -3967,9 +3984,139 @@ or `shared_alloc_u32` for a shared-memory array.",
     /// One statement - under `--lineinfo` preceded by its `.loc`, with the
     /// enclosing statement's line said again after it, so what the enclosing
     /// statement emits next is attributed to it (see `LineInfo`).
+    /// How divergent the code being emitted is - the least uniform of the
+    /// branches it is inside and of any exit some threads took - and why.
+    /// `None` where every thread of the block runs it.
+    fn divergence_here(&self) -> Option<(crate::uniformity::Uniform, String)> {
+        let mut worst: Option<(crate::uniformity::Uniform, String)> = None;
+        for (u, why) in self.divergent_regions.iter().chain(self.threads_left.iter()) {
+            if worst.as_ref().map_or(true, |(w, _)| u > w) {
+                worst = Some((*u, why.clone()));
+            }
+        }
+        worst
+    }
+
+    /// Enters the body of a branch on `tests` if the threads that take it can
+    /// differ. `what` names the branch and ends where `Uniformity::why`'s
+    /// description of the deciding value goes. Returns how many regions to
+    /// leave afterwards (`leave_regions`).
+    fn enter_region(&mut self, tests: &[&Expr], what: String) -> usize {
+        let Some(u) = self.uniformity.as_ref() else { return 0 };
+        let Some(e) = tests.iter().copied().max_by_key(|e| u.of(e)) else { return 0 };
+        let tier = u.of(e);
+        if tier == crate::uniformity::Uniform::Block {
+            return 0;
+        }
+        let why = format!("{} {}", what, u.why(e));
+        self.divergent_regions.push((tier, why));
+        1
+    }
+
+    /// `enter_region` for a loop, whose body is also divergent when some
+    /// threads leave it early (a `return` some take): its later iterations
+    /// run without them.
+    fn enter_loop_region(&mut self, tests: &[&Expr], body: &Block, what: String, line: usize) -> usize {
+        let mut entered = self.enter_region(tests, what);
+        let Some(u) = self.uniformity.as_ref() else { return entered };
+        let here = self.divergence_here().map_or(crate::uniformity::Uniform::Block, |d| d.0);
+        if let Some((tier, exit_line)) = u.exit_in(body, here) {
+            self.divergent_regions.push((
+                tier,
+                format!(
+                    "in the loop on line {}, which threads can leave at different iterations \
+                     (through the exit on line {})",
+                    line, exit_line
+                ),
+            ));
+            entered += 1;
+        }
+        entered
+    }
+
+    fn leave_regions(&mut self, entered: usize) {
+        for _ in 0..entered {
+            self.divergent_regions.pop();
+        }
+    }
+
+    /// A `return` emitted where the threads can differ: everything after it
+    /// runs without the threads that left.
+    fn note_threads_leave(&mut self, why: String) {
+        if self.uniformity.is_none() {
+            return;
+        }
+        if let Some((here, _)) = self.divergence_here() {
+            if self.threads_left.as_ref().map_or(true, |(u, _)| here > *u) {
+                self.threads_left = Some((here, why));
+            }
+        }
+    }
+
+    /// Refuses a collective instruction, among what was emitted since `from`
+    /// (one statement's code, or a condition's), that the threads running it
+    /// cannot execute together: a shuffle (`shfl.sync` over all 32 lanes, what
+    /// `warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` emit) where
+    /// the lanes of a warp can differ, or `bar.sync` where the threads of the
+    /// block can. The GPU leaves both undefined, and they were emitted
+    /// wherever they were written until 2026-10-12. See `crate::uniformity`.
+    fn refuse_divergent_collectives(&mut self, from: usize, span: &Span) {
+        use crate::uniformity::{first_collective_violated, Uniform};
+        let Some((here, why)) = self.divergence_here() else { return };
+        // A `.loc` line can be taken back off the end (`loc_write`).
+        let mut from = from.min(self.ptx_buffer.len());
+        while !self.ptx_buffer.is_char_boundary(from) {
+            from -= 1;
+        }
+        let Some((needs, op)) = first_collective_violated(&self.ptx_buffer[from..], here) else { return };
+        let message = if needs == Uniform::Warp {
+            format!(
+                "[PTX] Line {}: this statement emits `{}`, which all 32 lanes of a warp must \
+                 execute together, but it runs {}, so it can run on {}. The GPU leaves the \
+                 result undefined. `warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` \
+                 emit this shuffle: call it where every lane of the warp runs, and give the \
+                 lanes that should not contribute a neutral value, as in `let v: F32 = 0.0; \
+                 if <condition> {{ v = <value>; }} let s: F32 = warp_reduce_sum(v);`.",
+                span.line,
+                op,
+                why,
+                here.runs_on()
+            )
+        } else {
+            format!(
+                "[PTX] Line {}: this statement emits `{}`, which every thread of the block must \
+                 reach, but it runs {}, so it can run on {}. The GPU leaves this undefined, and \
+                 the block may hang. Move the barrier (`barrier_sync`) out of the branch, to \
+                 where every thread of the block reaches it.",
+                span.line,
+                op,
+                why,
+                here.runs_on()
+            )
+        };
+        self.emit_errors.push(message);
+    }
+
     fn emit_stmt(&mut self, stmt: &Stmt, hw_profile: &HardwareProfile) {
         self.loc_enter(&stmt.span());
+        let from = self.ptx_buffer.len();
         self.emit_stmt_inner(stmt, hw_profile);
+        // A compound statement's own code (a condition, a loop header) is
+        // checked where it is emitted, and its body statement by statement.
+        // A `chisel` block's PTX is the programmer's and is not checked.
+        if !matches!(
+            stmt,
+            Stmt::If { .. }
+                | Stmt::While { .. }
+                | Stmt::For { .. }
+                | Stmt::Chisel(..)
+                | Stmt::SafeBlock(..)
+                | Stmt::GhostBlock(..)
+                | Stmt::HintBlock { .. }
+                | Stmt::ClockDomainBlock { .. }
+        ) {
+            self.refuse_divergent_collectives(from, &stmt.span());
+        }
         if let Stmt::Let { name, span, .. } = stmt {
             let checked = crate::type_checker::RUNTIME_BOUNDS
                 .with(|m| m.borrow().get(&(span.line, span.col)).copied());
@@ -4302,6 +4449,7 @@ declare it as a Q format.\n{}",
                 end,
                 step,
                 body,
+                span,
                 ..
             } => {
                 let loop_reg = self.alloc_reg32();
@@ -4354,6 +4502,7 @@ declare it as a Q format.\n{}",
                     writeln!(&mut self.ptx_buffer, "    // [Y AUTOMATED VECTORIZING PASS] Transformed loop step into 128-bit SIMD v4 stride").unwrap();
                 }
 
+                let header_from = self.ptx_buffer.len();
                 self.emit_i32_loop_header(&loop_reg, start);
                 self.emit_i32_loop_header(&end_reg, end);
                 // `start`, `end` and `step` are each read once, before the
@@ -4365,6 +4514,7 @@ declare it as a Q format.\n{}",
                     self.emit_i32_loop_header(&r, dynamic);
                     step_reg = Some(r);
                 }
+                self.refuse_divergent_collectives(header_from, span);
                 self.variables.insert(loop_var.clone(), loop_reg.clone());
 
                 writeln!(&mut self.ptx_buffer, "    {}:", loop_start).unwrap();
@@ -4375,7 +4525,15 @@ declare it as a Q format.\n{}",
                 )
                 .unwrap();
                 writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
+                let bounds: Vec<&Expr> = [Some(start), Some(end), step.as_ref()].into_iter().flatten().collect();
+                let entered = self.enter_loop_region(
+                    &bounds,
+                    body,
+                    format!("in the `for` on line {}, whose bounds read", span.line),
+                    span.line,
+                );
                 self.emit_block(body, hw_profile);
+                self.leave_regions(entered);
                 match &step_reg {
                     Some(r) => writeln!(
                         &mut self.ptx_buffer,
@@ -4615,6 +4773,10 @@ declare it as a Q format.\n{}",
                     );
                 } else {
                     writeln!(&mut self.ptx_buffer, "    ret;").unwrap();
+                    self.note_threads_leave(format!(
+                        "after the `return` on line {}, which only some threads take",
+                        span.line
+                    ));
                 }
             }
             Stmt::SafeBlock(block, _) => {
@@ -4652,14 +4814,28 @@ declare it as a Q format.\n{}",
                 // added. `tests/chisel_register_scope.rs` needs the boundary
                 // to check WHICH lines were substituted.
                 writeln!(&mut self.ptx_buffer, "    // --- END CHISEL PTX ---").unwrap();
+                if crate::uniformity::chisel_transfers_control(block) {
+                    let why = format!(
+                        "after the `chisel` block on line {}, which may branch or return",
+                        chisel_span.line
+                    );
+                    if self.uniformity.is_some()
+                        && self.threads_left.as_ref().map_or(true, |(u, _)| *u < crate::uniformity::Uniform::Thread)
+                    {
+                        self.threads_left = Some((crate::uniformity::Uniform::Thread, why));
+                    }
+                }
             }
             Stmt::If {
                 condition,
                 then_block,
                 else_block,
+                span,
                 ..
             } => {
+                let cond_from = self.ptx_buffer.len();
                 let cond_str = self.emit_expr(condition, None, hw_profile);
+                self.refuse_divergent_collectives(cond_from, &condition.span());
 
                 let then_cost = then_block.stmts.len() as f64 * 1.0;
                 let else_cost = else_block
@@ -4725,12 +4901,17 @@ declare it as a Q format.\n{}",
                     } else {
                         writeln!(&mut self.ptx_buffer, "    @{} bra {};", pred, end_label).unwrap();
                     }
+                    let entered = self.enter_region(
+                        &[&**condition],
+                        format!("under the `if` on line {}, whose condition reads", span.line),
+                    );
                     self.emit_block(then_block, hw_profile);
                     if let Some(eb) = else_block {
                         writeln!(&mut self.ptx_buffer, "    bra {};", end_label).unwrap();
                         writeln!(&mut self.ptx_buffer, "    {}:", else_label).unwrap();
                         self.emit_block(eb, hw_profile);
                     }
+                    self.leave_regions(entered);
                     writeln!(&mut self.ptx_buffer, "    {}:", end_label).unwrap();
                 }
             }
@@ -4743,17 +4924,28 @@ declare it as a Q format.\n{}",
             // rejecting every `while` in the language, which is why a whole
             // missing statement kind went unnoticed in a backend with a
             // `ptxas` gate over it.
-            Stmt::While { condition, body, .. } => {
+            Stmt::While { condition, body, span, .. } => {
                 let loop_start = self.alloc_label("WHILE_START");
                 let loop_end = self.alloc_label("WHILE_END");
                 let exit_pred = self.alloc_pred();
 
                 writeln!(&mut self.ptx_buffer, "    // while ...").unwrap();
                 writeln!(&mut self.ptx_buffer, "    {}:", loop_start).unwrap();
+                // The threads still looping re-evaluate the condition, so it
+                // is inside the loop's region too.
+                let entered = self.enter_loop_region(
+                    &[&**condition],
+                    body,
+                    format!("in the `while` on line {}, whose condition reads", span.line),
+                    span.line,
+                );
                 // The condition is re-evaluated every iteration, which is the
                 // point of a `while`: hoisting it would be a `do`-loop.
+                let cond_from = self.ptx_buffer.len();
                 let cond_str = self.emit_expr(condition, None, hw_profile);
+                self.refuse_divergent_collectives(cond_from, &condition.span());
                 if cond_str.is_empty() {
+                    self.leave_regions(entered);
                     self.unsupported_stmt(
                         "a `while` whose condition this backend cannot lower",
                         &condition.span(),
@@ -4768,6 +4960,7 @@ declare it as a Q format.\n{}",
                 .unwrap();
                 writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
                 self.emit_block(body, hw_profile);
+                self.leave_regions(entered);
                 writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
                 writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
             }

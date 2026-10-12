@@ -9,13 +9,13 @@ Reviewed 2026-10-11 against every report in [the archived backlog](claude-histor
 most reproduced against the compiler built from the tree rather than read from
 source; each entry there now carries its status. What is still open:
 
-### Undefined on the GPU, not refused
+### Checked by name only
 
-- `warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` emit `shfl.sync` with
-  the full mask `0xffffffff` wherever they are written, including inside a
-  branch some lanes skip (`if t < 20 { warp_reduce_sum(x) }`). That is
-  undefined on the GPU; the compiler accepts it and the CPU interpreter stops
-  at it (`test_a_shuffle_whose_mask_names_absent_lanes_is_reported`).
+- `@divergence(uniform)` is checked by looking for identifiers containing
+  `threadIdx` or `laneId`, so `@divergence(uniform) if thread_idx_x() < 20`
+  passes. It changes no PTX (the LLVM backend attaches metadata to the
+  branch), and since 2026-10-12 it does not admit a shuffle or a barrier
+  into a branch the threads can disagree on; see the fixed entry below.
 
 ### Benchmarks
 
@@ -113,6 +113,7 @@ source; each entry there now carries its status. What is still open:
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| A shuffle or a barrier only some threads reached was emitted | `warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` emit `shfl.sync` over all 32 lanes, and `barrier_sync` emits `bar.sync` for the whole block, wherever they were written: `if t < 20 { warp_reduce_sum(x) }` compiled, and the GPU leaves it undefined (the shuffle reads lanes that are not there; a barrier may hang). The PTX backend now works out how far each variable is the same across threads (`src/uniformity.rs`: block-wide, per warp, or per thread; every memory read per thread) and refuses a collective instruction - any `shfl`/`vote`/`mma` and other `.sync` or `.aligned` form, or `bar`/`barrier` - under a branch, loop or earlier `return` the threads can disagree on, naming the line, the branch and the value that decides it. It refuses some correct kernels: a branch on a thread index divided by 32 is per warp only for some block shapes, and is refused. A `chisel` block's PTX is not checked, and one that branches counts as a `return` some threads take. `tests/ptx_divergent_collectives.rs` (19 refused forms; the rewrites run on the device and are exact), `uniformity`'s unit tests, `test_the_compiler_refuses_the_same_shuffle_written_with_a_builtin`. |
 | The CPU interpreter interpreted nothing | `CPUInterpreter.run` printed its arguments and returned `SUCCESS`; with `Y_INTERPRETER=1` every `TorchKernel.launch` printed "Executed safely under software bounds validation" and wrote no output; `debug_interpret("dummy", ...)` succeeded with no kernel; the C entry point `y_interpret_kernel` only type-checked. It now runs the kernel's PTX on the CPU in SIMT lockstep and stops at out-of-bounds and misaligned accesses, `trap`, divergent barriers and shuffles, conflicting stores and unmodelled instructions, naming the thread and PTX line. Each of the 518 instruction forms it models agrees with the GPU bit for bit over its operands' edge values and random bits, NaN payloads and signed zeros included, except that `.approx` functions agree within the GPU's documented error. The first version got 142 of those forms wrong, 137 of them without an error: canonical and propagated NaNs, `.ftz` tininess, signed zeros in `min`/`max`/`.sat`, NaN-to-integer conversions, `cvt.rni.f32.f32`, `sub.sat`, signed carries, `div.approx` and `sin`/`cos.approx` argument reduction. It also read a `cp.async` source size held in a register as the full copy, which raised spurious out-of-bounds errors and copied data the GPU zero-fills, and zero-extended `ld.global.s32` into a 64-bit register. `python/y_lang/tests/test_interpreter.py` (22 tests) and `test_interpreter_ops.py`; each of 41 mutants of the interpreter, and one returning the debug-mode launch to a no-op, fails a test. |
 | `benchmark_3d_block_ptr.py` compared unequal work | Y's kernel wrote 32,768 of the 8,388,608 elements it named and Triton's 524,288; neither output was checked, the script printed "FASTER" whatever the ratio, and it deleted `~/.ysu/cache` on import. Both kernels now cover the volume and must equal `2x + 1` exactly before they are timed; a busy GPU is reported. |
 | The second-copy gate failed in a checkout holding evidence snapshots | `no_gated_document_has_a_second_copy` flagged Codex's frozen "before" copies of `README.md`. It now skips what git ignores (`build_artifacts/`, like `target/`) and a copy whose current SHA-256 an ancestor's `evidence-manifest.json` records; an edited, unrecorded or untracked copy still fails it. `only_sealed_or_ignored_copies_are_exempt`. |
