@@ -56,8 +56,8 @@ pub const GEMM_SWIZZLE_GROUP_SIZE: u32 = 8;
 /// out the same either way (`num_i*num_j*4` = 64 registers, matching the
 /// F16 config's `num_i*num_j*8`). Combined A+B shared-memory footprint at
 /// this shape (`128*64 + 64*128` = 16384 bytes per stage, e4m3 is 1
-/// byte/element; `2 * 128*80` = 20480 per stage with the padded rows of
-/// `FP8_GEMM_SMEM_ROW`) is under `ptxas`'s 48KB static-`.shared` cap even
+/// byte/element; `2 * 128*80` = 20480 per stage with the padded path's
+/// `cta_k + 16`-byte rows, see `Fp8Tile`) is under `ptxas`'s 48KB static-`.shared` cap even
 /// double-buffered.
 ///
 /// `_SMALL` (64x64x64, 2x2 warps) exists because `_LARGE` measured a real
@@ -107,11 +107,67 @@ pub const FP8_GEMM_WARPS_N_SMALL: u32 = 2;
 /// K tile size - shared by both `_LARGE` and `_SMALL` (only M/N/warp
 /// counts vary between tiers), so this has no `_LARGE`/`_SMALL` suffix.
 pub const FP8_GEMM_CTA_K: u32 = 64;
-/// Byte stride of one row of the FP8 GEMM's e4m3 shared-memory tiles (A as
-/// `[m][k]`, B transposed to `[n][k]`): `FP8_GEMM_CTA_K` bytes padded by 16,
-/// so the 8 rows and 4 k-quads one fragment load touches fall in 32
-/// different banks (row * 20 + quad, mod 32).
-const FP8_GEMM_SMEM_ROW: u32 = FP8_GEMM_CTA_K + 16;
+/// One CTA tile of the FP8 GEMM's padded path (`n % 4 == 0`): `cta_m x
+/// cta_n` outputs on `warps_m x warps_n` warps, `cta_k` (32 or 64) of K
+/// per pipeline stage. Its shared rows are `cta_k + 16` bytes, so the 8
+/// rows each `ldmatrix` matrix reads fall in distinct banks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fp8Tile {
+    pub cta_m: u32,
+    pub cta_n: u32,
+    pub warps_m: u32,
+    pub warps_n: u32,
+    pub cta_k: u32,
+}
+
+/// The padded path's tiles (session 7, 2026-10-12), from a sweep of 20
+/// tiles against the head-to-head's Triton kernel on an RTX 4070 Ti SUPER
+/// (66 SMs), every one exact first (docs/benchmarks/fp8_gemm_2026-10-12/).
+/// Each warp of the 256x128 tile owns a 64x64 output tile: twice the
+/// tensor-core work per fragment load of a 32x64 one, and 25% less A and
+/// B traffic through L2 than 128x128 tiles, which at 4096^3 kept L2 at 80%
+/// of its throughput for both this kernel and Triton's.
+pub const FP8_TILE_256X128: Fp8Tile = Fp8Tile { cta_m: 256, cta_n: 128, warps_m: 4, warps_n: 2, cta_k: 32 };
+pub const FP8_TILE_128X64: Fp8Tile = Fp8Tile { cta_m: 128, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 32 };
+pub const FP8_TILE_128X128: Fp8Tile = Fp8Tile {
+    cta_m: FP8_GEMM_CTA_M_LARGE,
+    cta_n: FP8_GEMM_CTA_N_LARGE,
+    warps_m: FP8_GEMM_WARPS_M_LARGE,
+    warps_n: FP8_GEMM_WARPS_N_LARGE,
+    cta_k: FP8_GEMM_CTA_K,
+};
+pub const FP8_TILE_64X64_K32: Fp8Tile = Fp8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 32 };
+pub const FP8_TILE_64X64: Fp8Tile = Fp8Tile {
+    cta_m: FP8_GEMM_CTA_M_SMALL,
+    cta_n: FP8_GEMM_CTA_N_SMALL,
+    warps_m: FP8_GEMM_WARPS_M_SMALL,
+    warps_n: FP8_GEMM_WARPS_N_SMALL,
+    cta_k: FP8_GEMM_CTA_K,
+};
+/// 64x64 on 8 warps (32x16 each): when the whole grid is one wave, every
+/// SM holds one CTA and has two warps per scheduler instead of one.
+pub const FP8_TILE_64X64_8W: Fp8Tile = Fp8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 4, cta_k: 64 };
+
+/// The padded path's tile for an `m x n` output: the largest tile that
+/// still gives the GPU about two waves of CTAs. The thresholds reproduce
+/// the measured best at every square size swept (256 to 8192): 64x64 with
+/// a 64-wide K step up to 512 (on 8 warps while the grid is one wave),
+/// 64x64 with 32 at 768, 128x128 at 1024, 128x64 at 1536, and 256x128 from
+/// 2048. They were measured on one 66-SM GPU; another may want others.
+pub fn fp8_padded_tile(m: u32, n: u32) -> Fp8Tile {
+    let ctas = |t: &Fp8Tile| m.div_ceil(t.cta_m) * n.div_ceil(t.cta_n);
+    if m <= FP8_GEMM_SMALL_THRESHOLD || n <= FP8_GEMM_SMALL_THRESHOLD {
+        if ctas(&FP8_TILE_64X64) <= 64 { FP8_TILE_64X64_8W } else { FP8_TILE_64X64 }
+    } else if ctas(&FP8_TILE_256X128) >= 128 {
+        FP8_TILE_256X128
+    } else if ctas(&FP8_TILE_128X64) >= 256 {
+        FP8_TILE_128X64
+    } else if ctas(&FP8_TILE_128X128) >= 64 {
+        FP8_TILE_128X128
+    } else {
+        FP8_TILE_64X64_K32
+    }
+}
 /// CTAs launched consecutively cover this many M-tiles before moving to the
 /// next N-tile, so the CTAs resident together share A and B tiles in L2.
 const FP8_GEMM_GROUP_M: u32 = 8;
@@ -8751,28 +8807,28 @@ declare it as a Q format.\n{}",
 
     // ---- The padded, B-transposed path (`n % 4 == 0`, see
     // `emit_fp8_gemm_kernel`'s session-6 notes): A as `[m][k]` and B as
-    // `[n][k]`, both with FP8_GEMM_SMEM_ROW-byte rows, so every fragment
-    // register is one conflict-free `ld.shared.b32`; staging unrolled at
+    // `[n][k]`, both with `cta_k + 16`-byte rows, so every fragment
+    // register comes from a conflict-free `ldmatrix` (session 7); staging unrolled at
     // emit time and split into a load half (registers) and a convert+store
     // half, so the loads can stay in flight across the tensor-core work. ----
 
     /// This thread's A quads for the K-tile at `k0`, loaded into registers:
-    /// `cta_m*16/threads` quads, `threads/16` rows apart (unrolled; ptxas
+    /// `cta_m*(cta_k/4)/threads` quads, `threads/(cta_k/4)` rows apart (unrolled; ptxas
     /// leaves a %tid-strided loop rolled). Predicated on the M edge when M
     /// is not a whole number of tiles, and on `extra` (the next K-tile
     /// exists); registers that may stay unloaded are zeroed first.
     #[allow(clippy::too_many_arguments)]
-    fn emit_fp8_load_a_regs(&mut self, a_g: &str, cta_row0: &str, k0: &str, m: u32, k: u32, threads: u32, cta_m: u32, extra: Option<&str>) -> Vec<Vec<String>> {
-        let qpr = FP8_GEMM_CTA_K / 4;
+    fn emit_fp8_load_a_regs(&mut self, a_g: &str, cta_row0: &str, k0: &str, m: u32, k: u32, threads: u32, cta_m: u32, cta_k: u32, extra: Option<&str>) -> Vec<Vec<String>> {
+        let qpr = cta_k / 4;
         let per_thread = cta_m * qpr / threads;
         let rows_per_it = threads / qpr;
         let full = m % cta_m == 0;
         let tid = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
         let row0 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 4;", row0, tid).unwrap();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", row0, tid, qpr.trailing_zeros()).unwrap();
         let q = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 15;", q, tid).unwrap();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", q, tid, qpr - 1).unwrap();
         let col = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 2;", col, q).unwrap();
         let grow0 = self.alloc_reg32();
@@ -8817,24 +8873,26 @@ declare it as a Q format.\n{}",
     /// Quantizes `emit_fp8_load_a_regs`'s quads and stores them at row
     /// `tid/16 + it*threads/16`, k-quad `tid%16`. `guard` skips the store on
     /// the K-loop's last iteration, whose prefetch loaded nothing.
-    fn emit_fp8_store_a_regs(&mut self, quads: &[Vec<String>], smem_a: &str, inv_scale: &str, threads: u32, guard: Option<&str>) {
-        let rows_per_it = threads / (FP8_GEMM_CTA_K / 4);
+    #[allow(clippy::too_many_arguments)]
+    fn emit_fp8_store_a_regs(&mut self, quads: &[Vec<String>], smem_a: &str, inv_scale: &str, threads: u32, cta_k: u32, row: u32, guard: Option<&str>) {
+        let qpr = cta_k / 4;
+        let rows_per_it = threads / qpr;
         let tid = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
         let row0 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 4;", row0, tid).unwrap();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", row0, tid, qpr.trailing_zeros()).unwrap();
         let q = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 15;", q, tid).unwrap();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", q, tid, qpr - 1).unwrap();
         let col = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 2;", col, q).unwrap();
         let s_lin = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_lin, row0, FP8_GEMM_SMEM_ROW, col).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_lin, row0, row, col).unwrap();
         let saddr = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", saddr, smem_a, s_lin).unwrap();
         let g = guard.map(|p| format!("@{} ", p)).unwrap_or_default();
         for (it, f) in quads.iter().enumerate() {
             let w = self.emit_fp8_pack_quad(f, inv_scale);
-            writeln!(&mut self.ptx_buffer, "    {}st.shared.b32 [{}+{}], {};", g, saddr, it as u32 * rows_per_it * FP8_GEMM_SMEM_ROW, w).unwrap();
+            writeln!(&mut self.ptx_buffer, "    {}st.shared.b32 [{}+{}], {};", g, saddr, it as u32 * rows_per_it * row, w).unwrap();
         }
     }
 
@@ -8842,11 +8900,10 @@ declare it as a Q format.\n{}",
     /// k-quads of one n-quad pair, so the transposed stores below are
     /// conflict-free; each block is 4 rows of 4 f32, row-major.
     #[allow(clippy::too_many_arguments)]
-    fn emit_fp8_load_b_regs(&mut self, b_g: &str, k0: &str, cta_col0: &str, n: u32, threads: u32, cta_n: u32, extra: Option<&str>) -> Vec<Vec<String>> {
-        let warps = threads / 32;
-        let per_thread = (FP8_GEMM_CTA_K / 4) * (cta_n / 4) / threads;
+    fn emit_fp8_load_b_regs(&mut self, b_g: &str, k0: &str, cta_col0: &str, n: u32, threads: u32, cta_n: u32, cta_k: u32, extra: Option<&str>) -> Vec<Vec<String>> {
+        let (per_thread, cols_per_it) = Self::fp8_b_blocks(threads, cta_n, cta_k);
         let full = n % cta_n == 0;
-        let (kq4, col_local0) = self.emit_fp8_b_stage_lane();
+        let (kq4, col_local0) = self.emit_fp8_b_stage_lane(cta_k);
         let gcol0 = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", gcol0, cta_col0, col_local0).unwrap();
         let grow0 = self.alloc_reg32();
@@ -8859,7 +8916,7 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gaddr, b_g, byte).unwrap();
         let mut out = Vec::new();
         for it in 0..per_thread {
-            let coff = it * warps * 8;
+            let coff = it * cols_per_it;
             let v: Vec<String> = (0..16).map(|_| self.alloc_regf32()).collect();
             if full {
                 let g = extra.map(|e| format!("@{} ", e)).unwrap_or_default();
@@ -8912,9 +8969,39 @@ declare it as a Q format.\n{}",
         out
     }
 
+    /// How B's 4(k) x 4(n) blocks are spread over the CTA: (blocks per
+    /// thread, columns one pass of the CTA covers).
+    /// `fp8_padded_geometry_error` refuses a tile they do not divide.
+    fn fp8_b_blocks(threads: u32, cta_n: u32, cta_k: u32) -> (u32, u32) {
+        let blocks = (cta_k / 4) * (cta_n / 4);
+        (blocks / threads, (threads / 32) * (32 / (cta_k / 4)) * 4)
+    }
+
+    /// Why the padded path cannot stage this tile, if it cannot: every A
+    /// quad and every B block must belong to exactly one thread, each thread
+    /// having as many as the others. An integer division here once left B
+    /// unstaged: 256 blocks over 512 threads gave each thread none.
+    fn fp8_padded_geometry_error(threads: u32, cta_m: u32, cta_n: u32, cta_k: u32) -> Option<String> {
+        let qpr = cta_k / 4;
+        let a_quads = cta_m * qpr;
+        let b_blocks = qpr * (cta_n / 4);
+        if !(cta_k == 32 || cta_k == 64) {
+            return Some(format!("its K step is {cta_k}; the padded path takes 32 or 64"));
+        }
+        if threads % qpr != 0 || a_quads % threads != 0 {
+            return Some(format!("{a_quads} A quads do not divide among {threads} threads"));
+        }
+        if b_blocks % threads != 0 {
+            return Some(format!("{b_blocks} B blocks do not divide among {threads} threads"));
+        }
+        None
+    }
+
     /// (kq*4, nb0*4): this lane's k offset and first n offset within the
-    /// B tile, lane = 16*nb_lo + kq, nb0 = 2*warp + nb_lo.
-    fn emit_fp8_b_stage_lane(&mut self) -> (String, String) {
+    /// B tile. With `kqs = cta_k/4` k-quads, lane = kqs*nb_lo + kq and
+    /// nb0 = (32/kqs)*warp + nb_lo.
+    fn emit_fp8_b_stage_lane(&mut self, cta_k: u32) -> (String, String) {
+        let kqs = cta_k / 4;
         let tid = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
         let lane = self.alloc_reg32();
@@ -8922,87 +9009,113 @@ declare it as a Q format.\n{}",
         let w = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 5;", w, tid).unwrap();
         let kq = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 15;", kq, lane).unwrap();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", kq, lane, kqs - 1).unwrap();
         let kq4 = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 2;", kq4, kq).unwrap();
         let nb_lo = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 4;", nb_lo, lane).unwrap();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", nb_lo, lane, kqs.trailing_zeros()).unwrap();
         let nb0 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 2, {};", nb0, w, nb_lo).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", nb0, w, 32 / kqs, nb_lo).unwrap();
         let col0 = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 2;", col0, nb0).unwrap();
         (kq4, col0)
     }
 
-    fn emit_fp8_store_b_transposed(&mut self, blocks: &[Vec<String>], smem_b: &str, inv_scale: &str, threads: u32, guard: Option<&str>) {
-        let warps = threads / 32;
-        let (kq4, col_local0) = self.emit_fp8_b_stage_lane();
+    #[allow(clippy::too_many_arguments)]
+    fn emit_fp8_store_b_transposed(&mut self, blocks: &[Vec<String>], smem_b: &str, inv_scale: &str, threads: u32, cta_n: u32, cta_k: u32, row: u32, guard: Option<&str>) {
+        let (_, cols_per_it) = Self::fp8_b_blocks(threads, cta_n, cta_k);
+        let (kq4, col_local0) = self.emit_fp8_b_stage_lane(cta_k);
         let s_lin = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_lin, col_local0, FP8_GEMM_SMEM_ROW, kq4).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_lin, col_local0, row, kq4).unwrap();
         let saddr = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", saddr, smem_b, s_lin).unwrap();
         let g = guard.map(|p| format!("@{} ", p)).unwrap_or_default();
         for (it, v) in blocks.iter().enumerate() {
-            let coff = it as u32 * warps * 8;
+            let coff = it as u32 * cols_per_it;
             for c in 0..4usize {
                 let column = [v[c].clone(), v[4 + c].clone(), v[8 + c].clone(), v[12 + c].clone()];
                 let w = self.emit_fp8_pack_quad(&column, inv_scale);
-                writeln!(&mut self.ptx_buffer, "    {}st.shared.b32 [{}+{}], {};", g, saddr, (coff + c as u32) * FP8_GEMM_SMEM_ROW, w).unwrap();
+                writeln!(&mut self.ptx_buffer, "    {}st.shared.b32 [{}+{}], {};", g, saddr, (coff + c as u32) * row, w).unwrap();
             }
         }
     }
 
-    /// One fragment register: 4 consecutive k bytes of row `row` (A) or
-    /// column `row` (B, stored transposed), at k offset `k_local`.
-    fn emit_fp8_frag_reg(&mut self, smem: &str, row: &str, k_local: u32, tig: &str) -> String {
-        let t4 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 2;", t4, tig).unwrap();
-        let lin = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, row, FP8_GEMM_SMEM_ROW, t4).unwrap();
-        let addr = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem, lin).unwrap();
-        let reg = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    ld.shared.b32 {}, [{}+{}];", reg, addr, k_local).unwrap();
-        reg
+    /// Each lane's byte offsets for the padded path's `ldmatrix.x4` loads,
+    /// computed once. An 8-bit m16n8k32 fragment register holds 4
+    /// consecutive k bytes of one row - two of `ldmatrix`'s b16 elements -
+    /// so `ldmatrix.m8n8.x4.b16` gives each lane exactly its fragment
+    /// registers: for A, matrix `q` is rows `8*(q%2)..` at k byte `16*(q/2)`
+    /// (registers a0..a3), so lane L supplies row `L%8 + (L & 8)` and k byte
+    /// `L & 16`; for B (stored `[n][k]`), the matrices are (n tile, k half)
+    /// = (0,0), (0,1), (1,0), (1,1), so lane L supplies column
+    /// `L%8 + (L & 16)/2` and k byte `2*(L & 8)`. The 80-byte rows keep each
+    /// matrix's 8 rows in distinct banks.
+    fn emit_fp8_ldmatrix_lane_offsets(&mut self, lane: &str, warp_row0_local: &str, warp_col0_local: &str, row: u32) -> (String, String) {
+        let l7 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 7;", l7, lane).unwrap();
+        let l8 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 8;", l8, lane).unwrap();
+        let l16 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 16;", l16, lane).unwrap();
+        // A: row warp_row0 + l7 + l8, k byte l16.
+        let a_row = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", a_row, warp_row0_local, l7).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", a_row, a_row, l8).unwrap();
+        let a_off = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", a_off, a_row, row, l16).unwrap();
+        // B: column warp_col0 + l7 + l16/2, k byte 2*l8.
+        let half16 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", half16, l16).unwrap();
+        let b_col = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_col, warp_col0_local, l7).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_col, b_col, half16).unwrap();
+        let k2 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", k2, l8).unwrap();
+        let b_off = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", b_off, b_col, row, k2).unwrap();
+        (a_off, b_off)
     }
 
+    /// One K-tile's tensor-core work on the padded layout: per k32 step, one
+    /// `ldmatrix.x4` per pair of B n8 tiles and per A m16 tile (see
+    /// `emit_fp8_ldmatrix_lane_offsets`), then the `num_i x num_j` mmas.
     #[allow(clippy::too_many_arguments)]
     fn emit_fp8_gemm_compute_block_padded(
         &mut self,
         acc: &[Vec<Vec<String>>],
         smem_a: &str,
         smem_b: &str,
-        group_id: &str,
-        tig: &str,
-        warp_row0_local: &str,
-        warp_col0_local: &str,
+        a_lane_off: &str,
+        b_lane_off: &str,
         num_i: u32,
         num_j: u32,
         k_substeps: u32,
+        row: u32,
     ) {
+        let a_base = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", a_base, smem_a, a_lane_off).unwrap();
+        let b_base = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_base, smem_b, b_lane_off).unwrap();
         for ks in 0..k_substeps {
             let kk = ks * 32;
             let mut b_frags: Vec<Vec<String>> = Vec::with_capacity(num_j as usize);
-            for j in 0..num_j {
-                let ncol = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", ncol, warp_col0_local, j * 8).unwrap();
-                let nl = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", nl, ncol, group_id).unwrap();
-                b_frags.push(vec![self.emit_fp8_frag_reg(smem_b, &nl, kk, tig), self.emit_fp8_frag_reg(smem_b, &nl, kk + 16, tig)]);
+            for jp in 0..num_j / 2 {
+                let r: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
+                writeln!(
+                    &mut self.ptx_buffer,
+                    "    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {{{}}}, [{}+{}];",
+                    r.join(","), b_base, jp * 16 * row + kk
+                ).unwrap();
+                b_frags.push(vec![r[0].clone(), r[1].clone()]);
+                b_frags.push(vec![r[2].clone(), r[3].clone()]);
             }
             for i in 0..num_i {
-                let rb = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", rb, warp_row0_local, i * 16).unwrap();
-                let r0 = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", r0, rb, group_id).unwrap();
-                let r8 = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 8;", r8, r0).unwrap();
-                let a_frag = vec![
-                    self.emit_fp8_frag_reg(smem_a, &r0, kk, tig),
-                    self.emit_fp8_frag_reg(smem_a, &r8, kk, tig),
-                    self.emit_fp8_frag_reg(smem_a, &r0, kk + 16, tig),
-                    self.emit_fp8_frag_reg(smem_a, &r8, kk + 16, tig),
-                ];
+                let a_frag: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
+                writeln!(
+                    &mut self.ptx_buffer,
+                    "    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {{{}}}, [{}+{}];",
+                    a_frag.join(","), a_base, i * 16 * row + kk
+                ).unwrap();
                 for j in 0..num_j {
                     let d = acc[i as usize][j as usize].join(",");
                     writeln!(
@@ -9057,9 +9170,10 @@ declare it as a Q format.\n{}",
     /// kernel's OWN multi-warp tiling - see
     /// benchmark_y_tensor_core_gemm_results.md), NOT copy-pasted (FP8's
     /// `mma.sync.m16n8k32` has a different fragment shape/register count
-    /// than F16's `wmma`/`ldmatrix` path, and there is no `ldmatrix` 8-bit
-    /// variant at all - fragments are still hand-computed `ld.shared`, as
-    /// in the original single-warp kernel). The multi-warp address
+    /// than F16's `wmma`/`ldmatrix` path; this session concluded that
+    /// `ldmatrix` has no 8-bit variant and loaded fragments with hand-
+    /// computed `ld.shared` - see session 7 for why `ldmatrix.b16` serves
+    /// anyway). The multi-warp address
     /// composition (per-warp CTA-local tile origin, `lane = %tid.x & 31`
     /// now that a CTA is more than one warp, and the generalized
     /// cooperative quantize+stage step) was standalone-validated on real
@@ -9166,7 +9280,7 @@ declare it as a Q format.\n{}",
     /// global memory each iteration. When `n % 4 == 0`:
     /// - A is staged `[m][k]` and B transposed to `[n][k]` (the 4 k values
     ///   of a column packed into one word as they are quantized), both
-    ///   with `FP8_GEMM_SMEM_ROW` (80-byte) rows, so each fragment register
+    ///   with 80-byte rows (`cta_k + 16`), so each fragment register
     ///   is one conflict-free `ld.shared.b32`
     ///   (`emit_fp8_gemm_compute_block_padded`); staging is unrolled at
     ///   emit time and B's lanes are assigned so its transposed stores are
@@ -9185,6 +9299,32 @@ declare it as a Q format.\n{}",
     /// between the mma instructions in the emitted text (6-11% slower: it
     /// constrained ptxas's own scheduling and raised registers to 218). The
     /// session-5 path remains for `n % 4 != 0`.
+    ///
+    /// **`ldmatrix` fragments (session 7, 2026-10-12)**: session 2's "no
+    /// 8-bit `ldmatrix`" was true of the instruction and wrong about its
+    /// use. An m16n8k32 8-bit fragment register holds 4 consecutive k bytes
+    /// of one row, which is two `.b16` elements in `ldmatrix.m8n8`'s layout,
+    /// so one `ldmatrix.x4` loads an A m16 tile's four registers or two B n8
+    /// tiles' (`emit_fp8_ldmatrix_lane_offsets`), as CUTLASS does for int8.
+    /// The padded path's 48 `ld.shared.b32` per warp per K-tile (LARGE) are
+    /// 12 `ldmatrix.x4`, moving the same bytes; the 80-byte rows keep each
+    /// 8-row matrix conflict-free. Checked first by a probe comparing every
+    /// lane's registers both ways on the device, then exact on every
+    /// test_fp8_gemm.py shape.
+    ///
+    /// **A tile table (session 7)**: the padded path takes its tile from
+    /// `fp8_padded_tile` (`Fp8Tile`: CTA tile, warp grid, and a 32- or
+    /// 64-wide K step, with `cta_k + 16`-byte shared rows), not from the two
+    /// session-3 tiers, which the unpadded path keeps. Profiled at 4096^3,
+    /// this kernel and Triton's both moved 4.4 GB through L2 at 80% of its
+    /// throughput, so the larger tiles are the lever: a 256x128 CTA of
+    /// eight 64x64 warp tiles reads 25% less A and B per output. Each tile
+    /// was chosen by a sweep of 20 tiles at sizes 256 to 8192, all exact
+    /// first (docs/benchmarks/fp8_gemm_tiles_2026-10-12/). The staging
+    /// splits each tile's A quads and B blocks exactly among its threads,
+    /// and a tile where they do not divide is refused
+    /// (`fp8_padded_geometry_error`): an integer division once left B
+    /// unstaged on 16 warps.
     ///
     /// Deliberate, disclosed scope choices remaining after this pass (see
     /// benchmark_y_tensor_core_gemm_results.md for how the f16 GEMM
@@ -9250,16 +9390,23 @@ declare it as a Q format.\n{}",
         // stand-in for real Autotuner integration, purely a function of
         // this kernel's compile-time M/N. ----
         let is_small = m <= FP8_GEMM_SMALL_THRESHOLD || n <= FP8_GEMM_SMALL_THRESHOLD;
-        let (cta_m, cta_n, warps_m, warps_n) = if is_small {
+        let (mut cta_m, mut cta_n, mut warps_m, mut warps_n) = if is_small {
             (FP8_GEMM_CTA_M_SMALL, FP8_GEMM_CTA_N_SMALL, FP8_GEMM_WARPS_M_SMALL, FP8_GEMM_WARPS_N_SMALL)
         } else {
             (FP8_GEMM_CTA_M_LARGE, FP8_GEMM_CTA_N_LARGE, FP8_GEMM_WARPS_M_LARGE, FP8_GEMM_WARPS_N_LARGE)
         };
-        let cta_k = FP8_GEMM_CTA_K;
+        let mut cta_k = FP8_GEMM_CTA_K;
         // The padded, B-transposed, register-prefetched path needs B's rows
         // 16-byte aligned for `ld.global.v4.f32`; other N take the session-5
         // path (see doc comment).
         let padded = n % 4 == 0;
+        if padded {
+            let t = fp8_padded_tile(m, n);
+            (cta_m, cta_n, warps_m, warps_n, cta_k) = (t.cta_m, t.cta_n, t.warps_m, t.warps_n, t.cta_k);
+        }
+        // The padded path's shared row: the K step plus 16 bytes, so each
+        // 8-row `ldmatrix` matrix falls in distinct banks.
+        let row = cta_k + 16;
 
         let k_tiles = k / cta_k;
         let grid_x = (m + cta_m - 1) / cta_m;
@@ -9282,12 +9429,20 @@ declare it as a Q format.\n{}",
             self.emit_errors.push(format!("FP8 tensor-core GEMM: {}", why));
             return 0;
         }
+        if padded {
+            if let Some(why) = Self::fp8_padded_geometry_error(threads_per_cta, cta_m, cta_n, cta_k) {
+                self.emit_errors.push(format!(
+                    "FP8 tensor-core GEMM: the {cta_m}x{cta_n}x{cta_k} tile on {num_warps} warps cannot be staged: {why}"
+                ));
+                return 0;
+            }
+        }
 
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
         writeln!(
             &mut self.ptx_buffer,
             "    // [Y FP8 TENSOR CORE GEMM] M={} N={} K={} | CTA {}x{}x{} ({}) | {}x{} warps | mma.sync.m16n8k32.row.col.f32.e4m3.e4m3.f32",
-            m, n, k, cta_m, cta_n, cta_k, if is_small { "small" } else { "large" }, warps_m, warps_n
+            m, n, k, cta_m, cta_n, cta_k, if padded { "padded" } else if is_small { "small" } else { "large" }, warps_m, warps_n
         ).unwrap();
         writeln!(&mut self.ptx_buffer, "    // Fused on-the-fly FP32->e4m3 quantization (cvt.rn.satfinite.e4m3x2.f32); epilogue dequants by scale_a*scale_b.").unwrap();
         writeln!(&mut self.ptx_buffer, "    // Launch grid required: ({}, {}, 1) CTAs, block ({},1,1).", grid_x, grid_y, threads_per_cta).unwrap();
@@ -9301,8 +9456,8 @@ declare it as a Q format.\n{}",
         // LARGE and 20480 for SMALL padded; 32768 and 16384 unpadded).
         let smem_a_sym = format!("smem_fp8_A_{}", kernel_name);
         let smem_b_sym = format!("smem_fp8_B_{}", kernel_name);
-        let stage_a_bytes = if padded { cta_m * FP8_GEMM_SMEM_ROW } else { cta_m * cta_k };
-        let stage_b_bytes = if padded { cta_n * FP8_GEMM_SMEM_ROW } else { cta_k * cta_n };
+        let stage_a_bytes = if padded { cta_m * row } else { cta_m * cta_k };
+        let stage_b_bytes = if padded { cta_n * row } else { cta_k * cta_n };
         let smem_align = if padded { 16 } else { 4 };
         writeln!(&mut self.ptx_buffer, "    .shared .align {} .b8 {}[{}];", smem_align, smem_a_sym, 2 * stage_a_bytes).unwrap();
         writeln!(&mut self.ptx_buffer, "    .shared .align {} .b8 {}[{}];", smem_align, smem_b_sym, 2 * stage_b_bytes).unwrap();
@@ -9386,6 +9541,12 @@ declare it as a Q format.\n{}",
         let warp_col0_local = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", warp_col0_local, warp_n, per_warp_n).unwrap();
 
+        let ldsm_offsets = if padded {
+            Some(self.emit_fp8_ldmatrix_lane_offsets(&lane, &warp_row0_local, &warp_col0_local, row))
+        } else {
+            None
+        };
+
         // ---- loop-invariant reciprocals for quantization (scale_a/
         // scale_b are kernel params, unchanged across the K-loop) ----
         let inv_scale_a = self.alloc_regf32();
@@ -9444,10 +9605,10 @@ declare it as a Q format.\n{}",
         let k0_zero = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", k0_zero).unwrap();
         if padded {
-            let qa = self.emit_fp8_load_a_regs(&a_g, &cta_row0, &k0_zero, m, k, threads_per_cta, cta_m, None);
-            let qb = self.emit_fp8_load_b_regs(&b_g, &k0_zero, &cta_col0, n, threads_per_cta, cta_n, None);
-            self.emit_fp8_store_a_regs(&qa, &smem_a, &inv_scale_a, threads_per_cta, None);
-            self.emit_fp8_store_b_transposed(&qb, &smem_b, &inv_scale_b, threads_per_cta, None);
+            let qa = self.emit_fp8_load_a_regs(&a_g, &cta_row0, &k0_zero, m, k, threads_per_cta, cta_m, cta_k, None);
+            let qb = self.emit_fp8_load_b_regs(&b_g, &k0_zero, &cta_col0, n, threads_per_cta, cta_n, cta_k, None);
+            self.emit_fp8_store_a_regs(&qa, &smem_a, &inv_scale_a, threads_per_cta, cta_k, row, None);
+            self.emit_fp8_store_b_transposed(&qb, &smem_b, &inv_scale_b, threads_per_cta, cta_n, cta_k, row, None);
         } else {
             self.emit_fp8_quantize_stage_a(&a_g, &cta_row0, &k0_zero, m, k, &smem_a, &inv_scale_a, threads_per_cta, cta_m, None);
             self.emit_fp8_quantize_stage_b(&b_g, &k0_zero, &cta_col0, k, n, &smem_b, &inv_scale_b, threads_per_cta, cta_n, None);
@@ -9504,11 +9665,12 @@ declare it as a Q format.\n{}",
             // Register prefetch: the next K-tile's loads stay in flight
             // across this tile's tensor-core work; they are converted and
             // stored only after it.
-            let qa = self.emit_fp8_load_a_regs(&a_g, &cta_row0, &next_k0, m, k, threads_per_cta, cta_m, Some(&p_next_valid));
-            let qb = self.emit_fp8_load_b_regs(&b_g, &next_k0, &cta_col0, n, threads_per_cta, cta_n, Some(&p_next_valid));
-            self.emit_fp8_gemm_compute_block_padded(&acc, &smem_a_read, &smem_b_read, &group_id, &tig, &warp_row0_local, &warp_col0_local, num_i, num_j, k_substeps);
-            self.emit_fp8_store_a_regs(&qa, &smem_a_write, &inv_scale_a, threads_per_cta, Some(&p_next_valid));
-            self.emit_fp8_store_b_transposed(&qb, &smem_b_write, &inv_scale_b, threads_per_cta, Some(&p_next_valid));
+            let qa = self.emit_fp8_load_a_regs(&a_g, &cta_row0, &next_k0, m, k, threads_per_cta, cta_m, cta_k, Some(&p_next_valid));
+            let qb = self.emit_fp8_load_b_regs(&b_g, &next_k0, &cta_col0, n, threads_per_cta, cta_n, cta_k, Some(&p_next_valid));
+            let (a_lane_off, b_lane_off) = ldsm_offsets.clone().expect("computed for the padded path");
+            self.emit_fp8_gemm_compute_block_padded(&acc, &smem_a_read, &smem_b_read, &a_lane_off, &b_lane_off, num_i, num_j, k_substeps, row);
+            self.emit_fp8_store_a_regs(&qa, &smem_a_write, &inv_scale_a, threads_per_cta, cta_k, row, Some(&p_next_valid));
+            self.emit_fp8_store_b_transposed(&qb, &smem_b_write, &inv_scale_b, threads_per_cta, cta_n, cta_k, row, Some(&p_next_valid));
         } else {
             self.emit_fp8_quantize_stage_a(&a_g, &cta_row0, &next_k0, m, k, &smem_a_write, &inv_scale_a, threads_per_cta, cta_m, Some(&p_next_valid));
             self.emit_fp8_quantize_stage_b(&b_g, &next_k0, &cta_col0, k, n, &smem_b_write, &inv_scale_b, threads_per_cta, cta_n, Some(&p_next_valid));
@@ -14236,7 +14398,7 @@ mod tests {
         // M=N=1024) and test_fp8_gemm_kernel_small_tile_selection (this
         // same SMALL-tier shape, checked in more detail) below. Sizes are
         // DOUBLE-buffered (session 4's software pipelining) with padded
-        // rows (session 6) - 2x FP8_GEMM_CTA_M_SMALL*FP8_GEMM_SMEM_ROW =
+        // rows (session 6) - 2x FP8_GEMM_CTA_M_SMALL*(cta_k + 16) =
         // 2*64*80 = 10240.
         assert!(ptx.contains(".shared .align 16 .b8 smem_fp8_A_gemm_fp8_256[10240]"), "missing double-buffered A smem tile declaration: {}", ptx);
         assert!(ptx.contains(".shared .align 16 .b8 smem_fp8_B_gemm_fp8_256[10240]"), "missing double-buffered B smem tile declaration: {}", ptx);
@@ -14244,9 +14406,13 @@ mod tests {
         // byte at a time (session 6: those gathers and their bank
         // conflicts made the kernel 2.4x slower than Triton's).
         assert!(!ptx.contains("ld.shared.u8"), "B fragments must be one ld.shared.b32 each, not byte gathers: {}", ptx);
-        // Not ldmatrix - PTX ISA 8.5's ldmatrix has no 8-bit variant (see
-        // emit_fp8_gemm_kernel's doc comment).
-        assert!(!ptx.contains("ldmatrix"), "FP8 fragments must come from hand-computed ld.shared, not ldmatrix (unavailable for 8-bit types): {}", ptx);
+        // Every fragment register comes from `ldmatrix.x4`: an 8-bit
+        // fragment register is two of its b16 elements (see
+        // `emit_fp8_ldmatrix_lane_offsets`). Per K-tile of the 64x64 tile on
+        // 2x4 warps (32x16 warp tiles, two k32 steps): 2 A tiles + 1 pair
+        // of B tiles per step, so 6, and no fragment is loaded any other way.
+        assert_eq!(ptx.matches("ldmatrix.sync.aligned.m8n8.x4.shared.b16").count(), 6, "one ldmatrix.x4 per A m16 tile and per pair of B n8 tiles per k32 step: {}", ptx);
+        assert!(!ptx.contains("ld.shared"), "a fragment loaded without ldmatrix: {}", ptx);
     }
 
     /// Regression guard for the multi-warp CTA tiling rewrite's LARGE tier
@@ -14288,7 +14454,7 @@ mod tests {
         let ptx = emitter.emit_program(&ast, &hw);
 
         assert!(
-            ptx.contains("CTA 128x128x64 (large) | 4x2 warps"),
+            ptx.contains("CTA 128x128x64 (padded) | 4x2 warps"),
             "launch-geometry comment must advertise the LARGE multi-warp CTA shape at M=N=1024: {}", ptx
         );
         assert!(
@@ -14343,31 +14509,30 @@ mod tests {
         let mut emitter = PtxEmitter::new_with_profile(&hw);
         let ptx = emitter.emit_program(&ast, &hw);
 
+        // 16 CTAs, one wave: the 64x64 tile on 8 warps (`fp8_padded_tile`).
         assert!(
-            ptx.contains("CTA 64x64x64 (small) | 2x2 warps"),
-            "launch-geometry comment must advertise the SMALL multi-warp CTA shape at M=N=256: {}", ptx
+            ptx.contains("CTA 64x64x64 (padded) | 2x4 warps"),
+            "launch-geometry comment must advertise the 64x64 tile on 2x4 warps at M=N=256: {}", ptx
         );
         assert!(
-            ptx.contains("Launch grid required: (4, 4, 1) CTAs, block (128,1,1)"),
-            "at M=N=256 with a 64x64 CTA tile the grid must be (4,4,1), block (128,1,1) - a real, disclosed improvement over the LARGE tier's (2,2,1) at this size: {}", ptx
+            ptx.contains("Launch grid required: (4, 4, 1) CTAs, block (256,1,1)"),
+            "at M=N=256 with a 64x64 CTA tile the grid must be (4,4,1), block (256,1,1) - a real, disclosed improvement over the LARGE tier's (2,2,1) at this size: {}", ptx
         );
         assert!(
             ptx.contains(".shared .align 16 .b8 smem_fp8_A_gemm_fp8_256[10240]"),
-            "SMALL tier A smem tile must be double-buffered (session 4) with padded rows (session 6): 2*FP8_GEMM_CTA_M_SMALL*FP8_GEMM_SMEM_ROW = 2*64*80 = 10240: {}", ptx
+            "SMALL tier A smem tile must be double-buffered (session 4) with padded rows (session 6): 2*FP8_GEMM_CTA_M_SMALL*(cta_k + 16) = 2*64*80 = 10240: {}", ptx
         );
         assert!(
             ptx.contains(".shared .align 16 .b8 smem_fp8_B_gemm_fp8_256[10240]"),
-            "SMALL tier B smem tile, stored [n][k], must be double-buffered with padded rows: 2*FP8_GEMM_CTA_N_SMALL*FP8_GEMM_SMEM_ROW = 2*64*80 = 10240: {}", ptx
+            "SMALL tier B smem tile, stored [n][k], must be double-buffered with padded rows: 2*FP8_GEMM_CTA_N_SMALL*(cta_k + 16) = 2*64*80 = 10240: {}", ptx
         );
 
-        // SMALL tier: num_i=2, num_j=4, k_substeps=2 -> 16 static mma
-        // occurrences (half the LARGE tier's 32, consistent with half the
-        // per-warp N-fragment count - see FP8_GEMM_CTA_M_LARGE's doc
-        // comment).
+        // 32x16 warp tiles: num_i=2, num_j=2, k_substeps=2 -> 8 static mma
+        // occurrences.
         let mma_count = ptx.matches("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32").count();
         assert_eq!(
-            mma_count, 16,
-            "expected num_i(2)*num_j(4)*k_substeps(2) = 16 static mma.sync.m16n8k32 occurrences for the SMALL tier, got {}: {}",
+            mma_count, 8,
+            "expected num_i(2)*num_j(2)*k_substeps(2) = 8 static mma.sync.m16n8k32 occurrences, got {}: {}",
             mma_count, ptx
         );
     }
@@ -14404,10 +14569,68 @@ mod tests {
         let mut emitter = PtxEmitter::new_with_profile(&hw);
         let ptx = emitter.emit_program(&ast, &hw);
 
+        // 513 is not a multiple of 4, so this is the unpadded path, which
+        // keeps the two session-3 tiers.
         assert!(
             ptx.contains("CTA 128x128x64 (large) | 4x2 warps"),
             "M=N=513 is one past FP8_GEMM_SMALL_THRESHOLD (512) and must select the LARGE tier: {}", ptx
         );
+        // The padded path one step past the threshold: too few CTAs for any
+        // larger tile, so 64x64 with a 32-wide K step (`fp8_padded_tile`).
+        let padded = src.replace("513", "516");
+        let tokens = crate::lexer::Lexer::new(&padded).tokenize();
+        let ast = crate::parser::Parser::new(tokens).parse_program().unwrap();
+        let mut emitter = PtxEmitter::new_with_profile(&hw);
+        let ptx = emitter.emit_program(&ast, &hw);
+        assert!(
+            ptx.contains("CTA 64x64x32 (padded) | 2x2 warps") && ptx.contains("Launch grid required: (9, 9, 1) CTAs, block (128,1,1)"),
+            "M=N=516: {}", ptx
+        );
+    }
+
+    /// `fp8_padded_tile` at the sizes it was measured at, and at shapes
+    /// where one dimension decides: the largest tile that still gives about
+    /// two waves of CTAs on a 66-SM GPU.
+    #[test]
+    fn fp8_padded_tile_picks_the_measured_best() {
+        let name = |t: Fp8Tile| format!("{}x{}x{} {}x{}", t.cta_m, t.cta_n, t.cta_k, t.warps_m, t.warps_n);
+        for (m, n, want) in [
+            (256, 256, "64x64x64 2x4"),
+            (512, 512, "64x64x64 2x4"),
+            // 8 x 9 tiles of 64x64 is more than one wave.
+            (512, 576, "64x64x64 2x2"),
+            (8192, 512, "64x64x64 2x2"),
+            (513, 513, "64x64x32 2x2"),
+            (768, 768, "64x64x32 2x2"),
+            (1024, 1024, "128x128x64 4x2"),
+            (1536, 1536, "128x64x32 2x2"),
+            (2048, 2048, "256x128x32 4x2"),
+            (4096, 4096, "256x128x32 4x2"),
+            (8192, 8192, "256x128x32 4x2"),
+            // 16 x 5 tiles of 256x128 is too few; 32 x 10 of 128x64 is not.
+            (4096, 600, "128x64x32 2x2"),
+        ] {
+            assert_eq!(name(fp8_padded_tile(m, n)), want, "{m} x {n}");
+        }
+        // Every tile in the table can be staged.
+        for t in [FP8_TILE_256X128, FP8_TILE_128X64, FP8_TILE_128X128, FP8_TILE_64X64_K32, FP8_TILE_64X64, FP8_TILE_64X64_8W] {
+            let threads = t.warps_m * t.warps_n * 32;
+            assert_eq!(PtxEmitter::fp8_padded_geometry_error(threads, t.cta_m, t.cta_n, t.cta_k), None, "{t:?}");
+        }
+    }
+
+    /// A tile whose A quads or B blocks do not divide evenly among its
+    /// threads is refused by name. 256x128 with a 32-wide K step has 256
+    /// B blocks: on 16 warps an integer division gave each thread none,
+    /// and B went unstaged.
+    #[test]
+    fn an_fp8_tile_that_does_not_divide_is_refused() {
+        let e = |threads, m, n, k| PtxEmitter::fp8_padded_geometry_error(threads, m, n, k);
+        assert!(e(512, 256, 128, 32).is_some_and(|w| w.contains("256 B blocks do not divide among 512 threads")));
+        assert!(e(256, 64, 64, 32).is_some_and(|w| w.contains("B blocks")));
+        assert!(e(96, 64, 64, 64).is_some_and(|w| w.contains("A quads")));
+        assert!(e(256, 256, 128, 48).is_some_and(|w| w.contains("K step is 48")));
+        assert_eq!(e(256, 256, 128, 32), None);
     }
 
     /// Regression guard for session 4's software double-buffered

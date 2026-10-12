@@ -3,9 +3,10 @@
 Inputs are small integers times 2^-3, exact in e4m3, so every product and
 every float32 partial sum is exact and the kernel must equal `A @ B` bit for
 bit, whatever its tiling or order. C starts as NaN, so a tile no CTA writes
-fails too. The shapes cover both CTA tiers, ragged M and N edges, the
-`n % 4 != 0` path that keeps the unpadded layout, and grids that are not a
-whole number of launch groups (`FP8_GEMM_GROUP_M`, 8 M-tiles).
+fails too. The shapes cover every tile `fp8_padded_tile` picks, each with
+ragged M and N edges, the `n % 4 != 0` path that keeps the unpadded layout,
+and grids that are not a whole number of launch groups (`FP8_GEMM_GROUP_M`,
+8 M-tiles).
 
 Until 2026-10-12 nothing in the test suites ran this kernel on a GPU; the
 head-to-head benchmark's exactness check and tests/test_fp8_gemm_correctness.py
@@ -20,15 +21,20 @@ import torch
 from y_lang.torch_interop import TorchKernel
 
 SHAPES = [
-    (64, 64, 64),        # small tier, one CTA
-    (256, 256, 256),     # small tier, 4x4 grid
+    (64, 64, 64),        # 64x64, K step 64, 8 warps (M or N <= 512, one wave): one CTA
+    (256, 256, 256),     # the same tile, 4x4 grid
     (17, 12, 64),        # ragged M, N below one warp tile
     (33, 17, 64),        # N % 4 != 0: the unpadded path
-    (200, 136, 128),     # ragged, small tier
-    (1024, 1024, 1024),  # large tier, one full launch group
-    (1300, 520, 192),    # large tier, 11 M-tiles: a group of 8 and one of 3
-    (600, 1000, 128),    # 5 M-tiles, fewer than one group
-    (1030, 1026, 64),    # N % 4 != 0 on the large tier, grouped order
+    (200, 136, 128),     # ragged, 64x64
+    (512, 1100, 64),     # 64x64 on 4 warps: 144 CTAs, more than one wave; ragged N
+    (600, 700, 128),     # 64x64, K step 32: too few CTAs for larger tiles
+    (1300, 520, 192),    # 64x64, K step 32: 21 M-tiles, groups of 8, 8 and 5
+    (1024, 1024, 1024),  # 128x128, K step 64: one full launch group
+    (1000, 1000, 64),    # the same tile, ragged
+    (1300, 1500, 192),   # 128x64, K step 32: 11 M-tiles, a group of 8 and one of 3
+    (2100, 2052, 64),    # 256x128, K step 32: ragged both ways, 9 M-tiles
+    (300, 1000, 128),    # 64x64: 5 M-tiles, fewer than one group
+    (1030, 1026, 64),    # N % 4 != 0 on the large unpadded tier, grouped order
 ]
 
 
@@ -74,6 +80,7 @@ class Fp8GemmIsExact(unittest.TestCase):
         # exact only if the kernel quantizes A/scale_a and scales the result.
         self.run_shape(1024, 1024, 256, scale_a=2.0, scale_b=0.5)
         self.run_shape(200, 136, 128, scale_a=0.25, scale_b=4.0)
+        self.run_shape(2100, 2052, 128, scale_a=4.0, scale_b=0.25)
 
 
 if __name__ == "__main__":
