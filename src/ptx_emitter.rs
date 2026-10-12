@@ -118,52 +118,66 @@ pub struct Fp8Tile {
     pub warps_m: u32,
     pub warps_n: u32,
     pub cta_k: u32,
+    /// 0: the next K-tile is loaded into registers across the tensor-core
+    /// work. 2 or 3: raw f32 K-tiles are copied with `cp.async` into that
+    /// many shared stages, and converted to e4m3 one K-tile ahead
+    /// (`emit_fp8_k_loop_async`).
+    pub stages: u32,
 }
 
-/// The padded path's tiles (session 7, 2026-10-12), from a sweep of 20
-/// tiles against the head-to-head's Triton kernel on an RTX 4070 Ti SUPER
-/// (66 SMs), every one exact first (docs/benchmarks/fp8_gemm_2026-10-12/).
-/// Each warp of the 256x128 tile owns a 64x64 output tile: twice the
-/// tensor-core work per fragment load of a 32x64 one, and 25% less A and
-/// B traffic through L2 than 128x128 tiles, which at 4096^3 kept L2 at 80%
-/// of its throughput for both this kernel and Triton's.
-pub const FP8_TILE_256X128: Fp8Tile = Fp8Tile { cta_m: 256, cta_n: 128, warps_m: 4, warps_n: 2, cta_k: 32 };
-pub const FP8_TILE_128X64: Fp8Tile = Fp8Tile { cta_m: 128, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 32 };
-pub const FP8_TILE_128X128: Fp8Tile = Fp8Tile {
-    cta_m: FP8_GEMM_CTA_M_LARGE,
-    cta_n: FP8_GEMM_CTA_N_LARGE,
-    warps_m: FP8_GEMM_WARPS_M_LARGE,
-    warps_n: FP8_GEMM_WARPS_N_LARGE,
-    cta_k: FP8_GEMM_CTA_K,
-};
-pub const FP8_TILE_64X64_K32: Fp8Tile = Fp8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 32 };
+/// The padded path's tiles (session 7, 2026-10-12), chosen from sweeps of
+/// 26 tiles against the head-to-head's Triton kernel on an RTX 4070 Ti
+/// SUPER (66 SMs), every one exact first
+/// (docs/benchmarks/fp8_gemm_tiles_2026-10-12/ and fp8_gemm_async_2026-10-12/).
+/// The two with `stages: 2` copy raw f32 K-tiles with `cp.async`
+/// (`emit_fp8_k_loop_async`): at 1024^3 the register-prefetch kernel's warps
+/// waited 11.7 cycles per instruction on global loads to Triton's 1.0, and
+/// these keep two K-tiles in flight without holding them in registers.
+pub const FP8_TILE_128X128_ASYNC: Fp8Tile = Fp8Tile { cta_m: 128, cta_n: 128, warps_m: 4, warps_n: 2, cta_k: 32, stages: 2 };
+pub const FP8_TILE_64X64_ASYNC: Fp8Tile = Fp8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 32, stages: 2 };
+pub const FP8_TILE_64X64_K32: Fp8Tile = Fp8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 32, stages: 0 };
 pub const FP8_TILE_64X64: Fp8Tile = Fp8Tile {
     cta_m: FP8_GEMM_CTA_M_SMALL,
     cta_n: FP8_GEMM_CTA_N_SMALL,
     warps_m: FP8_GEMM_WARPS_M_SMALL,
     warps_n: FP8_GEMM_WARPS_N_SMALL,
     cta_k: FP8_GEMM_CTA_K,
+    stages: 0,
 };
-/// 64x64 on 8 warps (32x16 each): when the whole grid is one wave, every
-/// SM holds one CTA and has two warps per scheduler instead of one.
-pub const FP8_TILE_64X64_8W: Fp8Tile = Fp8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 4, cta_k: 64 };
 
-/// The padded path's tile for an `m x n` output: the largest tile that
-/// still gives the GPU about two waves of CTAs. The thresholds reproduce
-/// the measured best at every square size swept (256 to 8192): 64x64 with
-/// a 64-wide K step up to 512 (on 8 warps while the grid is one wave),
-/// 64x64 with 32 at 768, 128x128 at 1024, 128x64 at 1536, and 256x128 from
-/// 2048. They were measured on one 66-SM GPU; another may want others.
+/// The shape and shared layout `emit_fp8_k_loop_async` works on.
+struct Fp8AsyncGeometry {
+    m: u32,
+    n: u32,
+    k: u32,
+    threads: u32,
+    cta_m: u32,
+    cta_n: u32,
+    cta_k: u32,
+    row: u32,
+    stages: u32,
+    k_tiles: u32,
+    stage_a_bytes: u32,
+    stage_b_bytes: u32,
+    raw_a_bytes: u32,
+    raw_b_bytes: u32,
+}
+
+/// The padded path's tile for an `m x n` output. When M or N is at most
+/// 512: 64x64, copied with `cp.async` while the grid is one wave (at most
+/// 64 CTAs), else prefetched into registers (2-4% faster with 512 CTAs).
+/// Otherwise 128x128 copied with `cp.async` once there are 64 such tiles,
+/// and 64x64 with a 32-wide K step below that (768^3). Measured at 256 to
+/// 8192: the rule picks the fastest tile swept at every square size but
+/// 2048, where a 256x128 tile on eight 64x64 warp tiles (prefetched into
+/// registers; 25% less L2 traffic) was 4% faster. One 66-SM GPU; another
+/// may want other thresholds.
 pub fn fp8_padded_tile(m: u32, n: u32) -> Fp8Tile {
-    let ctas = |t: &Fp8Tile| m.div_ceil(t.cta_m) * n.div_ceil(t.cta_n);
+    let ctas = |cta_m: u32, cta_n: u32| m.div_ceil(cta_m) * n.div_ceil(cta_n);
     if m <= FP8_GEMM_SMALL_THRESHOLD || n <= FP8_GEMM_SMALL_THRESHOLD {
-        if ctas(&FP8_TILE_64X64) <= 64 { FP8_TILE_64X64_8W } else { FP8_TILE_64X64 }
-    } else if ctas(&FP8_TILE_256X128) >= 128 {
-        FP8_TILE_256X128
-    } else if ctas(&FP8_TILE_128X64) >= 256 {
-        FP8_TILE_128X64
-    } else if ctas(&FP8_TILE_128X128) >= 64 {
-        FP8_TILE_128X128
+        if ctas(64, 64) <= 64 { FP8_TILE_64X64_ASYNC } else { FP8_TILE_64X64 }
+    } else if ctas(128, 128) >= 64 {
+        FP8_TILE_128X128_ASYNC
     } else {
         FP8_TILE_64X64_K32
     }
@@ -9040,6 +9054,294 @@ declare it as a Q format.\n{}",
         }
     }
 
+    /// One K-tile of A, `cta_m x cta_k` f32, copied raw into `raw` with
+    /// 16-byte `cp.async`s: `cta_k/4` lanes per row, so each copy is
+    /// coalesced, and rows past M are zero-filled (source size 0). The same
+    /// thread converts what it copied (`emit_fp8_load_a_raw`), so A needs no
+    /// barrier between the two.
+    fn emit_fp8_cp_async_a(&mut self, g: &Fp8AsyncGeometry, raw: &str, a_g: &str, cta_row0: &str, k0: &str) {
+        let qpr = g.cta_k / 4;
+        let per_thread = g.cta_m * qpr / g.threads;
+        let rows_per_it = g.threads / qpr;
+        let full = g.m % g.cta_m == 0;
+        let tid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
+        let row0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", row0, tid, qpr.trailing_zeros()).unwrap();
+        let q = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", q, tid, qpr - 1).unwrap();
+        let grow0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", grow0, cta_row0, row0).unwrap();
+        let gcol = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 4, {};", gcol, q, k0).unwrap();
+        let lin = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, grow0, g.k, gcol).unwrap();
+        let byte = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 4;", byte, lin).unwrap();
+        let gaddr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gaddr, a_g, byte).unwrap();
+        let s_lin = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_lin, row0, g.cta_k * 4, raw).unwrap();
+        let saddr = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 16, {};", saddr, q, s_lin).unwrap();
+        for it in 0..per_thread {
+            let s_off = it * rows_per_it * g.cta_k * 4;
+            let g_off = it as u64 * rows_per_it as u64 * g.k as u64 * 4;
+            if full {
+                writeln!(&mut self.ptx_buffer, "    cp.async.cg.shared.global [{}+{}], [{}+{}], 16;", saddr, s_off, gaddr, g_off).unwrap();
+            } else {
+                let gr = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", gr, grow0, it * rows_per_it).unwrap();
+                let p = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, gr, g.m).unwrap();
+                let size = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    selp.u32 {}, 16, 0, {};", size, p).unwrap();
+                writeln!(&mut self.ptx_buffer, "    cp.async.cg.shared.global [{}+{}], [{}+{}], 16, {};", saddr, s_off, gaddr, g_off, size).unwrap();
+            }
+        }
+    }
+
+    /// The A quads `emit_fp8_cp_async_a` copied, read back by the same
+    /// thread for `emit_fp8_store_a_regs`: eight lanes read one row's 128
+    /// contiguous bytes, so the reads are conflict-free.
+    fn emit_fp8_load_a_raw(&mut self, g: &Fp8AsyncGeometry, raw: &str) -> Vec<Vec<String>> {
+        let qpr = g.cta_k / 4;
+        let per_thread = g.cta_m * qpr / g.threads;
+        let rows_per_it = g.threads / qpr;
+        let tid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
+        let row0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", row0, tid, qpr.trailing_zeros()).unwrap();
+        let q = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", q, tid, qpr - 1).unwrap();
+        let s_lin = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_lin, row0, g.cta_k * 4, raw).unwrap();
+        let saddr = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 16, {};", saddr, q, s_lin).unwrap();
+        (0..per_thread)
+            .map(|it| {
+                let f: Vec<String> = (0..4).map(|_| self.alloc_regf32()).collect();
+                writeln!(&mut self.ptx_buffer, "    ld.shared.v4.f32 {{{}}}, [{}+{}];", f.join(","), saddr, it * rows_per_it * g.cta_k * 4).unwrap();
+                f
+            })
+            .collect()
+    }
+
+    /// One K-tile of B, `cta_k x cta_n` f32, copied raw into `raw` with
+    /// 16-byte `cp.async`s, each warp copying consecutive 16-byte chunks of a
+    /// row (coalesced); columns past N are zero-filled. Chunk `c` of row `r`
+    /// is stored at chunk `c ^ ((r >> 2) & 7)`: the conversion reads it with
+    /// the transposed stores' lane order (`emit_fp8_b_stage_lane`), eight
+    /// lanes on eight rows 4 apart, which this XOR puts in eight different
+    /// bank groups. Different threads copy and convert, so a barrier
+    /// separates them.
+    fn emit_fp8_cp_async_b(&mut self, g: &Fp8AsyncGeometry, raw: &str, b_g: &str, k0: &str, cta_col0: &str) {
+        let cpr = g.cta_n / 4;
+        let per_thread = g.cta_k * cpr / g.threads;
+        let rows_per_it = g.threads / cpr;
+        let full = g.n % g.cta_n == 0;
+        let tid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
+        let r0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", r0, tid, cpr.trailing_zeros()).unwrap();
+        let c = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", c, tid, cpr - 1).unwrap();
+        let gcol = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 4, {};", gcol, c, cta_col0).unwrap();
+        let grow = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", grow, k0, r0).unwrap();
+        let lin = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, grow, g.n, gcol).unwrap();
+        let byte = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 4;", byte, lin).unwrap();
+        let gaddr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gaddr, b_g, byte).unwrap();
+        let size = if full {
+            None
+        } else {
+            let p = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, gcol, g.n).unwrap();
+            let size = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    selp.u32 {}, 16, 0, {};", size, p).unwrap();
+            Some(size)
+        };
+        for it in 0..per_thread {
+            // row = r0 + it*rows_per_it; physical chunk = c ^ ((row >> 2) & 7)
+            let row = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row, r0, it * rows_per_it).unwrap();
+            let sw = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    bfe.u32 {}, {}, 2, 3;", sw, row).unwrap();
+            let pc = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    xor.b32 {}, {}, {};", pc, c, sw).unwrap();
+            let s_lin = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_lin, row, g.cta_n * 4, raw).unwrap();
+            let saddr = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 16, {};", saddr, pc, s_lin).unwrap();
+            let g_off = it as u64 * rows_per_it as u64 * g.n as u64 * 4;
+            match &size {
+                None => writeln!(&mut self.ptx_buffer, "    cp.async.cg.shared.global [{}], [{}+{}], 16;", saddr, gaddr, g_off).unwrap(),
+                Some(sz) => writeln!(&mut self.ptx_buffer, "    cp.async.cg.shared.global [{}], [{}+{}], 16, {};", saddr, gaddr, g_off, sz).unwrap(),
+            }
+        }
+    }
+
+    /// B's 4(k) x 4(n) blocks from the swizzled raw tile, in the lane order
+    /// of `emit_fp8_load_b_regs` (row-major 4x4 per block), for
+    /// `emit_fp8_store_b_transposed`.
+    fn emit_fp8_load_b_raw(&mut self, g: &Fp8AsyncGeometry, raw: &str) -> Vec<Vec<String>> {
+        let (per_thread, cols_per_it) = Self::fp8_b_blocks(g.threads, g.cta_n, g.cta_k);
+        let (kq4, col_local0) = self.emit_fp8_b_stage_lane(g.cta_k);
+        let kq = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 2;", kq, kq4).unwrap();
+        let sw = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 7;", sw, kq).unwrap();
+        let nb0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 2;", nb0, col_local0).unwrap();
+        let mut out = Vec::new();
+        for it in 0..per_thread {
+            let nb = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", nb, nb0, it * cols_per_it / 4).unwrap();
+            let pc = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    xor.b32 {}, {}, {};", pc, nb, sw).unwrap();
+            let col_b = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 16, {};", col_b, pc, raw).unwrap();
+            let base = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", base, kq4, g.cta_n * 4, col_b).unwrap();
+            let v: Vec<String> = (0..16).map(|_| self.alloc_regf32()).collect();
+            for r in 0..4u32 {
+                let rr = (r * 4) as usize;
+                writeln!(&mut self.ptx_buffer, "    ld.shared.v4.f32 {{{}}}, [{}+{}];", v[rr..rr + 4].join(","), base, r * g.cta_n * 4).unwrap();
+            }
+            out.push(v);
+        }
+        out
+    }
+
+    /// The padded path's K loop with raw f32 K-tiles copied by `cp.async`
+    /// (`Fp8Tile::stages` > 0). At iteration k the raw stages hold tiles
+    /// k+1 .. k+stages-1, in flight or landed; the loop copies tile
+    /// k+stages into the stage tile k left, multiplies tile k from its e4m3
+    /// stage, waits for tile k+1, and converts it into the other e4m3 stage
+    /// between two barriers (B is converted by other threads than copied
+    /// it, and the next multiply reads every warp's conversion). Every
+    /// iteration commits one copy group, empty past the last tile, so
+    /// `wait_group stages-1` always means "tile k+1 has landed". The global
+    /// loads never wait in a register: `stages` tiles are in flight during
+    /// each multiply.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_fp8_k_loop_async(
+        &mut self,
+        g: &Fp8AsyncGeometry,
+        acc: &[Vec<Vec<String>>],
+        a_g: &str,
+        b_g: &str,
+        cta_row0: &str,
+        cta_col0: &str,
+        smem_a: &str,
+        smem_b: &str,
+        raw_a: &str,
+        raw_b: &str,
+        inv_scale_a: &str,
+        inv_scale_b: &str,
+        ldsm: &(String, String),
+        num_i: u32,
+        num_j: u32,
+        k_substeps: u32,
+        kernel_name: &str,
+    ) {
+        let (a_lane_off, b_lane_off) = ldsm;
+        // Prologue: tiles 0 .. stages-1 into raw stages 0 .. stages-1.
+        for t in 0..g.stages {
+            if t < g.k_tiles {
+                let k0 = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", k0, t * g.cta_k).unwrap();
+                let ra = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", ra, raw_a, t * g.raw_a_bytes).unwrap();
+                let rb = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", rb, raw_b, t * g.raw_b_bytes).unwrap();
+                self.emit_fp8_cp_async_a(g, &ra, a_g, cta_row0, &k0);
+                self.emit_fp8_cp_async_b(g, &rb, b_g, &k0, cta_col0);
+            }
+            writeln!(&mut self.ptx_buffer, "    cp.async.commit_group;").unwrap();
+        }
+        // Tile 0 into e4m3 stage 0.
+        writeln!(&mut self.ptx_buffer, "    cp.async.wait_group {};", g.stages - 1).unwrap();
+        writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+        let qa = self.emit_fp8_load_a_raw(g, raw_a);
+        let qb = self.emit_fp8_load_b_raw(g, raw_b);
+        self.emit_fp8_store_a_regs(&qa, smem_a, inv_scale_a, g.threads, g.cta_k, g.row, None);
+        self.emit_fp8_store_b_transposed(&qb, smem_b, inv_scale_b, g.threads, g.cta_n, g.cta_k, g.row, None);
+        writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+
+        let k_iter = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", k_iter).unwrap();
+        let loop_start = self.alloc_label(&format!("FP8_GEMM_KA_{}", kernel_name));
+        let loop_end = self.alloc_label(&format!("FP8_GEMM_KA_DONE_{}", kernel_name));
+        writeln!(&mut self.ptx_buffer, "    {}:", loop_start).unwrap();
+        let p_exit = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p_exit, k_iter, g.k_tiles).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} bra {};", p_exit, loop_end).unwrap();
+
+        // Copy tile k+stages into the raw stage tile k used (k % stages).
+        let issue = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", issue, k_iter, g.stages).unwrap();
+        let p_issue = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_issue, issue, g.k_tiles).unwrap();
+        let raw_slot = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", raw_slot, k_iter, g.stages).unwrap();
+        let skip_issue = self.alloc_label(&format!("FP8_GEMM_KA_NOCOPY_{}", kernel_name));
+        writeln!(&mut self.ptx_buffer, "    @!{} bra.uni {};", p_issue, skip_issue).unwrap();
+        {
+            let k0 = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0, issue, g.cta_k).unwrap();
+            let ra = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", ra, raw_slot, g.raw_a_bytes, raw_a).unwrap();
+            let rb = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", rb, raw_slot, g.raw_b_bytes, raw_b).unwrap();
+            self.emit_fp8_cp_async_a(g, &ra, a_g, cta_row0, &k0);
+            self.emit_fp8_cp_async_b(g, &rb, b_g, &k0, cta_col0);
+        }
+        writeln!(&mut self.ptx_buffer, "    {}:", skip_issue).unwrap();
+        writeln!(&mut self.ptx_buffer, "    cp.async.commit_group;").unwrap();
+
+        // Multiply tile k from e4m3 stage k % 2.
+        let read = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 1;", read, k_iter).unwrap();
+        let read_a = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", read_a, read, g.stage_a_bytes, smem_a).unwrap();
+        let read_b = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", read_b, read, g.stage_b_bytes, smem_b).unwrap();
+        self.emit_fp8_gemm_compute_block_padded(acc, &read_a, &read_b, a_lane_off, b_lane_off, num_i, num_j, k_substeps, g.row);
+
+        // Tile k+1: wait for it, then convert it into the other e4m3 stage.
+        writeln!(&mut self.ptx_buffer, "    cp.async.wait_group {};", g.stages - 1).unwrap();
+        writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+        let next = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", next, k_iter).unwrap();
+        let p_next = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_next, next, g.k_tiles).unwrap();
+        let conv_slot = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", conv_slot, next, g.stages).unwrap();
+        let ra = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", ra, conv_slot, g.raw_a_bytes, raw_a).unwrap();
+        let rb = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", rb, conv_slot, g.raw_b_bytes, raw_b).unwrap();
+        let write = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    xor.b32 {}, {}, 1;", write, read).unwrap();
+        let write_a = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", write_a, write, g.stage_a_bytes, smem_a).unwrap();
+        let write_b = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", write_b, write, g.stage_b_bytes, smem_b).unwrap();
+        let qa = self.emit_fp8_load_a_raw(g, &ra);
+        let qb = self.emit_fp8_load_b_raw(g, &rb);
+        self.emit_fp8_store_a_regs(&qa, &write_a, inv_scale_a, g.threads, g.cta_k, g.row, Some(&p_next));
+        self.emit_fp8_store_b_transposed(&qb, &write_b, inv_scale_b, g.threads, g.cta_n, g.cta_k, g.row, Some(&p_next));
+        writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
+        writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
+        writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
+    }
+
     /// Each lane's byte offsets for the padded path's `ldmatrix.x4` loads,
     /// computed once. An 8-bit m16n8k32 fragment register holds 4
     /// consecutive k bytes of one row - two of `ldmatrix`'s b16 elements -
@@ -9326,6 +9628,26 @@ declare it as a Q format.\n{}",
     /// (`fp8_padded_geometry_error`): an integer division once left B
     /// unstaged on 16 warps.
     ///
+    /// **Raw stages copied with `cp.async` (session 7, later the same day)**:
+    /// at 1024^3 the register-prefetch kernel was 1.26x Triton's time, and
+    /// sampled per instruction a quarter of its stalls sat on one `FMUL`
+    /// converting a value loaded a whole K-tile earlier: its warps waited
+    /// 11.7 cycles per instruction on global loads to Triton's 1.0. Only as
+    /// many K-tiles as its registers hold can be in flight, B's loads touch
+    /// 8 half-used lines each, and Triton's kernel issues no `ld.global` at
+    /// all. With `Fp8Tile::stages` 2 (`emit_fp8_k_loop_async`) raw f32
+    /// K-tiles are copied into shared memory with coalesced `cp.async`s and
+    /// converted to e4m3 one K-tile ahead of the tensor cores, two K-tiles in
+    /// flight during each multiply and none held in registers (117
+    /// registers at 128x128, from 143). B's raw rows are XOR-swizzled by
+    /// 16-byte chunk so that the conversion reads them in the transposed
+    /// stores' lane order without bank conflicts. The layout needs up to 90
+    /// KB of dynamic shared memory, which the PTX states for the launcher.
+    /// Against the previous tiles: 1.10-1.19x faster at 1024, 1536 and 2560,
+    /// 6-7% at 256-512, 2% at 3072-8192, and 3% slower at 2048, where the
+    /// dropped 256x128 tile was better (docs/benchmarks/fp8_gemm_async_2026-10-12/);
+    /// 256x128 tiles cannot take it (132 KB).
+    ///
     /// Deliberate, disclosed scope choices remaining after this pass (see
     /// benchmark_y_tensor_core_gemm_results.md for how the f16 GEMM
     /// kernel's OWN history went from correctness-first to optimized over
@@ -9396,13 +9718,14 @@ declare it as a Q format.\n{}",
             (FP8_GEMM_CTA_M_LARGE, FP8_GEMM_CTA_N_LARGE, FP8_GEMM_WARPS_M_LARGE, FP8_GEMM_WARPS_N_LARGE)
         };
         let mut cta_k = FP8_GEMM_CTA_K;
+        let mut stages = 0;
         // The padded, B-transposed, register-prefetched path needs B's rows
         // 16-byte aligned for `ld.global.v4.f32`; other N take the session-5
         // path (see doc comment).
         let padded = n % 4 == 0;
         if padded {
             let t = fp8_padded_tile(m, n);
-            (cta_m, cta_n, warps_m, warps_n, cta_k) = (t.cta_m, t.cta_n, t.warps_m, t.warps_n, t.cta_k);
+            (cta_m, cta_n, warps_m, warps_n, cta_k, stages) = (t.cta_m, t.cta_n, t.warps_m, t.warps_n, t.cta_k, t.stages);
         }
         // The padded path's shared row: the K step plus 16 bytes, so each
         // 8-row `ldmatrix` matrix falls in distinct banks.
@@ -9459,8 +9782,20 @@ declare it as a Q format.\n{}",
         let stage_a_bytes = if padded { cta_m * row } else { cta_m * cta_k };
         let stage_b_bytes = if padded { cta_n * row } else { cta_k * cta_n };
         let smem_align = if padded { 16 } else { 4 };
-        writeln!(&mut self.ptx_buffer, "    .shared .align {} .b8 {}[{}];", smem_align, smem_a_sym, 2 * stage_a_bytes).unwrap();
-        writeln!(&mut self.ptx_buffer, "    .shared .align {} .b8 {}[{}];", smem_align, smem_b_sym, 2 * stage_b_bytes).unwrap();
+        // The cp.async variant keeps the e4m3 tiles' two stages, then
+        // `stages` raw f32 A tiles, then as many B tiles, in one dynamic
+        // array: past ptxas's 48 KB static cap at 128x128.
+        let raw_a_bytes = cta_m * cta_k * 4;
+        let raw_b_bytes = cta_k * cta_n * 4;
+        let async_smem_bytes = 2 * (stage_a_bytes + stage_b_bytes) + stages * (raw_a_bytes + raw_b_bytes);
+        let async_sym = format!("smem_fp8_dyn_{}", kernel_name);
+        if stages > 0 {
+            self.pending_extern_decls.push(format!(".extern .shared .align 16 .b8 {}[];", async_sym));
+            writeln!(&mut self.ptx_buffer, "    // {} cp.async stages of raw f32 K-tiles. Dynamic shared memory required: {} bytes.", stages, async_smem_bytes).unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    .shared .align {} .b8 {}[{}];", smem_align, smem_a_sym, 2 * stage_a_bytes).unwrap();
+            writeln!(&mut self.ptx_buffer, "    .shared .align {} .b8 {}[{}];", smem_align, smem_b_sym, 2 * stage_b_bytes).unwrap();
+        }
 
         let a_g = self.alloc_reg64();
         writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", a_g, a_ptr).unwrap();
@@ -9470,9 +9805,14 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", c_g, c_ptr).unwrap();
 
         let smem_a = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", smem_a, smem_a_sym).unwrap();
         let smem_b = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", smem_b, smem_b_sym).unwrap();
+        if stages > 0 {
+            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", smem_a, async_sym).unwrap();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", smem_b, smem_a, 2 * stage_a_bytes).unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", smem_a, smem_a_sym).unwrap();
+            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", smem_b, smem_b_sym).unwrap();
+        }
 
         // ---- CTA tile origin ----
         let ctaid_x = self.alloc_reg32();
@@ -9604,6 +9944,28 @@ declare it as a Q format.\n{}",
         // arrays is `buf_index * stage_bytes`.
         let k0_zero = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", k0_zero).unwrap();
+        if padded && stages > 0 {
+            let cpr = cta_n / 4;
+            if !(stages == 2 || stages == 3) || threads_per_cta % cpr != 0 && cpr % threads_per_cta != 0 || (cta_k * cpr) % threads_per_cta != 0 {
+                self.emit_errors.push(format!(
+                    "FP8 tensor-core GEMM: the {cta_m}x{cta_n}x{cta_k} tile cannot copy its raw B rows with {stages} cp.async stages on {threads_per_cta} threads"
+                ));
+                return 0;
+            }
+            let raw_a = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", raw_a, smem_a, 2 * (stage_a_bytes + stage_b_bytes)).unwrap();
+            let raw_b = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", raw_b, raw_a, stages * raw_a_bytes).unwrap();
+            let geo = Fp8AsyncGeometry {
+                m, n, k, threads: threads_per_cta, cta_m, cta_n, cta_k, row, stages, k_tiles,
+                stage_a_bytes, stage_b_bytes, raw_a_bytes, raw_b_bytes,
+            };
+            self.emit_fp8_k_loop_async(
+                &geo, &acc, &a_g, &b_g, &cta_row0, &cta_col0, &smem_a, &smem_b, &raw_a, &raw_b,
+                &inv_scale_a, &inv_scale_b, ldsm_offsets.as_ref().expect("computed for the padded path"),
+                num_i, num_j, k_substeps, kernel_name,
+            );
+        } else {
         if padded {
             let qa = self.emit_fp8_load_a_regs(&a_g, &cta_row0, &k0_zero, m, k, threads_per_cta, cta_m, cta_k, None);
             let qb = self.emit_fp8_load_b_regs(&b_g, &k0_zero, &cta_col0, n, threads_per_cta, cta_n, cta_k, None);
@@ -9692,6 +10054,7 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
         writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
         writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
+        }
 
         // ---- epilogue: dequant scale + boundary-masked per-element store,
         // over every warp's (i, j) accumulator fragments ----
@@ -14393,26 +14756,22 @@ mod tests {
         assert!(ptx.contains(".version 8.4"), "sm_89 FP8 mma.sync needs PTX ISA >=8.4 (see ptx_version_for_sm): {}", ptx);
         assert!(ptx.contains("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32"), "missing the Ada-compatible FP8 mma instruction: {}", ptx);
         assert!(ptx.contains("cvt.rn.satfinite.e4m3x2.f32"), "missing the fused on-the-fly quantization instruction: {}", ptx);
-        // M=N=256 selects the SMALL tier (m <= FP8_GEMM_SMALL_THRESHOLD) -
-        // see test_fp8_gemm_kernel_multiwarp_cta_tiling (LARGE tier,
-        // M=N=1024) and test_fp8_gemm_kernel_small_tile_selection (this
-        // same SMALL-tier shape, checked in more detail) below. Sizes are
-        // DOUBLE-buffered (session 4's software pipelining) with padded
-        // rows (session 6) - 2x FP8_GEMM_CTA_M_SMALL*(cta_k + 16) =
-        // 2*64*80 = 10240.
-        assert!(ptx.contains(".shared .align 16 .b8 smem_fp8_A_gemm_fp8_256[10240]"), "missing double-buffered A smem tile declaration: {}", ptx);
-        assert!(ptx.contains(".shared .align 16 .b8 smem_fp8_B_gemm_fp8_256[10240]"), "missing double-buffered B smem tile declaration: {}", ptx);
+        // M=N=256 selects the 64x64 tile copied with cp.async
+        // (`fp8_padded_tile`; checked in more detail by
+        // test_fp8_gemm_kernel_small_tile_selection and
+        // test_fp8_gemm_kernel_async_copies_raw_tiles).
         // B is stored transposed, so no fragment register is gathered a
         // byte at a time (session 6: those gathers and their bank
         // conflicts made the kernel 2.4x slower than Triton's).
-        assert!(!ptx.contains("ld.shared.u8"), "B fragments must be one ld.shared.b32 each, not byte gathers: {}", ptx);
+        assert!(!ptx.contains("ld.shared.u8"), "B fragments must not be byte gathers: {}", ptx);
         // Every fragment register comes from `ldmatrix.x4`: an 8-bit
         // fragment register is two of its b16 elements (see
         // `emit_fp8_ldmatrix_lane_offsets`). Per K-tile of the 64x64 tile on
-        // 2x4 warps (32x16 warp tiles, two k32 steps): 2 A tiles + 1 pair
-        // of B tiles per step, so 6, and no fragment is loaded any other way.
-        assert_eq!(ptx.matches("ldmatrix.sync.aligned.m8n8.x4.shared.b16").count(), 6, "one ldmatrix.x4 per A m16 tile and per pair of B n8 tiles per k32 step: {}", ptx);
-        assert!(!ptx.contains("ld.shared"), "a fragment loaded without ldmatrix: {}", ptx);
+        // 2x2 warps (32x32 warp tiles, one k32 step): 2 A tiles + 2 pairs of
+        // B tiles, so 4. The only other shared loads read the raw f32 tiles
+        // back for conversion, 128 bits at a time.
+        assert_eq!(ptx.matches("ldmatrix.sync.aligned.m8n8.x4.shared.b16").count(), 4, "one ldmatrix.x4 per A m16 tile and per pair of B n8 tiles per k32 step: {}", ptx);
+        assert_eq!(ptx.matches("ld.shared").count(), ptx.matches("ld.shared.v4.f32").count(), "a fragment loaded without ldmatrix: {}", ptx);
     }
 
     /// Regression guard for the multi-warp CTA tiling rewrite's LARGE tier
@@ -14454,8 +14813,8 @@ mod tests {
         let ptx = emitter.emit_program(&ast, &hw);
 
         assert!(
-            ptx.contains("CTA 128x128x64 (padded) | 4x2 warps"),
-            "launch-geometry comment must advertise the LARGE multi-warp CTA shape at M=N=1024: {}", ptx
+            ptx.contains("CTA 128x128x32 (padded) | 4x2 warps"),
+            "launch-geometry comment must advertise the 128x128 tile (cp.async, fp8_padded_tile) at M=N=1024: {}", ptx
         );
         assert!(
             ptx.contains("Launch grid required: (8, 8, 1) CTAs, block (256,1,1)"),
@@ -14472,8 +14831,8 @@ mod tests {
 
         let mma_count = ptx.matches("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32").count();
         assert_eq!(
-            mma_count, 32,
-            "expected num_i(2)*num_j(8)*k_substeps(2) = 32 static mma.sync.m16n8k32 occurrences (Rust-side i/j/k_substep loops are unrolled at codegen time - only the @tile K-tile loop is a real PTX runtime loop), got {}: {}",
+            mma_count, 16,
+            "expected num_i(2)*num_j(8)*k_substeps(1) = 16 static mma.sync.m16n8k32 occurrences (Rust-side i/j/k_substep loops are unrolled at codegen time - only the @tile K-tile loop is a real PTX runtime loop), got {}: {}",
             mma_count, ptx
         );
 
@@ -14509,30 +14868,26 @@ mod tests {
         let mut emitter = PtxEmitter::new_with_profile(&hw);
         let ptx = emitter.emit_program(&ast, &hw);
 
-        // 16 CTAs, one wave: the 64x64 tile on 8 warps (`fp8_padded_tile`).
+        // 16 CTAs, one wave: the 64x64 tile copied with cp.async (`fp8_padded_tile`).
         assert!(
-            ptx.contains("CTA 64x64x64 (padded) | 2x4 warps"),
-            "launch-geometry comment must advertise the 64x64 tile on 2x4 warps at M=N=256: {}", ptx
+            ptx.contains("CTA 64x64x32 (padded) | 2x2 warps"),
+            "launch-geometry comment must advertise the 64x64 tile on 2x2 warps at M=N=256: {}", ptx
         );
         assert!(
-            ptx.contains("Launch grid required: (4, 4, 1) CTAs, block (256,1,1)"),
-            "at M=N=256 with a 64x64 CTA tile the grid must be (4,4,1), block (256,1,1) - a real, disclosed improvement over the LARGE tier's (2,2,1) at this size: {}", ptx
+            ptx.contains("Launch grid required: (4, 4, 1) CTAs, block (128,1,1)"),
+            "at M=N=256 with a 64x64 CTA tile the grid must be (4,4,1), block (128,1,1) - a real, disclosed improvement over the LARGE tier's (2,2,1) at this size: {}", ptx
         );
-        assert!(
-            ptx.contains(".shared .align 16 .b8 smem_fp8_A_gemm_fp8_256[10240]"),
-            "SMALL tier A smem tile must be double-buffered (session 4) with padded rows (session 6): 2*FP8_GEMM_CTA_M_SMALL*(cta_k + 16) = 2*64*80 = 10240: {}", ptx
-        );
-        assert!(
-            ptx.contains(".shared .align 16 .b8 smem_fp8_B_gemm_fp8_256[10240]"),
-            "SMALL tier B smem tile, stored [n][k], must be double-buffered with padded rows: 2*FP8_GEMM_CTA_N_SMALL*(cta_k + 16) = 2*64*80 = 10240: {}", ptx
-        );
+        // Two e4m3 stages of 64 rows of 48 bytes for A and for B, and two raw
+        // f32 stages of 64x32 A and 32x64 B: 2*(3072+3072) + 2*(8192+8192).
+        assert!(ptx.contains(".extern .shared .align 16 .b8 smem_fp8_dyn_gemm_fp8_256[];"), "{}", ptx);
+        assert!(ptx.contains("Dynamic shared memory required: 45056 bytes."), "{}", ptx);
 
-        // 32x16 warp tiles: num_i=2, num_j=2, k_substeps=2 -> 8 static mma
+        // 32x32 warp tiles: num_i=2, num_j=4, k_substeps=1 -> 8 static mma
         // occurrences.
         let mma_count = ptx.matches("mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32").count();
         assert_eq!(
             mma_count, 8,
-            "expected num_i(2)*num_j(2)*k_substeps(2) = 8 static mma.sync.m16n8k32 occurrences, got {}: {}",
+            "expected num_i(2)*num_j(4)*k_substeps(1) = 8 static mma.sync.m16n8k32 occurrences, got {}: {}",
             mma_count, ptx
         );
     }
@@ -14593,27 +14948,28 @@ mod tests {
     /// two waves of CTAs on a 66-SM GPU.
     #[test]
     fn fp8_padded_tile_picks_the_measured_best() {
-        let name = |t: Fp8Tile| format!("{}x{}x{} {}x{}", t.cta_m, t.cta_n, t.cta_k, t.warps_m, t.warps_n);
+        let name = |t: Fp8Tile| format!("{}x{}x{} {}x{} s{}", t.cta_m, t.cta_n, t.cta_k, t.warps_m, t.warps_n, t.stages);
         for (m, n, want) in [
-            (256, 256, "64x64x64 2x4"),
-            (512, 512, "64x64x64 2x4"),
+            (256, 256, "64x64x32 2x2 s2"),
+            (512, 512, "64x64x32 2x2 s2"),
             // 8 x 9 tiles of 64x64 is more than one wave.
-            (512, 576, "64x64x64 2x2"),
-            (8192, 512, "64x64x64 2x2"),
-            (513, 513, "64x64x32 2x2"),
-            (768, 768, "64x64x32 2x2"),
-            (1024, 1024, "128x128x64 4x2"),
-            (1536, 1536, "128x64x32 2x2"),
-            (2048, 2048, "256x128x32 4x2"),
-            (4096, 4096, "256x128x32 4x2"),
-            (8192, 8192, "256x128x32 4x2"),
-            // 16 x 5 tiles of 256x128 is too few; 32 x 10 of 128x64 is not.
-            (4096, 600, "128x64x32 2x2"),
+            (512, 576, "64x64x64 2x2 s0"),
+            (8192, 512, "64x64x64 2x2 s0"),
+            (513, 513, "64x64x32 2x2 s0"),
+            (768, 768, "64x64x32 2x2 s0"),
+            (1024, 1024, "128x128x32 4x2 s2"),
+            (1536, 1536, "128x128x32 4x2 s2"),
+            (4096, 4096, "128x128x32 4x2 s2"),
+            (8192, 8192, "128x128x32 4x2 s2"),
+            // 7 x 7 tiles of 128x128 is too few; 900 x 900 is 8 x 8 of them.
+            (896, 896, "64x64x32 2x2 s0"),
+            (900, 900, "128x128x32 4x2 s2"),
+            (4096, 600, "128x128x32 4x2 s2"),
         ] {
             assert_eq!(name(fp8_padded_tile(m, n)), want, "{m} x {n}");
         }
         // Every tile in the table can be staged.
-        for t in [FP8_TILE_256X128, FP8_TILE_128X64, FP8_TILE_128X128, FP8_TILE_64X64_K32, FP8_TILE_64X64, FP8_TILE_64X64_8W] {
+        for t in [FP8_TILE_128X128_ASYNC, FP8_TILE_64X64_ASYNC, FP8_TILE_64X64_K32, FP8_TILE_64X64] {
             let threads = t.warps_m * t.warps_n * 32;
             assert_eq!(PtxEmitter::fp8_padded_geometry_error(threads, t.cta_m, t.cta_n, t.cta_k), None, "{t:?}");
         }
@@ -14633,6 +14989,51 @@ mod tests {
         assert_eq!(e(256, 256, 128, 32), None);
     }
 
+    /// The cp.async variant (`Fp8Tile::stages` 2, `emit_fp8_k_loop_async`) at
+    /// 1024x1024x256, eight K-tiles of the 128x128 tile: every global read
+    /// is a `cp.async` into one dynamic shared array whose size the PTX
+    /// states for the launcher; each loop iteration copies tile k+2 before
+    /// the tensor-core work and waits for tile k+1 after it, then converts
+    /// it between two barriers.
+    #[test]
+    fn test_fp8_gemm_kernel_async_copies_raw_tiles() {
+        let src = r#"
+        @tile(1024, 1024, 256)
+        kernel gemm_fp8_async(A: GlobalMemory<F32>, B: GlobalMemory<F32>, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>) {
+        }
+        "#;
+        let tokens = crate::lexer::Lexer::new(src).tokenize();
+        let ast = crate::parser::Parser::new(tokens).parse_program().unwrap();
+        let mut hw = crate::sentinel::HardwareProfile::default();
+        hw.sm_version = "sm_89".to_string();
+        let mut emitter = PtxEmitter::new_with_profile(&hw);
+        let ptx = emitter.emit_program(&ast, &hw);
+        assert!(emitter.emit_errors.is_empty(), "{:?}", emitter.emit_errors);
+
+        // 2 e4m3 stages of (128 + 128) rows of 48 bytes, 2 raw stages of
+        // 128x32 + 32x128 f32.
+        assert!(ptx.contains(".extern .shared .align 16 .b8 smem_fp8_dyn_gemm_fp8_async[];"), "{}", ptx);
+        assert!(ptx.contains("Dynamic shared memory required: 90112 bytes."), "{}", ptx);
+        assert!(!ptx.contains(".shared .align 16 .b8 smem_fp8_A"), "no static tile beside the dynamic one: {}", ptx);
+        assert!(!ptx.contains("ld.global"), "every global read is a cp.async: {}", ptx);
+        // Per thread and K-tile, 4 A and 4 B copies; the prologue copies
+        // two K-tiles, the loop body one.
+        assert_eq!(ptx.matches("cp.async.cg.shared.global").count(), 24, "{}", ptx);
+        assert_eq!(ptx.matches("cp.async.commit_group;").count(), 3, "{}", ptx);
+        assert_eq!(ptx.matches("cp.async.wait_group 1;").count(), 2, "{}", ptx);
+        assert_eq!(ptx.matches("bar.sync 0;").count(), 4, "two in the prologue, two a K-tile: {}", ptx);
+
+        let body = &ptx[ptx.find("FP8_GEMM_KA_gemm_fp8_async").expect("K loop")..];
+        let first_copy = body.find("cp.async.cg").unwrap();
+        let first_mma = body.find("mma.sync").unwrap();
+        let last_mma = body.rfind("mma.sync").unwrap();
+        let wait = body.find("cp.async.wait_group").unwrap();
+        let first_store = body.find("st.shared").unwrap();
+        assert!(first_copy < first_mma, "tile k+2 is copied before the tensor-core work: {}", body);
+        assert!(wait > last_mma, "tile k+1 is waited for after it: {}", body);
+        assert!(first_store > wait, "and converted after the wait: {}", body);
+    }
+
     /// Regression guard for session 4's software double-buffered
     /// pipelining (see `emit_fp8_gemm_kernel`'s doc comment, "Software
     /// double-buffered pipelining" section, and
@@ -14645,7 +15046,7 @@ mod tests {
     #[test]
     fn test_fp8_gemm_kernel_pipelined_double_buffering() {
         let src = r#"
-        @tile(1024, 1024, 256)
+        @tile(768, 768, 256)
         kernel gemm_fp8_pipe(A: GlobalMemory<F32>, B: GlobalMemory<F32>, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>) {
         }
         "#;
@@ -14660,14 +15061,16 @@ mod tests {
         let mut emitter = PtxEmitter::new_with_profile(&hw);
         let ptx = emitter.emit_program(&ast, &hw);
 
-        // Double-buffered with padded rows: 2 * (128*80) = 20480 each for A
-        // and for B (LARGE tier) - not the single-buffered 10240.
+        // 768^3 keeps the register-prefetch path (64x64 with a 32-wide K
+        // step, `fp8_padded_tile`). Double-buffered with padded rows:
+        // 2 * (64*48) = 6144 each for A and for B.
+        assert!(ptx.contains("CTA 64x64x32 (padded) | 2x2 warps"), "{}", ptx);
         assert!(
-            ptx.contains(".shared .align 16 .b8 smem_fp8_A_gemm_fp8_pipe[20480]"),
+            ptx.contains(".shared .align 16 .b8 smem_fp8_A_gemm_fp8_pipe[6144]"),
             "A smem must be double-buffered (2x single-stage bytes): {}", ptx
         );
         assert!(
-            ptx.contains(".shared .align 16 .b8 smem_fp8_B_gemm_fp8_pipe[20480]"),
+            ptx.contains(".shared .align 16 .b8 smem_fp8_B_gemm_fp8_pipe[6144]"),
             "B smem must be double-buffered (2x single-stage bytes): {}", ptx
         );
 
@@ -14688,24 +15091,23 @@ mod tests {
         );
 
         // The prefetch-suppression predicate: exactly one setp.lt.u32
-        // comparing against the compile-time k_tiles literal (4) - confirms
+        // comparing against the compile-time k_tiles literal (8) - confirms
         // the last-iteration skip logic is present, not just assumed from
         // the Python validator.
-        let next_valid_setp_count = ptx.lines().filter(|l| l.trim_start().starts_with("setp.lt.u32") && l.trim_end().ends_with(", 4;")).count();
+        let next_valid_setp_count = ptx.lines().filter(|l| l.trim_start().starts_with("setp.lt.u32") && l.trim_end().ends_with(", 8;")).count();
         assert_eq!(
             next_valid_setp_count, 1,
-            "expected exactly one `next_k_iter < k_tiles(4)` predicate computation, got {}: {}",
+            "expected exactly one `next_k_iter < k_tiles(8)` predicate computation, got {}: {}",
             next_valid_setp_count, ptx
         );
 
-        // and.pred count: 64 from the epilogue (num_i(2)*num_j(8)*4 = 64,
-        // see test_fp8_gemm_kernel_multiwarp_cta_tiling) and none from the
-        // staging: M and N are whole numbers of tiles here, so the
-        // prefetch is predicated on the next-tile predicate alone (the
+        // and.pred count: 32 from the epilogue (num_i(2)*num_j(4)*4) and
+        // none from the staging: M and N are whole numbers of tiles here, so
+        // the prefetch is predicated on the next-tile predicate alone (the
         // edge predicates are compile-time true). The ragged path is
         // checked on the GPU (python/y_lang/tests/test_fp8_gemm.py).
         let and_pred_count = ptx.matches("and.pred").count();
-        assert_eq!(and_pred_count, 64, "expected the epilogue's 64 and.pred occurrences only, got {}: {}", and_pred_count, ptx);
+        assert_eq!(and_pred_count, 32, "expected the epilogue's 32 and.pred occurrences only, got {}: {}", and_pred_count, ptx);
 
         // Register prefetch (session 6): in the loop body the next tile's
         // global loads are issued before the first mma and stored to

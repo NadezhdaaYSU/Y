@@ -1,0 +1,15 @@
+--- a/src/ptx_emitter.rs	2026-10-12 23:09:46.853627953 +0300
++++ b/src/ptx_emitter.rs	2026-10-12 23:09:46.844261454 +0300
+@@ -9706,6 +9706,12 @@
+         if padded {
+             let t = fp8_padded_tile(m, n);
+             (cta_m, cta_n, warps_m, warps_n, cta_k, stages) = (t.cta_m, t.cta_n, t.warps_m, t.warps_n, t.cta_k, t.stages);
++            // EXPERIMENT ONLY: Y_FP8_TILE=cta_m,cta_n,warps_m,warps_n,cta_k,stages.
++            if let Ok(v) = std::env::var("Y_FP8_TILE") {
++                let f: Vec<u32> = v.split(',').map(|x| x.trim().parse().expect("Y_FP8_TILE")).collect();
++                (cta_m, cta_n, warps_m, warps_n, cta_k) = (f[0], f[1], f[2], f[3], f[4]);
++                stages = *f.get(5).unwrap_or(&0);
++            }
+         }
+         // The padded path's shared row: the K step plus 16 bytes, so each
+         // 8-row `ldmatrix` matrix falls in distinct banks.

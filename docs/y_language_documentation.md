@@ -5244,6 +5244,11 @@ column's better regime is compared:
   to 256x128) made it up to 1.34x faster again: it takes 0.69-0.98x Triton's
   time at 256, 768, 3072 and 4096, 0.77x at 8192, 1.04-1.07x at 1536-2560,
   1.17x at 512 and 1.26x at 1024 (`docs/benchmarks/fp8_gemm_tiles_2026-10-12/`).
+  A third (raw tiles copied into shared memory with `cp.async`, converted one
+  K-tile ahead) made 1024, 1536 and 2560 1.10-1.19x faster again and 2048
+  3% slower: Y takes 0.42-1.00x
+  Triton's time from 256 to 8192 except at 1024 (1.06x) and 2048 (1.07x)
+  (`docs/benchmarks/fp8_gemm_async_2026-10-12/`).
   `torch._scaled_mm` was not measured again.
 - Through `y_inductor`, a SwiGLU module runs within 2% of eager PyTorch (its
   multiply is the one Y kernel); `torch.compile` is 11-13% faster than either.

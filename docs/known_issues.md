@@ -21,13 +21,11 @@ source; each entry there now carries its status. What is still open:
 
 - `python/examples/benchmark_3d_block_ptr.py` has been run only on a busy GPU
   since its rewrite (2026-10-11); no figure from it is published.
-- Y's FP8 GEMM takes 1.17x as long as a fused Triton kernel for the same
-  function at 512 and 1.26x at 1024, where the grid is one wave and Triton's
-  three-stage pipeline hides the load latency that Y's one-tile-ahead
-  prefetch does not, and 1.04-1.07x at 1536-2560; it is faster at 256, 768,
-  3072, 4096 and 8192 (0.69-0.98x, 0.77x at 8192)
-  (`docs/benchmarks/fp8_gemm_tiles_2026-10-12/`, measured with a game using
-  part of the GPU). It was 2.1-2.6x before the two 2026-10-12 changes. A Y launch
+- Y's FP8 GEMM takes 1.06x as long as a fused Triton kernel for the same
+  function at 1024 and 1.07x at 2048; at the other sizes measured from 256 to
+  8192 it takes 0.42-1.00x Triton's time, 0.76x at 8192
+  (`docs/benchmarks/fp8_gemm_async_2026-10-12/`). It was 2.1-2.6x before the
+  three 2026-10-12 changes. A Y launch
   from Python costs 2.9 us of CPU time per call, against Triton's 5.7 and
   PyTorch's 2.0 (`docs/benchmarks/launch_2026-10-12/`); it was 6.6.
   Performance, not correctness.
