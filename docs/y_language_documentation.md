@@ -5262,7 +5262,10 @@ column's better regime is compared:
   K-tile ahead) made 1024, 1536 and 2560 1.10-1.19x faster again and 2048
   3% slower: Y takes 0.42-1.00x
   Triton's time from 256 to 8192 except at 1024 (1.06x) and 2048 (1.07x)
-  (`docs/benchmarks/fp8_gemm_async_2026-10-12/`).
+  (`docs/benchmarks/fp8_gemm_async_2026-10-12/`). A fourth (C written through
+  shared memory with 16-byte stores, 2026-10-13) made it 1.02-1.27x faster
+  again: Y takes 0.33-0.96x Triton's time at every size from 256 to 8192
+  (`docs/benchmarks/fp8_gemm_epilogue_2026-10-13/`).
   `torch._scaled_mm` was not measured again.
 - Through `y_inductor`, a SwiGLU module ran within 2% of eager PyTorch (its
   multiply was the one Y kernel); `torch.compile` was 11-13% faster than
