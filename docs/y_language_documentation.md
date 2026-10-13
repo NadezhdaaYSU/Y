@@ -5085,13 +5085,13 @@ checker does not know), so the scripts that load it stop there.
 ### 34.1 `torch.compile` backend (`y_inductor`)
 * **Usage**: `torch.compile(model, backend=y_inductor)`, or `y_inductor(module, example_inputs)` directly.
   Implemented in `python/y_lang/inductor.py`; the result carries `.y_report`.
-* **What is lowered**: connected groups of `add`, `sub`, `mul` and `relu` whose
-  every tensor operand and result is a contiguous float32 CUDA tensor of one
-  static shape (no broadcasting). A tensor-scalar `add`/`sub`/`mul` carries the
+* **What is lowered**: connected groups of `add`, `sub`, `mul`, `relu`, `silu`
+  and `sigmoid` whose every tensor operand and result is a contiguous float32
+  CUDA tensor of one static shape (no broadcasting). A tensor-scalar `add`/`sub`/`mul` carries the
   scalar in the kernel. Each group becomes one Y kernel, compiled through the Y
   compiler and launched on the current CUDA stream.
-* **Everything else runs as PyTorch runs it**: `linear`, `matmul`, `silu` and
-  other activations, division, negation, reductions, broadcasting, other dtypes,
+* **Everything else runs as PyTorch runs it**: `linear`, `matmul`, other
+  activations, division, negation, reductions, broadcasting, other dtypes,
   CPU tensors, and any call that needs autograd (so training through the
   backend works, and runs eagerly). `.y_report` lists what was lowered, why
   each other node was not, and per kernel how many calls launched it and how
@@ -5107,6 +5107,15 @@ checker does not know), so the scripts that load it stop there.
   (eager canonicalises a NaN; a negation folded into a select keeps its payload).
   Division is not lowered (Y's F32 `/` is `div.approx.f32`). A multiply by 1.0
   is not lowered (ptxas deletes it, so a NaN keeps its payload).
+* **`silu` and `sigmoid` are eager's own arithmetic.** Eager computes
+  `x / (1 + exp(-x))` and `1 / (1 + exp(-x))` with CUDA's `expf` and IEEE
+  division, keeping denormals. The kernel writes that `expf` (libdevice's
+  range reduction, `ex2.approx`, the exponent added by a shift) and
+  `div.rn.f32` in a `chisel` block, and the result equals eager's on all 2^32
+  float32 inputs, NaN payloads included. The fast forms do not: an
+  approximate division differs on 107,440,379 inputs, one that flushes
+  denormals on 33,554,428. So a SwiGLU activation, `silu(g) * u`, is one Y
+  kernel, bit for bit eager's; `torch.compile`'s own kernel is not.
 * **History**: this section used to say the backend lowered "pointwise,
   activations, reductions" into Y kernels. It lowered nothing: it returned the
   original graph wrapped in `torch.no_grad()`, which also broke training
@@ -5250,8 +5259,13 @@ column's better regime is compared:
   Triton's time from 256 to 8192 except at 1024 (1.06x) and 2048 (1.07x)
   (`docs/benchmarks/fp8_gemm_async_2026-10-12/`).
   `torch._scaled_mm` was not measured again.
-- Through `y_inductor`, a SwiGLU module runs within 2% of eager PyTorch (its
-  multiply is the one Y kernel); `torch.compile` is 11-13% faster than either.
+- Through `y_inductor`, a SwiGLU module ran within 2% of eager PyTorch (its
+  multiply was the one Y kernel); `torch.compile` was 11-13% faster than
+  either. Since 2026-10-12 `y_inductor` lowers `silu` too, bit for bit
+  eager's, so the module is one Y kernel: it takes 0.98-1.04x
+  `torch.compile`'s time at 2^22 and 2^24 elements and 0.9x at 2^20 replayed
+  from a graph, measured with a game using part of the GPU
+  (`docs/benchmarks/inductor_silu_2026-10-12/`).
 - Cold compilation of one kernel: Y 0.6 ms to PTX plus 10 ms for the driver to
   load it; Triton's first call with an empty cache, 500 ms.
 
