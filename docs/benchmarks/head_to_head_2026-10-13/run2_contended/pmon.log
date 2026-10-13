@@ -1,0 +1,210 @@
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0       2093   C+G      3      1      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      3      5      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0       2093   C+G      1      0      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      0      0      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      0      0      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G     10      1      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     35      3      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     91     40      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     98     40      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     99     58      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     99     41      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     99      3      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     99     63      -      -      -      -    python3        
+    0       2093   C+G     12     10      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     86     87      -      -      -      -    python3        
+    0       2093   C+G     12     10      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     86     71      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G     11      8      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0     174820     C     61     52      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G     10     12      -      -      -      -    plasmashell    
+    0       2732     G     11      8      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     10      3      -      -      -      -    python3        
+    0       2093   C+G      1      0      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G     10     12      -      -      -      -    plasmashell    
+    0       2732     G      0      0      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C     10      3      -      -      -      -    python3        
+    0       2093   C+G      0      0      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      1      0      -      -      -      -    hom            
+    0       2744     G      1      0      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      0      0      -      -      -      -    plasmashell    
+    0       2732     G      3      0      -      -      -      -    hom            
+    0       2744     G      2      0      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0     175078     C      0      0      -      -      -      -    python3        
+    0       2093   C+G      4      0      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      0      0      -      -      -      -    plasmashell    
+    0       2732     G      3      0      -      -      -      -    hom            
+    0       2744     G      1      0      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0     175144     C      2      0      -      -      -      -    python3        
+    0       2093   C+G      4      0      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      2      0      -      -      -      -    plasmashell    
+    0       2732     G      5      0      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0     174820     C      -      -      -      -      -      -    python3        
+    0     175180     C      2      0      -      -      -      -    python3        
+    0       2093   C+G      3      2      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      2      0      -      -      -      -    plasmashell    
+    0       2732     G      2      0      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0       2093   C+G      4      5      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0     175262     C      2      1      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0       2093   C+G     30     23      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G     23     15      -      -      -      -    plasmashell    
+    0       2732     G      -      -      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0       2093   C+G     20     13      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G     23     15      -      -      -      -    plasmashell    
+    0       2732     G      8      5      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0     175346     C      -      -      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G     40     29      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G     43     33      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G     41     33      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
+    0     175445     C      -      -      -      -      -      -    python3        
+    0       2093   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2150     G      -      -      -      -      -      -    Xwayland       
+    0       2200     G      -      -      -      -      -      -    plasmashell    
+    0       2732     G     42     35      -      -      -      -    hom            
+    0       2744     G      -      -      -      -      -      -    Code --gpu-    
+    0       2807     G      -      -      -      -      -      -    renderD128 --cr
+    0     174820     C      -      -      -      -      -      -    python3        
