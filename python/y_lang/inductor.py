@@ -3,14 +3,14 @@
 
     compiled = torch.compile(model, backend=y_inductor)
 
-What is lowered: connected groups of `add`, `sub`, `mul` and `relu` whose every
-tensor operand and result is a contiguous float32 CUDA tensor of one static
-shape (no broadcasting). A tensor-scalar `add`, `sub` or `mul` carries the
-scalar in the kernel. Each group becomes one Y kernel, compiled through the Y
-compiler to PTX and launched on the current CUDA stream.
+What is lowered: connected groups of `add`, `sub`, `mul`, `relu`, `silu` and
+`sigmoid` whose every tensor operand and result is a contiguous float32 CUDA
+tensor of one static shape (no broadcasting). A tensor-scalar `add`, `sub` or
+`mul` carries the scalar in the kernel. Each group becomes one Y kernel,
+compiled through the Y compiler to PTX and launched on the current CUDA stream.
 
 Everything else runs exactly as PyTorch runs it: `linear`, `matmul`, division,
-negation, `exp`, `sigmoid`, `silu`, reductions, broadcasting, other dtypes,
+negation, `exp`, other activations, reductions, broadcasting, other dtypes,
 CPU tensors, and any call that needs autograd. `compiled.y_report` records
 which nodes were lowered, why each other node was not, and, per kernel, how
 many calls launched it and how many fell back to the original subgraph.
@@ -34,6 +34,14 @@ constraint on the design, not luck, and it decides the op set:
 * **`relu` is lowered as `x <= 0.0 ? 0.0 : x`**, which measures bit-identical
   to `torch.relu` on CUDA including NaN payloads (kept, sign included) and
   `-0.0` (becomes `+0.0`).
+* **`silu` and `sigmoid` are eager's own instruction sequence**, written in a
+  `chisel` block. Eager computes `x / (1 + exp(-x))` and `1 / (1 + exp(-x))`
+  with CUDA's `expf` and IEEE division, without flushing denormals; `_EXP_NEG`
+  is that `expf` (libdevice's, as Triton's PTX for `libdevice.exp` shows it),
+  and the quotient is `div.rn.f32`. Each measures bit-identical to eager on all
+  2^32 float32 inputs, NaNs included (`test_inductor.py`). The fast forms do
+  not: `div.full.f32` differs on 107,440,379 inputs, and a division that
+  flushes denormals on 33,554,428.
 
 This module used to lower nothing. It returned the original graph under
 `torch.no_grad()`, so `torch.compile(model, backend=y_inductor)` computed eager
@@ -51,7 +59,8 @@ import torch
 import torch.fx
 from torch.fx.passes.utils.fuser_utils import fuse_by_partitions
 
-ADD, SUB, MUL, RELU = "add", "sub", "mul", "relu"
+ADD, SUB, MUL, RELU, SILU, SIGMOID = "add", "sub", "mul", "relu", "silu", "sigmoid"
+_UNARY = (RELU, SILU, SIGMOID)
 _BINARY_SYMBOL = {ADD: "+", SUB: "-", MUL: "*"}
 
 _FUNCTIONS = {
@@ -63,8 +72,38 @@ _FUNCTIONS = {
     torch.mul: MUL,
     torch.relu: RELU,
     torch.nn.functional.relu: RELU,
+    torch.nn.functional.silu: SILU,
+    torch.sigmoid: SIGMOID,
+    torch.nn.functional.sigmoid: SIGMOID,
 }
-_METHODS = {"add": ADD, "sub": SUB, "mul": MUL, "relu": RELU}
+_METHODS = {"add": ADD, "sub": SUB, "mul": MUL, "relu": RELU, "sigmoid": SIGMOID}
+# Modules, lowered when not in place: an in-place one writes its input.
+_MODULES = {torch.nn.ReLU: RELU, torch.nn.SiLU: SILU, torch.nn.Sigmoid: SIGMOID}
+# The operations that may take `inplace=False` as a keyword.
+_INPLACE_KEYWORD = (RELU, SILU)
+
+# `exp(-x)` for silu and sigmoid, as CUDA's `expf` computes it (libdevice,
+# without flushing denormals): the exponent j = floor(-x * log2 e), clamped to
+# [-126, 126], comes from a saturated multiply-add rounded down; 2^j is built
+# by shifting j's bits into the exponent field, and 2^(-x log2 e - j) is
+# `ex2.approx` of a two-constant (hi + lo) product. `{p}d` ends as 1 + exp(-x).
+# Multiplying by 2^j is exact, so `mul.rn` + `add.rn` and one `fma` give the
+# same bits. `{p}` prefixes the temporaries, `{x}` is the operand.
+_EXP_NEG = (
+    "neg.f32 %{p}a, %{x};",
+    "fma.rn.f32 %{p}t, %{p}a, 0f3BBB989D, 0f3F000000;",  # -x * log2(e)/252 + 0.5
+    "cvt.sat.f32.f32 %{p}t, %{p}t;",
+    "fma.rm.f32 %{p}t, %{p}t, 0f437C0000, 0f4B400001;",  # floor(t * 252) + 1.5 * 2^23 + 1
+    "add.f32 %{p}j, %{p}t, 0fCB40007F;",  # j
+    "neg.f32 %{p}j, %{p}j;",
+    "fma.rn.f32 %{p}f, %{p}a, 0f3FB8AA3B, %{p}j;",  # -x * log2(e) - j, high part
+    "fma.rn.f32 %{p}f, %{p}a, 0f32A57060, %{p}f;",  # and low part
+    "shl.b32 %{p}s, %{p}t, 23;",  # 2^j
+    "ex2.approx.ftz.f32 %{p}f, %{p}f;",
+    "mul.rn.f32 %{p}d, %{p}f, %{p}s;",
+    "add.rn.f32 %{p}d, %{p}d, 0f3F800000;",
+)
+_EXP_TEMPS = "atjfsd"
 
 # Ops this backend declines, with the reason stated where a user will see it.
 _NEGATION = ("negation is not lowered: eager `-x` canonicalises a NaN, and a negation "
@@ -143,7 +182,7 @@ def _kind(gm: torch.fx.GraphModule, node: torch.fx.Node) -> Tuple[Optional[str],
         kind = _METHODS.get(node.target)
     elif node.op == "call_module":
         mod = gm.get_submodule(node.target)
-        kind = RELU if type(mod) is torch.nn.ReLU and not mod.inplace else None
+        kind = None if getattr(mod, "inplace", False) else _MODULES.get(type(mod))
     else:
         return None, None  # not a computation: nothing to lower or report
     if kind is None:
@@ -156,11 +195,11 @@ def _classify(gm: torch.fx.GraphModule, node: torch.fx.Node) -> Tuple[Optional[s
     if kind is None:
         return None, reason
     kwargs = dict(node.kwargs)
-    if kind == RELU and kwargs.get("inplace", False) is False:
+    if kind in _INPLACE_KEYWORD and kwargs.get("inplace", False) is False:
         kwargs.pop("inplace", None)
     if kwargs:
         return None, f"keyword arguments {sorted(kwargs)} are not lowered"
-    arity = 1 if kind == RELU else 2
+    arity = 1 if kind in _UNARY else 2
     if len(node.args) != arity:
         return None, f"{arity} positional operand(s) expected, found {len(node.args)}"
 
@@ -190,8 +229,8 @@ def _classify(gm: torch.fx.GraphModule, node: torch.fx.Node) -> Tuple[Optional[s
                               "are not lowered)")
             tensors += 1
         else:
-            if kind == RELU:
-                return None, "relu of a scalar is not lowered"
+            if kind in _UNARY:
+                return None, f"{kind} of a scalar is not lowered"
             _, why = _scalar_literal(arg)
             if why is not None:
                 return None, why
@@ -283,7 +322,14 @@ def _kernel_source(sub: torch.fx.GraphModule) -> Tuple[str, int, int, List[str]]
         return text
 
     outputs: Tuple[torch.fx.Node, ...] = ()
-    for node in sub.graph.nodes:
+    # Every input is loaded before anything is computed, so the loads are in
+    # flight together. `fuse_by_partitions` puts an input's placeholder where
+    # it is first used, and a load written after a silu waited for its whole
+    # division: ptxas does not move a load above the division's slow-path
+    # call (measured with Y's `ld.global.ca` and with a plain `ld.global`).
+    # The inputs keep their order, which is the kernel's.
+    nodes = list(sub.graph.nodes)
+    for node in [n for n in nodes if n.op == "placeholder"] + [n for n in nodes if n.op != "placeholder"]:
         if node.op == "placeholder":
             params.append(f"x{n_in}: GlobalMemory<F32>")
             v = fresh()
@@ -302,6 +348,16 @@ def _kernel_source(sub: torch.fx.GraphModule) -> Tuple[str, int, int, List[str]]
                 body.append(f"        let mut {v}: F32 = {a};")
                 body.append(f"        if {a} <= 0.0 {{")
                 body.append(f"            {v} = 0.0;")
+                body.append("        }")
+            elif kind in (SILU, SIGMOID):
+                a = operand(node.args[0])
+                numerator = f"%{a}" if kind == SILU else "0f3F800000"
+                for t in ("",) + tuple(_EXP_TEMPS):
+                    body.append(f"        let mut {v}{t}: F32 = 0.0;")
+                body.append("        chisel {")
+                for line in _EXP_NEG:
+                    body.append(f'            "{line.format(p=v, x=a)}";')
+                body.append(f'            "div.rn.f32 %{v}, {numerator}, %{v}d;";')
                 body.append("        }")
             else:
                 a, b = operand(node.args[0]), operand(node.args[1])

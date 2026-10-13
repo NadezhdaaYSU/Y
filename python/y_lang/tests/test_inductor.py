@@ -229,7 +229,7 @@ class YInductorTest(unittest.TestCase):
 
             def forward(self, x):
                 h = self.lin(x)
-                return torch.nn.functional.silu(h) + (-h) / 3.0 + h * h + x
+                return torch.nn.functional.gelu(h) + (-h) / 3.0 + h * h + x
 
         torch.manual_seed(1)
         model = Mixed().cuda()
@@ -243,9 +243,107 @@ class YInductorTest(unittest.TestCase):
         why = {what: reason for _, what, reason in report.not_lowered}
         self.assertIn("negation is not lowered", why["call_function `neg`"])
         self.assertIn("division is not lowered", why["call_function `truediv`"])
-        self.assertIn("is not lowered", why["call_function `silu`"])
+        self.assertIn("is not lowered", why["call_function `gelu`"])
         self.assertIn("is not lowered", why["call_function `linear`"])
         self.assertGreaterEqual(report.lowered_ops, 3, report.summary())
+
+    @unittest.skipUnless(CUDA, NO_CUDA)
+    def test_silu_and_sigmoid_match_eager_on_every_float32(self):
+        # Every one of the 2^32 bit patterns, NaN payloads and denormals
+        # included, in chunks of 2^26. A sample is not enough: a division
+        # that flushes denormals differs only where an operand or the result
+        # is denormal (33,554,428 inputs), `div.full.f32` on 2.5% of them.
+        class Activations(torch.nn.Module):
+            def forward(self, x):
+                return torch.nn.functional.silu(x), torch.sigmoid(x)
+
+        chunk = 1 << 26
+        base = torch.arange(chunk, dtype=torch.int64, device="cuda")
+        first = base.to(torch.int32).view(torch.float32)
+        compiled = y_inductor(Activations(), [first])
+        self.assertEqual([k.ops for k in compiled.y_report.kernels], [["silu"], ["sigmoid"]])
+        differing = {"silu": 0, "sigmoid": 0}
+        with torch.no_grad():
+            for c in range((1 << 32) // chunk):
+                x = (base + c * chunk).to(torch.int32).view(torch.float32)
+                silu, sigmoid = compiled(x)
+                differing["silu"] += int((bits(silu) != bits(torch.nn.functional.silu(x))).sum())
+                differing["sigmoid"] += int((bits(sigmoid) != bits(torch.sigmoid(x))).sum())
+        self.assertEqual(differing, {"silu": 0, "sigmoid": 0},
+                         "bit patterns on which a lowered activation differs from eager")
+        self.assertEqual([k.launches for k in compiled.y_report.kernels], [64, 64])
+
+    @unittest.skipUnless(CUDA, NO_CUDA)
+    def test_a_swiglu_runs_as_one_y_kernel_bit_for_bit(self):
+        class SwiGLU(torch.nn.Module):
+            def forward(self, g, u):
+                return torch.nn.functional.silu(g) * u
+
+        g, u = operands(2, n_random=1 << 16)
+        cm, reports = compile_with_reports(SwiGLU())
+        with torch.no_grad():
+            out = cm(g, u)
+        self.assertEqual([k.ops for k in reports[-1].kernels], [["silu", "mul"]])
+        self.assertEqual([k.launches for k in reports[-1].kernels], [1])
+        self.assertTrue(torch.equal(bits(out), bits(SwiGLU()(g, u))), "the fused SwiGLU differs from eager")
+        # Both inputs are loaded before the silu. A load after it waits for
+        # the whole division, which ptxas does not hoist it above: 11.7
+        # against 4.5 us at 2^20 (docs/benchmarks/inductor_silu_2026-10-12/).
+        source = reports[-1].kernels[0].source
+        self.assertLess(max(source.index("x0[tid]"), source.index("x1[tid]")), source.index("chisel"))
+
+    @unittest.skipUnless(CUDA, NO_CUDA)
+    def test_every_spelling_of_silu_and_sigmoid_is_lowered(self):
+        class Spellings(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.silu = torch.nn.SiLU()
+                self.sigmoid = torch.nn.Sigmoid()
+
+            def forward(self, x):
+                return (torch.nn.functional.silu(x), torch.nn.functional.silu(x, inplace=False),
+                        self.silu(x), torch.sigmoid(x), x.sigmoid(), self.sigmoid(x))
+
+        (x,) = operands(1)
+        for name, make in (("module path", lambda m: y_inductor(m, [x])),
+                           ("torch.compile", lambda m: compile_with_reports(m))):
+            made = make(Spellings())
+            compiled, report = (made[0], made[1]) if isinstance(made, tuple) else (made, [made.y_report])
+            with torch.no_grad():
+                outs = compiled(x)
+            report = report[-1]
+            self.assertEqual(sorted(k.ops[0] for k in report.kernels),
+                             ["sigmoid"] * 3 + ["silu"] * 3, f"{name}: {report.summary()}")
+            self.assertEqual(report.not_lowered, [], name)
+            self.assertTrue(all(k.launches == 1 for k in report.kernels), name)
+            for i, (got, ref) in enumerate(zip(outs, Spellings()(x))):
+                self.assertTrue(torch.equal(bits(got), bits(ref)), f"{name}: output {i} differs from eager")
+
+    @unittest.skipUnless(CUDA, NO_CUDA)
+    def test_in_place_activations_are_not_lowered(self):
+        # An in-place activation writes its input, which a kernel with its own
+        # output buffer would not.
+        class InPlace(torch.nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.silu = torch.nn.SiLU(inplace=True)
+                self.relu = torch.nn.ReLU(inplace=True)
+
+            def forward(self, x, y):
+                return self.silu(x) + 1.0, self.relu(y) + 1.0
+
+        x, y = operands(2)
+        compiled = y_inductor(InPlace(), [x.clone(), y.clone()])
+        why = {what: reason for _, what, reason in compiled.y_report.not_lowered}
+        self.assertIn("call_module `silu`", why)
+        self.assertIn("call_module `relu`", why)
+        self.assertEqual([k.ops for k in compiled.y_report.kernels], [["add"], ["add"]])
+        xa, ya, xb, yb = x.clone(), y.clone(), x.clone(), y.clone()
+        with torch.no_grad():
+            got = compiled(xa, ya)
+            ref = InPlace()(xb, yb)
+        for a, b in zip(got + (xa, ya), ref + (xb, yb)):
+            self.assertTrue(torch.equal(bits(a), bits(b)))
 
     @unittest.skipUnless(CUDA, NO_CUDA)
     def test_scalar_operands_are_exact_or_not_lowered(self):

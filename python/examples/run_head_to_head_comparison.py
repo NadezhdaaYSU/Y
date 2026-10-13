@@ -403,7 +403,7 @@ def rows(target, y_ptx, gen):
            {name: (lambda name=name: got[name]) for name in ("Y", "Triton", "PyTorch")},
            module(gate.double(), up.double()), 1e-6, False,
            # Read after the timed calls, so the report's launch counts are the run's.
-           lambda: "Y column: y_inductor (silu runs eagerly, the multiply is a Y kernel). "
+           lambda: "Y column: y_inductor (silu and the multiply are one Y kernel, bit for bit eager's). "
                    "Triton column: torch.compile, whose Inductor backend generates Triton. "
                    "PyTorch column: eager. " + y_compiled.y_report.summary().replace("\n", " "))
 
