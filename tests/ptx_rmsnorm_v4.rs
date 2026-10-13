@@ -30,6 +30,19 @@ const KERNEL_TWO_ROWS: &str = "kernel rms(X: GlobalMemory<F32>, W: GlobalMemory<
     let row: I32 = block_idx_x() * 2 + thread_idx_y();\n    let col: I32 = thread_idx_x() * 4;\n    let idx: I32 = row * hidden_dim + col;\n    \
     rmsnorm_v4(X[idx], W[col], Out[idx], hidden_dim, eps);\n}\n\nfn main() {}\n";
 
+/// Four rows per block, one per iteration: the shared words the warp
+/// partials go through are reused while other warps may still be reading.
+const KERNEL_LOOP: &str = "kernel rms(X: GlobalMemory<F32>, W: GlobalMemory<F32>, Out: GlobalMemory<F32>, hidden_dim: I32, eps: F32) {\n    \
+    let col: I32 = thread_idx_x() * 4;\n    @invariant(r >= 0)\n    for r in 0..4 {\n        \
+    let idx: I32 = (block_idx_x() * 4 + r) * hidden_dim + col;\n        \
+    rmsnorm_v4(X[idx], W[col], Out[idx], hidden_dim, eps);\n    }\n}\n\nfn main() {}\n";
+
+/// The same rows through a `while`.
+const KERNEL_WHILE: &str = "kernel rms(X: GlobalMemory<F32>, W: GlobalMemory<F32>, Out: GlobalMemory<F32>, hidden_dim: I32, eps: F32) {\n    \
+    let col: I32 = thread_idx_x() * 4;\n    let r: I32 = 0;\n    @invariant(r >= 0)\n    while r < 4 {\n        \
+    let idx: I32 = (block_idx_x() * 4 + r) * hidden_dim + col;\n        \
+    rmsnorm_v4(X[idx], W[col], Out[idx], hidden_dim, eps);\n        r = r + 1;\n    }\n}\n\nfn main() {}\n";
+
 const ROWS: usize = 8;
 
 fn compile(tag: &str, src: &str) -> (bool, String, PathBuf) {
@@ -56,8 +69,9 @@ fn inputs(hidden: usize) -> (Vec<f32>, Vec<f32>) {
 }
 
 /// One launch, reported on stdout: `TRAPPED`, or `RESULT <worst error relative
-/// to the largest output>` against a float64 reference.
-fn run_case(ptx_path: &str, hidden: usize, block: (u32, u32, u32), eps: f32) {
+/// to the largest output>` against a float64 reference. Each block covers
+/// `block.1 * rows_per_thread` rows.
+fn run_case(ptx_path: &str, hidden: usize, block: (u32, u32, u32), eps: f32, rows_per_thread: u32) {
     let ctx = y::cuda_runtime::CudaContext::new().expect("a context");
     let ptx = std::fs::read_to_string(ptx_path).unwrap();
     let module = ctx.load_ptx(&ptx, "rms").expect("load");
@@ -68,8 +82,7 @@ fn run_case(ptx_path: &str, hidden: usize, block: (u32, u32, u32), eps: f32) {
     ctx.memcpy_htod_at(&dw, 0, &bytes(&w)).unwrap();
     ctx.memset_u8(&dout, 0).unwrap();
     let args = [dx.device_ptr(), dw.device_ptr(), dout.device_ptr(), hidden as u64, eps.to_bits() as u64];
-    // One block per `block.1` rows.
-    let grid = ((ROWS as u32) / block.1, 1, 1);
+    let grid = ((ROWS as u32) / (block.1 * rows_per_thread), 1, 1);
     if let Err(e) = ctx.launch(&module, grid, block, 0, &args).and_then(|_| ctx.synchronize()) {
         println!("TRAPPED {e}");
         return;
@@ -92,9 +105,16 @@ fn run_case(ptx_path: &str, hidden: usize, block: (u32, u32, u32), eps: f32) {
 }
 
 fn child(ptx: &PathBuf, hidden: usize, block: (u32, u32, u32), eps: f32) -> String {
+    child_rows(ptx, hidden, block, eps, 1)
+}
+
+fn child_rows(ptx: &PathBuf, hidden: usize, block: (u32, u32, u32), eps: f32, rows_per_thread: u32) -> String {
     let out = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", "every_row_shape_is_normalised_and_a_wrong_launch_traps", "--nocapture"])
-        .env("Y_RMSNORM_CASE", format!("{}|{hidden}|{}|{}|{}|{eps}", ptx.display(), block.0, block.1, block.2))
+        .env(
+            "Y_RMSNORM_CASE",
+            format!("{}|{hidden}|{}|{}|{}|{eps}|{rows_per_thread}", ptx.display(), block.0, block.1, block.2),
+        )
         .output()
         .expect("run the launch in a child");
     String::from_utf8_lossy(&out.stdout).into_owned()
@@ -105,7 +125,7 @@ fn every_row_shape_is_normalised_and_a_wrong_launch_traps() {
     if let Ok(case) = std::env::var("Y_RMSNORM_CASE") {
         let f: Vec<&str> = case.split('|').collect();
         let n = |i: usize| f[i].parse::<u32>().unwrap();
-        run_case(f[0], f[1].parse().unwrap(), (n(2), n(3), n(4)), f[5].parse().unwrap());
+        run_case(f[0], f[1].parse().unwrap(), (n(2), n(3), n(4)), f[5].parse().unwrap(), n(6));
         return;
     }
     if y::cuda_runtime::CudaContext::new().is_none() {
@@ -148,6 +168,52 @@ fn every_row_shape_is_normalised_and_a_wrong_launch_traps() {
     ] {
         let text = child(kernel, hidden, block, 1e-5);
         assert!(text.contains("TRAPPED"), "{why} (hidden {hidden}, block {block:?}), and the kernel ran: {text}");
+    }
+}
+
+/// Each warp reduces all the warp partials itself, so no thread hands the
+/// scale round through shared memory: one barrier, between the partials'
+/// stores and their loads. In a loop the next row's stores reuse those words,
+/// so a second barrier keeps them until every warp has read them. A race
+/// there would need one warp a whole row ahead of another, which a device run
+/// almost never shows, so the count is what is checked.
+#[test]
+fn one_barrier_outside_a_loop_and_two_inside() {
+    let (ok, log, ptx) = compile("barriers", KERNEL);
+    assert!(ok, "{log}");
+    let text = std::fs::read_to_string(&ptx).unwrap();
+    assert_eq!(text.matches("bar.sync").count(), 1, "{text}");
+    // The partials' store; the scale is no longer stored for other warps.
+    assert_eq!(text.matches("st.shared").count(), 1, "{text}");
+
+    let (ok, log, ptx_loop) = compile("loop", KERNEL_LOOP);
+    assert!(ok, "{log}");
+    let text = std::fs::read_to_string(&ptx_loop).unwrap();
+    assert_eq!(text.matches("bar.sync").count(), 2, "{text}");
+    let (ok, log, ptx_while) = compile("while", KERNEL_WHILE);
+    assert!(ok, "{log}");
+    let text = std::fs::read_to_string(&ptx_while).unwrap();
+    assert_eq!(text.matches("bar.sync").count(), 2, "{text}");
+
+    if y::cuda_runtime::CudaContext::new().is_none() {
+        eprintln!("SKIP: no CUDA device, so the loop kernel was not run");
+        return;
+    }
+    for (kernel, hidden, block) in [
+        (&ptx_loop, 1024, (256, 1, 1)),
+        (&ptx_loop, 512, (128, 1, 1)),
+        (&ptx_loop, 128, (32, 1, 1)),
+        (&ptx_while, 1024, (256, 1, 1)),
+    ] {
+        let text = child_rows(kernel, hidden, block, 1e-5, 4);
+        let err: f64 = text
+            .split("RESULT ")
+            .nth(1)
+            .and_then(|r| r.split_whitespace().next())
+            .unwrap_or_else(|| panic!("hidden {hidden}, four rows per block: no result:\n{text}"))
+            .parse()
+            .unwrap();
+        assert!(err < 1e-5, "hidden {hidden}, four rows per block: error {err:e} of the largest output");
     }
 }
 

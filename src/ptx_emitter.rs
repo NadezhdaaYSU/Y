@@ -984,6 +984,11 @@ pub struct PtxEmitter {
     /// A `return` (or a branching `chisel` block) only some threads took:
     /// everything emitted after it runs without the others.
     threads_left: Option<(crate::uniformity::Uniform, String)>,
+    /// How many `for`/`while` bodies the code being emitted is inside of.
+    /// A built-in that reuses shared memory without a closing barrier
+    /// (`rmsnorm_v4`) adds one when this is not 0: a warp's next iteration
+    /// could overwrite what another warp has not read yet.
+    loop_depth: usize,
     /// The resolved SM target (e.g. "sm_80") for PTX header emission.
     sm_target: String,
     /// Why `sm_target` is `PTX_FLOOR` rather than a probed architecture, when
@@ -1165,6 +1170,7 @@ impl PtxEmitter {
             emit_errors: Vec::new(),
             uniformity: None,
             divergent_regions: Vec::new(),
+            loop_depth: 0,
             threads_left: None,
             sm_target: target,
             target_assumed: decided.assumed,
@@ -4602,7 +4608,9 @@ declare it as a Q format.\n{}",
                     format!("in the `for` on line {}, whose bounds read", span.line),
                     span.line,
                 );
+                self.loop_depth += 1;
                 self.emit_block(body, hw_profile);
+                self.loop_depth -= 1;
                 self.leave_regions(entered);
                 match &step_reg {
                     Some(r) => writeln!(
@@ -5029,7 +5037,9 @@ declare it as a Q format.\n{}",
                 )
                 .unwrap();
                 writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
+                self.loop_depth += 1;
                 self.emit_block(body, hw_profile);
+                self.loop_depth -= 1;
                 self.leave_regions(entered);
                 writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
                 writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
@@ -5448,40 +5458,43 @@ declare it as a Q format.\n{}",
                             writeln!(&mut self.ptx_buffer, "    @{} st.shared.f32 [{}], {};", pred_first_lane, smem_addr, warp_sum).unwrap();
                             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
 
+                            // Every warp reads all the warp partials and reduces
+                            // them itself, lane `l` reading warp `l`'s: the same
+                            // values through the same shuffles, so each warp gets
+                            // the sum warp 0 alone used to, bit for bit, and works
+                            // out the scale without thread 0 handing it round
+                            // through shared memory behind a second barrier.
                             let smem_base = self.alloc_reg64();
-                            let tid_u64 = self.alloc_reg64();
-                            let tid_offset = self.alloc_reg64();
+                            let lane_u64 = self.alloc_reg64();
+                            let lane_offset = self.alloc_reg64();
                             let smem_read_addr = self.alloc_reg64();
-                            let pred_warp0_threads = self.alloc_pred();
+                            let pred_partial = self.alloc_pred();
                             let val_warp_sum = self.alloc_regf32();
 
                             writeln!(&mut self.ptx_buffer, "    mov.u64 {}, smem_reduce;", smem_base).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", tid_u64, tid).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    shl.b64 {}, {}, 2;", tid_offset, tid_u64).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", smem_read_addr, smem_base, tid_offset).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", lane_u64, lane_id).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    shl.b64 {}, {}, 2;", lane_offset, lane_u64).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", smem_read_addr, smem_base, lane_offset).unwrap();
                             let nwarps = self.alloc_reg32();
                             writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 5;", nwarps, ntid).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", pred_warp0_threads, tid, nwarps).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    @{} ld.shared.f32 {}, [{}];", pred_warp0_threads, val_warp_sum, smem_read_addr).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    @!{} mov.f32 {}, 0.0;", pred_warp0_threads, val_warp_sum).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", pred_partial, lane_id, nwarps).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    @{} ld.shared.f32 {}, [{}];", pred_partial, val_warp_sum, smem_read_addr).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    @!{} mov.f32 {}, 0.0;", pred_partial, val_warp_sum).unwrap();
+                            // In a loop, the next iteration stores its partials into
+                            // the same words: wait until every warp has read these.
+                            if self.loop_depth > 0 {
+                                writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+                            }
 
                             let block_sum = self.emit_warp_reduce_sum(&val_warp_sum);
 
                             let inv_rms = self.alloc_regf32();
                             let mean = self.alloc_regf32();
-                            let pred_tid0 = self.alloc_pred();
-                            writeln!(&mut self.ptx_buffer, "    setp.eq.u32 {}, {}, 0;", pred_tid0, tid).unwrap();
                             let hidden_f = self.alloc_regf32();
                             writeln!(&mut self.ptx_buffer, "    cvt.rn.f32.s32 {}, {};", hidden_f, hidden).unwrap();
                             writeln!(&mut self.ptx_buffer, "    div.rn.f32 {}, {}, {};", mean, block_sum, hidden_f).unwrap();
                             writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", mean, mean, eps).unwrap();
                             writeln!(&mut self.ptx_buffer, "    rsqrt.approx.f32 {}, {};", inv_rms, mean).unwrap();
-
-                            let smem_root = self.alloc_reg64();
-                            writeln!(&mut self.ptx_buffer, "    mov.u64 {}, smem_reduce;", smem_root).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    @{} st.shared.f32 [{}], {};", pred_tid0, smem_root, inv_rms).unwrap();
-                            writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
-                            writeln!(&mut self.ptx_buffer, "    ld.shared.f32 {}, [{}];", inv_rms, smem_root).unwrap();
 
                             let o0 = self.alloc_regf32();
                             let o1 = self.alloc_regf32();
