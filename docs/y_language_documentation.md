@@ -5234,48 +5234,53 @@ The table this section published was not a measurement of Y against Triton:
   volume and must equal `2x + 1` exactly); it has been run only on a busy GPU
   since, where the two took the same time within 2%.
 
-Measured 2026-10-11 with nothing else using the GPU
-([report and raw samples](benchmarks/head_to_head_2026-10-11/report.md)); each
+Measured 2026-10-13 at `c8eea77`, the GPU 4% busy as the run started (the
+desktop compositor, Discord and Chromium; no game)
+([record](benchmarks/head_to_head_2026-10-13/README.md)). A second run, marked
+contended, gave every graph-mode minimum within 3.2% of the first. Each
 column's better regime is compared:
 
 - Replayed from a CUDA graph, Y's vector add and SwiGLU take the same time as
-  Triton's (1.07 and 1.13 us), and its RMSNorm 1.40 us against Triton's 1.33.
-  Since 2026-10-13 every warp of the RMSNorm reduces the warp partials itself
-  instead of waiting for thread 0's scale behind a second barrier: 1.22 us
-  against Triton's 1.31 (`docs/benchmarks/rmsnorm_2026-10-13/`).
-  Launched from Python, each Y call costs more than Triton's:
-  `TorchKernel.launch` makes vector add 6.6 us a call, against Triton's 4.8 and
-  PyTorch's 2.0. Since 2026-10-12 a launch costs 2.9 us of CPU time, against
-  Triton's 5.7 and PyTorch's 2.0 measured alongside it
-  (`docs/benchmarks/launch_2026-10-12/`).
-- Y's FP8 GEMM took 2.1-2.6x as long as a fused Triton kernel computing the
-  same function, and 1.5-3.3x as long as `torch._scaled_mm` with the
-  quantisation done in separate kernels. A change on 2026-10-12 (B staged
-  transposed, the next tile prefetched into registers, CTAs launched in
-  groups) made it 1.5-2.5x faster: 1.25-1.38x Triton's time from 512 to 4096,
-  1.02x at 8192, faster at 256 (`docs/benchmarks/fp8_gemm_2026-10-12/`). A
-  second (fragments loaded with `ldmatrix`, and a tile chosen per shape, up
-  to 256x128) made it up to 1.34x faster again: it takes 0.69-0.98x Triton's
-  time at 256, 768, 3072 and 4096, 0.77x at 8192, 1.04-1.07x at 1536-2560,
-  1.17x at 512 and 1.26x at 1024 (`docs/benchmarks/fp8_gemm_tiles_2026-10-12/`).
-  A third (raw tiles copied into shared memory with `cp.async`, converted one
-  K-tile ahead) made 1024, 1536 and 2560 1.10-1.19x faster again and 2048
-  3% slower: Y takes 0.42-1.00x
-  Triton's time from 256 to 8192 except at 1024 (1.06x) and 2048 (1.07x)
-  (`docs/benchmarks/fp8_gemm_async_2026-10-12/`). A fourth (C written through
-  shared memory with 16-byte stores, 2026-10-13) made it 1.02-1.27x faster
-  again: Y takes 0.33-0.96x Triton's time at every size from 256 to 8192
-  (`docs/benchmarks/fp8_gemm_epilogue_2026-10-13/`).
-  `torch._scaled_mm` was not measured again.
-- Through `y_inductor`, a SwiGLU module ran within 2% of eager PyTorch (its
-  multiply was the one Y kernel); `torch.compile` was 11-13% faster than
-  either. Since 2026-10-12 `y_inductor` lowers `silu` too, bit for bit
-  eager's, so the module is one Y kernel: it takes 0.98-1.04x
-  `torch.compile`'s time at 2^22 and 2^24 elements and 0.9x at 2^20 replayed
-  from a graph, measured with a game using part of the GPU
-  (`docs/benchmarks/inductor_silu_2026-10-12/`).
-- Cold compilation of one kernel: Y 0.6 ms to PTX plus 10 ms for the driver to
-  load it; Triton's first call with an empty cache, 500 ms.
+  Triton's (1.04 against 1.05 us, 1.12 against 1.12), and its RMSNorm 1.24 us
+  against Triton's 1.34.
+- Launched from Python, a vector-add call takes 3.0 us with Y, 5.8 with
+  Triton and 2.1 with PyTorch (medians: launches are bound by the CPU).
+- Y's FP8 GEMM takes 0.83x Triton's time at 1024, 0.96x at 2048, 0.94x at
+  4096 and 0.74x at 8192. Against `torch._scaled_mm`, with the quantisation
+  in separate kernels, it takes 0.60x, 0.71x and 0.82x up to 4096, and 1.12x
+  at 8192.
+- Through `y_inductor` the SwiGLU module is one Y kernel, bit for bit eager's:
+  81.1 us at 2^22 elements, against `torch.compile`'s 80.4 (inside both
+  columns' spread) and eager's 89.9.
+- Cold compilation of one kernel: Y 0.6 ms to PTX plus 10.2 ms for the driver
+  to load it; Triton's first call with an empty cache, 513 ms.
+
+On 2026-10-11 ([report](benchmarks/head_to_head_2026-10-11/report.md)) Y's
+RMSNorm took 1.40 us against Triton's 1.33 and a Y launch 6.6 us. Its FP8 GEMM
+took 2.1-2.6x Triton's time and 1.5-3.3x `torch._scaled_mm`'s. The SwiGLU
+module ran within 2% of eager, only its multiply a Y kernel, and
+`torch.compile` was 11-13% faster. The changes since, each with its record
+under `docs/benchmarks/`:
+
+- `TorchKernel.launch` costs 2.9 us of CPU time, from 6.6
+  (`launch_2026-10-12/`).
+- Every warp of the RMSNorm reduces the warp partials itself, instead of
+  waiting for thread 0's scale behind a second barrier
+  (`rmsnorm_2026-10-13/`).
+- The FP8 GEMM changed four times, each measured against Triton from 256 to
+  8192:
+  - B staged transposed, the next tile prefetched into registers, CTAs
+    launched in groups: 1.5-2.5x faster (`fp8_gemm_2026-10-12/`).
+  - Fragments loaded with `ldmatrix`, a tile chosen per shape: up to 1.34x
+    faster again (`fp8_gemm_tiles_2026-10-12/`).
+  - Raw tiles copied into shared memory with `cp.async`, converted one K-tile
+    ahead: 1.10-1.19x faster again at 1024, 1536 and 2560, 3% slower at 2048
+    (`fp8_gemm_async_2026-10-12/`).
+  - C written through shared memory with 16-byte stores: 1.02-1.27x faster
+    again, 0.33-0.96x Triton's time at every size
+    (`fp8_gemm_epilogue_2026-10-13/`).
+- `y_inductor` lowers `silu`, bit for bit eager's, so the SwiGLU module is one
+  Y kernel (`inductor_silu_2026-10-12/`).
 
 ---
 
@@ -5285,7 +5290,7 @@ This section provides a formal technical architectural comparison between **Open
 
 ### 35.1 PyTorch Compiler & Native Framework Integration
 * **OpenAI Triton**: Serves as the primary default compiler backend for `torch.compile` via PyTorch Inductor. FX GraphModule nodes are automatically lowered directly into Triton IR dialects without requiring dynamic library loading or explicit C-ABI binding code.
-* **Y Language**: Integrates with PyTorch through `TorchKernel` (launch a compiled Y kernel on tensors) and `y_inductor`, a `torch.compile` backend that lowers only elementwise `add`/`sub`/`mul`/`relu` subgraphs over float32 CUDA tensors to Y kernels and runs everything else eagerly (§34.1). It is an external backend, not PyTorch's default, and not a general graph compiler. (This bullet used to describe "FX module compilation" by a backend that compiled nothing.)
+* **Y Language**: Integrates with PyTorch through `TorchKernel` (launch a compiled Y kernel on tensors) and `y_inductor`, a `torch.compile` backend that lowers only elementwise `add`/`sub`/`mul`/`relu`/`silu`/`sigmoid` subgraphs over float32 CUDA tensors to Y kernels and runs everything else eagerly (§34.1). It is an external backend, not PyTorch's default, and not a general graph compiler. (This bullet used to describe "FX module compilation" by a backend that compiled nothing.)
 
 ### 35.2 High-Level Block Abstraction vs. Low-Level PTX Control
 * **OpenAI Triton**: Operates on a high-level block-centric model (`tl.tensor`). Threads, warps, shared memory allocation, and register layout conversions (`BlockedLayout` $\leftrightarrow$ `SharedLayout`) are abstracted away from the programmer and managed automatically by Triton's MLIR compiler passes.
@@ -5310,7 +5315,7 @@ This section provides a formal technical architectural comparison between **Open
 | Technical Capability | OpenAI Triton (v3.7.0) | Y Language (v1.2.0) |
 | :--- | :--- | :--- |
 | **Primary Design Focus** | High-level GPU deep learning block compiler | Hardware-sentient systems language (GPU + CPU SIMD + ZK R1CS) |
-| **PyTorch `torch.compile` Backend** | Native default Inductor backend | `y_inductor`: elementwise `add`/`sub`/`mul`/`relu` on float32 CUDA tensors only (§34.1) |
+| **PyTorch `torch.compile` Backend** | Native default Inductor backend | `y_inductor`: elementwise `add`/`sub`/`mul`/`relu`/`silu`/`sigmoid` on float32 CUDA tensors only (§34.1) |
 | **Hardware Targets** | NVIDIA GPUs, AMD ROCm, Intel XPU | NVIDIA PTX (`sm_80`–`sm_89`; **Hopper `sm_90a` features were removed**, §33.3–33.5), Native x86 CPU, R1CS Circuits |
 | **Compiler Framework** | LLVM / MLIR Dialect Pipeline | Rust-based IR Grapher & Native PTX Emitter |
 | **Block Masking** | Automatic elementwise tensor predicate masking | 2D & 3D Block Pointer predicates (`BlockPtr2D` & `BlockPtr3D`) |
@@ -5318,7 +5323,7 @@ This section provides a formal technical architectural comparison between **Open
 | **Warp & PTX Granularity** | Abstracted via Block Layout IR | Direct PTX intrinsics (`shfl`, `ldmatrix`, `mma.sync`, `cp.async`). **No `wgmma` or `mbarrier`** — see §33.3–33.5. |
 | **Zero-Knowledge (ZK) Backend** | ❌ None | ✅ Built-in R1CS & GPU PTX Witness Generator |
 | **CPU SIMD Execution** | ❌ GPU Only | ✅ LLVM AVX-512 Native Lowering |
-| **Cold JIT Compilation Latency** | ~200 – 500 ms | **0.055 ms (55 $\mu$s)** |
+| **Cold JIT Compilation Latency** | 513 ms, a first call with an empty cache (§34.6) | 0.6 ms to PTX, plus 10.2 ms for the driver to load it (§34.6). This row said 0.055 ms, a copy of the table §34.6 withdrew |
 
 ---
 

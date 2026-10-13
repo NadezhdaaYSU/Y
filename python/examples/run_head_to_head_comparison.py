@@ -25,8 +25,11 @@ What this does not time, and why:
   quantised to e4m3 in the kernel, float32 C. The other columns compute that
   same function, quantisation included; they used to time FP16 matmuls.
 
-Writes `results.json` (every sample, every check, the toolchain and the GPU's
-state before and after) and `report.md` to --out, by default
+Each row's samples start from warmed clocks, and the SM clock is read after
+every sample: short replays left alone run at the idle clock.
+
+Writes `results.json` (every sample and the SM clock after it, every check,
+the toolchain and the GPU's state before and after) and `report.md` to --out, by default
 `build_artifacts/head_to_head/<UTC time>/`, which git ignores. A run that
 starts with the GPU more than 5% busy is marked as contended.
 
@@ -181,11 +184,30 @@ def event_time_us(fn, calls):
     return start.elapsed_time(end) * 1000.0 / calls
 
 
+def sm_clock_mhz():
+    """The SM clock now, from NVML; None where NVML cannot answer."""
+    try:
+        return torch.cuda.clock_rate(0)
+    except Exception:
+        return None
+
+
+def warm_clocks():
+    """Bring the clocks up. A row whose samples are short (500 replays of a
+    1 us kernel) does not hold them up itself: such replays were measured at
+    the 210 MHz idle clock, 4.6x slow."""
+    warm = torch.randn(4096, 4096, device=DEVICE)
+    for _ in range(30):
+        warm @ warm
+    torch.cuda.synchronize()
+
+
 def measure(columns, rounds, warmup_rounds, target_us=2000.0):
     """Interleaved samples, in both regimes, for every column that passed.
 
     `columns` maps a name to a zero-argument callable. Returns
-    {name: {"calls": n, "launch": [us...], "graph": [us...] or None, "graph_error": str}}.
+    {name: {"calls": n, "launch": [us...], "graph": [us...] or None, "graph_error": str,
+            "sm_clock_mhz": [MHz read right after each launch sample, then each graph sample]}}.
     """
     plan, one = {}, {}
     for name, fn in columns.items():
@@ -212,19 +234,25 @@ def measure(columns, rounds, warmup_rounds, target_us=2000.0):
             graph, graph_error = None, f"{type(e).__name__}: {e}"
             torch.cuda.synchronize()
         plan[name] = {"calls": calls, "many": many, "graph_obj": graph,
-                      "launch": [], "graph": [] if graph else None, "graph_error": graph_error}
+                      "launch": [], "graph": [] if graph else None, "graph_error": graph_error,
+                      "sm_clock_mhz": []}
 
     names = list(plan)
+    warm_clocks()
     for r in range(warmup_rounds + rounds):
         order = names[r % len(names):] + names[:r % len(names)]
         for name in order:
             p = plan[name]
             t_launch = event_time_us(p["many"], p["calls"])
+            clock_launch = sm_clock_mhz()
             t_graph = event_time_us(p["graph_obj"].replay, p["calls"]) if p["graph_obj"] else None
+            clock_graph = sm_clock_mhz() if t_graph is not None else None
             if r >= warmup_rounds:
                 p["launch"].append(t_launch)
+                p["sm_clock_mhz"].append(clock_launch)
                 if t_graph is not None:
                     p["graph"].append(t_graph)
+                    p["sm_clock_mhz"].append(clock_graph)
     for p in plan.values():
         del p["many"], p["graph_obj"]
     return plan
@@ -505,6 +533,10 @@ def write_report(out_dir, result):
             t = row["timing"][col]
             fmt = lambda s: f"{s['min']:.2f} / {s['median']:.2f}" if s else f"n/a ({t['graph_error']})"
             lines.append(f"| {col} | {mark} | {fmt(t['launch_summary'])} | {fmt(t['graph_summary'])} |")
+        clocks = [c for t in row["timing"].values() for c in t["sm_clock_mhz"] if c is not None]
+        if clocks:
+            lines.append(f"\nSM clock read after each sample: {min(clocks)}-{max(clocks)} MHz "
+                         f"(median {statistics.median(clocks):.0f}).")
         lines.append("")
     cold = result["cold_compile"]
     ok_y = [s for s in cold["y"] if "error" not in s]
@@ -539,11 +571,9 @@ def main():
     before = gpu_state()
     gen = torch.Generator(device=DEVICE).manual_seed(args.seed)
 
-    # Bring the clocks up before anything is measured.
-    warm = torch.randn(4096, 4096, device=DEVICE)
-    for _ in range(30):
-        warm @ warm
-    torch.cuda.synchronize()
+    # Bring the clocks up before anything is measured (measure() does it
+    # again before each row's samples).
+    warm_clocks()
 
     y_ptx, results = {}, []
     for name, columns, outputs, ref, tol, exact, notes in rows(target, y_ptx, gen):
@@ -552,13 +582,16 @@ def main():
         for t in timing.values():
             t["launch_summary"] = summary(t["launch"])
             t["graph_summary"] = summary(t["graph"])
+            t["sm_clock_summary"] = summary([c for c in t["sm_clock_mhz"] if c is not None])
         notes = notes() if callable(notes) else notes
         results.append({"name": name, "notes": notes, "checks": checks, "timing": timing})
         cell = lambda c: (f"{timing[c]['launch_summary']['min']:.2f}/"
                           + (f"{timing[c]['graph_summary']['min']:.2f}" if timing[c]["graph_summary"] else "n/a")
                           if c in timing else "FAILED")
+        clocks = [c for t in timing.values() for c in t["sm_clock_mhz"] if c is not None]
         print(f"{name:<55} " + " | ".join(f"{c}: {cell(c)}" for c in ("Y", "Triton", "PyTorch"))
-              + "  (min us, launch/graph)", flush=True)
+              + "  (min us, launch/graph)"
+              + (f"  SM clock {min(clocks)}-{max(clocks)} MHz" if clocks else "  SM clock unread"), flush=True)
         torch.cuda.empty_cache()
 
     after = gpu_state()
