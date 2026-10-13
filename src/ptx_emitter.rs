@@ -9355,6 +9355,114 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
     }
 
+    /// The cp.async path's epilogue: C through shared memory.
+    ///
+    /// Each thread stores its scaled fragments, two adjacent columns a
+    /// `st.shared.v2`, into a `cta_m` x `cta_n` f32 tile whose rows are
+    /// `cta_n + 8` floats apart: a fragment's 8 rows then start 8 words apart
+    /// modulo 32, so a half-warp's 16 two-word stores cover the 32 banks once.
+    /// After a barrier each thread copies 16-byte chunks out, consecutive
+    /// threads taking consecutive chunks of a row, so a warp writes 512
+    /// contiguous bytes at 128 columns. A chunk is in range or out of it
+    /// whole, since the padded path has `n % 4 == 0`; rows past `m` are not
+    /// written.
+    ///
+    /// The tile reuses the stages from offset 0. The K loop ends with a
+    /// barrier after every warp's last `ldmatrix`, and its last copy groups
+    /// are empty; `cp.async.wait_all` makes "no copy in flight" explicit.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_fp8_epilogue_staged(
+        &mut self,
+        acc: &[Vec<Vec<String>>],
+        scale: &str,
+        smem: &str,
+        c_g: &str,
+        tid: &str,
+        group_id: &str,
+        tig: &str,
+        warp_row0_local: &str,
+        warp_col0_local: &str,
+        cta_row0: &str,
+        cta_col0: &str,
+        m: u32,
+        n: u32,
+        cta_m: u32,
+        cta_n: u32,
+        threads: u32,
+        num_i: u32,
+        num_j: u32,
+    ) {
+        let cs = cta_n + 8;
+        writeln!(&mut self.ptx_buffer, "    // C through shared memory: {}x{} f32, rows of {} floats", cta_m, cta_n, cs).unwrap();
+        writeln!(&mut self.ptx_buffer, "    cp.async.wait_all;").unwrap();
+        let r0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", r0, warp_row0_local, group_id).unwrap();
+        let c0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 2, {};", c0, tig, warp_col0_local).unwrap();
+        let off = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", off, r0, cs, c0).unwrap();
+        let base = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 4, {};", base, off, smem).unwrap();
+        for i in 0..num_i {
+            for j in 0..num_j {
+                for h in 0..2u32 {
+                    let v0 = self.alloc_regf32();
+                    let v1 = self.alloc_regf32();
+                    let fr = &acc[i as usize][j as usize];
+                    writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", v0, fr[2 * h as usize], scale).unwrap();
+                    writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", v1, fr[2 * h as usize + 1], scale).unwrap();
+                    let imm = ((i * 16 + 8 * h) * cs + j * 8) * 4;
+                    writeln!(&mut self.ptx_buffer, "    st.shared.v2.f32 [{}+{}], {{{}, {}}};", base, imm, v0, v1).unwrap();
+                }
+            }
+        }
+        writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+
+        let cpr = cta_n / 4;
+        let rows_step = threads / cpr;
+        let per_thread = cta_m * cpr / threads;
+        let ch = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", ch, tid, cpr).unwrap();
+        let row = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", row, tid, cpr).unwrap();
+        let soff = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", soff, row, cs).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 4, {};", soff, ch, soff).unwrap();
+        let sbase = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 4, {};", sbase, soff, smem).unwrap();
+        let gcol = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 4, {};", gcol, ch, cta_col0).unwrap();
+        let p_col = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_col, gcol, n).unwrap();
+        let grow0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", grow0, cta_row0, row).unwrap();
+        let lin = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, grow0, n, gcol).unwrap();
+        let byte = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 4;", byte, lin).unwrap();
+        let gaddr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gaddr, c_g, byte).unwrap();
+        for kk in 0..per_thread {
+            let grow = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", grow, grow0, kk * rows_step).unwrap();
+            let p = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.lt.and.u32 {}, {}, {}, {};", p, grow, m, p_col).unwrap();
+            let v: Vec<String> = (0..4).map(|_| self.alloc_regf32()).collect();
+            writeln!(
+                &mut self.ptx_buffer,
+                "    ld.shared.v4.f32 {{{}, {}, {}, {}}}, [{}+{}];",
+                v[0], v[1], v[2], v[3], sbase, kk * rows_step * cs * 4
+            )
+            .unwrap();
+            writeln!(
+                &mut self.ptx_buffer,
+                "    @{} st.global.v4.f32 [{}+{}], {{{}, {}, {}, {}}};",
+                p, gaddr, kk as u64 * rows_step as u64 * n as u64 * 4, v[0], v[1], v[2], v[3]
+            )
+            .unwrap();
+        }
+    }
+
     /// Each lane's byte offsets for the padded path's `ldmatrix.x4` loads,
     /// computed once. An 8-bit m16n8k32 fragment register holds 4
     /// consecutive k bytes of one row - two of `ldmatrix`'s b16 elements -
@@ -9660,6 +9768,15 @@ declare it as a Q format.\n{}",
     /// 6-7% at 256-512, 2% at 3072-8192, and 3% slower at 2048, where the
     /// dropped 256x128 tile was better (docs/benchmarks/fp8_gemm_async_2026-10-12/);
     /// 256x128 tiles cannot take it (132 KB).
+    ///
+    /// **Epilogue (2026-10-13).** At 1024^3 Nsight Compute put 27% of the
+    /// kernel's warp samples after the K loop (Triton's: 8%): every value
+    /// was a 4-byte store, 64 a thread, each fragment row on its own line.
+    /// The cp.async path now writes C through the shared memory its stages
+    /// are done with (`emit_fp8_epilogue_staged`), 16-byte stores of whole
+    /// rows, and the register path stores column pairs with
+    /// `st.global.v2`. 1.02-1.27x faster, 0.33-0.96x Triton's time at every
+    /// size from 256 to 8192 (docs/benchmarks/fp8_gemm_epilogue_2026-10-13/).
     ///
     /// Deliberate, disclosed scope choices remaining after this pass (see
     /// benchmark_y_tensor_core_gemm_results.md for how the f16 GEMM
@@ -10074,9 +10191,33 @@ declare it as a Q format.\n{}",
         let scale = self.alloc_regf32();
         writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", scale, scale_a_reg, scale_b_reg).unwrap();
 
+        // The cp.async path writes C through its own shared memory, which the
+        // tile is done with, so that each warp stores whole rows with 16-byte
+        // stores. Straight from the fragments, every value was a 4-byte store
+        // to one of 8 rows: 64 a thread at 128x128, and a quarter of the
+        // kernel's warp samples at 1024^3 where Triton's 16-byte stores took 8%.
+        let cs = cta_n + 8;
+        let cpr = cta_n / 4;
+        let staged = padded
+            && stages > 0
+            && cta_m * cs * 4 <= async_smem_bytes
+            && threads_per_cta % cpr == 0
+            && (cta_m * cpr) % threads_per_cta == 0;
+        if staged {
+            self.emit_fp8_epilogue_staged(
+                &acc, &scale, &smem_a, &c_g, &tid, &group_id, &tig, &warp_row0_local, &warp_col0_local,
+                &cta_row0, &cta_col0, m, n, cta_m, cta_n, threads_per_cta, num_i, num_j,
+            );
+            return threads_per_cta;
+        }
+
+        // On the padded path `n % 4 == 0` and a fragment's column pair starts
+        // at an even column, so the pair is in range or out of it together
+        // and 8-byte aligned: one `st.global.v2` instead of two stores.
+        let pairs = padded;
         for i in 0..num_i {
             for j in 0..num_j {
-                for idx4 in 0..4u32 {
+                for idx4 in (0..4u32).step_by(if pairs { 2 } else { 1 }) {
                     let (local_row, local_col) = self.emit_fp8_accum_row_col(&group_id, &tig, idx4);
 
                     let row1 = self.alloc_reg32();
@@ -10113,7 +10254,17 @@ declare it as a Q format.\n{}",
                     writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 4;", byte, lin).unwrap();
                     let addr = self.alloc_reg64();
                     writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", addr, c_g, byte).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    @{} st.global.f32 [{}], {};", p_ok, addr, dval).unwrap();
+                    if pairs {
+                        let dval1 = self.alloc_regf32();
+                        writeln!(
+                            &mut self.ptx_buffer,
+                            "    mul.f32 {}, {}, {};",
+                            dval1, acc[i as usize][j as usize][idx4 as usize + 1], scale
+                        ).unwrap();
+                        writeln!(&mut self.ptx_buffer, "    @{} st.global.v2.f32 [{}], {{{}, {}}};", p_ok, addr, dval, dval1).unwrap();
+                    } else {
+                        writeln!(&mut self.ptx_buffer, "    @{} st.global.f32 [{}], {};", p_ok, addr, dval).unwrap();
+                    }
                 }
             }
         }
@@ -15034,7 +15185,19 @@ mod tests {
         assert_eq!(ptx.matches("cp.async.cg.shared.global").count(), 24, "{}", ptx);
         assert_eq!(ptx.matches("cp.async.commit_group;").count(), 3, "{}", ptx);
         assert_eq!(ptx.matches("cp.async.wait_group 1;").count(), 2, "{}", ptx);
-        assert_eq!(ptx.matches("bar.sync 0;").count(), 4, "two in the prologue, two a K-tile: {}", ptx);
+        assert_eq!(ptx.matches("bar.sync 0;").count(), 5, "two in the prologue, two a K-tile, one in the epilogue: {}", ptx);
+        // C goes through shared memory: per thread, 2 x 8 fragments of two
+        // rows each stored as column pairs, then 128 x 32 16-byte chunks
+        // over 256 threads written out, and no 4-byte store left.
+        assert_eq!(ptx.matches("st.shared.v2.f32").count(), 32, "{}", ptx);
+        assert_eq!(ptx.matches("st.global.v4.f32").count(), 16, "{}", ptx);
+        assert!(!ptx.contains("st.global.f32"), "{}", ptx);
+        let epilogue = &ptx[ptx.rfind("FP8_GEMM_KA_DONE_gemm_fp8_async").expect("loop end")..];
+        let staged = epilogue.find("st.shared.v2.f32").unwrap();
+        let barrier = epilogue.find("bar.sync 0;").unwrap();
+        let read = epilogue.find("ld.shared.v4.f32").unwrap();
+        assert!(epilogue.find("cp.async.wait_all;").unwrap() < staged, "no copy in flight over the tile: {}", epilogue);
+        assert!(staged < barrier && barrier < read, "every fragment is stored before any row is read: {}", epilogue);
 
         let body = &ptx[ptx.find("FP8_GEMM_KA_gemm_fp8_async").expect("K loop")..];
         let first_copy = body.find("cp.async.cg").unwrap();
@@ -15114,13 +15277,16 @@ mod tests {
             next_valid_setp_count, ptx
         );
 
-        // and.pred count: 32 from the epilogue (num_i(2)*num_j(4)*4) and
-        // none from the staging: M and N are whole numbers of tiles here, so
-        // the prefetch is predicated on the next-tile predicate alone (the
-        // edge predicates are compile-time true). The ragged path is
-        // checked on the GPU (python/y_lang/tests/test_fp8_gemm.py).
+        // and.pred count: 16 from the epilogue (num_i(2)*num_j(4)*2 column
+        // pairs, each one `st.global.v2`) and none from the staging: M and N
+        // are whole numbers of tiles here, so the prefetch is predicated on
+        // the next-tile predicate alone (the edge predicates are
+        // compile-time true). The ragged path is checked on the GPU
+        // (python/y_lang/tests/test_fp8_gemm.py).
         let and_pred_count = ptx.matches("and.pred").count();
-        assert_eq!(and_pred_count, 32, "expected the epilogue's 32 and.pred occurrences only, got {}: {}", and_pred_count, ptx);
+        assert_eq!(and_pred_count, 16, "expected the epilogue's 16 and.pred occurrences only, got {}: {}", and_pred_count, ptx);
+        assert_eq!(ptx.matches("st.global.v2.f32").count(), 16, "{}", ptx);
+        assert!(!ptx.contains("st.global.f32"), "{}", ptx);
 
         // Register prefetch (session 6): in the loop body the next tile's
         // global loads are issued before the first mma and stored to

@@ -86,6 +86,12 @@ class Fp8GemmIsExact(unittest.TestCase):
         self.run_shape(1024, 1024, 256, scale_a=2.0, scale_b=0.5)
         self.run_shape(200, 136, 128, scale_a=0.25, scale_b=4.0)
         self.run_shape(2100, 2052, 128, scale_a=4.0, scale_b=0.25)
+        # Each pair above multiplies to 1, so a kernel that never scaled its
+        # result passed them; these do not (the 128x128 and 64x64 cp.async
+        # tiles, and the register path).
+        self.run_shape(1030, 1026, 64, scale_a=2.0, scale_b=4.0)
+        self.run_shape(200, 136, 128, scale_a=0.5, scale_b=0.25)
+        self.run_shape(600, 700, 128, scale_a=4.0, scale_b=2.0)
 
 
 # Ragged shapes of each tile family, run under compute-sanitizer's memcheck:
