@@ -3786,7 +3786,9 @@ The launch must be `(hidden_dim / 4, 1, 1)` threads, a whole number of warps;
 any other shape traps, because the block-wide sum would cover something other
 than the row. Until 2026-10-11 it took three operands and assumed a 1024-wide
 row, `eps = 1e-5` and 256 threads, whatever the kernel declared; other shapes
-were silently wrong (`tests/ptx_rmsnorm_v4.rs`).
+were silently wrong (`tests/ptx_rmsnorm_v4.rs`). Each warp reduces the warp
+partials itself, so a call has one barrier; inside a `for` or `while` it has a
+second, because the next row's partials reuse the same shared words.
 
 ### 20.6 Storing and Loading in a PTX Kernel
 
@@ -5238,6 +5240,9 @@ column's better regime is compared:
 
 - Replayed from a CUDA graph, Y's vector add and SwiGLU take the same time as
   Triton's (1.07 and 1.13 us), and its RMSNorm 1.40 us against Triton's 1.33.
+  Since 2026-10-13 every warp of the RMSNorm reduces the warp partials itself
+  instead of waiting for thread 0's scale behind a second barrier: 1.22 us
+  against Triton's 1.31 (`docs/benchmarks/rmsnorm_2026-10-13/`).
   Launched from Python, each Y call costs more than Triton's:
   `TorchKernel.launch` makes vector add 6.6 us a call, against Triton's 4.8 and
   PyTorch's 2.0. Since 2026-10-12 a launch costs 2.9 us of CPU time, against
