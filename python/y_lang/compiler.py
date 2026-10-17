@@ -207,7 +207,7 @@ def _ptx_cache_context():
     settings = sorted(
         (name, value) for name, value in os.environ.items()
         if name.startswith(("Y_", "YSU_"))
-        and name not in ("Y_LIB_PATH", "YSU_CACHE_DIR")
+        and name not in ("Y_LIB_PATH", "YSU_CACHE_DIR", "Y_LAUNCHER")
     )
     return [str(profile.resolve()), profile_identity, settings]
 

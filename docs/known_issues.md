@@ -21,11 +21,19 @@ source; each entry there now carries its status. What is still open:
 
 - `python/examples/benchmark_3d_block_ptr.py` has been run only on a busy GPU
   since its rewrite (2026-10-11); no figure from it is published.
-- A Y launch from Python costs 2.9 us of CPU time per call, against Triton's
-  5.7 and PyTorch's 2.0 (`docs/benchmarks/launch_2026-10-12/`); it was 6.6.
-  Performance, not correctness.
+- A Y launch from Python costs 1.72 us of CPU time per call through the
+  native launcher, against PyTorch's 2.02 and Triton's 5.6
+  (`docs/benchmarks/launch_2026-10-17/`); it was 6.6, then 2.9, which is
+  still the cost where the launcher cannot be compiled (no C compiler or no
+  `Python.h`; `launcher_status()` says). Performance, not correctness.
 - `python/examples/kernels/flash_attention.ysu` does not compile (`Pipeline` is
   not a type); the scripts report that rather than stop.
+
+### Python packaging
+
+- `python/pyproject.toml` cannot be built into a wheel: its `readme =
+  "../README.md"` lies outside the project, and setuptools refuses it
+  (checked 2026-10-17). The package is used through `PYTHONPATH`.
 
 ### `y_lang.ops`
 
@@ -91,6 +99,9 @@ source; each entry there now carries its status. What is still open:
 
 ### Debugger
 
+- A float kernel argument past float32's range raises `OverflowError` when
+  launched on the GPU, and becomes inf under the CPU interpreter
+  (`Y_INTERPRETER=1`), which converts it with numpy.
 - A data-carrying enum's payload prints as raw words (§38.6); the runtime has no
   debug information, by design; a breakpoint in a kernel the LLVM backend
   replaces with the packed GEMM is hit only on the fallback path.

@@ -6,7 +6,9 @@ The launch passed no dynamic shared memory, so every kernel staging through
 launched from Python; a kernel name the module lacked ran an entry named
 `main` instead, if there was one; and each launch built a `Stream` object
 and asked twice whether CUDA was available, 6.6 us a call against Triton's
-5.7; it is 2.9 now (docs/benchmarks/launch_2026-10-12/).
+5.7; it was 2.9 after that (docs/benchmarks/launch_2026-10-12/). The GPU
+tests run through both launch paths, the native one (`_launch.c`) and
+ctypes; test_native_launch.py compares the two.
 """
 
 import ctypes
@@ -17,6 +19,7 @@ import unittest
 
 import torch
 
+from test_native_launch import WithLauncher
 from y_lang.compiler import is_interpreter_enabled
 from y_lang.torch_interop import TorchKernel, _get_cuda_driver
 
@@ -78,7 +81,7 @@ def gpu_has_tensor_cores():
 
 
 @unittest.skipUnless(gpu_has_tensor_cores(), "needs an sm_89 or later GPU")
-class LaunchesWhatThePtxNeeds(unittest.TestCase):
+class LaunchesWhatThePtxNeeds(WithLauncher, unittest.TestCase):
     def run_gemm(self, n, tile):
         k, grid, block, shared = f16_tile_gemm(n, tile)
         gen = torch.Generator(device="cuda").manual_seed(n)
@@ -103,9 +106,14 @@ class LaunchesWhatThePtxNeeds(unittest.TestCase):
         self.assertGreater(self.run_gemm(512, "64,64,64,4,2,3"), 48 * 1024)
 
 
+class LaunchesWhatThePtxNeedsThroughCtypes(LaunchesWhatThePtxNeeds):
+    LAUNCHER = "ctypes"
+
+
 @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA device")
-class LaunchesTheNamedKernelOnTheCallersStream(unittest.TestCase):
+class LaunchesTheNamedKernelOnTheCallersStream(WithLauncher, unittest.TestCase):
     def setUp(self):
+        super().setUp()
         self.n = 1 << 20
         self.a = torch.randn(self.n, device="cuda")
         self.b = torch.randn(self.n, device="cuda")
@@ -159,6 +167,10 @@ class LaunchesTheNamedKernelOnTheCallersStream(unittest.TestCase):
         self.side.synchronize()
         torch.cuda.synchronize()
         self.assertTrue(torch.equal(c, self.a + self.b))
+
+
+class LaunchesTheNamedKernelOnTheCallersStreamThroughCtypes(LaunchesTheNamedKernelOnTheCallersStream):
+    LAUNCHER = "ctypes"
 
 
 class TheInterpreterSwitchIsReadEachTime(unittest.TestCase):

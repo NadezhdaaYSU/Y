@@ -1,0 +1,16 @@
+QUIET 21:19:25 mean 2.6%
+         140001 function calls in 0.073 seconds
+
+   Ordered by: internal time
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    20000    0.054    0.000    0.054    0.000 {built-in method _ylaunch.launch}
+    20000    0.009    0.000    0.073    0.000 python/y_lang/torch_interop.py:265(launch)
+    20000    0.003    0.000    0.007    0.000 python/y_lang/torch_interop.py:24(<lambda>)
+    20000    0.002    0.000    0.002    0.000 {built-in method torch._C._cuda_getDevice}
+    20000    0.002    0.000    0.002    0.000 python/y_lang/compiler.py:328(is_interpreter_enabled)
+    20000    0.001    0.000    0.001    0.000 {built-in method torch._C._cuda_getCurrentRawStream}
+    20000    0.001    0.000    0.001    0.000 python/y_lang/torch_interop.py:198(_ensure_loaded)
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+
+

@@ -1,0 +1,6 @@
+QUIET 21:54:32 mean 1.5%
+run1    Y         events: min   1.70 median   1.73 | CPU per call: min   1.62 median   1.72 us
+run1    Y ctypes  events: min   2.93 median   2.94 | CPU per call: min   2.92 median   2.93 us
+run1    Triton    events: min   5.65 median   5.68 | CPU per call: min   5.65 median   5.66 us
+run1    PyTorch   events: min   2.03 median   2.06 | CPU per call: min   2.00 median   2.03 us
+run1    SM clock after each sample: 2490-2490 MHz

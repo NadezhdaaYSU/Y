@@ -17,3 +17,7 @@ dev = [
     "pytest",
     "cupy-cuda12x",
 ]
+
+[tool.setuptools.package-data]
+# Compiled on first use by torch_interop's native launch path.
+y_lang = ["_launch.c"]

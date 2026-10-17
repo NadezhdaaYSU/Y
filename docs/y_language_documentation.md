@@ -5137,12 +5137,29 @@ checker does not know), so the scripts that load it stop there.
   kernel runs. This section used to describe a parallel scan and a bitonic sort.
 * **Implementation**: `python/y_lang/ops/block.py`.
 
-### 34.3 Zero-Allocation Host Launch Pointer Caching (`TorchKernel.launch`)
-* **Overview**: Pre-allocates and caches `ctypes.addressof` storage arrays on `TorchKernel` instances.
-* **Impact**: avoids re-allocating the argument array on every call. The
-  "$\sim 4.0 \rightarrow < 0.4\ \mu$s" dispatch figure this section gave was
-  never measured. The head-to-head script's *launch* column times back-to-back
-  calls through `TorchKernel.launch` beside PyTorch's and Triton's own launches.
+### 34.3 Launching from Python (`TorchKernel.launch`)
+* **Native path**: when the first kernel is loaded, `python/y_lang/_launch.c`
+  is compiled with the system C compiler (`CC`, else `cc`, `gcc` or `clang`;
+  about 60 ms) and cached per user under `$YSU_CACHE_DIR`, else
+  `$XDG_CACHE_HOME/y-lang` or `~/.cache/y-lang`, named by a hash of the
+  source, the compiler and the interpreter. A launch is then one C call that
+  fills the parameter slots and calls `cuLaunchKernel`: 1.72 us of CPU time
+  a call, against 2.02-2.03 for PyTorch's own add and 5.6-5.7 for Triton's
+  launch (`docs/benchmarks/launch_2026-10-17/`).
+* **Fallback**: without a C compiler or the interpreter's `Python.h`, kernels
+  launch through ctypes, as every launch did before: 2.93 us a call.
+  `y_lang.torch_interop.launcher_status()` says which path and why.
+  `Y_LAUNCHER=ctypes` chooses ctypes; `Y_LAUNCHER=native` raises instead of
+  falling back. Both are read when a kernel is loaded.
+* **Arguments**: an object with a callable `data_ptr` (a tensor) passes that
+  pointer, an int its value modulo 2^64, a float its float32 bits
+  (`OverflowError` past float32's range, as `struct.pack("<f", x)`); anything
+  else is a `TypeError`. The two paths fill the slots alike, byte for byte and
+  error for error (`python/y_lang/tests/test_native_launch.py`); a grid or
+  block that is not an integer raises `TypeError` on the native path, where
+  ctypes raised `ctypes.ArgumentError`.
+* This section used to give a "$\sim 4.0 \rightarrow < 0.4\ \mu$s" dispatch
+  figure for caching the ctypes argument array, which was never measured.
 
 ### 34.4 CPU interpreter (`y_lang.interpreter`)
 Runs the PTX a kernel compiles to on the CPU, so a kernel can be debugged
@@ -5288,6 +5305,10 @@ under `docs/benchmarks/`:
     (`fp8_gemm_epilogue_2026-10-13/`).
 - `y_inductor` lowers `silu`, bit for bit eager's, so the SwiGLU module is one
   Y kernel (`inductor_silu_2026-10-12/`).
+
+Since the 2026-10-13 run, `TorchKernel.launch` fills the parameters and calls
+`cuLaunchKernel` in one C call (§34.3): 1.72 us of CPU time a call, against
+PyTorch's 2.02 (`launch_2026-10-17/`).
 
 ---
 
