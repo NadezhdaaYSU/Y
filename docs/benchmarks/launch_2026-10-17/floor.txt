@@ -1,0 +1,2 @@
+C cuLaunchKernel: min 0.99 median 1.01 us per call
+C cuLaunchKernel: min 1.03 median 1.04 us per call

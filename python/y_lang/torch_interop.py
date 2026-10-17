@@ -67,6 +67,122 @@ def _get_cuda_driver():
         raise RuntimeError("CUDA Driver API library (libcuda.so) could not be loaded.")
     return _cuda_lib
 
+
+# The native launch path, `_launch.c`: one C call converts the kernel
+# arguments and calls cuLaunchKernel, where ctypes took 2.9 us a launch. It
+# is compiled with the system C compiler the first time a kernel is loaded,
+# cached per user (`$YSU_CACHE_DIR`, else `$XDG_CACHE_HOME/y-lang` or
+# `~/.cache/y-lang`) under a hash of the source, the compiler and the
+# interpreter, and loaded once per process. Where it cannot be built the
+# launch goes through ctypes as before; `launcher_status()` says which and
+# why. `Y_LAUNCHER=ctypes` chooses ctypes, and `Y_LAUNCHER=native` raises
+# instead of falling back. The setting is read when a kernel is loaded.
+_native_launch = None
+_native_status = None
+_LAUNCHER_MODES = ("", "native", "ctypes")
+
+
+def _launcher_cache_dir() -> str:
+    if "YSU_CACHE_DIR" in os.environ:
+        return os.path.abspath(os.environ["YSU_CACHE_DIR"])
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return os.path.join(base, "y-lang")
+
+
+def _build_native_launcher(source_path=None):
+    """The `_ylaunch` module, compiled from `source_path` (`_launch.c` beside
+    this file) unless a cached build exists: `(module, None)`, or `(None, the
+    reason it could not be built)`."""
+    import hashlib
+    import importlib.util
+    import shlex
+    import shutil
+    import subprocess
+    import sys
+    import sysconfig
+
+    source_path = source_path or os.path.join(os.path.dirname(os.path.abspath(__file__)), "_launch.c")
+    try:
+        with open(source_path, "rb") as f:
+            source = f.read()
+    except OSError as e:
+        return None, f"cannot read {source_path}: {e}"
+    include = sysconfig.get_paths().get("include")
+    suffix = sysconfig.get_config_var("EXT_SUFFIX")
+    if not include or not suffix or not os.path.exists(os.path.join(include, "Python.h")):
+        return None, f"this interpreter's Python.h is not installed (looked in {include})"
+    cc = os.environ.get("CC") or shutil.which("cc") or shutil.which("gcc") or shutil.which("clang")
+    if not cc:
+        return None, "no C compiler found (set CC)"
+    identity = b"\0".join([source, cc.encode(), include.encode(), suffix.encode(), sys.version.encode()])
+    cache = _launcher_cache_dir()
+    path = os.path.join(cache, f"_ylaunch_{hashlib.sha256(identity).hexdigest()[:24]}{suffix}")
+    if not os.path.exists(path):
+        # Built under a name of this process's own and renamed into place, so
+        # no process loads a half-written module.
+        tmp = f"{path}.{os.getpid()}.tmp"
+        try:
+            os.makedirs(cache, exist_ok=True)
+            built = subprocess.run(shlex.split(cc) + ["-O2", "-shared", "-fPIC", "-I", include, source_path,
+                                                      "-o", tmp], capture_output=True, text=True)
+            if built.returncode != 0:
+                return None, f"{cc} could not compile {source_path}: {built.stderr.strip()[-2000:]}"
+            os.replace(tmp, path)
+        except OSError as e:
+            return None, f"could not build {path}: {e}"
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+    spec = importlib.util.spec_from_file_location("_ylaunch", path)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except Exception as e:
+        return None, f"could not load {path}: {e}"
+    return module, None
+
+
+def _native_launcher():
+    """`_ylaunch.launch`, or None where the launch goes through ctypes."""
+    global _native_launch, _native_status
+    mode = os.environ.get("Y_LAUNCHER", "")
+    if mode not in _LAUNCHER_MODES:
+        raise ValueError(f"Y_LAUNCHER={mode!r}: expected 'native', 'ctypes' or unset")
+    if mode == "ctypes":
+        return None
+    if _native_status is None:
+        module, why = _build_native_launcher()
+        if module is None:
+            _native_status = f"ctypes: {why}"
+        else:
+            module.set_driver(ctypes.cast(_get_cuda_driver().cuLaunchKernel, ctypes.c_void_p).value)
+            _native_launch, _native_status = module.launch, f"native: {module.__file__}"
+    if _native_launch is None and mode == "native":
+        raise RuntimeError(f"Y_LAUNCHER=native, and the native launcher is unavailable ({_native_status})")
+    return _native_launch
+
+
+def launcher_status():
+    """How kernels loaded without `Y_LAUNCHER=ctypes` launch: "native: <module>",
+    "ctypes: <why the native launcher could not be built>", or None before
+    the first kernel is loaded."""
+    return _native_status
+
+def _fill_slots(slots, args):
+    """The ctypes path's parameter slots (`ctypes.c_uint64`s) for `args`;
+    `_launch.c` fills its own the same way."""
+    for slot, arg in zip(slots, args):
+        data_ptr = getattr(arg, "data_ptr", None)
+        if data_ptr is not None and callable(data_ptr):
+            slot.value = data_ptr()
+        elif isinstance(arg, int):
+            slot.value = arg
+        elif isinstance(arg, float):
+            slot.value = _U32.unpack(_F32.pack(arg))[0]
+        else:
+            raise TypeError(f"Unsupported argument type: {type(arg)}")
+
+
 _MODULE_CACHE: Dict[str, Tuple[Any, Any]] = {}
 
 class TorchKernel:
@@ -84,6 +200,9 @@ class TorchKernel:
             return
 
         cuda = _get_cuda_driver()
+        # Chosen before anything is loaded: where it raises, the next launch
+        # retries the load rather than finding a half-initialised kernel.
+        native_launch = _native_launcher()
 
         # cuModuleLoadData(CUmodule *module, const void *image)
         cuModuleLoadData = cuda.cuModuleLoadData
@@ -140,6 +259,8 @@ class TorchKernel:
         ]
         cuLaunchKernel.restype = ctypes.c_int
         self._cuLaunchKernel = cuLaunchKernel
+        self._native_launch = native_launch
+        self._function_address = function.value
 
     def launch(self, grid: Tuple[int, int, int], block: Tuple[int, int, int], args: list, stream: Any = None):
         """Launch the compiled kernel on the GPU, or, with `Y_INTERPRETER=1` or
@@ -155,25 +276,6 @@ class TorchKernel:
 
         self._ensure_loaded()
 
-        # Prepare kernel argument pointers (Zero Allocation Fast Path)
-        num_args = len(args)
-        if not hasattr(self, "_args_array") or len(self._args_array) != num_args:
-            self._storage_array = [ctypes.c_uint64(0) for _ in range(num_args)]
-            self._args_array = (ctypes.c_void_p * num_args)()
-            for i in range(num_args):
-                self._args_array[i] = ctypes.addressof(self._storage_array[i])
-
-        for slot, arg in zip(self._storage_array, args):
-            data_ptr = getattr(arg, "data_ptr", None)
-            if data_ptr is not None and callable(data_ptr):
-                slot.value = data_ptr()
-            elif isinstance(arg, int):
-                slot.value = arg
-            elif isinstance(arg, float):
-                slot.value = _U32.unpack(_F32.pack(arg))[0]
-            else:
-                raise TypeError(f"Unsupported argument type: {type(arg)}")
-
         if stream is not None and hasattr(stream, "cuda_stream"):
             stream_ptr = stream.cuda_stream
         else:
@@ -185,15 +287,31 @@ class TorchKernel:
         grid_x, grid_y, grid_z = grid
         block_x, block_y, block_z = block
 
-        res = self._cuLaunchKernel(
-            self._function,
-            grid_x, grid_y, grid_z,
-            block_x, block_y, block_z,
-            self._shared_bytes,
-            stream_ptr,
-            self._args_array,
-            None
-        )
+        if self._native_launch is not None:
+            # `_launch.c` fills the parameter slots as the loop below does,
+            # and calls cuLaunchKernel, in one C call.
+            res = self._native_launch(self._function_address, grid_x, grid_y, grid_z, block_x, block_y, block_z,
+                                      self._shared_bytes, stream_ptr, args)
+        else:
+            # Prepare kernel argument pointers (Zero Allocation Fast Path)
+            num_args = len(args)
+            if not hasattr(self, "_args_array") or len(self._args_array) != num_args:
+                self._storage_array = [ctypes.c_uint64(0) for _ in range(num_args)]
+                self._args_array = (ctypes.c_void_p * num_args)()
+                for i in range(num_args):
+                    self._args_array[i] = ctypes.addressof(self._storage_array[i])
+
+            _fill_slots(self._storage_array, args)
+
+            res = self._cuLaunchKernel(
+                self._function,
+                grid_x, grid_y, grid_z,
+                block_x, block_y, block_z,
+                self._shared_bytes,
+                stream_ptr,
+                self._args_array,
+                None
+            )
 
         if res != 0:
             raise RuntimeError(f"cuLaunchKernel failed with CUDA error code {res}")
