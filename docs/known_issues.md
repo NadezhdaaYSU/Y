@@ -114,6 +114,17 @@ source; each entry there now carries its status. What is still open:
   re-measured here; the current state is in
   [the validator documentation](ptxas_translation_validation.md) and Codex's
   2026-10-08 review.
+- `python3 tools/ptxas_tval/docgate.py` reports 13 figures in the validator
+  documentation and the README that disagree with its measurement (checked
+  2026-10-17 at `ff3526f`): the loop census's buckets and its
+  `loopval`/`nestval` split; the multi-back-edge kernels (33 of 48 published,
+  29 measured) and liftgap's levels (115 published, 95 measured); the unroll
+  census (24 `MATCHED` and 18 `REFUSED` published, 27 and 15 measured); and the
+  `-O1` and `-O3` frontier censuses, stamped on an older tree
+  (`python3 frontier.py`, minutes, restamps them). The F16 GEMM K-loop change
+  moved the unroll census to 25 and 17: `ptxas` now unrolls the whole K loop
+  of `gemm_f16_512` and `gemm_f16_bias_relu_512`, and `unroll.py` refuses a
+  PTX loop it cannot pair with a SASS one.
 
 ## Fixed
 

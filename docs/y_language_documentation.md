@@ -988,9 +988,16 @@ for i in 0..100 {
 
 ### 9.12 `@tile` — **on a `kernel` only**
 * **Syntax**: `@tile(M, N, K)` immediately before a `kernel`.
-* **Function**: selects the tensor-core GEMM lowering for that kernel, with
-  `M`, `N` and `K` as its block shape; see the `@tile`-dispatched kernels in
-  `tests/gemm_f16_*.ysu`.
+* **Function**: selects the tensor-core GEMM lowering for that kernel. `M`,
+  `N` and `K` are the matrices' dimensions, not a block shape: `C = A @ B`
+  with A `M`x`K` and B `K`x`N` in `F16` and C `M`x`N` in `F32`, row-major; see
+  the `@tile`-dispatched kernels in `tests/gemm_f16_*.ysu`. The CTA tile is
+  chosen in the order `Autotuner::autotune` documents: `Y_CTA_OVERRIDE`, then
+  the tile `.ysu_hw_profile` records as measured for that shape, then a fresh
+  measurement or the autotuner's estimate. Where `M`, `N` and `K` are
+  multiples of the tile, each thread's `cp.async` addresses are computed once,
+  before the K loop
+  ([record](benchmarks/f16_gemm_loop_2026-10-17/README.md)).
 * **On a loop, a statement or a `fn` it is refused.** It used to parse there
   and change nothing: on a `for`, the LLVM and PTX backends wrote it into their
   output as a comment (`[Y TILE OPTIMIZATION] Tiled loop dimensions`, the PTX

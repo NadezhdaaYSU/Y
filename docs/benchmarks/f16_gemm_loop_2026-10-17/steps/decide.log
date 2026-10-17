@@ -1,0 +1,22 @@
+QUIET 21:10:09 mean 2.4%
+          1024 Y {'old': '64x128 2x2', 'r2': '64x128 2x2', 'r3': '64x128 2x2', 'rotni': '64x128 2x2'} | exact {'old': True, 'r2': True, 'r3': True, 'rotni': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2445-2445 MHz
+      cuBLAS    min      28.8 median      28.9 us  0.953x Triton
+      r2        min      29.9 median      30.0 us  0.991x Triton
+      r3        min      30.0 median      30.1 us  0.994x Triton
+      Triton    min      30.2 median      30.2 us  1.000x Triton
+      old       min      30.5 median      30.5 us  1.010x Triton
+      rotni     min      31.6 median      31.7 us  1.046x Triton
+          2048 Y {'old': '128x128 2x2', 'r2': '128x128 2x2', 'r3': '128x128 2x2', 'rotni': '128x128 2x2'} | exact {'old': True, 'r2': True, 'r3': True, 'rotni': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2655-2760 MHz
+      cuBLAS    min     204.5 median     205.1 us  0.988x Triton
+      Triton    min     207.1 median     208.1 us  1.000x Triton
+      r2        min     207.3 median     207.3 us  1.001x Triton
+      r3        min     207.5 median     207.6 us  1.002x Triton
+      old       min     215.4 median     215.5 us  1.040x Triton
+      rotni     min     223.3 median     223.4 us  1.078x Triton
+          4096 Y {'old': '128x128 2x2', 'r2': '128x128 2x2', 'r3': '128x128 2x2', 'rotni': '128x128 2x2'} | exact {'old': True, 'r2': True, 'r3': True, 'rotni': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2760-2760 MHz
+      cuBLAS    min    1547.3 median    1548.3 us  0.969x Triton
+      r2        min    1582.1 median    1582.6 us  0.991x Triton
+      r3        min    1594.4 median    1594.9 us  0.998x Triton
+      Triton    min    1596.8 median    1597.6 us  1.000x Triton
+      old       min    1645.6 median    1646.1 us  1.031x Triton
+      rotni     min    1708.0 median    1710.3 us  1.070x Triton

@@ -2041,8 +2041,13 @@ all. Counted as **instructions**, not as lines that mention one:
 ```
 kernel                lines  mma.sync  cp.async  ldmatrix  bar.sync
 int8_gemm.ptx           134         1         0         0         0
-gemm_f16_4096.ptx       964        64        21        24         7
+gemm_f16_4096.ptx       672        64        20        16         6
 ```
+
+The f16 row read `964 / 64 / 21 / 24 / 7` until 2026-10-17, when that
+kernel's K loop began computing its copy addresses once and loading B with one
+`ldmatrix.x4.trans` per 16 columns
+(`docs/benchmarks/f16_gemm_loop_2026-10-17/`).
 
 > **Those figures read `89 lines with 2 mma … against 964 / 65 / 22 / 24 / 7`
 > until 2026-09-08, and the correction above had already been written.** The

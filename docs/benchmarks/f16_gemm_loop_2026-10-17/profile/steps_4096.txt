@@ -1,0 +1,55 @@
+Nsight Compute at 4096^3 of two intermediate steps (reports not kept: 3.3 and 4.3 MB),
+made with prof_f16.py on 2026-10-13. new_4096: steps 1 and 2 (steps/ptx/new);
+after_4096: copies between the MMAs, the wait still at the loop's end (steps/ptx/new2 at 4096).
+
+## new_4096: the copies back to back
+loop 0x1000529d040..0x1000529d8f0: 140 instructions, back-branch executed 524288 times
+per iteration: HMMA 64.0, IMAD 24.0, LDSM 16.0, IADD3 11.0, LDGSTS 8.0, ISETP 6.0, LEA 4.0, LDS 3.0, LDGDEPBAR 1.0, DEPBAR 1.0, BAR 1.0, BRA 1.0
+total per iteration 140.0
+
+stall_lg: 7612 samples in the kernel, 7510 in the loop
+      4110  loop   0x1000529d370        LDGSTS.E.BYPASS.128 [R55+0x880][R46.64], P1
+      1891  loop   0x1000529d380        LDGSTS.E.BYPASS.128 [R55+0x1100][R48.64], P1
+      1324  loop   0x1000529d390        LDGSTS.E.BYPASS.128 [R55+0x1980][R50.64], P1
+       121  loop   0x1000529d8e0        BAR.SYNC.DEFER_BLOCKING 0x0
+        36  loop   0x1000529d360        LDGSTS.E.BYPASS.128 [R55][R40.64], P1
+        23  before 0x1000529cf50        LDGSTS.E.BYPASS.128 [R3+0x6100][R14.64], P0
+        16  before 0x1000529cf70        LDGSTS.E.BYPASS.128 [R3+0x6980][R16.64], P0
+        12  before 0x1000529cf10        LDGSTS.E.BYPASS.128 [R3+0x5000][R192.64], P0
+
+stall_long_sb: 3008 samples in the kernel, 2104 in the loop
+      2104  loop   0x1000529d670        HMMA.16816.F32 R132, R176, R168, R132
+       667  before 0x1000529d020        IMAD.SHL.U32 R184, R2, 0x40, RZ
+        45  before 0x1000529cfc0        CS2R R14, SRZ
+        45  after  0x1000529f430        IMAD.HI.U32 R3, R11, R0, RZ
+        44  before 0x1000529cfe0        CS2R R16, SRZ
+        37  before 0x1000529cf90        CS2R R12, SRZ
+        34  after  0x1000529e5c0        IMAD.HI.U32 R3, R181, R0, RZ
+        27  before 0x1000529cf60        CS2R R8, SRZ
+
+## after_4096: the copies between the MMAs
+loop 0x1000529d040..0x1000529d980: 149 instructions, back-branch executed 524288 times
+per iteration: HMMA 64.0, IMAD 24.0, LDSM 16.0, LDS 12.0, IADD3 11.0, LDGSTS 8.0, ISETP 6.0, LEA 4.0, LDGDEPBAR 1.0, DEPBAR 1.0, BAR 1.0, BRA 1.0
+total per iteration 149.0
+
+stall_long_sb: 25205 samples in the kernel, 24200 in the loop
+     24200  loop   0x1000529d700        HMMA.16816.F32 R132, R180, R168, R132
+       737  before 0x1000529d020        IMAD.SHL.U32 R184, R2, 0x40, RZ
+        53  before 0x1000529cf90        CS2R R12, SRZ
+        42  before 0x1000529cf60        CS2R R8, SRZ
+        42  before 0x1000529cfe0        CS2R R16, SRZ
+        42  after  0x1000529f4c0        IMAD.HI.U32 R3, R11, R0, RZ
+        41  after  0x1000529e650        IMAD.HI.U32 R3, R177, R0, RZ
+        39  before 0x1000529cfc0        CS2R R14, SRZ
+
+stall_lg: 50 samples in the kernel, 2 in the loop
+        13  before 0x1000529cf50        LDGSTS.E.BYPASS.128 [R3+0x6100][R14.64], P0
+        10  before 0x1000529cf10        LDGSTS.E.BYPASS.128 [R3+0x5000][R194.64], P0
+        10  before 0x1000529cf30        LDGSTS.E.BYPASS.128 [R3+0x5880][R12.64], P0
+         9  before 0x1000529cf80        LDGDEPBAR
+         5  before 0x1000529cf70        LDGSTS.E.BYPASS.128 [R3+0x6980][R16.64], P0
+         1  before 0x1000529cef0        LDGSTS.E.BYPASS.128 [R176+0x1e00][R8.64], P0
+         1  loop   0x1000529d510        LDGSTS.E.BYPASS.128 [R191+0x1100][R42.64], P1
+         1  loop   0x1000529d970        BAR.SYNC.DEFER_BLOCKING 0x0
+
+the loop's wait, DEPBAR.LE SB0, 0x0 at 0x1000529d6f0: 26 HMMA before it in the iteration, 38 after it

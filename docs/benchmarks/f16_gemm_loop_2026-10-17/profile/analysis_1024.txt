@@ -1,0 +1,144 @@
+Nsight Compute at 1024^3, Triton's configuration pinned. before: c8eea77's kernel (before_1024.ncu-repz); after: this change (after_1024.ncu-repz).
+
+## regions, before
+Y: before the loop 5.5%, loop 87.3%, after it 7.2%; global stores executed {'STG.E.128': 8192.0}
+Triton: before the loop 2.8%, loop 91.9%, after it 5.4%; global stores executed {'STG.E.128': 8192.0}
+
+## K loop, Y before
+loop 0x1000529d220..0x1000529da00: 127 instructions, back-branch executed 16384 times
+per iteration: IMAD 36.0, HMMA 32.0, LDSM 20.0, ISETP 19.0, IADD3 7.0, LDGSTS 6.0, LDS 3.0, LDGDEPBAR 1.0, DEPBAR 1.0, BAR 1.0, BRA 1.0
+total per iteration 127.0
+
+stall_long_sb: 611 samples in the kernel, 442 in the loop
+       364  loop   0x1000529d860        HMMA.16816.F32 R52, R20, R122, R52
+       157  before 0x1000529d210        BAR.SYNC.DEFER_BLOCKING 0x0
+        40  loop   0x1000529d4e0        IMAD.WIDE.U32 R6, R21, R2, c[0x0][0x168]
+        23  loop   0x1000529d5d0        IMAD.WIDE.U32 R6, R21, R2, c[0x0][0x168]
+        15  loop   0x1000529d5b0        IMAD R11, R18, 0x400, R109
+         4  before 0x1000529d1e0        CS2R R12, SRZ
+         3  before 0x1000529cef0        IMAD.SHL.U32 R6, R11, 0x8, RZ
+         2  after  0x1000529e0c0        IMAD.HI.U32 R2, R131, R0, RZ
+
+stall_mio: 297 samples in the kernel, 292 in the loop
+        71  loop   0x1000529d6b0        LDSM.16.MT88.2 R116, [R142+0x20]
+        52  loop   0x1000529d6c0        LDSM.16.MT88.2 R112, [R142+0x30]
+        40  loop   0x1000529d6d0        LDSM.16.MT88.2 R110, [R142+0x40]
+        35  loop   0x1000529d6e0        LDSM.16.MT88.2 R106, [R142+0x50]
+        20  loop   0x1000529d6f0        LDSM.16.MT88.2 R104, [R142+0x60]
+        18  loop   0x1000529d710        LDSM.16.M88.4 R20, [R143+0x500]
+        14  loop   0x1000529d700        LDSM.16.MT88.2 R98, [R142+0x70]
+        11  loop   0x1000529d6a0        LDSM.16.MT88.2 R118, [R142+0x10]
+
+stall_lg: 2 samples in the kernel, 1 in the loop
+         1  before 0x1000529d1c0        LDGDEPBAR
+         1  loop   0x1000529d550        LDGSTS.E.BYPASS.128 [R19][R6.64], P1
+         0  before 0x1000529c300        IMAD.MOV.U32 R1, RZ, RZ, c[0x0][0x28]
+         0  before 0x1000529c310        IMAD.MOV.U32 R4, RZ, RZ, c[0x0][0xc]
+         0  before 0x1000529c320        S2UR UR4, SR_CTAID.X
+         0  before 0x1000529c330        ULDC UR6, c[0x0][0xc]
+         0  before 0x1000529c340        I2F.U32.RP R8, 0x4
+         0  before 0x1000529c350        IMAD.SHL.U32 R4, R4, 0x8, RZ
+
+stall_wait: 835 samples in the kernel, 685 in the loop
+        23  loop   0x1000529d8b0        HMMA.16816.F32 R32, R20, R106, R32
+        21  loop   0x1000529d390  @P1   IADD3 R8, R8, -0x2, RZ
+        21  loop   0x1000529d870        HMMA.16816.F32 R48, R20, R118, R48
+        21  loop   0x1000529d8d0        HMMA.16816.F32 R12, R20, R98, R12
+        20  loop   0x1000529d8e0        HMMA.16816.F32 R84, R16, R6, R84
+        19  loop   0x1000529d940        HMMA.16816.F32 R60, R16, R94, R60
+        18  loop   0x1000529d8a0        HMMA.16816.F32 R36, R20, R110, R36
+        18  loop   0x1000529d930        HMMA.16816.F32 R64, R16, R92, R64
+
+## regions, after
+Y: before the loop 4.8%, loop 88.2%, after it 7.0%; global stores executed {'STG.E.128': 8192.0}
+Triton: before the loop 2.6%, loop 92.5%, after it 4.9%; global stores executed {'STG.E.128': 8192.0}
+
+## K loop, Y after
+loop 0x1000529ce10..0x1000529d3e0: 94 instructions, back-branch executed 16384 times
+per iteration: HMMA 32.0, IMAD 18.0, LDSM 12.0, IADD3 9.0, ISETP 6.0, LDGSTS 6.0, LEA 4.0, LDS 3.0, LDGDEPBAR 1.0, DEPBAR 1.0, BAR 1.0, BRA 1.0
+total per iteration 94.0
+
+stall_long_sb: 794 samples in the kernel, 653 in the loop
+       548  loop   0x1000529d200        HMMA.16816.F32 R80, R116, R100, R80
+       134  before 0x1000529ce00        BAR.SYNC.DEFER_BLOCKING 0x0
+       105  loop   0x1000529d070        IMAD R9, R20, R19, 0x2800
+         4  after  0x1000529e320        IMAD.HI.U32 R3, R11, R0, RZ
+         2  before 0x1000529cde0        CS2R R6, SRZ
+         1  after  0x1000529dab0        IMAD.HI.U32 R3, R111, R0, RZ
+         0  before 0x1000529c300        IMAD.MOV.U32 R1, RZ, RZ, c[0x0][0x28]
+         0  before 0x1000529c310        IMAD.MOV.U32 R0, RZ, RZ, c[0x0][0xc]
+
+stall_mio: 251 samples in the kernel, 245 in the loop
+        29  loop   0x1000529d140        LDSM.16.MT88.4 R24, [R130+0x1100]
+        27  loop   0x1000529d120        LDSM.16.MT88.4 R36, [R130+0x60]
+        26  loop   0x1000529d130        LDSM.16.M88.4 R32, [R131+0x500]
+        22  loop   0x1000529d110        LDSM.16.MT88.4 R100, [R130+0x40]
+        22  loop   0x1000529d160        LDSM.16.MT88.4 R20, [R130+0x1120]
+        21  loop   0x1000529d150        LDSM.16.M88.4 R28, [R131+0x20]
+        21  loop   0x1000529d170        LDSM.16.MT88.4 R16, [R130+0x1140]
+        20  loop   0x1000529d060        LDGSTS.E.BYPASS.128 [R125][R10.64], P1
+
+stall_lg: 50 samples in the kernel, 31 in the loop
+        30  loop   0x1000529d0c0        LDGSTS.E.BYPASS.128 [R125+0x1980][R18.64], P1
+         9  before 0x1000529cd80        LDGSTS.E.BYPASS.128 [R109+0x2800][R126.64], P0
+         5  before 0x1000529cd90        LDGSTS.E.BYPASS.128 [R109+0x3080][R6.64], P0
+         3  before 0x1000529cdd0        LDGDEPBAR
+         2  before 0x1000529cda0        LDGSTS.E.BYPASS.128 [R109+0x3900][R8.64], P0
+         1  loop   0x1000529d0b0        LDGSTS.E.BYPASS.128 [R125+0x1100][R16.64], P1
+         0  before 0x1000529c300        IMAD.MOV.U32 R1, RZ, RZ, c[0x0][0x28]
+         0  before 0x1000529c310        IMAD.MOV.U32 R0, RZ, RZ, c[0x0][0xc]
+
+stall_wait: 800 samples in the kernel, 653 in the loop
+        28  loop   0x1000529d220        HMMA.16816.F32 R72, R116, R36, R72
+        25  loop   0x1000529d340        HMMA.16816.F32 R64, R8, R24, R64
+        23  loop   0x1000529d240        HMMA.16816.F32 R64, R32, R112, R64
+        21  loop   0x1000529d2b0        HMMA.16816.F32 R4, R32, R38, R4
+        20  loop   0x1000529d2e0        HMMA.16816.F32 R88, R28, R20, R88
+        19  loop   0x1000529ce50        IMAD.HI.U32 R9, R123, R12, RZ
+        18  loop   0x1000529d1e0        HMMA.16816.F32 R84, R116, R106, R84
+        18  loop   0x1000529d380        HMMA.16816.F32 R48, R8, R16, R48
+
+## K loop, Triton
+loop 0x100052ab810..0x100052abdb0: 91 instructions, back-branch executed 16384 times
+per iteration: HMMA 32.0, LDSM 12.0, IMAD 11.0, LEA 8.0, LDGSTS 6.0, IADD3 3.0, ISETP 3.0, LDS 3.0, UIADD3 2.0, BAR 2.0, LDGDEPBAR 2.0, DEPBAR 1.0, UISETP 1.0, USEL 1.0, USHF 1.0, SEL 1.0, LOP3 1.0, BRA 1.0
+total per iteration 91.0
+
+stall_long_sb: 111 samples in the kernel, 66 in the loop
+        65  loop   0x100052ab830        UISETP.GT.AND UP0, UPT, UR6, 0x2, UPT
+        21  after  0x100052aca60        IMAD.MOV.U32 R4, RZ, RZ, R58
+         6  after  0x100052abde0        LOP3.LUT R0, R8, 0x1, RZ, 0xc0, !PT
+         4  after  0x100052ac9d0        IMAD.MOV.U32 R12, RZ, RZ, R34
+         2  before 0x100052ab170        LEA R14, P5, R18, R109, 0x1
+         2  before 0x100052ab1b0        LEA R8, P4, R21, R109, 0x1
+         2  before 0x100052ab520        IMAD.MOV.U32 R3, RZ, RZ, RZ
+         2  after  0x100052ac930        IMAD.MOV.U32 R8, RZ, RZ, R82
+
+stall_mio: 142 samples in the kernel, 118 in the loop
+        32  loop   0x100052ab940        LDSM.16.M88.4 R84, [R124+UR7+0x6c00]
+        19  loop   0x100052ab930        LDSM.16.M88.4 R80, [R124+UR7+0x6800]
+        10  loop   0x100052abbf0        LDGSTS.E.BYPASS.128 [R51+0x6000][R10.64], !P1
+         9  loop   0x100052abbe0  @!PT  LDS RZ, [RZ]
+         6  loop   0x100052ab8e0        LDSM.16.M88.4 R68, [R2+UR7+0x6c00]
+         6  loop   0x100052ab910        LDSM.16.M88.4 R72, [R124+UR7+0x6000]
+         6  loop   0x100052abc40        LDGSTS.E.BYPASS.128 [R51+0x6800][R48.64], !P1
+         4  loop   0x100052ab8f0        LDSM.16.MT88.4 R4, [R111+UR8+0x80]
+
+stall_lg: 36 samples in the kernel, 6 in the loop
+        13  after  0x100052aca50        STG.E.128 [R38.64], R32
+         7  after  0x100052aca20        STG.E.128 [R36.64], R28
+         3  after  0x100052acae0        STG.E.128 [R108.64], R4
+         2  before 0x100052ab2a0        LDGSTS.E.BYPASS.128 [R116+0x5800][R14.64], P2
+         2  loop   0x100052ab860        BAR.SYNC.DEFER_BLOCKING 0x0
+         2  loop   0x100052abd90        LDGSTS.E.BYPASS.128 [R61+0x1800][R10.64], !P1
+         1  before 0x100052ab000        LDGDEPBAR
+         1  before 0x100052ab0f0        LDGSTS.E.BYPASS.128 [R117+0x7000][R2.64+0x40], P1
+
+stall_wait: 651 samples in the kernel, 614 in the loop
+        25  loop   0x100052aba90        HMMA.16816.F32 R24, R64, R4, R24
+        23  loop   0x100052ab970        HMMA.16816.F32 R88, R64, R4, R88
+        22  loop   0x100052abae0        HMMA.16816.F32 R32, R84, R6, R32
+        22  loop   0x100052abd00        HMMA.16816.F32 R56, R84, R6, R56
+        21  loop   0x100052ab9f0        HMMA.16816.F32 R100, R76, R6, R100
+        20  loop   0x100052aba60        HMMA.16816.F32 R92, R84, R10, R92
+        18  loop   0x100052ab9a0        HMMA.16816.F32 R16, R60, R8, R16
+        18  loop   0x100052aba80        HMMA.16816.F32 R36, R60, R4, R36
