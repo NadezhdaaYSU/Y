@@ -87,6 +87,14 @@ source; each entry there now carries its status. What is still open:
   performance choice, but the emitted PTX then depends on what the process
   compiled first. `python/y_lang/tests/test_launch.py` pins its tiles with
   `Y_CTA_OVERRIDE` and its profile with a temporary one for this reason.
+- A shape with no measured tile borrows the nearest measured one
+  (`load_persisted_nearest`), whatever the grid size then does. At
+  1280x1024x1024, 1024^3's 3-stage tile measured 6.4% slower than its
+  2-stage tile (`docs/benchmarks/f16_tiles_2026-10-17/`). By shared memory,
+  the 3-stage tile (41,472 bytes) fits 2 CTAs per SM, so that shape's 160
+  CTAs take two waves; the 2-stage tile (27,648 bytes) fits 3, one wave. The
+  committed artifact at that shape (`gemm_f16_uneven_grid`) now has a tile
+  measured for it.
 
 ### Test-suite hygiene
 
@@ -129,7 +137,9 @@ source; each entry there now carries its status. What is still open:
   documentation and the README that disagree with its measurement (checked
   2026-10-17 at `ff3526f`): the loop census's buckets and its
   `loopval`/`nestval` split; the multi-back-edge kernels (33 of 48 published,
-  29 measured) and liftgap's levels (115 published, 95 measured); the unroll
+  29 measured) and liftgap's levels (115 published, 95 measured, 97 since
+  `tensor_core_gemm_f16_rect`'s re-measured tile added two loop levels); the
+  unroll
   census (24 `MATCHED` and 18 `REFUSED` published, 27 and 15 measured); and the
   `-O1` and `-O3` frontier censuses, stamped on an older tree
   (`python3 frontier.py`, minutes, restamps them). The F16 GEMM K-loop change
