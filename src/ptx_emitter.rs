@@ -145,6 +145,22 @@ pub const FP8_TILE_64X64: Fp8Tile = Fp8Tile {
     stages: 0,
 };
 
+/// A thread's share of one `cp.async` tile load, from
+/// `PtxEmitter::emit_gemm_tile_load_async_setup`.
+struct HoistedTileLoad {
+    /// Global address of the thread's chunk 0 at K-tile offset 0 (u64).
+    gmem_thread: String,
+    /// Byte offset of the thread's chunk 0 inside a stage (u32).
+    smem_thread: String,
+    /// Bytes the global address moves per element of K-tile offset `k0`.
+    k_step_bytes: u32,
+    /// Chunks per thread, and the constant distances between them.
+    chunks: u32,
+    chunk_gmem_bytes: u32,
+    chunk_smem_bytes: u32,
+    threads_per_cta: u32,
+}
+
 /// The shape and shared layout `emit_fp8_k_loop_async` works on.
 struct Fp8AsyncGeometry {
     m: u32,
@@ -10610,11 +10626,191 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    cp.async.cg.shared.global [{}], [{}], 16, {};", saddr, gaddr, rsize).unwrap();
     }
 
+    /// The per-thread half of a `cp.async` tile load whose chunks need no
+    /// bound checks, emitted once before the K loop; `None` when the tile
+    /// does not split the way `emit_gemm_tile_load_async_hoisted` needs.
+    ///
+    /// `emit_gemm_tile_load_async` recomputes every chunk's whole address
+    /// at every K-tile: the row/column split, both bound checks, the global
+    /// `mad`/`mul.wide`/`add` and the shared `mad`/`shl`/`add`. At 4096^3
+    /// (128x128x32, 2x2 warps) that was 44 IMAD and 25 ISETP of the K loop's
+    /// 181 SASS instructions, against Triton's 17 and 4 in 132, and the
+    /// loop's long-scoreboard stalls sat on those IMADs: each overwrote a
+    /// register the previous chunk's LDGSTS was still reading.
+    ///
+    /// But a thread's chunks differ only by compile-time strides. With
+    /// `threads_per_cta` a multiple of the chunks per row, chunk `u` of a
+    /// thread is `threads_per_cta / chunks_per_row` rows below chunk 0, in
+    /// the same column - in global memory and in shared memory alike. So a
+    /// thread's chunk 0 address is computed here, once, and each load adds
+    /// the K-tile's offset to it and issues every chunk as
+    /// `[base + constant]`.
+    ///
+    /// `row0`/`col0` are the tile's first global row and column with the
+    /// K-tile offset left out (`None` for 0): the load adds `k0 *
+    /// k_step_bytes` instead.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_gemm_tile_load_async_setup(
+        &mut self,
+        gmem_ptr: &str,
+        row0: Option<&str>,
+        col0: Option<&str>,
+        gmem_row_stride: u32,
+        local_rows: u32,
+        local_cols: u32,
+        smem_stride: u32,
+        threads_per_cta: u32,
+        k_step_bytes: u32,
+    ) -> Option<HoistedTileLoad> {
+        let (chunks, chunk_gmem_bytes, chunk_smem_bytes) =
+            Self::hoisted_tile_load_shape(gmem_row_stride, local_rows, local_cols, smem_stride, threads_per_cta)?;
+        let chunks_per_row = local_cols / 8;
+
+        let tid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
+        let lr = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", lr, tid, chunks_per_row).unwrap();
+        let lc_chunk = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", lc_chunk, tid, chunks_per_row).unwrap();
+        let lc = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 8;", lc, lc_chunk).unwrap();
+        let grow = match row0 {
+            Some(r) => {
+                let g = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", g, r, lr).unwrap();
+                g
+            }
+            None => lr.clone(),
+        };
+        let gcol = match col0 {
+            Some(c) => {
+                let g = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", g, c, lc).unwrap();
+                g
+            }
+            None => lc.clone(),
+        };
+        let gidx = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", gidx, grow, gmem_row_stride, gcol).unwrap();
+        // `mul.wide` and `add`, not `mad.wide`: see the K-tile offset in
+        // `emit_gemm_tile_load_async_hoisted_deferred`.
+        let gbyte = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 2;", gbyte, gidx).unwrap();
+        let gmem_thread = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gmem_thread, gmem_ptr, gbyte).unwrap();
+        let sidx = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", sidx, lr, smem_stride, lc).unwrap();
+        let smem_thread = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", smem_thread, sidx).unwrap();
+        Some(HoistedTileLoad {
+            gmem_thread,
+            smem_thread,
+            k_step_bytes,
+            chunks,
+            chunk_gmem_bytes,
+            chunk_smem_bytes,
+            threads_per_cta,
+        })
+    }
+
+    /// `(chunks per thread, global bytes between them, shared bytes between
+    /// them)` for `emit_gemm_tile_load_async_setup`, or `None` when the tile
+    /// does not split into whole rows of chunks per pass of the CTA, the
+    /// unroll would pass `emit_gemm_tile_load_async`'s cap, or a chunk
+    /// offset would not fit an address immediate.
+    fn hoisted_tile_load_shape(
+        gmem_row_stride: u32,
+        local_rows: u32,
+        local_cols: u32,
+        smem_stride: u32,
+        threads_per_cta: u32,
+    ) -> Option<(u32, u32, u32)> {
+        const MAX_STAGE_UNROLL: u32 = 16;
+        if local_cols % 8 != 0 || smem_stride % 8 != 0 || gmem_row_stride % 8 != 0 || threads_per_cta == 0 {
+            return None;
+        }
+        let chunks_per_row = local_cols / 8;
+        if threads_per_cta % chunks_per_row != 0 || (local_rows * chunks_per_row) % threads_per_cta != 0 {
+            return None;
+        }
+        let chunks = local_rows * chunks_per_row / threads_per_cta;
+        let rows_per_chunk_step = u64::from(threads_per_cta / chunks_per_row);
+        let chunk_gmem_bytes = rows_per_chunk_step * u64::from(gmem_row_stride) * 2;
+        let chunk_smem_bytes = rows_per_chunk_step * u64::from(smem_stride) * 2;
+        if chunks == 0 || chunks > MAX_STAGE_UNROLL || chunk_gmem_bytes * u64::from(chunks) > i32::MAX as u64 {
+            return None;
+        }
+        Some((chunks, chunk_gmem_bytes as u32, chunk_smem_bytes as u32))
+    }
+
+    /// One K-tile of a tile load set up by `emit_gemm_tile_load_async_setup`:
+    /// two address instructions, then the thread's chunks at constant
+    /// offsets. `rsize` is the `cp.async` source size every chunk shares,
+    /// 16 or 0: zero-filled rather than skipped, as in
+    /// `emit_gemm_tile_load_async`.
+    fn emit_gemm_tile_load_async_hoisted(
+        &mut self,
+        label_tag: &str,
+        h: &HoistedTileLoad,
+        k0: &str,
+        smem_stage_base: &str,
+        rsize: &str,
+    ) {
+        for line in self.emit_gemm_tile_load_async_hoisted_deferred(label_tag, h, k0, smem_stage_base, rsize) {
+            writeln!(&mut self.ptx_buffer, "{}", line).unwrap();
+        }
+    }
+
+    /// `emit_gemm_tile_load_async_hoisted`'s address instructions, with its
+    /// copies returned as PTX lines for the caller to place - see
+    /// `emit_gemm_compute_block_interleaved`.
+    fn emit_gemm_tile_load_async_hoisted_deferred(
+        &mut self,
+        label_tag: &str,
+        h: &HoistedTileLoad,
+        k0: &str,
+        smem_stage_base: &str,
+        rsize: &str,
+    ) -> Vec<String> {
+        writeln!(
+            &mut self.ptx_buffer,
+            "    // [Y ASYNC TILE LOAD] {} | {} chunks of 16B over {} threads, addresses hoisted",
+            label_tag, h.chunks * h.threads_per_cta, h.threads_per_cta
+        ).unwrap();
+        // The K-tile's offset, k0 * k_step_bytes, as a shift where the step
+        // is a power of two (A's 2 bytes; B's 2 * N for most N). ptxas makes
+        // that, like a `mad.wide`, a LEA and LEA.HI.X pair, and the
+        // translation validator models these instructions but not `mad.wide`
+        // (tools/ptxas_tval/ptxexec.py). A `mul.wide` becomes one
+        // IMAD.WIDE.U32 instead: two SASS instructions fewer in the K loop at
+        // 4096^3, and 0.8% slower there.
+        let gstep = self.alloc_reg64();
+        if h.k_step_bytes.is_power_of_two() {
+            let k0_wide = self.alloc_reg64();
+            writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", k0_wide, k0).unwrap();
+            writeln!(&mut self.ptx_buffer, "    shl.b64 {}, {}, {};", gstep, k0_wide, h.k_step_bytes.trailing_zeros()).unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, {};", gstep, k0, h.k_step_bytes).unwrap();
+        }
+        let gaddr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gaddr, h.gmem_thread, gstep).unwrap();
+        let saddr = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", saddr, smem_stage_base, h.smem_thread).unwrap();
+        (0..h.chunks)
+            .map(|u| {
+                let (s_off, g_off) = (u * h.chunk_smem_bytes, u * h.chunk_gmem_bytes);
+                let s = if s_off == 0 { format!("[{}]", saddr) } else { format!("[{}+{}]", saddr, s_off) };
+                let g = if g_off == 0 { format!("[{}]", gaddr) } else { format!("[{}+{}]", gaddr, g_off) };
+                format!("    cp.async.cg.shared.global {}, {}, 16, {};", s, g, rsize)
+            })
+            .collect()
+    }
+
     /// Shared compute core of `emit_tensor_core_gemm_kernel`'s K-loop body,
     /// used identically by both the synchronous-fallback and
     /// cp.async-pipelined paths: for each `kk` sub-step, issues one
-    /// `ldmatrix.x4` per `i` (A, reused across all `j`) and two
-    /// `ldmatrix.x2.trans` per `j` (B, one per 8-wide N-half - native
+    /// `ldmatrix.x4` per `i` (A, reused across all `j`) and one
+    /// `ldmatrix.x4.trans` per `j` (B, both of its 8-wide N-halves - native
     /// `mma.sync.m16n8k16` granularity, see below - reused across all `i`),
     /// then two `mma.sync.aligned.m16n8k16.row.col` calls per `(i,j)` (one
     /// per N-half) accumulating into `acc[i][j][0..4]`/`acc[i][j][4..8]`
@@ -10648,7 +10844,7 @@ declare it as a Q format.\n{}",
     ///     grammar for this shape, there is no `.row.row` variant unlike
     ///     `m8n8k4`) expects. `col_bit_a` (0 or 8) selects which half of
     ///     the 16-wide K dimension a lane's group belongs to.
-    ///   - B is fed `ldmatrix.x2.trans`: `mma.m16n8k16` hardcodes B as
+    ///   - B is fed `ldmatrix.x4.trans`: `mma.m16n8k16` hardcodes B as
     ///     `.col`, but B is ALSO stored row-major in smem (N contiguous,
     ///     matching global B's own layout) - `.trans` reconciles the two
     ///     (same "supply a physical smem row address" protocol as A, but
@@ -10657,7 +10853,9 @@ declare it as a Q format.\n{}",
     ///     needs no changes at all.
     ///   - `row_off` is reused as-is by both A (combined with the warp's
     ///     row and `i*16`) and B (combined with `kk`) - it is the same
-    ///     per-lane "which of 16 rows within this half" term either way.
+    ///     per-lane "which of 16 rows within this half" term either way -
+    ///     and so is `col_bit_a`: for A it picks the K half, for B the
+    ///     N half lanes 16-31 address.
     ///
     /// Offline bank-conflict analysis (project scratchpad's
     /// swizzle_design.py, using this exact validated address formula,
@@ -10702,6 +10900,40 @@ declare it as a Q format.\n{}",
         num_i: u32,
         num_j: u32,
     ) {
+        self.emit_gemm_compute_block_interleaved(
+            acc, warp_col0_local, warp_row0_local, smem_a_base, smem_b_base, smem_a_stride,
+            smem_b_stride, row_off, col_bit_a, k_substeps, num_i, num_j, &[],
+        );
+    }
+
+    /// `emit_gemm_compute_block`, with `interleave` - whole PTX lines, the
+    /// next K-tile's `cp.async` copies - written between the A-fragment
+    /// groups of the first 16-deep K step, an equal share after each
+    /// group's MMAs. Issued back to back, a tile's copies filled the LSU
+    /// queue: at 4096^3 the second to fourth of B's four copies a thread
+    /// carried 7,300 `lg_throttle` stall samples, Triton's spread copies
+    /// about 0. Only the first K step takes them, so each copy still has
+    /// the rest of the iteration to land before the `cp.async.wait_group`
+    /// at its end - with two stages that wait is for these very copies.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_gemm_compute_block_interleaved(
+        &mut self,
+        acc: &[Vec<Vec<String>>],
+        warp_col0_local: &str,
+        warp_row0_local: &str,
+        smem_a_base: &str,
+        smem_b_base: &str,
+        smem_a_stride: u32,
+        smem_b_stride: u32,
+        row_off: &str,
+        col_bit_a: &str,
+        k_substeps: u32,
+        num_i: u32,
+        num_j: u32,
+        interleave: &[String],
+    ) {
+        let per_group = interleave.len().div_ceil(num_i.max(1) as usize).max(1);
+        let mut pending = interleave.iter();
         // ldmatrix's address must be naturally 16-byte aligned (PTX ISA
         // 9.7.13.4.15); every term added to a row/col-scaled linear index
         // below is already a multiple of 8 elements EXCEPT the
@@ -10715,32 +10947,39 @@ declare it as a Q format.\n{}",
         for kk_step in 0..k_substeps {
             let kk = kk_step * 16;
 
-            // ---- B: ldmatrix.x2.trans, two 8-wide N-halves per j (native
-            // mma.m16n8k16 granularity), reused across every i below (same
-            // reuse-across-i optimization the prior wmma.load.b loop used) ----
+            // ---- B: one ldmatrix.x4.trans per j, both 8-wide N-halves
+            // (native mma.m16n8k16 granularity), reused across every i below
+            // (same reuse-across-i optimization the prior wmma.load.b loop
+            // used). Matrix q's row addresses come from lanes 8q..8q+7:
+            // lanes 0-15 give this j's K rows kk..kk+15 at its N-half 0,
+            // lanes 16-31 the same rows at N-half 1 - and `col_bit_a`, (lane
+            // & 16) >> 1, is exactly that 0-or-8 column offset. So matrices
+            // 0/1 are N-half 0's two K-halves and 2/3 N-half 1's: the same
+            // registers, in the same order, the two `x2.trans` loads this
+            // replaced gave, from half the shared-memory instructions (at
+            // 4096^3 they were 8 of the K loop's 24 LDSM, and its top
+            // MIO-throttle stalls). ----
             let mut b_frags: Vec<[Vec<String>; 2]> = Vec::with_capacity(num_j as usize);
             for j in 0..num_j {
-                let mut halves: [Vec<String>; 2] = [Vec::new(), Vec::new()];
-                for (half_idx, n_half) in [0u32, 8u32].into_iter().enumerate() {
-                    let col_reg = self.alloc_reg32();
-                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_reg, warp_col0_local, j * 16 + n_half).unwrap();
-                    let global_k = self.alloc_reg32();
-                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_k, row_off, kk).unwrap();
-                    let lin = self.alloc_reg32();
-                    writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_k, smem_b_stride, col_reg).unwrap();
-                    let byte = self.alloc_reg32();
-                    writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
-                    let addr = self.alloc_reg32();
-                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_b_base, byte).unwrap();
-                    let frag: Vec<String> = (0..2).map(|_| self.alloc_reg32()).collect();
-                    writeln!(
-                        &mut self.ptx_buffer,
-                        "    ldmatrix.sync.aligned.m8n8.x2.trans.shared.b16 {{{}}}, [{}];",
-                        frag.join(","), addr
-                    ).unwrap();
-                    halves[half_idx] = frag;
-                }
-                b_frags.push(halves);
+                let col_base = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_base, warp_col0_local, j * 16).unwrap();
+                let col_reg = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_reg, col_base, col_bit_a).unwrap();
+                let global_k = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_k, row_off, kk).unwrap();
+                let lin = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_k, smem_b_stride, col_reg).unwrap();
+                let byte = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
+                let addr = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_b_base, byte).unwrap();
+                let frag: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
+                writeln!(
+                    &mut self.ptx_buffer,
+                    "    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {{{}}}, [{}];",
+                    frag.join(","), addr
+                ).unwrap();
+                b_frags.push([frag[0..2].to_vec(), frag[2..4].to_vec()]);
             }
 
             // ---- A: ldmatrix.x4, reused across every j below (same
@@ -10776,7 +11015,15 @@ declare it as a Q format.\n{}",
                         ).unwrap();
                     }
                 }
+                if kk_step == 0 {
+                    for line in pending.by_ref().take(per_group) {
+                        writeln!(&mut self.ptx_buffer, "{}", line).unwrap();
+                    }
+                }
             }
+        }
+        for line in pending {
+            writeln!(&mut self.ptx_buffer, "{}", line).unwrap();
         }
     }
 
@@ -11229,6 +11476,45 @@ declare it as a Q format.\n{}",
             let smem_b_region_base = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", smem_b_region_base, smem_pipeline_base, n_stages * stage_a_bytes).unwrap();
 
+            // ---- Staging addresses hoisted out of the K loop (see
+            // emit_gemm_tile_load_async_setup) where no chunk of an in-range
+            // CTA can be out of bounds: M, N and K whole multiples of the
+            // tile. The chunks' bound checks then reduce to one CTA-wide
+            // predicate, so a CTA past M or N - a grid larger than the matrix
+            // - still loads zeros and stores nothing, as the per-chunk checks
+            // made it do. ----
+            let hoisted = if m % cta_m == 0 && n % cta_n == 0 && k % cta_k == 0
+                && Self::hoisted_tile_load_shape(k, cta_m, cta_k, smem_a_stride, threads_per_cta).is_some()
+                && Self::hoisted_tile_load_shape(n, cta_k, cta_n, smem_b_stride, threads_per_cta).is_some()
+            {
+                let a = self.emit_gemm_tile_load_async_setup(
+                    &a_g, Some(&cta_m_start), None, k, cta_m, cta_k, smem_a_stride, threads_per_cta, 2,
+                ).expect("shape checked above");
+                let b = self.emit_gemm_tile_load_async_setup(
+                    &b_g, None, Some(&cta_n_start), n, cta_k, cta_n, smem_b_stride, threads_per_cta, 2 * n,
+                ).expect("shape checked above");
+                let p_m = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_m, cta_m_start, m).unwrap();
+                let p_n = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_n, cta_n_start, n).unwrap();
+                let p_cta = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    and.pred {}, {}, {};", p_cta, p_m, p_n).unwrap();
+                let rsize_cta = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    selp.u32 {}, 16, 0, {};", rsize_cta, p_cta).unwrap();
+                Some((a, b, p_cta, rsize_cta))
+            } else {
+                None
+            };
+            // The hoisted path's copies go between the compute block's MMA
+            // groups (see emit_gemm_compute_block_interleaved), A's and B's
+            // alternating, and are committed after it - where that spreads
+            // them: at most two after each of the first K step's `num_i`
+            // groups. Measured at 2048-8192 (128x128, four groups, eight
+            // copies) interleaving was 0.6-1.1% faster; at 1024 (64x128,
+            // two groups, six copies) three copies a group, issued later,
+            // were 3.6% slower than issuing all six first.
+            let spreads = hoisted.as_ref().is_some_and(|(a, b, _, _)| a.chunks + b.chunks <= 2 * num_i);
+
             // ---- Prologue: prefetch stages 0..n_stages-2 (compile-time
             // constant tile indices - always in-bounds since n_stages <=
             // k_tiles by construction, so no K-tail masking is needed here,
@@ -11241,16 +11527,23 @@ declare it as a Q format.\n{}",
                 let b_stage_base = self.alloc_reg32();
                 writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_stage_base, smem_b_region_base, s * stage_b_bytes).unwrap();
 
-                self.emit_gemm_tile_load_async(
-                    &format!("PA{}", s), &a_g, &cta_m_start, &k0_s, k, m, k, cta_m, cta_k, &a_stage_base, smem_a_stride, threads_per_cta, None,
-                );
-                self.emit_gemm_tile_load_async(
-                    &format!("PB{}", s), &b_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &b_stage_base, smem_b_stride, threads_per_cta, None,
-                );
+                if let Some((a, b, _, rsize_cta)) = &hoisted {
+                    self.emit_gemm_tile_load_async_hoisted(&format!("PA{}", s), a, &k0_s, &a_stage_base, rsize_cta);
+                    self.emit_gemm_tile_load_async_hoisted(&format!("PB{}", s), b, &k0_s, &b_stage_base, rsize_cta);
+                } else {
+                    self.emit_gemm_tile_load_async(
+                        &format!("PA{}", s), &a_g, &cta_m_start, &k0_s, k, m, k, cta_m, cta_k, &a_stage_base, smem_a_stride, threads_per_cta, None,
+                    );
+                    self.emit_gemm_tile_load_async(
+                        &format!("PB{}", s), &b_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &b_stage_base, smem_b_stride, threads_per_cta, None,
+                    );
+                }
                 self.emit_cp_async_commit();
             }
-            self.emit_cp_async_wait(n_stages - 2);
-            writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+            if !spreads {
+                self.emit_cp_async_wait(n_stages - 2);
+                writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+            }
 
             let k_iter = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", k_iter).unwrap();
@@ -11261,9 +11554,32 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", exit_pred, k_iter, k_tiles).unwrap();
             writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
 
+            // Where the copies are spread between the MMAs, the wait for
+            // this iteration's tile (group `k_iter`) and the barrier start
+            // the iteration instead of ending it. The barrier also says
+            // every warp is done reading the previous iteration's
+            // `read_stage`, the slot this iteration's prefetch writes. At
+            // the end of the iteration ptxas issued the wait (DEPBAR) after
+            // the last ldmatrix, ahead of 38 of the iteration's 64
+            // MMAs: with two stages it waits for the copies that iteration
+            // had just spread through its first MMAs, so a warp stopped on
+            // their latency with MMAs still to issue - at 4096^3, 24,200
+            // long-scoreboard stall samples on the MMA after it. At the top
+            // of the loop the wait cannot move above the previous
+            // iteration's MMAs, so the copies have all of them to land, as
+            // in Triton's loop: 2048-8192 measured 0.5-1.2% faster. Where
+            // the copies are issued first (1024, 64x128) the same move
+            // measured 5% slower, so there the pair still ends the
+            // iteration.
+            if spreads {
+                self.emit_cp_async_wait(n_stages - 2);
+                writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+            }
+
             // read_stage: which physical stage slot holds THIS iteration's
-            // already-ready data (guaranteed by the previous iteration's -
-            // or the prologue's, for k_iter==0 - wait_group+bar.sync below).
+            // already-ready data (guaranteed by the wait_group+bar.sync
+            // above, or the previous iteration's - or the prologue's, for
+            // k_iter==0 - below).
             let read_stage = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", read_stage, k_iter, n_stages).unwrap();
             // next_tile: the tile index to prefetch NOW so it's ready
@@ -11289,32 +11605,64 @@ declare it as a Q format.\n{}",
             // `read_stage` (already confirmed ready) - the tensor-core work
             // below overlaps with this prefetch's async-copy-engine traffic
             // instead of waiting for it first.
-            self.emit_gemm_tile_load_async(
-                "A", &a_g, &cta_m_start, &k0_next, k, m, k, cta_m, cta_k, &a_write_base, smem_a_stride, threads_per_cta, Some(&p_tile_valid),
-            );
-            self.emit_gemm_tile_load_async(
-                "B", &b_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &b_write_base, smem_b_stride, threads_per_cta, Some(&p_tile_valid),
-            );
-            self.emit_cp_async_commit();
+            let interleave = if let Some((a, b, p_cta, _)) = &hoisted {
+                let p_load = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    and.pred {}, {}, {};", p_load, p_tile_valid, p_cta).unwrap();
+                let rsize = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    selp.u32 {}, 16, 0, {};", rsize, p_load).unwrap();
+                if spreads {
+                    let a_lines = self.emit_gemm_tile_load_async_hoisted_deferred("A", a, &k0_next, &a_write_base, &rsize);
+                    let b_lines = self.emit_gemm_tile_load_async_hoisted_deferred("B", b, &k0_next, &b_write_base, &rsize);
+                    let (mut a_it, mut b_it) = (a_lines.into_iter(), b_lines.into_iter());
+                    let mut lines = Vec::new();
+                    loop {
+                        let (x, y) = (a_it.next(), b_it.next());
+                        if x.is_none() && y.is_none() {
+                            break;
+                        }
+                        lines.extend(x);
+                        lines.extend(y);
+                    }
+                    lines
+                } else {
+                    self.emit_gemm_tile_load_async_hoisted("A", a, &k0_next, &a_write_base, &rsize);
+                    self.emit_gemm_tile_load_async_hoisted("B", b, &k0_next, &b_write_base, &rsize);
+                    self.emit_cp_async_commit();
+                    Vec::new()
+                }
+            } else {
+                self.emit_gemm_tile_load_async(
+                    "A", &a_g, &cta_m_start, &k0_next, k, m, k, cta_m, cta_k, &a_write_base, smem_a_stride, threads_per_cta, Some(&p_tile_valid),
+                );
+                self.emit_gemm_tile_load_async(
+                    "B", &b_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &b_write_base, smem_b_stride, threads_per_cta, Some(&p_tile_valid),
+                );
+                self.emit_cp_async_commit();
+                Vec::new()
+            };
 
             let a_read_base = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", a_read_base, read_stage, stage_a_bytes, smem_pipeline_base).unwrap();
             let b_read_base = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", b_read_base, read_stage, stage_b_bytes, smem_b_region_base).unwrap();
 
-            self.emit_gemm_compute_block(
+            self.emit_gemm_compute_block_interleaved(
                 &acc, &warp_col0_local, &warp_row0_local, &a_read_base, &b_read_base,
                 smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                &interleave,
             );
-
-            // Wait until group `k_iter+1` (the tile that will become
-            // read_stage next iteration) has landed, then make it visible
-            // block-wide; also what makes it safe for the NEXT iteration's
-            // prefetch-write to reuse this iteration's `read_stage` slot
-            // (that slot is only written again as write_stage one iteration
-            // from now - see doc comment derivation).
-            self.emit_cp_async_wait(n_stages - 2);
-            writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+            if !interleave.is_empty() {
+                self.emit_cp_async_commit();
+            }
+            if !spreads {
+                // Wait until group `k_iter+1` (the tile that will become
+                // read_stage next iteration) has landed, then make it
+                // visible block-wide; also what makes it safe for the NEXT
+                // iteration's prefetch-write to reuse this iteration's
+                // `read_stage` slot.
+                self.emit_cp_async_wait(n_stages - 2);
+                writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+            }
 
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
             writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
@@ -14877,7 +15225,8 @@ mod tests {
         let ptx = emitter.emit_program(&ast, &hw);
 
         assert!(ptx.contains("ldmatrix.sync.aligned.m8n8.x4.shared.b16"), "missing ldmatrix.x4 A-fragment load: {}", ptx);
-        assert!(ptx.contains("ldmatrix.sync.aligned.m8n8.x2.trans.shared.b16"), "missing ldmatrix.x2.trans B-fragment load: {}", ptx);
+        assert!(ptx.contains("ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16"), "missing ldmatrix.x4.trans B-fragment load: {}", ptx);
+        assert!(!ptx.contains("ldmatrix.sync.aligned.m8n8.x2.trans"), "B fragments come from one x4.trans per 16 columns, not two x2.trans: {}", ptx);
         assert!(ptx.contains("mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32"), "missing mma.sync.m16n8k16 multiply-accumulate: {}", ptx);
         assert!(!ptx.contains("wmma.load.a.sync"), "A fragments should no longer come from wmma.load.a: {}", ptx);
         assert!(!ptx.contains("wmma.load.b.sync"), "B fragments should no longer come from wmma.load.b: {}", ptx);
@@ -15329,7 +15678,7 @@ mod tests {
     }
 
     /// Real, hardware-validated address formula for
-    /// `emit_gemm_compute_block`'s `ldmatrix.x4` (A) / `ldmatrix.x2.trans`
+    /// `emit_gemm_compute_block`'s `ldmatrix.x4` (A) / `ldmatrix.x4.trans`
     /// (B) reads (see that function's doc comment) - duplicated here
     /// independently rather than calling into the emitter, so this test
     /// can't pass by "testing a bug against an identical copy of itself".
@@ -15341,11 +15690,14 @@ mod tests {
         (global_row * stride_elems + global_col0) * 2
     }
 
+    /// Matrices 0/1 (lanes 0-15) are K rows 0..15 at N-half 0, matrices 2/3
+    /// (lanes 16-31) the same rows at N-half 1.
     fn ldmatrix_b_byte_addr(lane: u32, row_offset: u32, col_offset: u32, stride_elems: u32) -> u32 {
         let group = lane >> 3;
         let local_row = lane & 7;
         let global_k = row_offset + local_row + ((group & 1) << 3);
-        (global_k * stride_elems + col_offset) * 2
+        let global_col0 = col_offset + ((group >> 1) << 3);
+        (global_k * stride_elems + global_col0) * 2
     }
 
     /// Bank-conflict check matching bank_conflict.rs's own methodology (32
@@ -15417,18 +15769,16 @@ mod tests {
             for warp_n in 0..warps_n {
                 for j in 0..num_j {
                     for kk in 0..k_substeps {
-                        for n_half in [0u32, 8u32] {
-                            let col_offset = warp_n * per_warp_n + j * 16 + n_half;
-                            let addrs: Vec<u32> = (0..32u32)
-                                .map(|lane| ldmatrix_b_byte_addr(lane, kk * 16, col_offset, b_stride))
-                                .collect();
-                            let worst = max_bank_hits(&addrs);
-                            assert!(
-                                worst <= 4,
-                                "B ldmatrix.trans bank conflict: cta={}x{}x{} warp_n={} j={} kk={} n_half={} worst_bank_hits={}",
-                                cta_m, cta_n, cta_k, warp_n, j, kk, n_half, worst
-                            );
-                        }
+                        let col_offset = warp_n * per_warp_n + j * 16;
+                        let addrs: Vec<u32> = (0..32u32)
+                            .map(|lane| ldmatrix_b_byte_addr(lane, kk * 16, col_offset, b_stride))
+                            .collect();
+                        let worst = max_bank_hits(&addrs);
+                        assert!(
+                            worst <= 4,
+                            "B ldmatrix.x4.trans bank conflict: cta={}x{}x{} warp_n={} j={} kk={} worst_bank_hits={}",
+                            cta_m, cta_n, cta_k, warp_n, j, kk, worst
+                        );
                     }
                 }
             }

@@ -1,0 +1,17 @@
+QUIET 21:56:39 mean 1.2%
+   1x4096x4096 Y {'before': '32x64 2x2', 'after': '32x64 2x2'} | exact {'before': True, 'after': True, 'cuBLAS': True} | Triton None | SM 2520-2520 MHz
+      after     min      20.7 median      21.5 us
+      before    min      20.8 median      21.7 us
+      cuBLAS    min      26.6 median      27.1 us
+   4x4096x4096 Y {'before': '32x64 2x2', 'after': '32x64 2x2'} | exact {'before': True, 'after': True, 'cuBLAS': True} | Triton None | SM 2520-2520 MHz
+      before    min      21.8 median      21.8 us
+      after     min      21.8 median      21.9 us
+      cuBLAS    min      53.4 median      55.0 us
+   8x4096x4096 Y {'before': '32x64 2x2', 'after': '32x64 2x2'} | exact {'before': True, 'after': True, 'cuBLAS': True} | Triton None | SM 2490-2490 MHz
+      before    min      23.9 median      24.0 us
+      after     min      23.9 median      24.1 us
+      cuBLAS    min      50.3 median      51.4 us
+  32x4096x4096 Y {'before': '32x64 2x2', 'after': '32x64 2x2'} | exact {'before': True, 'after': True, 'cuBLAS': True} | Triton None | SM 2490-2490 MHz
+      cuBLAS    min      23.7 median      23.9 us
+      after     min      31.0 median      31.2 us
+      before    min      31.1 median      31.2 us
