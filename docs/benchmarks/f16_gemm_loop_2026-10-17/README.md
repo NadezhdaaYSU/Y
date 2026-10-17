@@ -22,7 +22,9 @@ Triton's autotuner picked:
 - 128x256x32 on 8 warps, 3 stages, at 8192.
 
 The kernels timed are, byte for byte, `tests/gemm_f16_<N>.ptx` at
-`ff3526f` ("before") and at this commit ("after"). Each run started when the
+`ff3526f` ("before") and at `8d605e9` ("after"). The tiles were then
+measured again with the new loop, and three of them changed
+(`../f16_tiles_2026-10-17/`). Each run started when the
 GPU's utilisation, averaged over 10 samples, was at most 5% and no game was
 running. Run 1 started at 0.9% and run 2 at 0.6%.
 
@@ -57,8 +59,10 @@ those shapes (32x64 on 2x2 warps), on a GPU 1.2% busy:
 
 At M = 1, 4 and 8 the tile does not divide M, so these shapes keep the
 per-chunk copies. At 32 the addresses are hoisted, and the time does not
-move. `kernels/` holds these kernels' sources and PTX: they are not the
-committed `gemm_f16_decode_*` artifacts, whose K and N differ.
+move. `kernels/` holds these kernels' sources and PTX. The PTX is
+`tests/gemm_f16_decode_m<M>.ptx` at `ff3526f` and at `8d605e9`, with the
+kernel renamed. (This paragraph said they were other kernels, with other K
+and N, until the tiles were measured again.)
 
 ## Where the time went
 
@@ -168,7 +172,12 @@ uses only instructions the validator models. Four runs against `mad.wide`
 At 1024 this change ties Triton. Its loop is 94 instructions against
 Triton's 91, but it has 653 long-scoreboard stall samples against Triton's 66
 (`profile/analysis_1024.txt`). That tile keeps the copies back to back, at
-the start of the iteration.
+the start of the iteration. Its two stages make the wait at the end of the
+iteration a wait for every copy, the ones just issued included, and ptxas
+moved that wait up to after the fourth of the iteration's 32 MMAs. Measured
+again with the new loop, the tile at 1024 takes three stages
+(`../f16_tiles_2026-10-17/`): 29.6-29.8 us against Triton's 30.2-30.7 in the
+same runs.
 
 ## Reproduce
 
