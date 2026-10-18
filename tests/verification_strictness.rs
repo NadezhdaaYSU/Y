@@ -115,12 +115,15 @@ fn python_without_z3() -> TemporaryCommand {
 #[cfg(unix)]
 fn command_fixture(name: &str, exit_code: u8) -> TemporaryCommand {
     use std::os::unix::fs::PermissionsExt;
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_nanos();
+    // Tests on parallel threads can read the clock in the same nanosecond.
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let directory = std::env::temp_dir().join(format!(
-        "y-verification-command-fixture-{}-{nonce}",
+        "y-verification-command-fixture-{}-{nonce}-{sequence}",
         std::process::id()
     ));
     std::fs::create_dir(&directory).unwrap();
@@ -129,6 +132,35 @@ fn command_fixture(name: &str, exit_code: u8) -> TemporaryCommand {
     std::fs::write(&command, format!("#!/bin/sh\nexit {exit_code}\n")).unwrap();
     std::fs::set_permissions(&command, std::fs::Permissions::from_mode(0o755)).unwrap();
     TemporaryCommand(directory)
+}
+
+#[cfg(unix)]
+#[test]
+fn fixtures_made_at_the_same_moment_get_their_own_directories() {
+    // Cargo runs this file's tests on parallel threads, and two of them can
+    // read the clock in the same nanosecond.
+    let start = std::sync::Arc::new(std::sync::Barrier::new(8));
+    for _ in 0..200 {
+        let threads: Vec<_> = (0..8u8)
+            .map(|i| {
+                let start = start.clone();
+                std::thread::spawn(move || {
+                    start.wait();
+                    command_fixture("ptxas", i)
+                })
+            })
+            .collect();
+        let fixtures: Vec<TemporaryCommand> = threads
+            .into_iter()
+            .map(|t| t.join().expect("creating a fixture failed"))
+            .collect();
+        let distinct: std::collections::HashSet<_> = fixtures.iter().map(|f| &f.0).collect();
+        assert_eq!(distinct.len(), fixtures.len(), "two fixtures share a directory");
+        for (i, fixture) in fixtures.iter().enumerate() {
+            let script = std::fs::read_to_string(fixture.0.join("ptxas")).unwrap();
+            assert_eq!(script, format!("#!/bin/sh\nexit {i}\n"));
+        }
+    }
 }
 
 #[cfg(unix)]
