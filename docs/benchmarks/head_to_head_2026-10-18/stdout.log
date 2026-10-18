@@ -1,0 +1,286 @@
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+Vector add (100,000 f32)                                Y: 1.77/1.05 | Triton: 5.67/1.05 | PyTorch: 2.05/1.10  (min us, launch/graph)  SM clock 2475-2475 MHz
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+SwiGLU (100,000 f32)                                    Y: 1.84/1.23 | Triton: 5.70/1.22 | PyTorch: 4.61/2.62  (min us, launch/graph)  SM clock 2475-2475 MHz
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+RMSNorm (128 x 1024 f32)                                Y: 1.83/1.22 | Triton: 5.06/1.32 | PyTorch: 18.29/8.87  (min us, launch/graph)  SM clock 2445-2475 MHz
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+FP8 GEMM 1024^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 26.87/26.17 | Y e4m3: 25.70/24.11 | Triton: 32.87/32.04 | PyTorch: 47.64/44.58  (min us, launch/graph)  SM clock 2760-2775 MHz
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+FP8 GEMM 2048^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 192.69/191.49 | Y e4m3: 169.45/171.10 | Triton: 202.66/199.68 | PyTorch: 282.89/275.46  (min us, launch/graph)  SM clock 2715-2775 MHz
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+FP8 GEMM 4096^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 1485.98/1486.85 | Y e4m3: 1067.01/1086.46 | Triton: 1601.54/1576.96 | PyTorch: 1765.54/1801.22  (min us, launch/graph)  SM clock 2715-2760 MHz
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+FP8 GEMM 8192^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 11263.30/11256.83 | Y e4m3: 7380.70/7390.21 | Triton: 15333.34/15628.90 | PyTorch: 10576.48/10384.03  (min us, launch/graph)  SM clock 2595-2745 MHz
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Unknown GPU / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 3 / 11 / 41 / 396 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.20 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2040 cycles
+    -> Loaded GPU Name: Unknown GPU
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+SwiGLU module through a graph compiler (2^22 f32)       Y: 81.23/80.55 | Triton: 80.46/80.07 | PyTorch: 89.48/90.21  (min us, launch/graph)  SM clock 2520-2520 MHz
+
+wrote /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/e73759c4-94e7-4114-923c-ad963d8afa5e/scratchpad/h2h_e/run1/report.md and results.json

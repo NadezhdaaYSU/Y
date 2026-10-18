@@ -1,0 +1,368 @@
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      1     19      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0       2094   C+G     12      3      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0     584058     G      6      4      -      -      -      -    krita          
+    0     687136     C     34     15      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     77     33      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     97     44      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     98     44      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     98     76      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     98     12      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     99     25      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     99    100      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     99     85      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     99     69      -      -      -      -    python3        
+    0       2094   C+G      0      0      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     65     50      -      -      -      -    python3        
+    0       2094   C+G      0      0      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     22     14      -      -      -      -    python3        
+    0       2094   C+G      6      7      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      0      0      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C     16     12      -      -      -      -    python3        
+    0       2094   C+G      0      0      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      1      0      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0     687386     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      0      0      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0     687439     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      2      0      -      -      -      -    kwin_wayland   
+    0       2151     G      1      0      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0     687475     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      2      0      -      -      -      -    kwin_wayland   
+    0       2151     G      1      0      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      2      1      -      -      -      -    kwin_wayland   
+    0       2151     G      2      2      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0     687136     C      -      -      -      -      -      -    python3        
+    0     687569     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0     687652     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G     16     33      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+# gpu         pid   type     sm    mem    enc    dec    jpg    ofa    command 
+# Idx           #    C/G      %      %      %      %      %      %    name 
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0     687698     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0     687734     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          
+    0     687136     C      -      -      -      -      -      -    python3        
+    0       2094   C+G      -      -      -      -      -      -    kwin_wayland   
+    0       2151     G      -      -      -      -      -      -    Xwayland       
+    0       2198     G      -      -      -      -      -      -    plasmashell    
+    0       2516     G      -      -      -      -      -      -    xdg-desktop-por
+    0       4405     G      -      -      -      -      -      -    renderD128 --cr
+    0       5428     G      -      -      -      -      -      -    hom            
+    0      25038     G      -      -      -      -      -      -    Code --gpu     
+    0      77182     G      -      -      -      -      -      -    steam          
+    0      77397     G      -      -      -      -      -      -    steamwebhelper 
+    0      77431     G      -      -      -      -      -      -    steamwebhelper 
+    0     584058     G      -      -      -      -      -      -    krita          

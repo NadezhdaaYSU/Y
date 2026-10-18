@@ -5310,8 +5310,8 @@ None of these runs a kernel the Y compiler emitted:
 
 `python/examples/run_head_to_head_comparison.py` compares kernels the Y compiler
 emits with Triton and PyTorch: vector add, SwiGLU and RMSNorm, the FP8 GEMM at
-1024-8192, and a SwiGLU module through `y_inductor` against `torch.compile` and
-eager. Every column is checked against a reference first (exactly, where the
+1024-8192 (Y's fused GEMM, and the three kernels of the "Y e4m3" column), and a
+SwiGLU module through `y_inductor` against `torch.compile` and eager. Every column is checked against a reference first (exactly, where the
 arithmetic allows: the FP8 inputs are chosen so every implementation's answer
 is exact) and timed both as plain launches and as CUDA-graph replays, in
 interleaved rounds. It writes every sample, the toolchain and the GPU's state
@@ -5338,26 +5338,35 @@ The table this section published was not a measurement of Y against Triton:
   volume and must equal `2x + 1` exactly); it has been run only on a busy GPU
   since, where the two took the same time within 2%.
 
-Measured 2026-10-13 at `c8eea77`, the GPU 4% busy as the run started (the
-desktop compositor, Discord and Chromium; no game)
-([record](benchmarks/head_to_head_2026-10-13/README.md)). A second run, marked
-contended, gave every graph-mode minimum within 3.2% of the first. Each
-column's better regime is compared:
+Measured 2026-10-18 at `3048a13`, the GPU 2.8% busy as the run started (the
+desktop, the Steam client, Krita, Discord and Chromium; no game)
+([record](benchmarks/head_to_head_2026-10-18/README.md)). A second run gave
+every graph-mode minimum within 3.5% of the first, apart from the SwiGLU row,
+whose three columns ran 6-7% faster together. Each column's better regime is
+compared:
 
 - Replayed from a CUDA graph, Y's vector add and SwiGLU take the same time as
-  Triton's (1.04 against 1.05 us, 1.12 against 1.12), and its RMSNorm 1.24 us
-  against Triton's 1.34.
-- Launched from Python, a vector-add call takes 3.0 us with Y, 5.8 with
-  Triton and 2.1 with PyTorch (medians: launches are bound by the CPU).
-- Y's FP8 GEMM takes 0.83x Triton's time at 1024, 0.96x at 2048, 0.94x at
-  4096 and 0.74x at 8192. Against `torch._scaled_mm`, with the quantisation
-  in separate kernels, it takes 0.60x, 0.71x and 0.82x up to 4096, and 1.12x
-  at 8192.
+  Triton's (1.05 against 1.05 us, 1.23 against 1.22), and its RMSNorm 1.22 us
+  against Triton's 1.32.
+- Launched from Python, a vector-add call takes 1.79 us with Y, 5.72 with
+  Triton and 2.06 with PyTorch (medians: launches are bound by the CPU).
+- The FP8 GEMM from float32 A and B, through three Y kernels (A quantised, B
+  quantised and transposed, the `@tile` GEMM over e4m3 bytes; §9.12, §20.5),
+  takes 0.54x the time of `torch._scaled_mm`'s pipeline at 1024, 0.62x at
+  2048, 0.60x at 4096 and 0.71x at 8192, and 0.47-0.86x Triton's fused
+  kernel's. Y's fused GEMM takes 0.82x Triton's time at 1024, 0.96x at 2048,
+  0.94x at 4096 and 0.72x at 8192, and 1.08x `_scaled_mm`'s at 8192. Both Y
+  GEMMs add each `mma`'s result in float32; Triton's chains them in the
+  tensor core's accumulator (§9.12).
 - Through `y_inductor` the SwiGLU module is one Y kernel, bit for bit eager's:
-  81.1 us at 2^22 elements, against `torch.compile`'s 80.4 (inside both
-  columns' spread) and eager's 89.9.
-- Cold compilation of one kernel: Y 0.6 ms to PTX plus 10.2 ms for the driver
-  to load it; Triton's first call with an empty cache, 513 ms.
+  80.55 us at 2^22 elements, against `torch.compile`'s 80.07 (inside both
+  columns' spread) and eager's 90.21.
+- Cold compilation of one kernel: Y 0.6 ms to PTX plus 10.7 ms for the driver
+  to load it; Triton's first call with an empty cache, 505 ms.
+
+On 2026-10-13 ([record](benchmarks/head_to_head_2026-10-13/README.md)), before
+the e4m3 GEMM and the native launcher (§34.3), Y's FP8 GEMM took 1.12x
+`_scaled_mm`'s time at 8192 and a Y launch 3.0 us.
 
 On 2026-10-11 ([report](benchmarks/head_to_head_2026-10-11/report.md)) Y's
 RMSNorm took 1.40 us against Triton's 1.33 and a Y launch 6.6 us. Its FP8 GEMM
@@ -5386,9 +5395,10 @@ under `docs/benchmarks/`:
 - `y_inductor` lowers `silu`, bit for bit eager's, so the SwiGLU module is one
   Y kernel (`inductor_silu_2026-10-12/`).
 
-Since the 2026-10-13 run, `TorchKernel.launch` fills the parameters and calls
-`cuLaunchKernel` in one C call (§34.3): 1.72 us of CPU time a call, against
-PyTorch's 2.02 (`launch_2026-10-17/`).
+`TorchKernel.launch` fills the parameters and calls `cuLaunchKernel` in one C
+call (§34.3): 1.72 us of CPU time a call, against PyTorch's 2.02
+(`launch_2026-10-17/`). The FP8 GEMM over e4m3 bytes and the float32
+accumulation are measured in `fp8_e4m3_2026-10-18/`.
 
 ---
 

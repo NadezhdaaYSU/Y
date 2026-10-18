@@ -1010,6 +1010,27 @@ a wash: it removes work but lengthens the live ranges around the branch, and
 kept because it is what makes the multi-head epilogue affordable, not because
 it was a speedup.
 
+### FP8 (e4m3) GEMM vs `torch._scaled_mm`
+
+Float32 A and B to float32 C through the e4m3 tensor cores, every column
+checked exact first. Y quantises A, quantises and transposes B, and runs its
+`@tile` GEMM over the e4m3 bytes: three kernels, as PyTorch's column is its
+quantisation kernels and cuBLASLt's GEMM. CUDA-graph replays
+(`docs/benchmarks/head_to_head_2026-10-18/`):
+
+| M=N=K | 1024 | 2048 | 4096 | 8192 |
+|---|---|---|---|---|
+| **Y vs PyTorch** | 0.54x | 0.62x | 0.60x | 0.71x |
+| **Y vs Triton's fused kernel** | 0.75x | 0.86x | 0.69x | 0.47x |
+
+The GEMM alone ties cuBLASLt's (0.97-0.99x up to 4096, 0.995-1.005x at
+8192); the difference is the quantisation, 1.08 ms against torch's 4.17 at
+8192. Both of Y's FP8 GEMMs add each `mma`'s result in float32. The tensor
+core's own accumulator keeps about 11 bits and truncates: chaining a K loop in
+it, as Y did until 2026-10-18 and Triton's `tl.dot` still does, left a median
+relative error of 6.6% at K = 4096 on positive inputs, against 6.5e-5 now
+(`docs/benchmarks/fp8_e4m3_2026-10-18/`).
+
 ### BN254 field kernels, NTT and MSM
 
 Once the integer datapath existed, the ZK backend's arithmetic could be
@@ -1050,17 +1071,14 @@ different baseline.
 
 | workload | baseline | result |
 |---|---|---|
-| **FP8 (e4m3) GEMM** | `torch._scaled_mm` | **0.16–0.26x — 4–6x slower** |
 | Paged decode attention, L2-resident | FlashInfer | 0.76–0.81x |
 | Decode-shaped GEMM (M=4–8) | cuBLAS | at the DRAM roofline; tied |
 
-FP8 is the largest gap and is not being chased: this is Ada, not Hopper, and the
-kernel is instruction-bound in its quantize-and-stage step. Paged decode
-attention is now at the DRAM roofline when the KV cache does not fit in L2, and
-loses by up to 1.3x when it does. What binds it there has not been measured; the
-suspect is the per-token instruction count — one 32-lane butterfly reduction per
-query head, so four per token, which the GQA merge amortized the *loads* over
-but not the reductions.
+Paged decode attention is now at the DRAM roofline when the KV cache does not
+fit in L2, and loses by up to 1.3x when it does. What binds it there has not
+been measured; the suspect is the per-token instruction count — one 32-lane
+butterfly reduction per query head, so four per token, which the GQA merge
+amortized the *loads* over but not the reductions.
 
 ### Memory bandwidth
 

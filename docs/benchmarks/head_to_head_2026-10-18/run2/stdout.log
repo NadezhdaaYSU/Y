@@ -1,0 +1,10 @@
+Vector add (100,000 f32)                                Y: 1.66/1.05 | Triton: 5.68/1.05 | PyTorch: 1.68/1.10  (min us, launch/graph)  SM clock 2475-2475 MHz
+SwiGLU (100,000 f32)                                    Y: 1.75/1.14 | Triton: 5.65/1.14 | PyTorch: 4.59/2.45  (min us, launch/graph)  SM clock 2475-2475 MHz
+RMSNorm (128 x 1024 f32)                                Y: 1.75/1.22 | Triton: 5.06/1.32 | PyTorch: 18.25/8.85  (min us, launch/graph)  SM clock 2475-2475 MHz
+FP8 GEMM 1024^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 26.88/26.15 | Y e4m3: 25.67/24.09 | Triton: 32.81/31.97 | PyTorch: 47.39/44.48  (min us, launch/graph)  SM clock 2475-2475 MHz
+FP8 GEMM 2048^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 192.70/191.39 | Y e4m3: 169.50/170.73 | Triton: 202.19/199.40 | PyTorch: 282.21/277.41  (min us, launch/graph)  SM clock 2775-2775 MHz
+FP8 GEMM 4096^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 1474.56/1479.65 | Y e4m3: 1066.98/1084.42 | Triton: 1577.98/1570.82 | PyTorch: 1773.57/1792.00  (min us, launch/graph)  SM clock 2760-2760 MHz
+FP8 GEMM 8192^3 (f32 in, e4m3 tensor cores, f32 out)    Y: 11254.78/11651.74 | Y e4m3: 7370.75/7452.26 | Triton: 16014.34/15632.38 | PyTorch: 10529.54/10332.16  (min us, launch/graph)  SM clock 2610-2685 MHz
+SwiGLU module through a graph compiler (2^22 f32)       Y: 80.55/80.21 | Triton: 81.43/80.65 | PyTorch: 89.69/89.97  (min us, launch/graph)  SM clock 2775-2775 MHz
+
+wrote /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/e73759c4-94e7-4114-923c-ad963d8afa5e/scratchpad/h2h_e/run2/report.md and results.json
