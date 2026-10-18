@@ -899,22 +899,34 @@ the 2.61 GHz boost clock is **88.1 TFLOPS**.
 
 ### Square FP16 GEMM vs cuBLAS
 
-Measured from `target/release/Y tests/gemm_f16_<N>.ysu --emit-ptx` — the
-compiler's own output, not a hand-written CUDA reference. Interleaved A/B,
-ranked by minimum, correctness-checked every run.
+The committed `tests/gemm_f16_<N>.ptx` — the compiler's own output, not a
+hand-written CUDA reference — against cuBLAS (`torch.mm` with a float32
+output, as Y's C is float32) and an autotuned Triton GEMM. Every column is
+checked exact first; interleaved rounds, ranked by minimum; two runs on
+2026-10-18 (`docs/benchmarks/f16_square_2026-10-18/`).
 
 | M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 |
 |---|---|---|---|---|---|---|
-| **Y vs cuBLAS** | 1.12x | 0.84x | 0.89x | 0.93x | 0.93x | 0.94x |
-| **Y TFLOPS** | 11.1 | 38.2 | 69.8 | 79.5 | 79.1 | 81.6 |
+| **Y vs cuBLAS** | 1.344x / 1.308x | 0.856x / 0.879x | 0.969x / 0.967x | 0.989x / 0.987x | 0.977x / 0.975x | 0.995x / 1.001x |
+| **Y vs Triton** | 3.24x / 2.44x | 1.38x / 1.06x | 1.01x / 1.01x | 1.01x / 1.00x | 1.01x / 1.00x | 1.14x / 1.15x |
+| **Y TFLOPS** | 11.5 / 11.2 | 39.0 / 40.2 | 72.2 / 72.1 | 83.0 / 83.2 | 87.0 / 86.7 | 88.0 / 88.8 |
 
-**Y is behind cuBLAS at every size above 256, by 6–16%.** 256 reads 1.12–1.23x
-across runs and 4096 reads 0.93–0.94x; both are at the edge of what a
-3 µs kernel reproduces to, but the ordering is stable. This is a large
-improvement on the 0.61–0.94x the same benchmark measured before the mainloop
-work (`ptxas` could not unroll the `cp.async` staging loops because their trip
-count depended on `%tid.x`, costing ~22 SASS instructions per 16-byte copy), and
-it is still a loss.
+**From 1024 up Y is 0.97–1.00x cuBLAS; at 8192 the two runs disagree on the
+order, a tie.** Y is ahead at 256 and 0.86–0.88x at 512. Against Triton it
+ties from 1024 to 4096 and is 1.14–1.15x at 8192, where Triton's autotuner
+picks a 128x256 tile on 8 warps; Triton's 256 and 512 minima moved by 22–26%
+between the runs, so those two ratios carry little weight. The 8192 TFLOPS
+were measured with the SM at up to 2760 MHz, where the peak is 93.2.
+
+This table read 0.84–0.94x above 256 when it was measured on 2026-08-09, by
+a harness that commit does not record. On 2026-10-17 the K loop
+stopped recomputing every `cp.async` chunk's address and bounds at each
+K-tile and loaded B with one `ldmatrix.x4.trans` per 16 columns
+(`docs/benchmarks/f16_gemm_loop_2026-10-17/`), and the tiles were measured
+again, three of them changing (`docs/benchmarks/f16_tiles_2026-10-17/`). Before the
+mainloop work it was 0.61–0.94x: `ptxas` could not unroll the `cp.async`
+staging loops because their trip count depended on `%tid.x`, costing ~22
+SASS instructions per 16-byte copy.
 
 ### Fused GEMM + bias + ReLU vs cuDNN
 
