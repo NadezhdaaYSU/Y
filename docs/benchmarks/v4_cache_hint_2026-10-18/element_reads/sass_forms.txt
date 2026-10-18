@@ -1,0 +1,4 @@
+add1_ca.ptx:  2 LDG.E.STRONG.SM 
+add1_plain.ptx:  2 LDG.E 
+fma1_ca.ptx:  3 LDG.E.STRONG.SM 
+fma1_plain.ptx:  3 LDG.E 

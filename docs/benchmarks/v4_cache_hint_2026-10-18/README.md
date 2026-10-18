@@ -57,8 +57,9 @@ faster. The footprint counts every byte the kernel reads or writes once.
   against 325.06 us) and cost 0.2-0.3% on RMSNorm at 16384 x 1024; Y without
   it is 1.00x Triton in every one of those rows in both runs.
 - `.ca` loads are within 0.5% of plain ones except at 2^22: 2.5% and 0.5%
-  slower on the vector add, 10.1% and 8.7% on SwiGLU. Element reads (`A[i]`)
-  take `.ca` by default; that is not changed here.
+  slower on the vector add, 10.1% and 8.7% on SwiGLU. 2^22 floats is the
+  L2's own size (below), and element reads, which take `.ca`, tie plain ones
+  at every footprint either side of it ("Element reads").
 
 ## At the L2's size
 
@@ -83,3 +84,33 @@ changes between runs. The 50 MB rows of the first table are of that kind.
 
 A read that should stream can still say so: `@cache_policy(L2_STREAM)` on an
 element read emits `ld.global.cs` (`tests/ptx_cache_policy.rs`).
+
+## Element reads
+
+An element read (`A[i]`) emits `ld.global.ca`, which ptxas makes
+`LDG.E.STRONG.SM`; without the operator it is `LDG.E`
+(`element_reads/sass_forms.txt`). `element_reads/probe_ca2.py` (the compiler
+of `957899d`) compiles a one-element-a-thread vector add (`C[i] = A[i] +
+B[i]`) and multiply-add (`D[i] = A[i] * B[i] + C[i]`) from Y source, times
+them as emitted and with `.ca` removed (`element_reads/*.ptx`) against
+Triton's, each column checked first, at footprints away from the L2's size.
+Two runs, each started by `gpu_quiet_then.sh` at 4.1% and 2.7% with no game
+running (`element_reads/queue.txt`). Microseconds, run 1 / run 2
+(`element_reads/table.py`):
+
+| kernel | footprint | Y plain | Y `.ca` | Triton | `.ca` / plain | Triton / plain |
+|---|---|---|---|---|---|---|
+| add1 | 24 MB | 7.91 / 7.89 | 7.91 / 7.89 | 9.13 / 9.07 | 1.000 / 1.000 | 1.154 / 1.150 |
+| fma1 | 24 MB | 7.35 / 7.33 | 7.35 / 7.32 | 8.52 / 8.55 | 1.000 / 0.999 | 1.159 / 1.166 |
+| add1 | 32 MB | 10.17 / 10.11 | 10.15 / 10.10 | 11.36 / 11.29 | 0.998 / 0.999 | 1.117 / 1.117 |
+| fma1 | 32 MB | 9.38 / 9.34 | 9.38 / 9.33 | 10.78 / 10.74 | 1.000 / 0.999 | 1.149 / 1.150 |
+| add1 | 40 MB | 12.45 / 12.40 | 12.41 / 12.37 | 13.73 / 13.65 | 0.997 / 0.998 | 1.103 / 1.101 |
+| fma1 | 40 MB | 11.29 / 11.35 | 11.28 / 11.36 | 12.64 / 12.61 | 0.999 / 1.001 | 1.120 / 1.111 |
+| add1 | 96 MB | 154.15 / 154.03 | 154.35 / 154.30 | 154.41 / 153.94 | 1.001 / 1.002 | 1.002 / 0.999 |
+| fma1 | 96 MB | 155.20 / 155.29 | 155.26 / 155.32 | 155.60 / 155.59 | 1.000 / 1.000 | 1.003 / 1.002 |
+| add1 | 192 MB | 308.00 / 308.31 | 308.45 / 308.00 | 310.39 / 309.36 | 1.001 / 0.999 | 1.008 / 1.003 |
+| fma1 | 192 MB | 308.22 / 308.41 | 308.64 / 308.57 | 309.48 / 309.02 | 1.001 / 1.001 | 1.004 / 1.002 |
+
+`.ca` takes 0.997-1.002x plain's time in every row, so element reads keep
+it. The timing script imports `bench_ab.py` from
+`../f16_square_2026-10-18/` for its PTX loader.
