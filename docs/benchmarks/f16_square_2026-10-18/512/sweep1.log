@@ -1,0 +1,12 @@
+           512 Y {'64_64_32_2_2_5': '64x64 2x2', '64_64_32_2_2_8': '64x64 2x2', '64_64_32_4_2_4': '64x64 4x2', '64_64_32_4_2_6': '64x64 4x2', '64_64_64_2_2_3': '64x64 2x2', '64_64_64_2_2_4': '64x64 2x2', '64_64_64_2_2_5': '64x64 2x2', '64_64_64_2_2_6': '64x64 2x2', '64_64_64_4_2_5': '64x64 4x2'} | exact {'64_64_32_2_2_5': True, '64_64_32_2_2_8': True, '64_64_32_4_2_4': True, '64_64_32_4_2_6': True, '64_64_64_2_2_3': True, '64_64_64_2_2_4': True, '64_64_64_2_2_5': True, '64_64_64_2_2_6': True, '64_64_64_4_2_5': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2490-2490 MHz
+      cuBLAS    min       5.8 median       5.9 us  0.615x Triton
+      64_64_32_4_2_4 min       6.7 median       6.8 us  0.707x Triton
+      64_64_32_4_2_6 min       6.7 median       6.8 us  0.712x Triton
+      64_64_64_2_2_3 min       6.9 median       6.9 us  0.728x Triton
+      64_64_32_2_2_5 min       7.0 median       7.0 us  0.736x Triton
+      64_64_64_2_2_4 min       7.0 median       7.0 us  0.738x Triton
+      64_64_64_4_2_5 min       7.2 median       7.2 us  0.760x Triton
+      64_64_64_2_2_6 min       7.3 median       7.4 us  0.774x Triton
+      64_64_64_2_2_5 min       7.3 median       7.4 us  0.775x Triton
+      64_64_32_2_2_8 min       7.3 median       7.4 us  0.776x Triton
+      Triton    min       9.5 median       9.5 us  1.000x Triton

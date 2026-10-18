@@ -168,6 +168,47 @@ fn the_v4_load_takes_the_same_policy() {
     assert!(ptx.contains("ld.global.L2::cache_hint.v4.f32"), "{}", ptx);
 }
 
+/// The v4 built-ins take no `@cache_policy` and leave their lines at normal
+/// priority. They emitted `.cs` (evict-first in L1 and L2) for every load and
+/// store until 2026-10-18, which cost 2.7-3.3x wherever the data fit in L2
+/// (docs/benchmarks/v4_cache_hint_2026-10-18/). A read that asks for
+/// streaming still gets `.cs`.
+#[test]
+fn the_v4_built_ins_leave_lines_at_normal_priority() {
+    let cases = [
+        ("vec_add_v4", "kernel k(A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>, N: I32) {\n    \
+         let i: I32 = global_thread_id() * 4;\n    if i < N {\n        vec_add_v4(A[i], B[i], C[i]);\n    }\n}",
+         2, 1),
+        ("swiglu_v4", "kernel k(G: GlobalMemory<F32>, U: GlobalMemory<F32>, O: GlobalMemory<F32>, N: I32) {\n    \
+         let i: I32 = global_thread_id() * 4;\n    if i < N {\n        swiglu_v4(G[i], U[i], O[i]);\n    }\n}",
+         2, 1),
+        ("rmsnorm_v4", "kernel k(X: GlobalMemory<F32>, W: GlobalMemory<F32>, O: GlobalMemory<F32>, h: I32, eps: F32) {\n    \
+         let col: I32 = thread_idx_x() * 4;\n    let i: I32 = block_idx_x() * h + col;\n    \
+         rmsnorm_v4(X[i], W[col], O[i], h, eps);\n}",
+         2, 1),
+        ("block_ptr3d_store_v4", "kernel k(A: GlobalMemory<F32>) {\n    \
+         block_ptr3d_store_v4(A, 0, 0, 0, 1, 1, 1, 1, 4, 1.0, 2.0, 3.0, 4.0);\n}",
+         0, 1),
+    ];
+    for (name, src, loads, stores) in cases {
+        let ptx = compiled_for("8.9", name, src);
+        assert_eq!(ptx.matches("ld.global.v4.f32").count(), loads, "{}:\n{}", name, ptx);
+        assert_eq!(ptx.matches("st.global.v4.f32").count(), stores, "{}:\n{}", name, ptx);
+        assert!(!ptx.contains(".cs."), "{} marks lines evict-first:\n{}", name, ptx);
+        if ptxas_present() {
+            assemble_or_panic(name, &ptx);
+        }
+    }
+    let streamed = compiled_for("8.9", "streamed", &loader(Some("L2_STREAM"), "A[1]"));
+    assert!(streamed.contains("ld.global.cs.f32"), "{}", streamed);
+}
+
+fn assemble_or_panic(tag: &str, ptx: &str) {
+    if let Err(e) = assembles(tag, ptx) {
+        panic!("{} does not assemble: {}\n{}", tag, e, ptx);
+    }
+}
+
 /// Every form assembles at every arch the backend targets from sm_80 up - the
 /// reported bug was a module `ptxas` rejects after a clean compile. One read
 /// spelling is enough here: both go through one load helper, and the test

@@ -1,0 +1,117 @@
+.version 7.8
+.target sm_89
+.address_size 64
+
+.visible .entry rmsnorm(
+    .param .u64 X_0,
+    .param .u64 Weight_1,
+    .param .u64 Out_2,
+    .param .b32 hidden_dim_3,
+    .param .b32 eps_4
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 98
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 128 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 33.33% (2 active blocks per SM)
+.maxnreg 128
+{
+    .reg .b32 %r<16>;
+    .reg .f32 %f<44>;
+    .reg .b64 %rd<19>;
+    .reg .pred %p<4>;
+
+    ld.param.u64 %rd0, [X_0];
+    ld.param.u64 %rd1, [Weight_1];
+    ld.param.u64 %rd2, [Out_2];
+    ld.param.u32 %r0, [hidden_dim_3];
+    ld.param.f32 %f0, [eps_4];
+    mov.u32 %r1, %ctaid.x;
+    mov.u32 %r2, %tid.x;
+    mov.u32 %r3, 4;
+    mul.lo.s32 %r4, %r2, %r3;
+    mul.lo.s32 %r5, %r1, %r0;
+    add.s32 %r6, %r5, %r4;
+    cvt.u64.u32 %rd3, %r6;
+    shl.b64 %rd4, %rd3, 2;
+    add.u64 %rd5, %rd0, %rd4;
+    cvt.u64.u32 %rd6, %r4;
+    shl.b64 %rd7, %rd6, 2;
+    add.u64 %rd8, %rd1, %rd7;
+    cvt.u64.u32 %rd9, %r6;
+    shl.b64 %rd10, %rd9, 2;
+    add.u64 %rd11, %rd2, %rd10;
+    mov.u32 %r7, %ntid.x;
+    mov.u32 %r10, %ntid.y;
+    mov.u32 %r11, %ntid.z;
+    shl.b32 %r8, %r7, 2;
+    setp.ne.s32 %p0, %r8, %r0;
+    and.b32 %r9, %r7, 31;
+    setp.ne.u32 %p1, %r9, 0;
+    or.pred %p0, %p0, %p1;
+    mul.lo.u32 %r10, %r10, %r11;
+    setp.ne.u32 %p1, %r10, 1;
+    or.pred %p0, %p0, %p1;
+    @%p0 trap;
+    ld.global.ca.v4.f32 {%f1, %f2, %f3, %f4}, [%rd5];
+    ld.global.ca.v4.f32 {%f5, %f6, %f7, %f8}, [%rd8];
+    mul.f32 %f9, %f1, %f1;
+    mul.f32 %f10, %f2, %f2;
+    mul.f32 %f11, %f3, %f3;
+    mul.f32 %f12, %f4, %f4;
+    add.f32 %f13, %f9, %f10;
+    add.f32 %f14, %f11, %f12;
+    add.f32 %f15, %f13, %f14;
+    // [WARP-LEVEL SHUFFLE REDUCTION SUM - shfl.sync.bfly.b32]
+    shfl.sync.bfly.b32 %f16, %f15, 16, 0x1f, 0xffffffff;
+    add.f32 %f17, %f15, %f16;
+    shfl.sync.bfly.b32 %f18, %f17, 8, 0x1f, 0xffffffff;
+    add.f32 %f19, %f17, %f18;
+    shfl.sync.bfly.b32 %f20, %f19, 4, 0x1f, 0xffffffff;
+    add.f32 %f21, %f19, %f20;
+    shfl.sync.bfly.b32 %f22, %f21, 2, 0x1f, 0xffffffff;
+    add.f32 %f23, %f21, %f22;
+    shfl.sync.bfly.b32 %f24, %f23, 1, 0x1f, 0xffffffff;
+    add.f32 %f25, %f23, %f24;
+    .shared .align 4 .f32 smem_reduce[32];
+    mov.u32 %r14, %tid.x;
+    and.b32 %r12, %r14, 31;
+    shr.u32 %r13, %r14, 5;
+    setp.eq.u32 %p2, %r12, 0;
+    cvt.u64.u32 %rd12, %r13;
+    shl.b64 %rd13, %rd12, 2;
+    mov.u64 %rd14, smem_reduce;
+    add.u64 %rd14, %rd14, %rd13;
+    @%p2 st.shared.f32 [%rd14], %f25;
+    bar.sync 0;
+    mov.u64 %rd15, smem_reduce;
+    cvt.u64.u32 %rd16, %r12;
+    shl.b64 %rd17, %rd16, 2;
+    add.u64 %rd18, %rd15, %rd17;
+    shr.u32 %r15, %r7, 5;
+    setp.lt.u32 %p3, %r12, %r15;
+    @%p3 ld.shared.f32 %f26, [%rd18];
+    @!%p3 mov.f32 %f26, 0.0;
+    // [WARP-LEVEL SHUFFLE REDUCTION SUM - shfl.sync.bfly.b32]
+    shfl.sync.bfly.b32 %f27, %f26, 16, 0x1f, 0xffffffff;
+    add.f32 %f28, %f26, %f27;
+    shfl.sync.bfly.b32 %f29, %f28, 8, 0x1f, 0xffffffff;
+    add.f32 %f30, %f28, %f29;
+    shfl.sync.bfly.b32 %f31, %f30, 4, 0x1f, 0xffffffff;
+    add.f32 %f32, %f30, %f31;
+    shfl.sync.bfly.b32 %f33, %f32, 2, 0x1f, 0xffffffff;
+    add.f32 %f34, %f32, %f33;
+    shfl.sync.bfly.b32 %f35, %f34, 1, 0x1f, 0xffffffff;
+    add.f32 %f36, %f34, %f35;
+    cvt.rn.f32.s32 %f39, %r0;
+    div.rn.f32 %f38, %f36, %f39;
+    add.f32 %f38, %f38, %f0;
+    rsqrt.approx.f32 %f37, %f38;
+    mul.f32 %f40, %f1, %f37;
+    mul.f32 %f41, %f2, %f37;
+    mul.f32 %f42, %f3, %f37;
+    mul.f32 %f43, %f4, %f37;
+    mul.f32 %f40, %f40, %f5;
+    mul.f32 %f41, %f41, %f6;
+    mul.f32 %f42, %f42, %f7;
+    mul.f32 %f43, %f43, %f8;
+    st.global.v4.f32 [%rd11], {%f40, %f41, %f42, %f43};
+}
