@@ -60,5 +60,26 @@ faster. The footprint counts every byte the kernel reads or writes once.
   slower on the vector add, 10.1% and 8.7% on SwiGLU. Element reads (`A[i]`)
   take `.ca` by default; that is not changed here.
 
+## At the L2's size
+
+The 50 MB shapes above sit on the L2's own size, and there the order of the
+columns does not hold from one run to the next. `edge/probe_edge.py` (the
+compiler of `957899d`, two runs: `edge/edge1.log`, `edge/edge2.log`) times
+`vec_add_v4`, a one-element-a-thread vector add (`C[i] = A[i] + B[i]`) and
+Triton's at ten footprints, each checked exact first. Triton's time over
+Y's, run 1 / run 2:
+
+| footprint | `vec_add_v4` | one element a thread |
+|---|---|---|
+| 16-44 MB | 1.080-1.124 / 1.080-1.136 | 1.078-1.164 / 1.090-1.160 |
+| 48 MB | 1.005 / 0.907 | 0.806 / 0.693 |
+| 52 MB | 0.928 / 0.987 | 1.187 / 1.214 |
+| 56 MB | 0.985 / 1.061 | 1.037 / 0.969 |
+| 64 and 96 MB | 1.001, 0.992 / 1.010, 1.002 | 1.015, 0.985 / 1.031, 1.004 |
+
+Below 48 MB Y's vector adds are 1.08-1.16x Triton's in both runs, and from
+64 MB they tie; between, either kernel leads by up to 1.44x, in an order that
+changes between runs. The 50 MB rows of the first table are of that kind.
+
 A read that should stream can still say so: `@cache_policy(L2_STREAM)` on an
 element read emits `ld.global.cs` (`tests/ptx_cache_policy.rs`).

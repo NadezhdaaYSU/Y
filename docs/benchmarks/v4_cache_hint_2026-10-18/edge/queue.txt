@@ -1,0 +1,4 @@
+gpu_quiet_then.sh output (its stdout, copied here):
+edge1.log: QUIET 20:13:42 mean 4.7%
+edge2.log: QUIET 20:14:31 mean 0.0%
+Compiler: 957899d (liby.so sha256 62fb7e0d34ae4ba9...)
