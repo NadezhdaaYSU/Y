@@ -1,0 +1,20 @@
+# python3 sass_loop.py <ptx> paged_decode_attention_split_128_32_8_16_16_8  (CUDA 13.4 ptxas -O3, sm_89)
+## ptx/old_16_8.ptx
+paged_decode_attention_split_128_32_8_16_16_8: loop 0x520-0xee0, 157 instructions: FFMA=32 FMUL=28 FADD=28 SHFL=20 HADD2=8 MUFU=8 MOV=6 IADD3=5 SHF=4 IMAD=4 FMNMX=4 LDG=3 ISETP=2 LEA=2 BRA=2 LOP3=1
+## exploration/ptx/layout_only_16_8.ptx
+paged_decode_attention_split_128_32_8_16_16_8: loop 0x860-0x15d0, 216 instructions: FFMA=64 FMUL=44 FADD=24 HADD2=16 SHFL=16 FSEL=8 MUFU=8 MOV=6 IADD3=5 SHF=4 IMAD=4 FMNMX=4 LEA=3 ISETP=3 LDG=3 BRA=2 IMNMX=1 LOP3=1
+## ptx/new_16_8.ptx
+paged_decode_attention_split_128_32_8_16_16_8: loop 0x9a0-0x1880, 239 instructions: FFMA=60 FMUL=48 FADD=32 HADD2=16 SHFL=16 MOV=15 FMNMX=8 MUFU=8 IADD3=5 LEA=4 SHF=4 ISETP=4 IMAD=4 FSEL=4 LDG=3 BRA=3 IMNMX=1 LOP3=1 VOTE=1 BSSY=1 BSYNC=1
+  rescale block 0x1110-0x14c0: 60 instructions, so 179 when it is skipped
+
+# ptxas -arch=sm_89 -O3 -v, GQA 8:1 (32 q heads, 4 kv heads), 16 splits x 8 warps: 8 and 4 elements a lane
+## exploration/ptx/gqa8_8_per_lane_16_8.ptx
+ptxas info    : Compiling entry function 'paged_decode_attention_split_128_32_4_16_16_8' for 'sm_89'
+ptxas info    : Used 194 registers, used 1 barriers, 4160 bytes smem, 420 bytes cmem[0]
+ptxas info    : Compiling entry function 'paged_decode_attention_split_128_32_4_16_16_8_reduce' for 'sm_89'
+ptxas info    : Used 44 registers, used 0 barriers, 420 bytes cmem[0]
+## exploration/ptx/gqa8_4_per_lane_16_8.ptx
+ptxas info    : Compiling entry function 'paged_decode_attention_split_128_32_4_16_16_8' for 'sm_89'
+ptxas info    : Used 121 registers, used 1 barriers, 4160 bytes smem, 420 bytes cmem[0]
+ptxas info    : Compiling entry function 'paged_decode_attention_split_128_32_4_16_16_8_reduce' for 'sm_89'
+ptxas info    : Used 44 registers, used 0 barriers, 420 bytes cmem[0]

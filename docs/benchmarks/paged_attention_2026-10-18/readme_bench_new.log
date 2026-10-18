@@ -1,0 +1,53 @@
+====================================================================================================
+   REAL Y-COMPILER PAGED DECODE ATTENTION vs FlashInfer BatchDecodeWithPagedKVCacheWrapper
+====================================================================================================
+[*] head_dim=128  q_heads=32  kv_heads=8 (GQA 4:1)  page_size=16
+[*] Compiled: tests/paged_decode_attention_128_32_8_16.ptx  (1024 threads/CTA)
+[*] Compiled: tests/paged_decode_attention_128_32_8_16_8.ptx  (256 threads/CTA)
+[*] Compiled: tests/paged_decode_attention_split_128_32_8_16_16_8.ptx  (256 threads/CTA, 16 splits, 4 q heads/CTA)
+[*] Compiled: tests/paged_decode_attention_split_128_32_8_16_4_8.ptx  (256 threads/CTA, 4 splits, 4 q heads/CTA)
+
+Correctness (vs PyTorch f32 reference walking the same shuffled page table)
+----------------------------------------------------------------------------------------------------
+case                             | seqs   | rel L2 (1-pass) | rel L2 (split) | verdict
+----------------------------------------------------------------------------------------------------
+single seq, partial page         | 1      | 2.06e-04       | 2.06e-04       | OK
+exact page multiple              | 1      | 2.10e-04       | 2.10e-04       | OK
+one token                        | 1      | 0.00e+00       | 0.00e+00       | OK
+len below warp count             | 1      | 2.10e-04       | 2.10e-04       | OK
+zero length                      | 1      | 0.00e+00       | 0.00e+00       | OK
+ragged batch incl. zero          | 8      | 1.21e-04       | 1.21e-04       | OK
+long context 4096                | 1      | 2.02e-04       | 2.02e-04       | OK
+long ragged batch                | 4      | 2.04e-04       | 2.04e-04       | OK
+timed shape: b8 ctx 1024         | 8      | 2.06e-04       | 2.06e-04       | OK
+timed shape: b32 ctx 1024        | 32     | 2.08e-04       | 2.08e-04       | OK
+----------------------------------------------------------------------------------------------------
+worst relative L2 = 2.10e-04 over 10 cases x 2 shapes, 0 failures
+
+Performance vs FlashInfer (ramped clocks, A/B interleaved, min over 7 rounds)
+----------------------------------------------------------------------------------------------------
+[*] SM clock after ramp: 2685 MHz
+----------------------------------------------------------------------------------------------------
+case                 | FI us     | 1pass 32w | 1pass 8w  | split 16x  | split  4x  | best vs FI | KV GB/s
+----------------------------------------------------------------------------------------------------------------------
+batch 1,  ctx 1024   |      8.50 |      9.10 |     14.81 |       7.65 |       8.22 | 1.11x     | 548
+batch 1,  ctx 4096   |     13.67 |     28.24 |     54.39 |      11.87 |      18.01 | 1.15x     | 1413
+batch 8,  ctx 1024   |     23.21 |     54.29 |     38.95 |      32.33 |      20.53 | 1.13x     | 1635
+batch 8,  ctx 4096   |    190.34 |    200.63 |    191.01 |     196.85 |     194.88 | 0.98x     | 689
+batch 32, ctx 1024   |    196.25 |    216.22 |    193.94 |     217.54 |     197.36 | 0.99x     | 680
+batch 32, ctx 4096   |    826.08 |    869.27 |    851.97 |     866.65 |     832.63 | 0.99x     | 645
+----------------------------------------------------------------------------------------------------------------------
+[*] DRAM peak on this card is ~672 GB/s. The KV GB/s column is over the
+    bytes the split-K kernel is obliged to read exactly once; above peak
+    means the cache fit in L2.
+
+Summary (x vs FlashInfer, >1 is Y faster). The split-K columns are the
+two configurations above; batch size is a runtime value, so a deployment
+picks one - `fixed 16` is what a single compiled binary would ship.
+case                 | 1-pass best  | split fixed16 | split best   | split/1-pass
+batch 1,  ctx 1024   | 0.93x        | 1.11x        | 1.11x        | 1.19x
+batch 1,  ctx 4096   | 0.48x        | 1.15x        | 1.15x        | 2.38x
+batch 8,  ctx 1024   | 0.60x        | 0.72x        | 1.13x        | 1.90x
+batch 8,  ctx 4096   | 1.00x        | 0.97x        | 0.98x        | 0.98x
+batch 32, ctx 1024   | 1.01x        | 0.90x        | 0.99x        | 0.98x
+batch 32, ctx 4096   | 0.97x        | 0.95x        | 0.99x        | 1.02x

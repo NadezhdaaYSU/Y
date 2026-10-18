@@ -118,8 +118,10 @@ Ranked by sharpness of pain, not size:
 
 ### Why competitive-not-fastest is the right bar
 
-Y's inference kernels measure 0.93x cuBLAS on FP16 GEMM and 0.76–1.06x
-FlashInfer on paged decode attention. **In a throughput race that is a loss.
+Y's inference kernels measure 0.93x cuBLAS on FP16 GEMM and 0.95–1.15x
+FlashInfer on paged decode attention (the split-K kernel over the README's six
+shapes in two runs, `docs/benchmarks/paged_attention_2026-10-18/`). **In a
+throughput race that is no clear win.
 Under this thesis it is table stakes already met**: "within 10% of FlashInfer
 and bit-reproducible" is a winning product where "8% faster than FlashInfer" is
 not a product at all.

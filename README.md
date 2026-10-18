@@ -953,24 +953,47 @@ RoPE wins in 8 of 9 (head_dim, rows) combinations across head_dim 64/128/256.
 head_dim 128, 32 query heads, 8 KV heads (GQA 4:1), page_size 16, against
 FlashInfer's `BatchDecodeWithPagedKVCacheWrapper` on the same shuffled page
 table and the same NHD KV layout. Ramped clocks, A/B interleaved, minimum of 7
-rounds. `python3 tests/benchmark_y_paged_decode_attention.py`.
+rounds. `python3 tests/benchmark_y_paged_decode_attention.py`; the record,
+with CUPTI device times and both runs, is
+`docs/benchmarks/paged_attention_2026-10-18/`.
 
 | case | FlashInfer | Y single-pass | Y split-K | split-K vs FI |
 |---|---|---|---|---|
-| batch 1, ctx 1024 | 8.4 µs | 12.6 µs | **8.0 µs** | **1.06x** |
-| batch 1, ctx 4096 | 13.7 µs | 43.0 µs | 16.9 µs | 0.81x |
-| batch 8, ctx 1024 | 22.1 µs | 48.1 µs | 29.2 µs | 0.76x |
-| batch 8, ctx 4096 | 189.5 µs | 226.6 µs | 201.9 µs | 0.94x |
-| batch 32, ctx 1024 | 197.1 µs | 246.1 µs | 211.6 µs | 0.93x |
-| batch 32, ctx 4096 | 886.3 µs | 995.9 µs | 861.5 µs | tie (1.03x) |
+| batch 1, ctx 1024 | 8.50 µs | 9.10 µs | **7.65 µs** | **1.11x** |
+| batch 1, ctx 4096 | 13.67 µs | 28.24 µs | **11.87 µs** | **1.15x** |
+| batch 8, ctx 1024 | 23.21 µs | 38.95 µs | **20.53 µs** | **1.13x** |
+| batch 8, ctx 4096 | 190.34 µs | 191.01 µs | 194.88 µs | tie (0.98x) |
+| batch 32, ctx 1024 | 196.25 µs | 193.94 µs | 197.36 µs | tie (0.99x) |
+| batch 32, ctx 4096 | 826.08 µs | 851.97 µs | 832.63 µs | tie (0.99x) |
 
-One run, not a best-of. Y's columns reproduce to ~1% across runs; FlashInfer's
-batch-32/ctx-4096 figure moved between 825 and 886 µs over three runs, which is
-the whole of that row's 0.97–1.03x — read it as a tie, not as a win.
+The first of two runs on 2026-10-18. The second gave 1.11x, 1.13x and 1.13x on
+the first three rows and 1.01x, 0.95x and 1.03x on the last three, where
+FlashInfer's own time moved by up to 4% between the runs (826 and 859 µs at
+batch 32 / ctx 4096): read those three as ties. In CUPTI device time Y was
+2–5% behind FlashInfer at batch 32 / ctx 1024 in both runs. The first three
+rows are the shapes whose KV cache (4–34 MB) fits in the 48 MB L2; the last
+three read 134–537 MB.
 
-**This was 1.3–3.7x slower and is now 0.76–1.06x**, i.e. between 1.3x slower and
-6% faster depending on the shape. The two causes this README used to name were
-both real, and neither could be fixed alone:
+**The KV loop (2026-10-18).** Until then the loop put all 32 lanes on one
+token: 157 sm_89 SASS instructions a token, 20 of them shuffles. At batch 1 /
+ctx 4096 it executed 5.33 M warp instructions to FlashInfer's 4.28 M and took
+1.31x FlashInfer's device time; both issued about half an instruction per
+cycle per scheduler, so the time ratio was the instruction ratio. Now a
+token's row spans 16 lanes (8 f16, one 128-bit load each), so a warp works on
+two tokens at a time with 4-step butterflies. Each warp walks one contiguous
+block of tokens, so its page-table entry is reloaded once a page. The softmax
+state is rescaled only when a score passes the running max by more than 8
+(a warp-uniform `vote.any`), and the next iteration's page lookup and K/V
+loads are issued before this iteration's arithmetic. The loop is 239
+instructions for two tokens, 179 when no rescale is taken, and the kernel
+executes 0.66x the instructions it did at the same issue rate: 9.19 µs
+against 14.33 at batch 1 / ctx 4096, FlashInfer 10.98. At GQA 8:1, eight
+query heads to a CTA, a token keeps 32 lanes: 8 elements a lane needed 194
+registers.
+
+**The split-K kernel.** Before it this was 1.3–3.7x slower; the split-K
+kernel made it 0.76–1.06x. The two causes this README used to name were both
+real, and neither could be fixed alone:
 
 * **The GQA re-read.** The single-pass grid is `num_q_heads x num_seqs`, so the
   four CTAs sharing a KV head each streamed that head's whole cache — four
@@ -992,12 +1015,12 @@ inside the timed region above.
 Two things this does not claim. The split count is compile-time (16 for batch 1,
 4 for batch-many — `paged_decode_attention_split_128_32_8_16_<splits>_<warps>`)
 and its optimum depends on batch size, which is a runtime value; a single
-compiled binary shipping only the 16-split kernel measures **0.72–1.06x**
-instead of 0.76–1.06x. And at batch 32 / ctx 4096 the kernel moves 623 GB/s of
-the KV bytes it is obliged to read, against this card's 672 GB/s DRAM
-ceiling — 93% of the roofline, with FlashInfer between 90% and 97% across runs.
-There is nothing left to win there; the remaining gap is entirely in the
-L2-resident shapes.
+compiled binary shipping only the 16-split kernel measures **0.72–1.15x**
+instead of 0.98–1.15x (0.70–1.13x in the second run): at batch 8 / ctx 1024
+the 16-split kernel takes 32.33 µs where the 4-split one takes 20.53. And at
+batch 32 / ctx 4096 the kernel moves 645 GB/s of the KV bytes it is obliged to
+read, against this card's 672 GB/s DRAM ceiling: 96% of the roofline, with
+FlashInfer at 650 and 625 GB/s in the two runs.
 
 The single-pass kernel got 1.12–1.43x faster on the way, and **not** for the
 reason that sounds likely. Hoisting the V load above the QK warp reduction is
@@ -1071,14 +1094,14 @@ different baseline.
 
 | workload | baseline | result |
 |---|---|---|
-| Paged decode attention, L2-resident | FlashInfer | 0.76–0.81x |
+| Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
 | Decode-shaped GEMM (M=4–8) | cuBLAS | at the DRAM roofline; tied |
 
-Paged decode attention is now at the DRAM roofline when the KV cache does not
-fit in L2, and loses by up to 1.3x when it does. What binds it there has not
-been measured; the suspect is the per-token instruction count — one 32-lane
-butterfly reduction per query head, so four per token, which the GQA merge
-amortized the *loads* over but not the reductions.
+Paged decode attention used to lose by up to 1.3x when the KV cache fits in
+L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
+shapes it is behind only at batch 32 / ctx 1024, by 2–5% of CUPTI device time
+in both runs, about the size of FlashInfer's own run-to-run variation
+(`docs/benchmarks/paged_attention_2026-10-18/`).
 
 ### Memory bandwidth
 

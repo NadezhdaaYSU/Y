@@ -1,0 +1,19 @@
+[clock after warm] 1695, 3
+== b1c4096  (clocks,util per round: 1695, 6 1965, 7 2790, 7 2775, 4 2775, 4)
+   base_16/16x8w                span/iter   17.94 us | ion_split_128_32_8_16_16_8=14.15  it_128_32_8_16_16_8_reduce=1.87
+   base_16_16/16x16w            span/iter   20.51 us | on_split_128_32_8_16_16_16=16.67  t_128_32_8_16_16_16_reduce=1.91
+   base_32_8/32x8w              span/iter   19.56 us | ion_split_128_32_8_16_32_8=15.06  it_128_32_8_16_32_8_reduce=1.95
+   base_32_4/32x4w              span/iter   18.58 us | ion_split_128_32_8_16_32_4=14.22  it_128_32_8_16_32_4_reduce=1.96
+   base_8_8/8x8w                span/iter   25.52 us | tion_split_128_32_8_16_8_8=21.94  lit_128_32_8_16_8_8_reduce=1.30
+   base_8_16/8x16w              span/iter   18.71 us | ion_split_128_32_8_16_8_16=15.00  it_128_32_8_16_8_16_reduce=1.29
+   base_4/4x8w                  span/iter   42.36 us | tion_split_128_32_8_16_4_8=40.22  lit_128_32_8_16_4_8_reduce=1.11
+   flashinfer                   span/iter   13.96 us | odeWithPagedKVCacheKernel<=10.89  , 4u, __half, __half, int>=2.00
+== b8c1024  (clocks,util per round: 2775, 4 2745, 4 2775, 4 2760, 4 2775, 4)
+   base_16/16x8w                span/iter   31.31 us | ion_split_128_32_8_16_16_8=27.40  it_128_32_8_16_16_8_reduce=2.31
+   base_16_16/16x16w            span/iter   53.43 us | on_split_128_32_8_16_16_16=50.12  t_128_32_8_16_16_16_reduce=2.27
+   base_32_8/32x8w              span/iter   38.04 us | ion_split_128_32_8_16_32_8=33.51  it_128_32_8_16_32_8_reduce=3.04
+   base_32_4/32x4w              span/iter   29.54 us | ion_split_128_32_8_16_32_4=24.53  it_128_32_8_16_32_4_reduce=2.94
+   base_8_8/8x8w                span/iter   28.53 us | tion_split_128_32_8_16_8_8=25.72  lit_128_32_8_16_8_8_reduce=1.70
+   base_8_16/8x16w              span/iter   41.49 us | ion_split_128_32_8_16_8_16=38.16  it_128_32_8_16_8_16_reduce=1.69
+   base_4/4x8w                  span/iter   29.10 us | tion_split_128_32_8_16_4_8=26.46  lit_128_32_8_16_4_8_reduce=1.43
+   flashinfer                   span/iter   22.69 us | odeWithPagedKVCacheKernel<=19.48  , 4u, __half, __half, int>=2.20

@@ -1,0 +1,61 @@
+[clock after warm] 2010, 51
+== b1c1024  (clocks,util per round: 2790, 86 2775, 3 2775, 3 2775, 56 2775, 56)
+   pf0_16_8/16x8w               span/iter    9.55 us | ion_split_128_32_8_16_16_8=5.16  it_128_32_8_16_16_8_reduce=1.88
+   pf1_16_8/16x8w               span/iter    9.04 us | ion_split_128_32_8_16_16_8=4.86  it_128_32_8_16_16_8_reduce=1.90
+   pf0_4_8/4x8w                 span/iter   12.32 us | tion_split_128_32_8_16_4_8=7.63  lit_128_32_8_16_4_8_reduce=1.12
+   pf1_4_8/4x8w                 span/iter    9.59 us | tion_split_128_32_8_16_4_8=6.20  lit_128_32_8_16_4_8_reduce=1.13
+   pf0_4_4/4x4w                 span/iter   14.84 us | tion_split_128_32_8_16_4_4=11.46  lit_128_32_8_16_4_4_reduce=1.14
+   pf1_4_4/4x4w                 span/iter   12.84 us | tion_split_128_32_8_16_4_4=8.19  lit_128_32_8_16_4_4_reduce=1.13
+   pf0_32_4/32x4w               span/iter    9.10 us | ion_split_128_32_8_16_32_4=5.11  it_128_32_8_16_32_4_reduce=1.97
+   pf1_32_4/32x4w               span/iter    9.38 us | ion_split_128_32_8_16_32_4=4.83  it_128_32_8_16_32_4_reduce=1.99
+   flashinfer                   span/iter   11.28 us | odeWithPagedKVCacheKernel<=6.15  , 4u, __half, __half, int>=1.66
+== b1c4096  (clocks,util per round: 2775, 56 2775, 56 2775, 56 2775, 56 2775, 56)
+   pf0_16_8/16x8w               span/iter   18.34 us | ion_split_128_32_8_16_16_8=10.60  it_128_32_8_16_16_8_reduce=1.89
+   pf1_16_8/16x8w               span/iter   13.19 us | ion_split_128_32_8_16_16_8=9.68  it_128_32_8_16_16_8_reduce=1.90
+   pf0_4_8/4x8w                 span/iter   24.94 us | tion_split_128_32_8_16_4_8=22.67  lit_128_32_8_16_4_8_reduce=1.12
+   pf1_4_8/4x8w                 span/iter   20.32 us | tion_split_128_32_8_16_4_8=17.10  lit_128_32_8_16_4_8_reduce=1.15
+   pf0_4_4/4x4w                 span/iter   41.54 us | tion_split_128_32_8_16_4_4=39.26  lit_128_32_8_16_4_4_reduce=1.14
+   pf1_4_4/4x4w                 span/iter   29.91 us | tion_split_128_32_8_16_4_4=26.65  lit_128_32_8_16_4_4_reduce=1.14
+   pf0_32_4/32x4w               span/iter   13.87 us | ion_split_128_32_8_16_32_4=10.14  it_128_32_8_16_32_4_reduce=1.96
+   pf1_32_4/32x4w               span/iter   13.63 us | ion_split_128_32_8_16_32_4=9.46  it_128_32_8_16_32_4_reduce=1.99
+   flashinfer                   span/iter   13.99 us | odeWithPagedKVCacheKernel<=10.89  , 4u, __half, __half, int>=1.99
+== b8c1024  (clocks,util per round: 2775, 56 2760, 56 2760, 58 2760, 58 2760, 58)
+   pf0_16_8/16x8w               span/iter   35.42 us | ion_split_128_32_8_16_16_8=31.78  it_128_32_8_16_16_8_reduce=2.28
+   pf1_16_8/16x8w               span/iter   32.73 us | ion_split_128_32_8_16_16_8=29.21  it_128_32_8_16_16_8_reduce=2.28
+   pf0_4_8/4x8w                 span/iter   22.19 us | tion_split_128_32_8_16_4_8=19.57  lit_128_32_8_16_4_8_reduce=1.42
+   pf1_4_8/4x8w                 span/iter   20.61 us | tion_split_128_32_8_16_4_8=18.06  lit_128_32_8_16_4_8_reduce=1.41
+   pf0_4_4/4x4w                 span/iter   20.69 us | tion_split_128_32_8_16_4_4=16.86  lit_128_32_8_16_4_4_reduce=1.46
+   pf1_4_4/4x4w                 span/iter   18.92 us | tion_split_128_32_8_16_4_4=15.96  lit_128_32_8_16_4_4_reduce=1.47
+   pf0_32_4/32x4w               span/iter   34.59 us | ion_split_128_32_8_16_32_4=28.31  it_128_32_8_16_32_4_reduce=3.01
+   pf1_32_4/32x4w               span/iter   31.16 us | ion_split_128_32_8_16_32_4=26.31  it_128_32_8_16_32_4_reduce=3.01
+   flashinfer                   span/iter   22.59 us | odeWithPagedKVCacheKernel<=19.32  , 4u, __half, __half, int>=2.18
+== b8c4096  (clocks,util per round: 2775, 58 2775, 58 2730, 58 2775, 70 2775, 70)
+   pf0_16_8/16x8w               span/iter  203.67 us | ion_split_128_32_8_16_16_8=197.52  it_128_32_8_16_16_8_reduce=4.08
+   pf1_16_8/16x8w               span/iter  196.50 us | ion_split_128_32_8_16_16_8=191.35  it_128_32_8_16_16_8_reduce=4.04
+   pf0_4_8/4x8w                 span/iter  188.96 us | tion_split_128_32_8_16_4_8=185.81  lit_128_32_8_16_4_8_reduce=2.07
+   pf1_4_8/4x8w                 span/iter  187.59 us | tion_split_128_32_8_16_4_8=184.51  lit_128_32_8_16_4_8_reduce=1.99
+   pf0_4_4/4x4w                 span/iter  186.47 us | tion_split_128_32_8_16_4_4=183.43  lit_128_32_8_16_4_4_reduce=1.92
+   pf1_4_4/4x4w                 span/iter  185.63 us | tion_split_128_32_8_16_4_4=182.62  lit_128_32_8_16_4_4_reduce=1.90
+   pf0_32_4/32x4w               span/iter  202.45 us | ion_split_128_32_8_16_32_4=195.29  it_128_32_8_16_32_4_reduce=6.04
+   pf1_32_4/32x4w               span/iter  202.60 us | ion_split_128_32_8_16_32_4=195.51  it_128_32_8_16_32_4_reduce=5.98
+   flashinfer                   span/iter  189.43 us | odeWithPagedKVCacheKernel<=185.66  , 4u, __half, __half, int>=2.67
+== b32c1024  (clocks,util per round: 2730, 70 2775, 70 2775, 70 2760, 76 2715, 76)
+   pf0_16_8/16x8w               span/iter  215.33 us | ion_split_128_32_8_16_16_8=203.33  it_128_32_8_16_16_8_reduce=10.90
+   pf1_16_8/16x8w               span/iter  215.00 us | ion_split_128_32_8_16_16_8=203.02  it_128_32_8_16_16_8_reduce=10.89
+   pf0_4_8/4x8w                 span/iter  195.06 us | tion_split_128_32_8_16_4_8=190.42  lit_128_32_8_16_4_8_reduce=3.55
+   pf1_4_8/4x8w                 span/iter  193.61 us | tion_split_128_32_8_16_4_8=188.91  lit_128_32_8_16_4_8_reduce=3.61
+   pf0_4_4/4x4w                 span/iter  192.64 us | tion_split_128_32_8_16_4_4=188.20  lit_128_32_8_16_4_4_reduce=3.29
+   pf1_4_4/4x4w                 span/iter  191.33 us | tion_split_128_32_8_16_4_4=186.93  lit_128_32_8_16_4_4_reduce=3.29
+   pf0_32_4/32x4w               span/iter  242.14 us | ion_split_128_32_8_16_32_4=216.50  it_128_32_8_16_32_4_reduce=22.49
+   pf1_32_4/32x4w               span/iter  240.05 us | ion_split_128_32_8_16_32_4=216.45  it_128_32_8_16_32_4_reduce=22.50
+   flashinfer                   span/iter  189.94 us | odeWithPagedKVCacheKernel<=184.06  , 4u, __half, __half, int>=4.80
+== b32c4096  (clocks,util per round: 2775, 72 2715, 94 2715, 94 2715, 94 2730, 94)
+   pf0_16_8/16x8w               span/iter  885.78 us | ion_split_128_32_8_16_16_8=865.03  it_128_32_8_16_16_8_reduce=14.35
+   pf1_16_8/16x8w               span/iter  885.13 us | ion_split_128_32_8_16_16_8=865.98  it_128_32_8_16_16_8_reduce=14.38
+   pf0_4_8/4x8w                 span/iter  854.25 us | tion_split_128_32_8_16_4_8=848.28  lit_128_32_8_16_4_8_reduce=4.87
+   pf1_4_8/4x8w                 span/iter  854.26 us | tion_split_128_32_8_16_4_8=848.34  lit_128_32_8_16_4_8_reduce=4.83
+   pf0_4_4/4x4w                 span/iter  849.01 us | tion_split_128_32_8_16_4_4=843.36  lit_128_32_8_16_4_4_reduce=4.55
+   pf1_4_4/4x4w                 span/iter  842.02 us | tion_split_128_32_8_16_4_4=836.38  lit_128_32_8_16_4_4_reduce=4.53
+   pf0_32_4/32x4w               span/iter  923.94 us | ion_split_128_32_8_16_32_4=895.26  it_128_32_8_16_32_4_reduce=27.57
+   pf1_32_4/32x4w               span/iter  924.69 us | ion_split_128_32_8_16_32_4=896.01  it_128_32_8_16_32_4_reduce=27.58
+   flashinfer                   span/iter  832.53 us | odeWithPagedKVCacheKernel<=826.61  , 4u, __half, __half, int>=4.81

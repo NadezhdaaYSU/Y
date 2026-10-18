@@ -1,0 +1,21 @@
+[clock after warm] 1590, 75
+== b1c4096  (clocks,util per round: 1875, 75 2355, 9 2775, 68 2775, 68 2775, 68)
+   base_16/16x8w                span/iter   18.52 us | ion_split_128_32_8_16_16_8=14.21  it_128_32_8_16_16_8_reduce=1.89
+   base_4/4x8w                  span/iter   42.98 us | tion_split_128_32_8_16_4_8=40.65  lit_128_32_8_16_4_8_reduce=1.13
+   l32_16/16x8w                 span/iter   18.33 us | ion_split_128_32_8_16_16_8=14.40  it_128_32_8_16_16_8_reduce=1.88
+   l32_4/4x8w                   span/iter   43.85 us | tion_split_128_32_8_16_4_8=39.94  lit_128_32_8_16_4_8_reduce=1.12
+   l16_16/16x8w                 span/iter   14.95 us | ion_split_128_32_8_16_16_8=11.24  it_128_32_8_16_16_8_reduce=1.89
+   l16_4/4x8w                   span/iter   27.07 us | tion_split_128_32_8_16_4_8=23.87  lit_128_32_8_16_4_8_reduce=1.13
+   l8_16/16x8w                  span/iter   17.79 us | ion_split_128_32_8_16_16_8=13.61  it_128_32_8_16_16_8_reduce=1.87
+   l8_4/4x8w                    span/iter   20.54 us | tion_split_128_32_8_16_4_8=17.40  lit_128_32_8_16_4_8_reduce=1.12
+   flashinfer                   span/iter   13.90 us | odeWithPagedKVCacheKernel<=10.85  , 4u, __half, __half, int>=1.99
+== b8c1024  (clocks,util per round: 2775, 68 2745, 68 2760, 68 2760, 68 2760, 68)
+   base_16/16x8w                span/iter   32.25 us | ion_split_128_32_8_16_16_8=27.81  it_128_32_8_16_16_8_reduce=2.27
+   base_4/4x8w                  span/iter   29.17 us | tion_split_128_32_8_16_4_8=26.11  lit_128_32_8_16_4_8_reduce=1.40
+   l32_16/16x8w                 span/iter   31.14 us | ion_split_128_32_8_16_16_8=27.79  it_128_32_8_16_16_8_reduce=2.28
+   l32_4/4x8w                   span/iter   29.11 us | tion_split_128_32_8_16_4_8=26.04  lit_128_32_8_16_4_8_reduce=1.43
+   l16_16/16x8w                 span/iter   36.12 us | ion_split_128_32_8_16_16_8=32.59  it_128_32_8_16_16_8_reduce=2.27
+   l16_4/4x8w                   span/iter   23.28 us | tion_split_128_32_8_16_4_8=20.73  lit_128_32_8_16_4_8_reduce=1.43
+   l8_16/16x8w                  span/iter   64.94 us | ion_split_128_32_8_16_16_8=61.56  it_128_32_8_16_16_8_reduce=2.29
+   l8_4/4x8w                    span/iter   29.52 us | tion_split_128_32_8_16_4_8=26.57  lit_128_32_8_16_4_8_reduce=1.45
+   flashinfer                   span/iter   22.50 us | odeWithPagedKVCacheKernel<=19.29  , 4u, __half, __half, int>=2.18

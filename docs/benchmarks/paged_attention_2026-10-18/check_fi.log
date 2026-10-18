@@ -1,0 +1,7 @@
+b1c1024  FlashInfer rel L2 2.917e-04  finite True
+b1c4096  FlashInfer rel L2 3.580e-04  finite True
+b8c1024  FlashInfer rel L2 2.931e-04  finite True
+b8c4096  FlashInfer rel L2 2.946e-04  finite True
+b32c1024  FlashInfer rel L2 2.937e-04  finite True
+b32c4096  FlashInfer rel L2 2.941e-04  finite True
+worst 3.580e-04, tolerance 3.0e-03: OK
