@@ -1,0 +1,14 @@
+QUIET 02:46:56 mean 1.0%
+          4096 {'t64': 'CTA 64x64x64 | 2x2 warps | 3 stages', 't64g16': 'CTA 64x64x64 | 2x2 warps | 3 stages', 't64s4': 'CTA 64x64x64 | 2x2 warps | 4 stages', 'base': 'CTA 128x128x64 | 4x2 warps | 3 stages'} | exact {'t64': True, 't64g16': True, 't64s4': True, 'base': True, 'scaled_mm': True} | SM 2475-2475 MHz
+      t64g16       min     796.7 median     802.4 us   172.5 TFLOPS  0.953x scaled_mm
+      t64          min     798.5 median     806.8 us   172.1 TFLOPS  0.955x scaled_mm
+      t64s4        min     805.5 median     815.5 us   170.6 TFLOPS  0.963x scaled_mm
+      scaled_mm    min     836.1 median     845.9 us   164.4 TFLOPS  1.000x scaled_mm
+      base         min     837.2 median     847.3 us   164.2 TFLOPS  1.001x scaled_mm
+          8192 {'t64': 'CTA 64x64x64 | 2x2 warps | 3 stages', 't64g16': 'CTA 64x64x64 | 2x2 warps | 3 stages', 't64s4': 'CTA 64x64x64 | 2x2 warps | 4 stages', 'base': 'CTA 128x128x64 | 4x2 warps | 3 stages'} | exact {'t64': True, 't64g16': True, 't64s4': True, 'base': True, 'scaled_mm': True} | SM 2505-2580 MHz
+      t64g16       min    6297.1 median    6466.2 us   174.6 TFLOPS  0.955x scaled_mm
+      t64s4        min    6388.2 median    6603.3 us   172.1 TFLOPS  0.969x scaled_mm
+      t64          min    6388.7 median    6571.0 us   172.1 TFLOPS  0.969x scaled_mm
+      scaled_mm    min    6590.5 median    6745.1 us   166.8 TFLOPS  1.000x scaled_mm
+      base         min    6673.9 median    6866.9 us   164.7 TFLOPS  1.013x scaled_mm
+done

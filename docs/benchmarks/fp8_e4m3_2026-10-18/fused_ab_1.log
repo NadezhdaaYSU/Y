@@ -1,0 +1,21 @@
+QUIET 02:49:32 mean 3.5%
+           512 {'before': 'CTA 64x64x32 (padded) | 2x2 warps', 'after': 'CTA 64x64x32 (padded) | 2x2 warps'} | exact {'before': True, 'after': True, 'Triton': True} | SM 2475-2475 MHz
+      before       min       7.8 median       7.8 us    34.6 TFLOPS  0.845x Triton
+      after        min       7.8 median       7.8 us    34.5 TFLOPS  0.849x Triton
+      Triton       min       9.2 median       9.2 us    29.3 TFLOPS  1.000x Triton
+          1024 {'before': 'CTA 128x128x32 (padded) | 4x2 warps', 'after': 'CTA 128x128x32 (padded) | 4x2 warps'} | exact {'before': True, 'after': True, 'Triton': True} | SM 2475-2760 MHz
+      after        min      26.9 median      27.2 us    79.8 TFLOPS  0.820x Triton
+      before       min      27.5 median      27.5 us    78.1 TFLOPS  0.838x Triton
+      Triton       min      32.8 median      33.2 us    65.5 TFLOPS  1.000x Triton
+          2048 {'before': 'CTA 128x128x32 (padded) | 4x2 warps', 'after': 'CTA 128x128x32 (padded) | 4x2 warps'} | exact {'before': True, 'after': True, 'Triton': True} | SM 2760-2775 MHz
+      after        min     192.2 median     192.6 us    89.4 TFLOPS  0.958x Triton
+      before       min     192.6 median     192.8 us    89.2 TFLOPS  0.960x Triton
+      Triton       min     200.7 median     201.2 us    85.6 TFLOPS  1.000x Triton
+          4096 {'before': 'CTA 128x128x32 (padded) | 4x2 warps', 'after': 'CTA 128x128x32 (padded) | 4x2 warps'} | exact {'before': True, 'after': True, 'Triton': True} | SM 2655-2760 MHz
+      after        min    1505.3 median    1515.1 us    91.3 TFLOPS  0.943x Triton
+      before       min    1509.2 median    1514.7 us    91.1 TFLOPS  0.945x Triton
+      Triton       min    1596.2 median    1618.5 us    86.1 TFLOPS  1.000x Triton
+          8192 {'before': 'CTA 128x128x32 (padded) | 4x2 warps', 'after': 'CTA 128x128x32 (padded) | 4x2 warps'} | exact {'before': True, 'after': True, 'Triton': True} | SM 2460-2655 MHz
+      after        min   11436.9 median   11611.6 us    96.1 TFLOPS  0.741x Triton
+      before       min   11572.2 median   11953.2 us    95.0 TFLOPS  0.750x Triton
+      Triton       min   15432.7 median   15861.8 us    71.2 TFLOPS  1.000x Triton

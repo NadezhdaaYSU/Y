@@ -207,6 +207,74 @@ const FP8_GEMM_GROUP_M: u32 = 8;
 /// F16 threshold (256) it originally mirrored.
 pub const FP8_GEMM_SMALL_THRESHOLD: u32 = 512;
 
+/// One CTA tile of the e4m3-input FP8 GEMM (`emit_fp8_e4m3_gemm_kernel`):
+/// `cta_m x cta_n` outputs on `warps_m x warps_n` warps, `cta_k` bytes of K
+/// per stage, `stages` shared stages filled by `cp.async`, and the CTAs per
+/// SM its registers are capped for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Fp8E4m3Tile {
+    pub cta_m: u32,
+    pub cta_n: u32,
+    pub warps_m: u32,
+    pub warps_n: u32,
+    pub cta_k: u32,
+    pub stages: u32,
+    pub ctas_per_sm: u32,
+    /// M tiles a group of consecutively launched CTAs covers (see
+    /// `emit_fp8_grouped_tile`).
+    pub group_m: u32,
+}
+
+/// The e4m3-input GEMM's tile for an `m x n x k` problem: 64x64x64 on 2x2
+/// warps, 3 stages, four CTAs per SM, launched in groups of 16 M tiles. With
+/// every mma's result added in float32 (`emit_fp8_mma_into`) it was the
+/// fastest of the tiles swept from 1024^3 to 8192^3 - 0.95-0.99x
+/// `torch._scaled_mm`'s time - where 128x128x64 on 8 warps, two CTAs per SM,
+/// took 1.00-1.09x (docs/benchmarks/fp8_e4m3_2026-10-18/). Or the one
+/// `Y_FP8_E4M3_TILE=cta_m,cta_n,cta_k,warps_m,warps_n,stages,ctas_per_sm,group_m`
+/// names (for sweeps and tests; a malformed value is an error, not ignored).
+pub fn fp8_e4m3_tile(_m: u32, _n: u32, _k: u32) -> Result<Fp8E4m3Tile, String> {
+    if let Ok(v) = std::env::var("Y_FP8_E4M3_TILE") {
+        let f: Result<Vec<u32>, _> = v.split(',').map(|x| x.trim().parse::<u32>()).collect();
+        return match f.as_deref() {
+            Ok(&[cta_m, cta_n, cta_k, warps_m, warps_n, stages, ctas_per_sm, group_m]) => {
+                Ok(Fp8E4m3Tile { cta_m, cta_n, warps_m, warps_n, cta_k, stages, ctas_per_sm, group_m })
+            }
+            _ => Err(format!(
+                "Y_FP8_E4M3_TILE='{}' is not cta_m,cta_n,cta_k,warps_m,warps_n,stages,ctas_per_sm,group_m",
+                v
+            )),
+        };
+    }
+    Ok(Fp8E4m3Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 64, stages: 3, ctas_per_sm: 4, group_m: 16 })
+}
+
+/// The most dynamic shared memory one CTA can opt into on sm_89 (99 KB); the
+/// e4m3 GEMM's tiles must fit it.
+const FP8_E4M3_MAX_SMEM: u32 = 99 * 1024;
+
+/// A thread's share of the e4m3 GEMM's tile copies, set up once before
+/// its K loop (`emit_fp8_e4m3_copy_tile`).
+struct Fp8E4m3Copies {
+    /// Global addresses of the thread's first A and B chunk at K offset 0.
+    ga: String,
+    gb: String,
+    /// The chunk's byte offset within a row: 16 * (tid % chunks per row).
+    k_byte: String,
+    /// Per chunk, whether its row is inside the matrix (`None`: always).
+    pa: Vec<Option<String>>,
+    pb: Vec<Option<String>>,
+    /// K is not a multiple of the K tile, so the last tile's chunks past K
+    /// are zero-filled.
+    k_ragged: bool,
+    chunks_a: u32,
+    chunks_b: u32,
+    rows_per_pass: u32,
+    cta_k: u32,
+    k: u32,
+    stage_a_bytes: u32,
+}
+
 /// Compare two `.version` strings (`"8.4"`, or a whole `".version 8.4"` line)
 /// as (major, minor).
 fn ptx_version_ge(a: &str, b: &str) -> bool {
@@ -625,6 +693,12 @@ pub(crate) enum ScalarTy {
     /// backend's `half` rounds after every operation and a promoted f32
     /// register would not.
     F16,
+    /// FP8 `e4m3` (`torch.float8_e4m3fn`), a memory format like `F16`: a
+    /// load widens it to `F32` exactly (`cvt.rn.f16x2.e4m3x2`, then
+    /// `cvt.f32.f16`), and a store rounds to nearest-even and saturates to
+    /// +-448 (`cvt.rn.satfinite.e4m3x2.f32`); NaN stays NaN. Both
+    /// conversions exist from sm_89 (Ada); there they need PTX ISA 8.1.
+    E4M3,
     U32,
     I32,
     U64,
@@ -641,6 +715,7 @@ impl ScalarTy {
             "F32" => ScalarTy::F32,
             "F64" => ScalarTy::F64,
             "F16" => ScalarTy::F16,
+            "E4M3" => ScalarTy::E4M3,
             "U32" => ScalarTy::U32,
             "I32" => ScalarTy::I32,
             "U64" => ScalarTy::U64,
@@ -654,7 +729,7 @@ impl ScalarTy {
     }
 
     fn is_float(self) -> bool {
-        matches!(self, ScalarTy::F32 | ScalarTy::F64 | ScalarTy::F16)
+        matches!(self, ScalarTy::F32 | ScalarTy::F64 | ScalarTy::F16 | ScalarTy::E4M3)
     }
 
     /// Eight bytes wide. Decides the `.b64` bitwise suffix, the `.param .b64`
@@ -685,7 +760,7 @@ impl ScalarTy {
     fn is_subword(self) -> bool {
         matches!(
             self,
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3
         )
     }
 
@@ -706,7 +781,7 @@ impl ScalarTy {
         match self {
             ScalarTy::U8 | ScalarTy::U16 => ScalarTy::U32,
             ScalarTy::I8 | ScalarTy::I16 => ScalarTy::I32,
-            ScalarTy::F16 => ScalarTy::F32,
+            ScalarTy::F16 | ScalarTy::E4M3 => ScalarTy::F32,
             other => other,
         }
     }
@@ -722,7 +797,7 @@ impl ScalarTy {
     /// conversation.
     fn bytes(self) -> u32 {
         match self {
-            ScalarTy::U8 | ScalarTy::I8 => 1,
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::E4M3 => 1,
             ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 => 2,
             ScalarTy::F32 | ScalarTy::U32 | ScalarTy::I32 => 4,
             ScalarTy::U64 | ScalarTy::I64 | ScalarTy::F64 => 8,
@@ -765,6 +840,7 @@ impl ScalarTy {
             ScalarTy::F32 => "f32",
             ScalarTy::F64 => "f64",
             ScalarTy::F16 => "b16",
+            ScalarTy::E4M3 => "u8",
             ScalarTy::U32 | ScalarTy::I32 => "u32",
             ScalarTy::U64 | ScalarTy::I64 => "u64",
             ScalarTy::U8 => "u8",
@@ -795,7 +871,7 @@ impl ScalarTy {
             ScalarTy::F64 => "f64",
             ScalarTy::U64 | ScalarTy::I64 => "u64",
             ScalarTy::U32 | ScalarTy::I32 => "u32",
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 => {
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3 => {
                 unreachable!("reg_mem() promotes memory formats to a register width first")
             }
         }
@@ -816,7 +892,7 @@ impl ScalarTy {
             // this arm is unreachable. It is spelled out rather than `_ =>`
             // so that adding a width without deciding its arithmetic type is
             // a compile error, per the design rule.
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 => {
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3 => {
                 unreachable!("promoted() must map sub-word types to a register width")
             }
         }
@@ -851,6 +927,7 @@ impl ScalarTy {
             ScalarTy::F32 => "F32",
             ScalarTy::F64 => "F64",
             ScalarTy::F16 => "F16",
+            ScalarTy::E4M3 => "E4M3",
             ScalarTy::U32 => "U32",
             ScalarTy::I32 => "I32",
             ScalarTy::U64 => "U64",
@@ -1036,6 +1113,9 @@ pub struct PtxEmitter {
     /// kernel's `.visible .entry` line - i.e. still module scope, and still
     /// textually before its only use.
     pending_extern_decls: Vec<String>,
+    /// CTAs per SM a tile GEMM's registers must leave room for, when it asks
+    /// for more than one (`emit_kernel` tightens `.maxnreg` to match).
+    tile_gemm_ctas_per_sm: Option<u32>,
 
     /// Complete additional `.visible .entry` bodies queued by a kernel emitter
     /// that needs more than one entry point to implement its shape, drained by
@@ -1192,6 +1272,7 @@ impl PtxEmitter {
             target_assumed: decided.assumed,
             line_info: None,
             pending_extern_decls: Vec::new(),
+            tile_gemm_ctas_per_sm: None,
             pending_module_items: Vec::new(),
             shared_arrays: Vec::new(),
             shared_sym_count: 0,
@@ -1557,7 +1638,7 @@ impl PtxEmitter {
             ScalarTy::F64 => self.alloc_regf64(),
             ScalarTy::U64 | ScalarTy::I64 => self.alloc_reg64(),
             ScalarTy::U32 | ScalarTy::I32 => self.alloc_reg32(),
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 => {
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3 => {
                 unreachable!("promoted() must map sub-word types to a register width")
             }
         };
@@ -1645,6 +1726,8 @@ impl PtxEmitter {
     fn emit_store_operand(&mut self, val: &str, elem: ScalarTy) -> String {
         if elem == ScalarTy::F16 {
             self.emit_f16_bits(val)
+        } else if elem == ScalarTy::E4M3 {
+            self.emit_e4m3_bits(val)
         } else {
             self.emit_convert(val, elem)
         }
@@ -1683,6 +1766,23 @@ impl PtxEmitter {
                 }
             }
             writeln!(&mut self.ptx_buffer, "    cvt.f32.f16 {}, {};", res, h).unwrap();
+            return;
+        }
+        // `E4M3` too: the byte is widened to f16 (`cvt.rn.f16x2.e4m3x2`
+        // converts the register's two bytes; the high one is the zero
+        // `ld.global.u8` extended with) and then to f32, both exactly.
+        if elem == ScalarTy::E4M3 {
+            let b = self.alloc_reg16();
+            match pred {
+                Some(p) => {
+                    writeln!(&mut self.ptx_buffer, "    @{} ld.global{}.u8 {}, [{}]{};", p, qual, b, addr, pol).unwrap();
+                    writeln!(&mut self.ptx_buffer, "    @!{} mov.b16 {}, 0;", p, b).unwrap();
+                }
+                None => {
+                    writeln!(&mut self.ptx_buffer, "    ld.global{}.u8 {}, [{}]{};", qual, b, addr, pol).unwrap();
+                }
+            }
+            self.emit_e4m3_widen(res, &b);
             return;
         }
         match pred {
@@ -1777,6 +1877,83 @@ impl PtxEmitter {
         h
     }
 
+    /// `reg` as an e4m3 byte, rounded to nearest-even and saturated (a
+    /// magnitude past 448, infinity included, becomes 448; NaN stays NaN), in
+    /// the low byte of a `.b16` register whose high byte is zero - what
+    /// `st.global.u8` stores and `emit_e4m3_widen` reads.
+    ///
+    /// `cvt.rn.satfinite.e4m3x2.f32` converts from f32 only. An integer
+    /// reaches f32 exactly up to 2^24 and saturates past 448 either way. An
+    /// f64 - a float literal is its exact double, as for `F16` - must not be
+    /// rounded to nearest f32 first: a value just above an e4m3 tie can round
+    /// down onto the tie, which then rounds to even, the wrong way. It is
+    /// rounded to f32 toward zero with the lowest bit set when that was
+    /// inexact (round to odd), which keeps the tie broken, since f32 has more
+    /// than two bits beyond e4m3's four.
+    fn emit_e4m3_bits(&mut self, reg: &str) -> String {
+        let f = self.emit_e4m3_source(reg);
+        let zero = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", zero).unwrap();
+        let b = self.alloc_reg16();
+        // The first source goes to the high byte, the second to the low one.
+        writeln!(&mut self.ptx_buffer, "    cvt.rn.satfinite.e4m3x2.f32 {}, {}, {};", b, zero, f).unwrap();
+        b
+    }
+
+    /// The f32 an e4m3 conversion of `reg` starts from: see `emit_e4m3_bits`.
+    fn emit_e4m3_source(&mut self, reg: &str) -> String {
+        if let Some(v) = self.unowned_float_lit(reg) {
+            let d = self.alloc_ty(ScalarTy::F64);
+            writeln!(&mut self.ptx_buffer, "    mov.f64 {}, {};", d, Self::ptx_f64(v)).unwrap();
+            self.emit_f32_round_to_odd(&d)
+        } else if self.ty_of(reg) == ScalarTy::F64 {
+            self.emit_f32_round_to_odd(reg)
+        } else {
+            self.emit_convert(reg, ScalarTy::F32)
+        }
+    }
+
+    /// Four values as four consecutive e4m3 bytes, `vals[0]` lowest, in one
+    /// `.b32` register: `block_ptr2d_store_v4`'s E4M3 form.
+    fn emit_e4m3_pack4(&mut self, vals: &[String]) -> String {
+        let f: Vec<String> = vals.iter().map(|v| self.emit_e4m3_source(v)).collect();
+        let lo = self.alloc_reg16();
+        writeln!(&mut self.ptx_buffer, "    cvt.rn.satfinite.e4m3x2.f32 {}, {}, {};", lo, f[1], f[0]).unwrap();
+        let hi = self.alloc_reg16();
+        writeln!(&mut self.ptx_buffer, "    cvt.rn.satfinite.e4m3x2.f32 {}, {}, {};", hi, f[3], f[2]).unwrap();
+        let w = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.b32 {}, {{{}, {}}};", w, lo, hi).unwrap();
+        w
+    }
+
+    /// The f64 in `d` rounded to f32 toward zero, with the lowest mantissa
+    /// bit set if that dropped anything: round to odd. See `emit_e4m3_bits`.
+    fn emit_f32_round_to_odd(&mut self, d: &str) -> String {
+        let t = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    cvt.rz.f32.f64 {}, {};", t, d).unwrap();
+        let back = self.alloc_ty(ScalarTy::F64);
+        writeln!(&mut self.ptx_buffer, "    cvt.f64.f32 {}, {};", back, t).unwrap();
+        let p = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.neu.f64 {}, {}, {};", p, back, d).unwrap();
+        let bits = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.b32 {}, {};", bits, t).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} or.b32 {}, {}, 1;", p, bits, bits).unwrap();
+        let f = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    mov.b32 {}, {};", f, bits).unwrap();
+        f
+    }
+
+    /// The e4m3 byte in the low half of `.b16` register `b` (high byte zero),
+    /// widened exactly into the f32 register `res`.
+    fn emit_e4m3_widen(&mut self, res: &str, b: &str) {
+        let pair = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    cvt.rn.f16x2.e4m3x2 {}, {};", pair, b).unwrap();
+        let lo = self.alloc_reg16();
+        let hi = self.alloc_reg16();
+        writeln!(&mut self.ptx_buffer, "    mov.b32 {{{}, {}}}, {};", lo, hi, pair).unwrap();
+        writeln!(&mut self.ptx_buffer, "    cvt.f32.f16 {}, {};", res, lo).unwrap();
+    }
+
     fn emit_convert(&mut self, reg: &str, to: ScalarTy) -> String {
         let from = self.ty_of(reg);
         if from == to {
@@ -1790,6 +1967,12 @@ impl PtxEmitter {
             let h = self.emit_f16_bits(reg);
             let dst = self.alloc_ty(ScalarTy::F32);
             writeln!(&mut self.ptx_buffer, "    cvt.f32.f16 {}, {};", dst, h).unwrap();
+            return dst;
+        }
+        if to == ScalarTy::E4M3 {
+            let b = self.emit_e4m3_bits(reg);
+            let dst = self.alloc_ty(ScalarTy::F32);
+            self.emit_e4m3_widen(&dst, &b);
             return dst;
         }
         // A literal meeting an F64 is an F64 literal (the type checker gives
@@ -2297,10 +2480,28 @@ impl PtxEmitter {
                         "[PTX] `{}: {}<{}>` cannot be lowered: this backend has no \
                          lowering for a {} element, and without one every load and store \
                          of it would read `.f32` at a 4-byte stride. Element types are \
-                         F16, F32, F64 and the integers I8..I64 / U8..U64.",
+                         F16, E4M3, F32, F64 and the integers I8..I64 / U8..U64.",
                         param.name, base, name, name
                     ));
                     continue;
+                }
+                // e4m3's conversions (`cvt.rn.satfinite.e4m3x2.f32`,
+                // `cvt.rn.f16x2.e4m3x2`) exist from sm_89, where ptxas wants
+                // PTX ISA 8.1 for them ("Feature 'cvt.e4m3x2.f32 on sm_89'
+                // requires PTX ISA .version 8.1 or later"); below sm_89 the
+                // module would not load, so it is refused here by name, as
+                // the FP8 tensor cores are.
+                if name == "E4M3" {
+                    if self.sm_level() >= 89 {
+                        self.require_ptx_version("8.1");
+                    } else {
+                        let lvl = self.target_desc();
+                        self.emit_errors.push(format!(
+                            "[PTX] `{}: {}<E4M3>` needs FP8 (e4m3) conversions, which exist only \
+                             on sm_89 (Ada) and later; this build targets {}.",
+                            param.name, base, lvl
+                        ));
+                    }
                 }
                 // `SharedMemory` addressing is still 32-bit-only: the shared
                 // surface indexes in 16-byte units (`shared_load_v4`) and has
@@ -2354,6 +2555,13 @@ impl PtxEmitter {
          performs and this one would not. Declare it F32 (or F64) and let the buffer's element \
          type do the conversion.";
 
+    const E4M3_VALUE_REFUSAL: &'static str =
+        "`E4M3` is a buffer element type, not a value type: a load from a \
+         `GlobalMemory<E4M3>` widens it to F32 exactly and a store rounds it to nearest-even, \
+         saturating at +-448. PTX has no 8-bit float register, so an E4M3 value would be an f32 \
+         register whose type promises e4m3 rounding after every operation. Declare it F32 and \
+         let the buffer's element type do the conversion.";
+
     /// A declared type as the user spelled it, for diagnostics.
     fn type_display(t: &Type) -> String {
         match t {
@@ -2374,6 +2582,9 @@ impl PtxEmitter {
     fn refused_param_type(p: &str) -> Option<String> {
         if p == "F16" {
             return Some(Self::F16_VALUE_REFUSAL.to_string());
+        }
+        if p == "E4M3" {
+            return Some(Self::E4M3_VALUE_REFUSAL.to_string());
         }
         if Self::is_q_format(p) {
             return Some(format!(
@@ -2426,6 +2637,8 @@ impl PtxEmitter {
             if let Some(t) = ScalarTy::from_name(&n) {
                 return if t == ScalarTy::F16 {
                     DeclaredValue::Refused(Self::F16_VALUE_REFUSAL.to_string())
+                } else if t == ScalarTy::E4M3 {
+                    DeclaredValue::Refused(Self::E4M3_VALUE_REFUSAL.to_string())
                 } else if t.is_subword() {
                     DeclaredValue::Refused(
                         "PTX has no sub-word register class, so this would be a 32-bit value \
@@ -3267,6 +3480,7 @@ or `shared_alloc_u32` for a shared-memory array.",
         self.reg_pred_count = 0;
         self.reg_b16_count = 0;
         self.label_count = 0;
+        self.tile_gemm_ctas_per_sm = None;
 
         // Create a temporary buffer for parameter loading and kernel body
         let body_buffer = String::new();
@@ -3334,7 +3548,12 @@ or `shared_alloc_u32` for a shared-memory array.",
             ))
         } else if let Some((m, n, k, a_ptr, b_ptr, c_ptr)) = self.tile_gemm_int8_operands(kernel) {
             Some(self.emit_int8_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, &kernel.name, None))
-        } else if let Some((m, n, k, a_ptr, b_ptr, scale_a_reg, scale_b_reg, c_ptr)) = self.tile_gemm_fp8_operands(kernel) {
+        } else if let Some((m, n, k, a_ptr, b_ptr, scale_a_reg, scale_b_reg, c_ptr)) = self.tile_gemm_fp8_operands(kernel, "E4M3") {
+            if !self.require_fp8_hardware(&kernel.name) {
+                return;
+            }
+            Some(self.emit_fp8_e4m3_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &scale_a_reg, &scale_b_reg, &c_ptr, &kernel.name))
+        } else if let Some((m, n, k, a_ptr, b_ptr, scale_a_reg, scale_b_reg, c_ptr)) = self.tile_gemm_fp8_operands(kernel, "F32") {
             if !self.require_fp8_hardware(&kernel.name) {
                 return;
             }
@@ -3473,8 +3692,9 @@ or `shared_alloc_u32` for a shared-memory array.",
         // never assembled the result (see
         // `tests_paged_decode_attention::emitted_ptx_actually_assembles`,
         // which is what caught it).
+        let ctas_per_sm = self.tile_gemm_ctas_per_sm.take().unwrap_or(1).max(1);
         let limit = if block_size > 0 && max_regs_per_sm > 0 {
-            limit.min((max_regs_per_sm / block_size).max(1))
+            limit.min((max_regs_per_sm / (block_size * ctas_per_sm)).max(1))
         } else {
             limit
         };
@@ -5874,7 +6094,8 @@ declare it as a Q format.\n{}",
                             // Four F16 lanes are 8 bytes and would need b16
                             // staging per lane; `mem()` would otherwise emit
                             // `.v4.b16` into four f32 registers - raw half bits
-                            // read back as floats.
+                            // read back as floats. (Four E4M3 lanes are one
+                            // 32-bit word, converted two at a time below.)
                             if elem == ScalarTy::F16 {
                                 self.unsupported_intrinsic(
                                     fname,
@@ -5908,8 +6129,8 @@ declare it as a Q format.\n{}",
                             let p_c = self.alloc_pred();
                             let p_valid = self.alloc_pred();
 
-                            writeln!(&mut self.ptx_buffer, "    // [Y 2D BLOCK POINTER {} - 128-BIT VECTOR]",
-                                     if storing { "STORE" } else { "LOAD" }).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    // [Y 2D BLOCK POINTER {} - {}-BIT VECTOR]",
+                                     if storing { "STORE" } else { "LOAD" }, 4 * 8 * elem.bytes()).unwrap();
                             writeln!(&mut self.ptx_buffer, "    mul.lo.s32 {}, {}, {};", lin_off, row_reg, stride_reg).unwrap();
                             writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", lin_idx, lin_off, col_reg).unwrap();
                             writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", lin_u64, lin_idx).unwrap();
@@ -5931,11 +6152,37 @@ declare it as a Q format.\n{}",
                                 let mut vals = Vec::with_capacity(4);
                                 for k in 6..10 {
                                     let v = self.emit_expr(&args[k], cache_policy, hw_profile);
-                                    vals.push(self.emit_convert(&v, elem));
+                                    vals.push(if elem == ScalarTy::E4M3 { v } else { self.emit_convert(&v, elem) });
+                                }
+                                // Four e4m3 bytes are one 4-byte store, so
+                                // `row * stride + col` must be a multiple of 4.
+                                if elem == ScalarTy::E4M3 {
+                                    let w = self.emit_e4m3_pack4(&vals);
+                                    writeln!(&mut self.ptx_buffer, "    @{} st.global.b32 [{}], {};", p_valid, addr, w).unwrap();
+                                    return "".into();
                                 }
                                 writeln!(&mut self.ptx_buffer, "    @{} st.global.v4.{} [{}], {{{}, {}, {}, {}}};",
                                          p_valid, elem.mem(), addr, vals[0], vals[1], vals[2], vals[3]).unwrap();
                                 "".into()
+                            } else if elem == ScalarTy::E4M3 {
+                                let w = self.alloc_reg32();
+                                writeln!(&mut self.ptx_buffer, "    @{} ld.global.b32 {}, [{}];", p_valid, w, addr).unwrap();
+                                writeln!(&mut self.ptx_buffer, "    @!{} mov.b32 {}, 0;", p_valid, w).unwrap();
+                                let (lo, hi) = (self.alloc_reg16(), self.alloc_reg16());
+                                writeln!(&mut self.ptx_buffer, "    mov.b32 {{{}, {}}}, {};", lo, hi, w).unwrap();
+                                let regs = [
+                                    self.alloc_ty(elem), self.alloc_ty(elem),
+                                    self.alloc_ty(elem), self.alloc_ty(elem),
+                                ];
+                                for (half, pair) in [(&lo, &regs[0..2]), (&hi, &regs[2..4])] {
+                                    let x2 = self.alloc_reg32();
+                                    writeln!(&mut self.ptx_buffer, "    cvt.rn.f16x2.e4m3x2 {}, {};", x2, half).unwrap();
+                                    let (h0, h1) = (self.alloc_reg16(), self.alloc_reg16());
+                                    writeln!(&mut self.ptx_buffer, "    mov.b32 {{{}, {}}}, {};", h0, h1, x2).unwrap();
+                                    writeln!(&mut self.ptx_buffer, "    cvt.f32.f16 {}, {};", pair[0], h0).unwrap();
+                                    writeln!(&mut self.ptx_buffer, "    cvt.f32.f16 {}, {};", pair[1], h1).unwrap();
+                                }
+                                Self::v4_marker(&regs)
                             } else {
                                 let regs = [
                                     self.alloc_ty(elem), self.alloc_ty(elem),
@@ -8105,7 +8352,10 @@ declare it as a Q format.\n{}",
         Some((m, n, k, r(0)?, r(1)?, r(2)?, r(3)?, r(4)?, r(5)?))
     }
 
-    fn tile_gemm_fp8_operands(&self, kernel: &KernelDecl) -> Option<(u32, u32, u32, String, String, String, String, String)> {
+    /// `elem` is the operands' element type: `F32` for the fused-quantising
+    /// GEMM, `E4M3` for the one that takes e4m3 bytes (A `[M][K]`, B
+    /// `[N][K]`) - see `emit_fp8_e4m3_gemm_kernel`.
+    fn tile_gemm_fp8_operands(&self, kernel: &KernelDecl, elem: &str) -> Option<(u32, u32, u32, String, String, String, String, String)> {
         let tile = kernel.tile.as_ref()?;
 
         fn as_positive_u32(e: &Expr) -> Option<u32> {
@@ -8131,8 +8381,8 @@ declare it as a Q format.\n{}",
         }
 
         if kernel.params.len() != 5
-            || !is_global_memory_of(&kernel.params[0].ty, "F32")
-            || !is_global_memory_of(&kernel.params[1].ty, "F32")
+            || !is_global_memory_of(&kernel.params[0].ty, elem)
+            || !is_global_memory_of(&kernel.params[1].ty, elem)
             || !is_scalar_f32(&kernel.params[2].ty)
             || !is_scalar_f32(&kernel.params[3].ty)
             || !is_global_memory_of(&kernel.params[4].ty, "F32")
@@ -8822,6 +9072,8 @@ declare it as a Q format.\n{}",
         k_substeps: u32,
         cta_n: u32,
     ) {
+        let zero = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", zero).unwrap();
         for ks in 0..k_substeps {
             let kk = ks * 32;
 
@@ -8837,12 +9089,7 @@ declare it as a Q format.\n{}",
             for i in 0..num_i {
                 let a_frag = self.emit_fp8_load_a_fragment(smem_a, group_id, tig, warp_row0_local, i, kk);
                 for j in 0..num_j {
-                    let d = acc[i as usize][j as usize].join(",");
-                    writeln!(
-                        &mut self.ptx_buffer,
-                        "    mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
-                        d, a_frag.join(","), b_frags[j as usize].join(","), d
-                    ).unwrap();
+                    self.emit_fp8_mma_into(&acc[i as usize][j as usize], &a_frag, &b_frags[j as usize], &zero);
                 }
             }
         }
@@ -9479,6 +9726,45 @@ declare it as a Q format.\n{}",
         }
     }
 
+    /// The FP8 GEMMs' CTA tile `(m tile, n tile)` for this CTA, in grouped
+    /// launch order (see the comment inside).
+    fn emit_fp8_grouped_tile(&mut self, grid_x: u32, grid_y: u32, group_m: u32) -> (String, String) {
+        let ctaid_x = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", ctaid_x).unwrap();
+        let ctaid_y = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.y;", ctaid_y).unwrap();
+        // Grouped launch order (session 6): CTAs launched consecutively cover
+        // FP8_GEMM_GROUP_M M-tiles, then the next N-tile, so the CTAs
+        // resident together share A and B tiles in L2. In raster order the
+        // ~66 resident CTAs shared one B column and swept all of A, which
+        // at 8192^3 read 17.2 GB from DRAM (Triton: 9.2) and ran 1.8x slower.
+        if grid_x > 1 && grid_y > 1 {
+            let g = group_m;
+            let pid = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", pid, ctaid_y, grid_x, ctaid_x).unwrap();
+            let per_group = g * grid_y;
+            let group = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", group, pid, per_group).unwrap();
+            let first_m = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", first_m, group, g).unwrap();
+            let left = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    sub.u32 {}, {}, {};", left, grid_x, first_m).unwrap();
+            let gsize = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    min.u32 {}, {}, {};", gsize, left, g).unwrap();
+            let r = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", r, pid, per_group).unwrap();
+            let rm = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", rm, r, gsize).unwrap();
+            let tile_m = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", tile_m, first_m, rm).unwrap();
+            let tile_n = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", tile_n, r, gsize).unwrap();
+            (tile_m, tile_n)
+        } else {
+            (ctaid_x, ctaid_y)
+        }
+    }
+
     /// Each lane's byte offsets for the padded path's `ldmatrix.x4` loads,
     /// computed once. An 8-bit m16n8k32 fragment register holds 4
     /// consecutive k bytes of one row - two of `ldmatrix`'s b16 elements -
@@ -9515,6 +9801,29 @@ declare it as a Q format.\n{}",
         (a_off, b_off)
     }
 
+    /// One `mma.sync.m16n8k32` over e4m3 fragments, added into the f32
+    /// accumulator `acc` in float32.
+    ///
+    /// The mma starts from `zero` rather than from `acc`, and four
+    /// `add.rn.f32` fold its result in. The tensor core adds an mma's
+    /// products into its accumulator at about 11 bits, truncating, so
+    /// chaining every mma of a K loop in it (what this backend did, and what
+    /// Triton's `tl.dot` on e4m3 does) lost one such rounding per 32 of K: a
+    /// median relative error of 6.6% at K = 4096 on positive inputs, against
+    /// 5.7e-4 for `torch._scaled_mm`, which adds into float32 every two mmas,
+    /// and 6.5e-5 this way (docs/benchmarks/fp8_e4m3_2026-10-18/).
+    fn emit_fp8_mma_into(&mut self, acc: &[String], a: &[String], b: &[String], zero: &str) {
+        let t: Vec<String> = (0..4).map(|_| self.alloc_regf32()).collect();
+        writeln!(
+            &mut self.ptx_buffer,
+            "    mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {{{}}}, {{{}}}, {{{}}}, {{{z},{z},{z},{z}}};",
+            t.join(","), a.join(","), b.join(","), z = zero
+        ).unwrap();
+        for (r, tr) in acc.iter().zip(&t) {
+            writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", r, r, tr).unwrap();
+        }
+    }
+
     /// One K-tile's tensor-core work on the padded layout: per k32 step, one
     /// `ldmatrix.x4` per pair of B n8 tiles and per A m16 tile (see
     /// `emit_fp8_ldmatrix_lane_offsets`), then the `num_i x num_j` mmas.
@@ -9535,6 +9844,8 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", a_base, smem_a, a_lane_off).unwrap();
         let b_base = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_base, smem_b, b_lane_off).unwrap();
+        let zero = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", zero).unwrap();
         for ks in 0..k_substeps {
             let kk = ks * 32;
             let mut b_frags: Vec<Vec<String>> = Vec::with_capacity(num_j as usize);
@@ -9556,12 +9867,7 @@ declare it as a Q format.\n{}",
                     a_frag.join(","), a_base, i * 16 * row + kk
                 ).unwrap();
                 for j in 0..num_j {
-                    let d = acc[i as usize][j as usize].join(",");
-                    writeln!(
-                        &mut self.ptx_buffer,
-                        "    mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
-                        d, a_frag.join(","), b_frags[j as usize].join(","), d
-                    ).unwrap();
+                    self.emit_fp8_mma_into(&acc[i as usize][j as usize], &a_frag, &b_frags[j as usize], &zero);
                 }
             }
         }
@@ -9961,40 +10267,7 @@ declare it as a Q format.\n{}",
         }
 
         // ---- CTA tile origin ----
-        let ctaid_x = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", ctaid_x).unwrap();
-        let ctaid_y = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.y;", ctaid_y).unwrap();
-        // Grouped launch order (session 6): CTAs launched consecutively cover
-        // FP8_GEMM_GROUP_M M-tiles, then the next N-tile, so the CTAs
-        // resident together share A and B tiles in L2. In raster order the
-        // ~66 resident CTAs shared one B column and swept all of A, which
-        // at 8192^3 read 17.2 GB from DRAM (Triton: 9.2) and ran 1.8x slower.
-        let (ctaid_x, ctaid_y) = if grid_x > 1 && grid_y > 1 {
-            let g = FP8_GEMM_GROUP_M;
-            let pid = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", pid, ctaid_y, grid_x, ctaid_x).unwrap();
-            let per_group = g * grid_y;
-            let group = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", group, pid, per_group).unwrap();
-            let first_m = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", first_m, group, g).unwrap();
-            let left = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    sub.u32 {}, {}, {};", left, grid_x, first_m).unwrap();
-            let gsize = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    min.u32 {}, {}, {};", gsize, left, g).unwrap();
-            let r = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", r, pid, per_group).unwrap();
-            let rm = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", rm, r, gsize).unwrap();
-            let tile_m = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", tile_m, first_m, rm).unwrap();
-            let tile_n = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", tile_n, r, gsize).unwrap();
-            (tile_m, tile_n)
-        } else {
-            (ctaid_x, ctaid_y)
-        };
+        let (ctaid_x, ctaid_y) = self.emit_fp8_grouped_tile(grid_x, grid_y, FP8_GEMM_GROUP_M);
         let cta_row0 = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_row0, ctaid_x, cta_m).unwrap();
         let cta_col0 = self.alloc_reg32();
@@ -10286,6 +10559,531 @@ declare it as a Q format.\n{}",
         }
 
         threads_per_cta
+    }
+
+    /// The e4m3-input FP8 GEMM: `@tile(M, N, K) kernel f(A, B:
+    /// GlobalMemory<E4M3>, scale_a, scale_b: F32, C: GlobalMemory<F32>)`,
+    /// `C = scale_a * scale_b * (A @ B^T)` with A `[M][K]` and B `[N][K]`,
+    /// both K-contiguous, as `mma.sync.m16n8k32.row.col` reads them and as
+    /// `torch._scaled_mm` takes them (a row-major A and a column-major B).
+    ///
+    /// Where `emit_fp8_gemm_kernel` converts f32 tiles to e4m3 inside its
+    /// K loop - every CTA converting every element of its A rows and B
+    /// columns, 64 times over at 8192^3 - this one copies the bytes with
+    /// `cp.async` straight into the shared tiles `ldmatrix` reads.
+    ///
+    /// Shared layout: each stage is A's `cta_m` rows of `cta_k` bytes, then
+    /// B's `cta_n` rows. Rows are not padded; the 16-byte chunks of a row are
+    /// XOR-swizzled instead (`emit_fp8_e4m3_swizzle`), so the eight rows one
+    /// `ldmatrix` matrix reads fall in distinct banks with no padding: the
+    /// default tile's three 64x64x64 stages take 24 KB, four CTAs per SM.
+    ///
+    /// K loop, `stages` deep: tiles 0 .. stages-2 are copied before it; at
+    /// iteration k the loop waits for tile k, synchronises (which also says
+    /// every warp has finished with the stage tile k-1 used), copies tile
+    /// k+stages-1 into that stage, and multiplies tile k. Every iteration
+    /// commits one copy group, zero-sized past the last tile, so
+    /// `wait_group stages-2` always means "tile k has landed".
+    ///
+    /// Bounds: rows past M or N and 16-byte K chunks past K are copied as
+    /// zeros (`cp.async`'s source size 0); the stores are predicated. K must
+    /// be a multiple of 16, the copy's width.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_fp8_e4m3_gemm_kernel(
+        &mut self,
+        m: u32,
+        n: u32,
+        k: u32,
+        a_ptr: &str,
+        b_ptr: &str,
+        scale_a_reg: &str,
+        scale_b_reg: &str,
+        c_ptr: &str,
+        kernel_name: &str,
+    ) -> u32 {
+        if k % 16 != 0 {
+            self.emit_errors.push(format!(
+                "FP8 tensor-core GEMM `{}`: e4m3 inputs need K a multiple of 16, the width of one \
+                 `cp.async` copy; K is {}. Pad K with zeros.",
+                kernel_name, k
+            ));
+            return 0;
+        }
+        let t = match fp8_e4m3_tile(m, n, k) {
+            Ok(t) => t,
+            Err(why) => {
+                self.emit_errors.push(format!("FP8 tensor-core GEMM `{}`: {}", kernel_name, why));
+                return 0;
+            }
+        };
+        let Fp8E4m3Tile { cta_m, cta_n, warps_m, warps_n, cta_k, stages, ctas_per_sm, group_m } = t;
+        if let Err(why) = validate_warp_tiling(cta_m, cta_n, cta_k, warps_m, warps_n, 16, 8, 32) {
+            self.emit_errors.push(format!("FP8 tensor-core GEMM: {}", why));
+            return 0;
+        }
+        let threads = warps_m * warps_n * 32;
+        let per_warp_m = cta_m / warps_m;
+        let per_warp_n = cta_n / warps_n;
+        let num_i = per_warp_m / 16;
+        let num_j = per_warp_n / 8;
+        let k_substeps = cta_k / 32;
+        // Chunks of 16 bytes per row, and rows one pass of the CTA copies.
+        let cpr = cta_k / 16;
+        let geometry_error = if threads > 1024 {
+            Some(format!("{} threads, past a CTA's 1024", threads))
+        } else if ctas_per_sm == 0 || group_m == 0 {
+            Some("CTAs per SM and the launch group's M tiles must be at least 1".to_string())
+        } else if stages * (cta_m + cta_n) * cta_k > FP8_E4M3_MAX_SMEM {
+            Some(format!("{} stages take {} bytes of shared memory, past the {} a CTA can have", stages, stages * (cta_m + cta_n) * cta_k, FP8_E4M3_MAX_SMEM))
+        } else if !matches!(cta_k, 32 | 64 | 128) {
+            Some(format!("cta_k {} is not 32, 64 or 128, the widths the chunk swizzle covers", cta_k))
+        } else if stages < 2 {
+            Some(format!("{} stages; the K loop needs at least 2", stages))
+        } else if num_j % 2 != 0 {
+            Some(format!("a warp's {} columns are not whole pairs of n8 tiles, which one `ldmatrix.x4` loads", per_warp_n))
+        } else if threads % cpr != 0 || (threads / cpr) % 8 != 0 {
+            Some(format!("{} threads do not copy whole groups of 8 rows of {} chunks, so a thread's chunks would differ in swizzle", threads, cpr))
+        } else if (cta_m * cpr) % threads != 0 || (cta_n * cpr) % threads != 0 {
+            Some(format!("{} threads do not split the {}x{} and {}x{} byte tiles evenly", threads, cta_m, cta_k, cta_n, cta_k))
+        } else {
+            None
+        };
+        if let Some(why) = geometry_error {
+            self.emit_errors.push(format!(
+                "FP8 tensor-core GEMM: the {cta_m}x{cta_n}x{cta_k} e4m3 tile on {warps_m}x{warps_n} warps cannot be staged: {why}"
+            ));
+            return 0;
+        }
+        let rows_per_pass = threads / cpr;
+        let chunks_a = cta_m / rows_per_pass;
+        let chunks_b = cta_n / rows_per_pass;
+        let k_tiles = k.div_ceil(cta_k);
+        let grid_x = m.div_ceil(cta_m);
+        let grid_y = n.div_ceil(cta_n);
+        let stage_a_bytes = cta_m * cta_k;
+        let stage_bytes = (cta_m + cta_n) * cta_k;
+        let smem_bytes = stages * stage_bytes;
+        // Offsets the copies and stores carry as immediates.
+        let widest = [
+            u64::from(chunks_a.max(chunks_b)) * u64::from(rows_per_pass) * u64::from(k),
+            (u64::from(cta_m) * u64::from(n) + u64::from(cta_n)) * 4,
+        ];
+        if widest.iter().any(|&b| b > i32::MAX as u64) {
+            self.emit_errors.push(format!(
+                "FP8 tensor-core GEMM `{}`: M={} N={} K={} puts a copy or store offset past a 32-bit immediate",
+                kernel_name, m, n, k
+            ));
+            return 0;
+        }
+
+        writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
+        writeln!(
+            &mut self.ptx_buffer,
+            "    // [Y FP8 TENSOR CORE GEMM, e4m3 inputs] M={} N={} K={} | CTA {}x{}x{} | {}x{} warps | {} stages | mma.sync.m16n8k32.row.col.f32.e4m3.e4m3.f32",
+            m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n, stages
+        ).unwrap();
+        writeln!(&mut self.ptx_buffer, "    // A [M][K] and B [N][K] e4m3 bytes copied by cp.async; C = scale_a * scale_b * (A @ B^T).").unwrap();
+        writeln!(&mut self.ptx_buffer, "    // Launch grid required: ({}, {}, 1) CTAs, block ({},1,1).", grid_x, grid_y, threads).unwrap();
+        writeln!(&mut self.ptx_buffer, "    // {} cp.async stages of e4m3 K-tiles. Dynamic shared memory required: {} bytes.", stages, smem_bytes).unwrap();
+        writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
+        let smem_sym = format!("smem_fp8_e4m3_{}", kernel_name);
+        self.pending_extern_decls.push(format!(".extern .shared .align 128 .b8 {}[];", smem_sym));
+        self.tile_gemm_ctas_per_sm = Some(ctas_per_sm);
+
+        let a_g = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", a_g, a_ptr).unwrap();
+        let b_g = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", b_g, b_ptr).unwrap();
+        let c_g = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", c_g, c_ptr).unwrap();
+        let smem = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", smem, smem_sym).unwrap();
+
+        let (tile_m, tile_n) = self.emit_fp8_grouped_tile(grid_x, grid_y, group_m);
+        let cta_row0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_row0, tile_m, cta_m).unwrap();
+        let cta_col0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_col0, tile_n, cta_n).unwrap();
+
+        let tid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
+        let lane = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 31;", lane, tid).unwrap();
+        let warp_id = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 5;", warp_id, tid).unwrap();
+        let warp_m = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", warp_m, warp_id, warps_m).unwrap();
+        let warp_n = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", warp_n, warp_id, warps_m).unwrap();
+        let warp_row0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", warp_row0, warp_m, per_warp_m).unwrap();
+        let warp_col0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", warp_col0, warp_n, per_warp_n).unwrap();
+
+        let (a_lane, b_lane) = self.emit_fp8_e4m3_ldmatrix_offsets(&lane, &warp_row0, &warp_col0, cta_k, stage_a_bytes);
+
+        // ---- each thread's copies: row tid / cpr, chunk tid % cpr, then
+        // every rows_per_pass rows below, which have the same swizzle ----
+        let lr = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", lr, tid, cpr).unwrap();
+        let lc = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", lc, tid, cpr).unwrap();
+        let swz = self.emit_fp8_e4m3_swizzle(&lr, cta_k);
+        let sch = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    xor.b32 {}, {}, {};", sch, lc, swz).unwrap();
+        let s_thread = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", s_thread, lr, cta_k, smem).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 16, {};", s_thread, sch, s_thread).unwrap();
+        let k_byte = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 4;", k_byte, lc).unwrap();
+        let operand_base = |this: &mut Self, g: &str, row0: &str| -> String {
+            let row = this.alloc_reg32();
+            writeln!(&mut this.ptx_buffer, "    add.u32 {}, {}, {};", row, row0, lr).unwrap();
+            let off = this.alloc_reg64();
+            writeln!(&mut this.ptx_buffer, "    mul.wide.u32 {}, {}, {};", off, row, k).unwrap();
+            let kb = this.alloc_reg64();
+            writeln!(&mut this.ptx_buffer, "    cvt.u64.u32 {}, {};", kb, k_byte).unwrap();
+            let ga = this.alloc_reg64();
+            writeln!(&mut this.ptx_buffer, "    add.s64 {}, {}, {};", ga, g, off).unwrap();
+            writeln!(&mut this.ptx_buffer, "    add.s64 {}, {}, {};", ga, ga, kb).unwrap();
+            ga
+        };
+        let ga = operand_base(self, &a_g, &cta_row0);
+        let gb = operand_base(self, &b_g, &cta_col0);
+        // Row predicates, where a tile can pass the matrix's edge.
+        let row_preds = |this: &mut Self, row0: &str, chunks: u32, bound: u32, ragged: bool| -> Vec<Option<String>> {
+            (0..chunks)
+                .map(|u| {
+                    if !ragged {
+                        return None;
+                    }
+                    let r = this.alloc_reg32();
+                    writeln!(&mut this.ptx_buffer, "    add.u32 {}, {}, {};", r, row0, u * rows_per_pass).unwrap();
+                    writeln!(&mut this.ptx_buffer, "    add.u32 {}, {}, {};", r, r, lr).unwrap();
+                    let p = this.alloc_pred();
+                    writeln!(&mut this.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, r, bound).unwrap();
+                    Some(p)
+                })
+                .collect()
+        };
+        let pa = row_preds(self, &cta_row0, chunks_a, m, m % cta_m != 0);
+        let pb = row_preds(self, &cta_col0, chunks_b, n, n % cta_n != 0);
+        let k_ragged = k % cta_k != 0;
+        let copy = Fp8E4m3Copies { ga, gb, k_byte, pa, pb, k_ragged, chunks_a, chunks_b, rows_per_pass, cta_k, k, stage_a_bytes };
+
+        let mut acc: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
+        for _ in 0..num_i {
+            let mut row = Vec::with_capacity(num_j as usize);
+            for _ in 0..num_j {
+                let d: Vec<String> = (0..4).map(|_| self.alloc_regf32()).collect();
+                for r in &d {
+                    writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", r).unwrap();
+                }
+                row.push(d);
+            }
+            acc.push(row);
+        }
+
+        let zero = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", zero).unwrap();
+
+        // ---- prologue: tiles 0 .. stages-2 into stages 0 .. stages-2 ----
+        for s in 0..stages - 1 {
+            if s < k_tiles {
+                let k0 = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", k0, s * cta_k).unwrap();
+                let slot = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", slot, s_thread, s * stage_bytes).unwrap();
+                self.emit_fp8_e4m3_copy_tile(&copy, &k0, &slot, None);
+            }
+            writeln!(&mut self.ptx_buffer, "    cp.async.commit_group;").unwrap();
+        }
+
+        let k_iter = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", k_iter).unwrap();
+        // The stage tile k reads, and the one tile k+stages-1 is copied into.
+        let read_off = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", read_off).unwrap();
+        let write_off = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", write_off, (stages - 1) * stage_bytes).unwrap();
+        let loop_start = self.alloc_label(&format!("FP8E_K_{}", kernel_name));
+        let loop_end = self.alloc_label(&format!("FP8E_K_DONE_{}", kernel_name));
+        writeln!(&mut self.ptx_buffer, "    {}:", loop_start).unwrap();
+        let p_exit = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p_exit, k_iter, k_tiles).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} bra {};", p_exit, loop_end).unwrap();
+        writeln!(&mut self.ptx_buffer, "    cp.async.wait_group {};", stages - 2).unwrap();
+        writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+
+        let next = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", next, k_iter, stages - 1).unwrap();
+        let p_next = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_next, next, k_tiles).unwrap();
+        let k0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0, next, cta_k).unwrap();
+        let slot = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", slot, s_thread, write_off).unwrap();
+        self.emit_fp8_e4m3_copy_tile(&copy, &k0, &slot, Some(&p_next));
+        writeln!(&mut self.ptx_buffer, "    cp.async.commit_group;").unwrap();
+
+        let stage = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", stage, smem, read_off).unwrap();
+        for ks in 0..k_substeps {
+            let a_base = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", a_base, stage, a_lane[ks as usize]).unwrap();
+            let b_base = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_base, stage, b_lane[ks as usize]).unwrap();
+            let mut b_frags: Vec<Vec<String>> = Vec::with_capacity(num_j as usize);
+            for jp in 0..num_j / 2 {
+                let r: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
+                writeln!(
+                    &mut self.ptx_buffer,
+                    "    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {{{}}}, [{}+{}];",
+                    r.join(","), b_base, jp * 16 * cta_k
+                ).unwrap();
+                b_frags.push(vec![r[0].clone(), r[1].clone()]);
+                b_frags.push(vec![r[2].clone(), r[3].clone()]);
+            }
+            for i in 0..num_i {
+                let a_frag: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
+                writeln!(
+                    &mut self.ptx_buffer,
+                    "    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {{{}}}, [{}+{}];",
+                    a_frag.join(","), a_base, i * 16 * cta_k
+                ).unwrap();
+                for j in 0..num_j {
+                    self.emit_fp8_mma_into(&acc[i as usize][j as usize], &a_frag, &b_frags[j as usize], &zero);
+                }
+            }
+        }
+
+        // Advance both stage offsets by one stage, wrapping at `stages`.
+        for off in [&read_off, &write_off] {
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off, off, stage_bytes).unwrap();
+            let p_wrap = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.eq.u32 {}, {}, {};", p_wrap, off, smem_bytes).unwrap();
+            writeln!(&mut self.ptx_buffer, "    selp.u32 {}, 0, {}, {};", off, off, p_wrap).unwrap();
+        }
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
+        writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
+        writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
+        writeln!(&mut self.ptx_buffer, "    cp.async.wait_all;").unwrap();
+
+        // ---- epilogue: each fragment pair, scaled, straight to C ----
+        let scale = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", scale, scale_a_reg, scale_b_reg).unwrap();
+        let group_id = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 2;", group_id, lane).unwrap();
+        let tig = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 3;", tig, lane).unwrap();
+        let row0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row0, cta_row0, warp_row0).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row0, row0, group_id).unwrap();
+        let col0 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col0, cta_col0, warp_col0).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 2, {};", col0, tig, col0).unwrap();
+        let row_bytes = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, {};", row_bytes, row0, n * 4).unwrap();
+        let col_bytes = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 4;", col_bytes, col0).unwrap();
+        let c_thread = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", c_thread, c_g, row_bytes).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", c_thread, c_thread, col_bytes).unwrap();
+        // A pair of columns starts at an even column, so with N even it is
+        // in range or out of it whole, and 8-byte aligned.
+        let pairs = n % 2 == 0;
+        let row_ok: Vec<Vec<Option<String>>> = (0..num_i)
+            .map(|i| {
+                (0..2u32)
+                    .map(|h| {
+                        if m % cta_m == 0 {
+                            return None;
+                        }
+                        let r = self.alloc_reg32();
+                        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", r, row0, i * 16 + 8 * h).unwrap();
+                        let p = self.alloc_pred();
+                        writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, r, m).unwrap();
+                        Some(p)
+                    })
+                    .collect()
+            })
+            .collect();
+        let col_ok: Vec<[Option<String>; 2]> = (0..num_j)
+            .map(|j| {
+                if n % cta_n == 0 {
+                    return [None, None];
+                }
+                let mut ps: [Option<String>; 2] = [None, None];
+                for (e, slot) in ps.iter_mut().enumerate() {
+                    if pairs && e == 1 {
+                        break;
+                    }
+                    let c = self.alloc_reg32();
+                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", c, col0, j * 8 + e as u32).unwrap();
+                    let p = self.alloc_pred();
+                    writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, c, n).unwrap();
+                    *slot = Some(p);
+                }
+                ps
+            })
+            .collect();
+        for i in 0..num_i {
+            for j in 0..num_j {
+                for h in 0..2u32 {
+                    let fr = &acc[i as usize][j as usize];
+                    let v0 = self.alloc_regf32();
+                    writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", v0, fr[2 * h as usize], scale).unwrap();
+                    let v1 = self.alloc_regf32();
+                    writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", v1, fr[2 * h as usize + 1], scale).unwrap();
+                    let off = (u64::from(i * 16 + 8 * h) * u64::from(n) + u64::from(j * 8)) * 4;
+                    let guard = |this: &mut Self, col: &Option<String>| -> String {
+                        match (&row_ok[i as usize][h as usize], col) {
+                            (None, None) => String::new(),
+                            (Some(p), None) | (None, Some(p)) => format!("@{} ", p),
+                            (Some(r), Some(c)) => {
+                                let p = this.alloc_pred();
+                                writeln!(&mut this.ptx_buffer, "    and.pred {}, {}, {};", p, r, c).unwrap();
+                                format!("@{} ", p)
+                            }
+                        }
+                    };
+                    if pairs {
+                        let g = guard(self, &col_ok[j as usize][0]);
+                        writeln!(&mut self.ptx_buffer, "    {}st.global.v2.f32 [{}+{}], {{{}, {}}};", g, c_thread, off, v0, v1).unwrap();
+                    } else {
+                        let g0 = guard(self, &col_ok[j as usize][0]);
+                        writeln!(&mut self.ptx_buffer, "    {}st.global.f32 [{}+{}], {};", g0, c_thread, off, v0).unwrap();
+                        let g1 = guard(self, &col_ok[j as usize][1]);
+                        writeln!(&mut self.ptx_buffer, "    {}st.global.f32 [{}+{}], {};", g1, c_thread, off + 4, v1).unwrap();
+                    }
+                }
+            }
+        }
+        threads
+    }
+
+    /// The chunk of a swizzled e4m3 row (`emit_fp8_e4m3_gemm_kernel`) that
+    /// logical chunk 0 lands in: a row's chunks are XORed with
+    /// `(row / (128 / cta_k)) % (cta_k / 16)`, so each 8 consecutive rows -
+    /// one `ldmatrix` matrix - put a given chunk in 8 different 16-byte
+    /// columns of the 128-byte bank line. Depends on `row % 8` only.
+    fn emit_fp8_e4m3_swizzle(&mut self, row: &str, cta_k: u32) -> String {
+        let rows_per_line = 128 / cta_k;
+        let s = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", s, row, rows_per_line.trailing_zeros()).unwrap();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", s, s, cta_k / 16 - 1).unwrap();
+        s
+    }
+
+    /// Each lane's `ldmatrix.x4` byte offsets into a stage, one per 32-byte
+    /// K step, for A and for B (B's past A's `stage_a_bytes`). The matrices
+    /// are as in `emit_fp8_ldmatrix_lane_offsets` - A: rows `L & 15`, K half
+    /// `L >> 4`; B: rows `L % 8 + (L & 16) / 2`, K half `(L >> 3) & 1` - with
+    /// the K chunk swizzled by row. Every row a lane addresses is its
+    /// warp's first row plus a multiple of 8 plus `L % 8`, so the swizzle is
+    /// the lane's own, and the offsets differ between K steps by an XOR, not
+    /// a constant: hence one register per step.
+    fn emit_fp8_e4m3_ldmatrix_offsets(
+        &mut self,
+        lane: &str,
+        warp_row0: &str,
+        warp_col0: &str,
+        cta_k: u32,
+        stage_a_bytes: u32,
+    ) -> (Vec<String>, Vec<String>) {
+        let l7 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 7;", l7, lane).unwrap();
+        let swz = self.emit_fp8_e4m3_swizzle(&l7, cta_k);
+        // A: row warp_row0 + (L & 15), K half L >> 4.
+        let a_row = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 15;", a_row, lane).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", a_row, a_row, warp_row0).unwrap();
+        let a_half = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 4;", a_half, lane).unwrap();
+        // B: row warp_col0 + (L & 7) + (L & 16) / 2, K half (L >> 3) & 1.
+        let b_row = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 16;", b_row, lane).unwrap();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", b_row, b_row).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_row, b_row, l7).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_row, b_row, warp_col0).unwrap();
+        let b_half = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 3;", b_half, lane).unwrap();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 1;", b_half, b_half).unwrap();
+        let offsets = |this: &mut Self, row: &str, half: &str, base: u32| -> Vec<String> {
+            let x = this.alloc_reg32();
+            writeln!(&mut this.ptx_buffer, "    xor.b32 {}, {}, {};", x, half, swz).unwrap();
+            let row_off = this.alloc_reg32();
+            writeln!(&mut this.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", row_off, row, cta_k, base).unwrap();
+            (0..cta_k / 32)
+                .map(|ks| {
+                    let c = this.alloc_reg32();
+                    writeln!(&mut this.ptx_buffer, "    xor.b32 {}, {}, {};", c, x, 2 * ks).unwrap();
+                    let off = this.alloc_reg32();
+                    writeln!(&mut this.ptx_buffer, "    mad.lo.u32 {}, {}, 16, {};", off, c, row_off).unwrap();
+                    off
+                })
+                .collect()
+        };
+        let a = offsets(self, &a_row, &a_half, 0);
+        let b = offsets(self, &b_row, &b_half, stage_a_bytes);
+        (a, b)
+    }
+
+    /// One K tile's copies (`emit_fp8_e4m3_gemm_kernel`): the thread's
+    /// chunks of A and B at K offset `k0`, into the stage at `slot` (the
+    /// thread's own shared address in it). `valid` is false past the last
+    /// tile; with a row past the matrix or a chunk past K it makes the copy
+    /// zero-sized, which writes zeros and reads nothing.
+    fn emit_fp8_e4m3_copy_tile(&mut self, c: &Fp8E4m3Copies, k0: &str, slot: &str, valid: Option<&str>) {
+        let k0_wide = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", k0_wide, k0).unwrap();
+        let mut tile_ok = valid.map(str::to_string);
+        if c.k_ragged {
+            let kc = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", kc, k0, c.k_byte).unwrap();
+            let p = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, kc, c.k).unwrap();
+            tile_ok = Some(match tile_ok {
+                Some(v) => {
+                    let q = self.alloc_pred();
+                    writeln!(&mut self.ptx_buffer, "    and.pred {}, {}, {};", q, v, p).unwrap();
+                    q
+                }
+                None => p,
+            });
+        }
+        let size_of = |this: &mut Self, row: &Option<String>| -> String {
+            let p = match (&tile_ok, row) {
+                (None, None) => return String::new(),
+                (Some(p), None) | (None, Some(p)) => p.clone(),
+                (Some(a), Some(b)) => {
+                    let q = this.alloc_pred();
+                    writeln!(&mut this.ptx_buffer, "    and.pred {}, {}, {};", q, a, b).unwrap();
+                    q
+                }
+            };
+            let r = this.alloc_reg32();
+            writeln!(&mut this.ptx_buffer, "    selp.u32 {}, 16, 0, {};", r, p).unwrap();
+            format!(", {}", r)
+        };
+        let mut shared_size: Option<String> = None;
+        for (g, preds, chunks, s_base) in [(&c.ga, &c.pa, c.chunks_a, 0u32), (&c.gb, &c.pb, c.chunks_b, c.stage_a_bytes)] {
+            let gaddr = self.alloc_reg64();
+            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gaddr, g, k0_wide).unwrap();
+            for u in 0..chunks {
+                let size = match &preds[u as usize] {
+                    None => shared_size.get_or_insert_with(|| size_of(self, &None)).clone(),
+                    row => size_of(self, row),
+                };
+                let s_off = s_base + u * c.rows_per_pass * c.cta_k;
+                let g_off = u64::from(u) * u64::from(c.rows_per_pass) * u64::from(c.k);
+                writeln!(
+                    &mut self.ptx_buffer,
+                    "    cp.async.cg.shared.global [{}+{}], [{}+{}], 16{};",
+                    slot, s_off, gaddr, g_off, size
+                ).unwrap();
+            }
+        }
     }
 
     /// Emits a thread-strided, boundary-masked cooperative load of one CTA's

@@ -1,0 +1,22 @@
+kernel quant_e4m3(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, n: I32) {
+    let idx: I32 = global_thread_id();
+    if idx < n {
+        Q[idx] = X[idx] * inv_s;
+    }
+}
+
+kernel quant_e4m3_t(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, rows: I32, cols: I32) {
+    let idx: I32 = global_thread_id();
+    if idx < rows * cols {
+        let r: I32 = idx / cols;
+        let c: I32 = idx - r * cols;
+        Q[c * rows + r] = X[idx] * inv_s;
+    }
+}
+
+kernel dequant_e4m3(Q: GlobalMemory<E4M3>, s: F32, X: GlobalMemory<F32>, n: I32) {
+    let idx: I32 = global_thread_id();
+    if idx < n {
+        X[idx] = Q[idx] * s;
+    }
+}

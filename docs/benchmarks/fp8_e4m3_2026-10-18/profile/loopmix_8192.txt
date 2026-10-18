@@ -1,0 +1,8 @@
+gemm_e4m3_8192
+  loop 76 SASS instructions; samples before 0.2%, in 99.4%, after 0.4%; total 1106960
+  mix: QMMA 32, LDSM 12, IADD3 10, LDGSTS 4, UIADD3 3, LDS 3, IMAD 2, ISETP 2, UISETP 2, USEL 2, DEPBAR 1, BAR 1, LDGDEPBAR 1, BRA 1
+  loop stalls: stall_math 573092, stall_math (Not Issued) 557589, stall_barrier 304153, stall_barrier (Not Issued) 285095, stall_wait 93455, stall_wait (Not Issued) 90079, stall_mio 86530, stall_mio (Not Issued) 84085
+sm89_xmma_gemm_e4m3f32_e4m3f32_f32_tn_n_tilesize128x128x64_s
+  loop 175 SASS instructions; samples before 0.8%, in 97.4%, after 1.8%; total 1092192
+  mix: FADD 64, QMMA 32, UIADD3 20, IADD3 14, LDSM 12, UISETP 8, UMOV 6, SEL 4, LDGSTS 4, PLOP3 3, R2P 2, ISETP 2, LDGDEPBAR 1, DEPBAR 1
+  loop stalls: stall_math 710586, stall_math (Not Issued) 650749, stall_wait 189659, stall_wait (Not Issued) 184636, stall_selected 88925, stall_barrier 47417, stall_barrier (Not Issued) 42943, stall_not_selected 20317

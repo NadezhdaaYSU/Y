@@ -322,6 +322,17 @@ impl CpuEmitter {
             Type::Ident(name, _) => rust_scalar(name).map_or_else(|| name.clone(), Into::into),
             Type::Generic { base, args, span } => {
                 if base == "GlobalMemory" {
+                    // e4m3 bytes read as f32 would be a wrong answer; this
+                    // backend has no FP8 conversion, so it refuses by name.
+                    if let Some(GenericArg::Type(Type::Primitive(e, _))) = args.first() {
+                        if e == "E4M3" {
+                            self.emit_errors.push(format!(
+                                "Line {}: [CPU host backend] `GlobalMemory<E4M3>` cannot be lowered: \
+                                 this backend has no FP8 (e4m3) conversion. Compile FP8 kernels with --emit-ptx.",
+                                span.line
+                            ));
+                        }
+                    }
                     "*mut f32".into()
                 } else if base == "Vec" {
                     let mut inner_ty = "()".to_string();

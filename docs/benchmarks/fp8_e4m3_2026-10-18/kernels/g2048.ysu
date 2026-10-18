@@ -1,0 +1,3 @@
+@tile(2048, 2048, 2048)
+kernel gemm_e4m3_2048(A: GlobalMemory<E4M3>, B: GlobalMemory<E4M3>, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>) {
+}

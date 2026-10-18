@@ -1,0 +1,25 @@
+QUIET 02:44:56 mean 3.3%
+          1024 {'promote': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'chain': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'c1': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages'} | exact {'promote': True, 'chain': True, 'c1': True, 's4c1': True, 'scaled_mm': True} | SM 2535-2535 MHz
+      chain        min      16.3 median      16.6 us   131.4 TFLOPS  0.981x scaled_mm
+      scaled_mm    min      16.7 median      17.2 us   129.0 TFLOPS  1.000x scaled_mm
+      promote      min      18.1 median      18.3 us   118.4 TFLOPS  1.089x scaled_mm
+      c1           min      18.2 median      18.4 us   118.1 TFLOPS  1.092x scaled_mm
+      s4c1         min      18.4 median      18.4 us   116.7 TFLOPS  1.105x scaled_mm
+          2048 {'promote': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'chain': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'c1': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages'} | exact {'promote': True, 'chain': True, 'c1': True, 's4c1': True, 'scaled_mm': True} | SM 2760-2760 MHz
+      chain        min     103.6 median     104.4 us   165.8 TFLOPS  0.986x scaled_mm
+      scaled_mm    min     105.1 median     106.3 us   163.5 TFLOPS  1.000x scaled_mm
+      promote      min     110.4 median     113.1 us   155.7 TFLOPS  1.050x scaled_mm
+      c1           min     124.9 median     125.3 us   137.6 TFLOPS  1.188x scaled_mm
+      s4c1         min     125.8 median     125.9 us   136.6 TFLOPS  1.197x scaled_mm
+          4096 {'promote': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'chain': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'c1': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages'} | exact {'promote': True, 'chain': True, 'c1': True, 's4c1': True, 'scaled_mm': True} | SM 2475-2475 MHz
+      chain        min     814.8 median     815.6 us   168.7 TFLOPS  0.997x scaled_mm
+      promote      min     817.5 median     818.3 us   168.1 TFLOPS  1.000x scaled_mm
+      scaled_mm    min     817.6 median     829.2 us   168.1 TFLOPS  1.000x scaled_mm
+      c1           min     938.0 median    1004.9 us   146.5 TFLOPS  1.147x scaled_mm
+      s4c1         min     939.0 median     947.8 us   146.4 TFLOPS  1.148x scaled_mm
+          8192 {'promote': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'chain': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'c1': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages'} | exact {'promote': True, 'chain': True, 'c1': True, 's4c1': True, 'scaled_mm': True} | SM 2565-2760 MHz
+      scaled_mm    min    6245.4 median    6480.4 us   176.1 TFLOPS  1.000x scaled_mm
+      promote      min    6320.6 median    6813.1 us   174.0 TFLOPS  1.012x scaled_mm
+      chain        min    6358.0 median    6652.9 us   172.9 TFLOPS  1.018x scaled_mm
+      c1           min    7312.9 median    7877.5 us   150.4 TFLOPS  1.171x scaled_mm
+      s4c1         min    7320.6 median    7661.9 us   150.2 TFLOPS  1.172x scaled_mm

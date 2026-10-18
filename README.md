@@ -1121,7 +1121,8 @@ sm_75 6.3   sm_80 7.0   sm_86 7.1   sm_87 7.5   sm_89 7.8   sm_90 8.0   sm_120 8
 Four of the seven were over-stated. sm_89 was **8.4** — a whole CUDA major — for
 every kernel, because FP8 `mma.sync` needs 8.4 *on that arch*. That is a
 **per-instruction** requirement and now lives on the module: a plain sm_89 kernel
-declares 7.8, an FP8 one raises the floor to 8.4 through `require_ptx_version`.
+declares 7.8, an FP8 one raises the floor to 8.4 through `require_ptx_version`,
+and an `E4M3` buffer's conversions (`cvt.rn.satfinite.e4m3x2.f32`) to 8.1.
 sm_90 keeps 8.0 although `ptxas` 13.3 accepts 7.8, because sm_90 arrived in CUDA
 12.0 and this assembler is merely being lenient — guess down, but not below spec.
 

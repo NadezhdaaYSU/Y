@@ -1,0 +1,23 @@
+Nsight Compute, one launch each at 8192 x 8192 float32 -> e4m3 (prof_quant.py),
+sections SpeedOfLight and MemoryWorkloadAnalysis plus the metrics named.
+RTX 4070 Ti SUPER; the GPU was in use by another program (a game), which
+changes the durations, not the transaction counts.
+
+kernels/quant_naive.ysu (quant_e4m3, one byte store per element, and
+quant_e4m3_t, transposing with Q[c * rows + r] = X[idx] * inv_s):
+
+  quant_e4m3     262144 x 256 threads
+    Duration 568 us; DRAM throughput 94.89%; L2 throughput 28.70%
+    dram__bytes_read 280.86 MB, dram__bytes_write 72.40 MB
+    lts__t_sectors_op_read 8,430,909, lts__t_sectors_op_write 2,099,780
+  quant_e4m3_t   262144 x 256 threads
+    Duration 2.81 ms; DRAM throughput 19.73%; L2 throughput 93.49%
+    dram__bytes_read 282.60 MB, dram__bytes_write 80.34 MB
+    lts__t_sectors_op_read 8,717,372, lts__t_sectors_op_write 67,219,294
+
+kernels/quant.ysu's quant_e4m3_t (a warp covers 8 columns x 16 rows; each
+lane reads 4 rows of one column and writes 4 bytes with one
+block_ptr2d_store_v4), 65536 x 256 threads:
+    Duration 557.47 us; DRAM throughput 92.62%; L2 throughput 38.51%
+    dram__bytes_read 268.48 MB, dram__bytes_write 69.93 MB
+    lts__t_sectors_op_read 8,422,603, lts__t_sectors_op_write 4,196,522

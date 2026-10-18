@@ -332,6 +332,11 @@ fn the_proof_states_the_tile_that_was_actually_compiled() {
 /// nothing about which shape the emitter passes. Same device as pinning the
 /// absence of an environment override: where behaviour cannot reach, pin the
 /// source.
+///
+/// The FP8 GEMM over e4m3 bytes (2026-10-18) is the fourth guarded emitter,
+/// and the second with m16n8k32. Its site IS reachable - `Y_FP8_E4M3_TILE`
+/// pins any tile - and `tests/ptx_e4m3.rs` checks it there too: a 48-wide K
+/// step, which a 16-wide fragment would accept, is refused by this guard.
 #[test]
 fn each_emitter_passes_its_own_fragment_shape() {
     let src = std::fs::read_to_string("src/ptx_emitter.rs").unwrap();
@@ -344,19 +349,19 @@ fn each_emitter_passes_its_own_fragment_shape() {
         .collect();
     assert_eq!(
         calls.len(),
-        3,
-        "expected exactly three guarded GEMM emitters (F16, FP8, SwiGLU), found {}: {:#?}",
+        4,
+        "expected exactly four guarded GEMM emitters (F16, FP8 from f32, FP8 from e4m3, SwiGLU), found {}: {:#?}",
         calls.len(),
         calls
     );
-    // m16n8k32 exactly once — the FP8 kernel. `mma.sync.aligned.m16n8k32` is
-    // what it emits, and its `num_j = per_warp_n / 8` / `k_substeps = cta_k /
-    // 32` are what depend on it.
+    // m16n8k32 exactly twice — the two FP8 kernels. `mma.sync.aligned.m16n8k32`
+    // is what they emit, and their `num_j = per_warp_n / 8` / `k_substeps =
+    // cta_k / 32` are what depend on it.
     let fp8 = calls.iter().filter(|c| c.contains("16, 8, 32")).count();
     assert_eq!(
-        fp8, 1,
-        "the FP8 GEMM must pass its own m16n8k32 fragment shape, not the F16 \
-         one — its `num_j` divides by 8 and its `k_substeps` by 32. Found {} \
+        fp8, 2,
+        "the FP8 GEMMs must pass their own m16n8k32 fragment shape, not the F16 \
+         one — their `num_j` divides by 8 and their `k_substeps` by 32. Found {} \
          call sites passing 16, 8, 32 among:\n{:#?}",
         fp8, calls
     );

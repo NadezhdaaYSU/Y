@@ -1,0 +1,22 @@
+  gemm_e4m3_8192 (64, 64, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    SM Frequency                    Ghz          2,64
+    DRAM Throughput                   %         20,47
+    Duration                         ms          6,61
+    Executed Ipc Active   inst/cycle         0,29
+    L2 Hit Rate                                       %        93,01
+    Registers Per Thread             register/thread             118
+    Dynamic Shared Memory Per Block      Kbyte/block           49,15
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            2
+    Achieved Occupancy                        %        33,12
+  sm89_xmma_gemm_e4m3f32_e4m3f32_f32_tn_n_tilesize128x128x64_stage3_warpsize4x2x1_tensor16x8x32_algo2_execute_kernel__5x_cublas (64, 64, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    SM Frequency                    Ghz          2,64
+    DRAM Throughput                   %         18,20
+    Duration                         ms          6,48
+    Executed Ipc Active   inst/cycle         0,68
+    L2 Hit Rate                                       %        97,09
+    Registers Per Thread             register/thread             210
+    Dynamic Shared Memory Per Block      Kbyte/block           49,15
+    Block Limit Registers                 block            1
+    Block Limit Shared Mem                block            1
+    Achieved Occupancy                        %        16,68

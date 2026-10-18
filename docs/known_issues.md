@@ -28,6 +28,12 @@ source; each entry there now carries its status. What is still open:
   `Python.h`; `launcher_status()` says). Performance, not correctness.
 - `python/examples/kernels/flash_attention.ysu` does not compile (`Pipeline` is
   not a type); the scripts report that rather than stop.
+- The head-to-head's Triton FP8 kernel (`tl.dot` on e4m3) chains its K loop
+  in the tensor core's accumulator, as Y's FP8 GEMM did until 2026-10-18: a
+  median relative error of 6.6% on positive inputs at K = 4096, where Y's
+  FP8 GEMMs give 6.5e-5 and `_scaled_mm` 5.7e-4. Its inputs are small
+  integers, exact either way, so the comparison is of time at unequal
+  precision.
 
 ### Python packaging
 
@@ -66,6 +72,13 @@ source; each entry there now carries its status. What is still open:
   `@align` is refused (§9.4).
 - `--emit-cpu` refuses struct literals, zero-initialised arrays and the string
   built-ins; `--emit-native` is a straight-line `I32`/`bool` subset.
+- `--emit-cpu` does not lower kernels (found 2026-10-18): every
+  `GlobalMemory<T>` parameter is written `*mut f32` whatever `T` is, an element
+  read is the element's ADDRESS cast to the value's type (`let v: I32 = X[1]`
+  became `((X.add(1)) as i32)`, which rustc accepts), and an element store is
+  `Out.add(0) = v`, which rustc rejects. A kernel therefore does not compile
+  as Rust, since it does nothing without a store. `GlobalMemory<E4M3>` is
+  refused by name.
 - `eval_interval` models no `|`, `^`, `<<`, `>>` or `%`, so an index bounded
   only through one is refused as unprovable (archive 1857).
 
@@ -133,7 +146,7 @@ source; each entry there now carries its status. What is still open:
   re-measured here; the current state is in
   [the validator documentation](ptxas_translation_validation.md) and Codex's
   2026-10-08 review.
-- `python3 tools/ptxas_tval/docgate.py` reports 13 figures in the validator
+- `python3 tools/ptxas_tval/docgate.py` reports 14 figures in the validator
   documentation and the README that disagree with its measurement (checked
   2026-10-17 at `ff3526f`): the loop census's buckets and its
   `loopval`/`nestval` split; the multi-back-edge kernels (33 of 48 published,
@@ -145,12 +158,17 @@ source; each entry there now carries its status. What is still open:
   (`python3 frontier.py`, minutes, restamps them). The F16 GEMM K-loop change
   moved the unroll census to 25 and 17: `ptxas` now unrolls the whole K loop
   of `gemm_f16_512` and `gemm_f16_bias_relu_512`, and `unroll.py` refuses a
-  PTX loop it cannot pair with a SASS one.
+  PTX loop it cannot pair with a SASS one. The FP8 GEMM's float32
+  accumulation (2026-10-18) moved it to 26 `MATCHED`, and its "no loop"
+  bucket from the 21 published to 20, the fourteenth figure: `ptxas` no
+  longer unrolls the whole K loop of `gemm_fp8_256`.
 
 ## Fixed
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| Y's FP8 GEMM summed in the tensor core's accumulator | The `@tile` FP8 GEMM chained every `mma.sync.m16n8k32` of its K loop in the mma's own accumulator, which on an RTX 4070 Ti SUPER adds an mma's products at about 11 bits, truncating: on positive inputs at K = 4096 the median relative error was 6.6% (`torch._scaled_mm`: 5.7e-4). Every FP8 test and benchmark used small integers, whose partial sums are exact, so none could see it. Each mma now starts from zero and is added into the accumulator with `add.rn.f32`: 6.5e-5, at no measured cost (`docs/benchmarks/fp8_e4m3_2026-10-18/`). The new e4m3-input GEMM does the same. `test_partial_sums_are_added_in_float32` in `test_fp8_gemm.py` and `test_fp8_e4m3.py`; each fails on the chained form (7.1e-2). |
+| The CLI reported an F16 tile for every `@tile` kernel | It asked `Autotuner::autotune` for an F16 tile for the int8 and FP8 GEMMs too, which choose their own tiles, printed it as theirs, and under `--autotune` measured F16 candidates for them. It reports F16 kernels only now. `the_cli_reports_an_autotuned_tile_for_f16_only` (`tests/ptx_e4m3.rs`). |
 | Y's F16 tile GEMMs could not run from Python; a missing kernel name ran `main` | `TorchKernel.launch` passed no dynamic shared memory, so every kernel staging through `.extern .shared` died with an illegal address; it now passes what the kernel's PTX states and raises the function's limit above 48 KB. The CPU interpreter still gave that array 0 bytes, under `Y_INTERPRETER=1` and in `debug_interpret`, so such a kernel stopped at its first store there, reported out of bounds; `CPUInterpreter.run` now takes the size from the PTX as well (`DynamicSharedMemory` in `test_interpreter.py`). A kernel name the module lacked fell back to an entry named `main`; it is refused. The launch path also went from 6.6 to 2.9 us of CPU time per call (Triton 5.7, PyTorch 2.0; `docs/benchmarks/launch_2026-10-12/`). `python/y_lang/tests/test_launch.py` (F16 GEMMs below and above 48 KB exact against float64, the current and an explicit stream on a non-blocking stream, the interpreter switch); each of seven mutants fails it. |
 | Y's FP8 GEMM took 2.1-2.6x as long as Triton's | A fused Triton kernel doing the same work (f32 in, e4m3 tensor cores, f32 out) was 2.1-2.6x faster on 2026-10-11. Four changes: B staged transposed with a register prefetch and grouped CTAs (`docs/benchmarks/fp8_gemm_2026-10-12/`), `ldmatrix` fragments and a tile per shape (`fp8_gemm_tiles_2026-10-12/`), raw tiles copied with `cp.async` (`fp8_gemm_async_2026-10-12/`), and C written through shared memory with 16-byte stores, where a quarter of the kernel's time had gone on 4-byte stores (`fp8_gemm_epilogue_2026-10-13/`). Y takes 0.33-0.96x Triton's time at every size measured from 256 to 8192, 0.96x at 2048 the closest. `python/y_lang/tests/test_fp8_gemm.py` (every tile the rule picks, exact, ragged edges, scales whose product is not 1, compute-sanitizer memcheck). |
 | A shuffle or a barrier only some threads reached was emitted | `warp_reduce_sum`, `warp_reduce_max` and `shfl_sync_bfly` emit `shfl.sync` over all 32 lanes, and `barrier_sync` emits `bar.sync` for the whole block, wherever they were written: `if t < 20 { warp_reduce_sum(x) }` compiled, and the GPU leaves it undefined (the shuffle reads lanes that are not there; a barrier may hang). The PTX backend now works out how far each variable is the same across threads (`src/uniformity.rs`: block-wide, per warp, or per thread; every memory read per thread) and refuses a collective instruction - any `shfl`/`vote`/`mma` and other `.sync` or `.aligned` form, or `bar`/`barrier` - under a branch, loop or earlier `return` the threads can disagree on, naming the line, the branch and the value that decides it. It refuses some correct kernels: a branch on a thread index divided by 32 is per warp only for some block shapes, and is refused. A `chisel` block's PTX is not checked, and one that branches counts as a `return` some threads take. `tests/ptx_divergent_collectives.rs` (19 refused forms; the rewrites run on the device and are exact), `uniformity`'s unit tests, `test_the_compiler_refuses_the_same_shuffle_written_with_a_builtin`. |

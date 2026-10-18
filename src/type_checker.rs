@@ -1621,14 +1621,21 @@ not know its length",
         // apart from the F16 shapes purely by param count (5) - see
         // `ptx_emitter::tile_gemm_fp8_operands`'s doc comment, which this
         // must never disagree with about which shape a given kernel is.
+        //
+        // The same 5 parameters with A, B: GlobalMemory<E4M3> are the GEMM
+        // over already-quantised e4m3 bytes, A [M][K] and B [N][K]
+        // (`ptx_emitter::emit_fp8_e4m3_gemm_kernel`): A's element type picks
+        // the form, as `tile_gemm_fp8_operands` is asked for each in turn.
         if kernel.params.len() == 5 {
             fn is_scalar_f32(ty: &Type) -> bool {
                 matches!(ty, Type::Primitive(p, _) if p == "F32")
             }
-            let expected = ["GlobalMemory<F32>", "GlobalMemory<F32>", "F32", "F32", "GlobalMemory<F32>"];
+            let ab = if is_global_memory_of(&kernel.params[0].ty, "E4M3") { "E4M3" } else { "F32" };
+            let ab_ty = format!("GlobalMemory<{}>", ab);
+            let expected = [ab_ty.as_str(), ab_ty.as_str(), "F32", "F32", "GlobalMemory<F32>"];
             let checks: [bool; 5] = [
-                is_global_memory_of(&kernel.params[0].ty, "F32"),
-                is_global_memory_of(&kernel.params[1].ty, "F32"),
+                is_global_memory_of(&kernel.params[0].ty, ab),
+                is_global_memory_of(&kernel.params[1].ty, ab),
                 is_scalar_f32(&kernel.params[2].ty),
                 is_scalar_f32(&kernel.params[3].ty),
                 is_global_memory_of(&kernel.params[4].ty, "F32"),
@@ -1643,7 +1650,7 @@ not know its length",
                 .collect();
             if !bad_params.is_empty() {
                 self.errors.push(format!(
-                    "Line {}: Kernel-level @tile(M, N, K) on `{}` with 5 parameters requires (A, B: GlobalMemory<F32>, scale_a, scale_b: F32, C: GlobalMemory<F32>) for a fused FP8 (e4m3) GEMM - A/B are quantized on the fly, scale_a/scale_b dequant the f32 accumulator. Mismatched param(s): {}.",
+                    "Line {}: Kernel-level @tile(M, N, K) on `{}` with 5 parameters requires (A, B: GlobalMemory<F32>, scale_a, scale_b: F32, C: GlobalMemory<F32>) for a fused FP8 (e4m3) GEMM - A/B are quantized on the fly, scale_a/scale_b dequant the f32 accumulator - or the same with A, B: GlobalMemory<E4M3> (A [M][K], B [N][K]) for e4m3 inputs. Mismatched param(s): {}.",
                     tile.span.line, kernel.name, bad_params.join(", ")
                 ));
             }
@@ -1716,6 +1723,7 @@ not know its length",
                  \x20 4  (X, W_gate, W_up: GlobalMemory<F16>, Out: GlobalMemory<F32>)                     fused Linear+SwiGLU\n\
                  \x20 3  (A, B: GlobalMemory<I8>, C: GlobalMemory<I32>)                                   int8 Tensor Core GEMM\n\
                  \x20 5  (A, B: GlobalMemory<F32>, scale_a, scale_b: F32, C: GlobalMemory<F32>)           fused FP8 (e4m3) GEMM\n\
+                 \x20 5  (A, B: GlobalMemory<E4M3>, scale_a, scale_b: F32, C: GlobalMemory<F32>)          FP8 GEMM, e4m3 A [M][K], B [N][K]\n\
                  \x20 6  (A, B: GlobalMemory<I8>, Sa, Sb, Bias, C: GlobalMemory<F32>)                     int8 GEMM + scaled epilogue\n\
                  Found {} parameter(s){}.",
                 tile.span.line,
