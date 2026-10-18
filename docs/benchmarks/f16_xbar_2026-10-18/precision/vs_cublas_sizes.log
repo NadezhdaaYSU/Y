@@ -1,0 +1,12 @@
+256 normal    tile 32x64: 0 of 65536 elements differ in their bits from cuBLAS's
+256 same-sign tile 32x64: 0 of 65536 elements differ in their bits from cuBLAS's
+512 normal    tile 64x64: 0 of 262144 elements differ in their bits from cuBLAS's
+512 same-sign tile 64x64: 0 of 262144 elements differ in their bits from cuBLAS's
+1024 normal    tile 64x128: 0 of 1048576 elements differ in their bits from cuBLAS's
+1024 same-sign tile 64x128: 0 of 1048576 elements differ in their bits from cuBLAS's
+2048 normal    tile 128x128: 0 of 4194304 elements differ in their bits from cuBLAS's
+2048 same-sign tile 128x128: 0 of 4194304 elements differ in their bits from cuBLAS's
+4096 normal    tile 128x128: 0 of 16777216 elements differ in their bits from cuBLAS's
+4096 same-sign tile 128x128: 0 of 16777216 elements differ in their bits from cuBLAS's
+8192 normal    tile 128x128: 66982818 of 67108864 elements differ in their bits from cuBLAS's
+8192 same-sign tile 128x128: 67108864 of 67108864 elements differ in their bits from cuBLAS's

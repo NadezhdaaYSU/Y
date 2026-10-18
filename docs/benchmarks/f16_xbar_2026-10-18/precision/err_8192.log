@@ -1,0 +1,6 @@
+4096: Y signed mean -5.027e-05, below float64 in 100.00% of elements
+4096: cuBLAS signed mean -5.027e-05, below float64 in 100.00% of elements
+4096: rows 0-255 vs float64: Y max 5.454e-05 mean 5.027e-05; cuBLAS max 5.454e-05 mean 5.027e-05; f32 sum of exact k16 partials max 1.188e-06; bits differ Y vs cuBLAS 0 of 1048576
+8192: Y signed mean -1.014e-04, below float64 in 100.00% of elements
+8192: cuBLAS signed mean -3.174e-05, below float64 in 100.00% of elements
+8192: rows 0-255 vs float64: Y max 1.076e-04 mean 1.014e-04; cuBLAS max 3.415e-05 mean 3.174e-05; f32 sum of exact k16 partials max 1.740e-06; bits differ Y vs cuBLAS 2097152 of 2097152

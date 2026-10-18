@@ -903,20 +903,31 @@ The committed `tests/gemm_f16_<N>.ptx` — the compiler's own output, not a
 hand-written CUDA reference — against cuBLAS (`torch.mm` with a float32
 output, as Y's C is float32) and an autotuned Triton GEMM. Every column is
 checked exact first; interleaved rounds, ranked by minimum; two runs on
-2026-10-18 (`docs/benchmarks/f16_square_2026-10-18/`).
+2026-10-18 (`docs/benchmarks/f16_xbar_2026-10-18/table/`).
 
 | M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 |
 |---|---|---|---|---|---|---|
-| **Y vs cuBLAS** | 1.344x / 1.308x | 0.856x / 0.879x | 0.969x / 0.967x | 0.989x / 0.987x | 0.977x / 0.975x | 0.995x / 1.001x |
-| **Y vs Triton** | 3.24x / 2.44x | 1.38x / 1.06x | 1.01x / 1.01x | 1.01x / 1.00x | 1.01x / 1.00x | 1.14x / 1.15x |
-| **Y TFLOPS** | 11.5 / 11.2 | 39.0 / 40.2 | 72.2 / 72.1 | 83.0 / 83.2 | 87.0 / 86.7 | 88.0 / 88.8 |
+| **Y vs cuBLAS** | 1.080x / 1.222x | 0.866x / 0.883x | 0.987x / 0.985x | 0.986x / 0.987x | 0.978x / 0.977x | 1.006x / 1.007x |
+| **Y vs Triton** | 2.65x / 2.93x | 1.19x / 1.38x | 1.03x / 1.05x | 1.00x / 1.00x | 1.01x / 1.01x | 1.13x / 1.13x |
+| **Y TFLOPS** | 11.1 / 10.5 | 39.4 / 39.1 | 73.2 / 73.5 | 82.9 / 83.3 | 86.8 / 87.0 | 85.8 / 87.5 |
 
-**From 1024 up Y is 0.97–1.00x cuBLAS; at 8192 the two runs disagree on the
-order, a tie.** Y is ahead at 256 and 0.86–0.88x at 512. Against Triton it
-ties from 1024 to 4096 and is 1.14–1.15x at 8192, where Triton's autotuner
-picks a 128x256 tile on 8 warps; Triton's 256 and 512 minima moved by 22–26%
-between the runs, so those two ratios carry little weight. The 8192 TFLOPS
-were measured with the SM at up to 2760 MHz, where the peak is 93.2.
+**From 1024 up Y is 0.98–1.01x cuBLAS; at 8192, whose kernel did not change,
+the order differs from the previous two runs (0.995x and 1.001x), a tie.** Y
+is ahead at 256 and 0.87–0.88x at 512. Against Triton it ties at 2048 and
+4096, and is 1.03–1.05x at 1024 and 1.13x at 8192, where Triton's autotuner
+picks a 128x256 tile on 8 warps. Triton's 256 and 512 minima, and cuBLAS's at
+256, moved by 17–20% between the runs, so those ratios carry little weight. The
+8192 TFLOPS were measured with the SM at up to 2775 MHz, where the peak is 93.7.
+
+On 2026-10-18 the tiles with three stages or more (256, 512, 1024 and the
+decode shapes) moved the K loop's wait and barrier to between a K-tile's last
+two 16-deep steps, so the next tile's first fragments load while the last
+step's MMAs run: 1.2–1.5% faster at 1024 and 0.7% at 256, level at 512
+(`docs/benchmarks/f16_xbar_2026-10-18/`). 2048 and up run two stages and are
+unchanged. On random inputs Y's output is the same, bit for bit, on every tile
+tried, and from 256 to 4096 it is also cuBLAS's. At 8192 it is not, and cuBLAS
+is the closer to float64: on same-sign inputs Y's results are on average
+1.0e-4 below it and cuBLAS's 3.2e-5 (see known issues).
 
 This table read 0.84–0.94x above 256 when it was measured on 2026-08-09, by
 a harness that commit does not record. On 2026-10-17 the K loop
@@ -1110,8 +1121,8 @@ different baseline.
 | workload | baseline | result |
 |---|---|---|
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
-| Square F16 GEMM, 512³ | cuBLAS | 0.86–0.88x |
-| Decode-shaped GEMM (M=4–8) | cuBLAS | at the DRAM roofline; tied |
+| Square F16 GEMM, 512³ | cuBLAS | 0.87–0.88x |
+| Decode-shaped F16 GEMM, M=32, N=K=4096 | cuBLAS | 0.77x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
@@ -1121,7 +1132,18 @@ in both runs, about the size of FlashInfer's own run-to-run variation
 64x64 tile on the same 64-CTA grid as Y, on 4 warps with a 64-deep K step and
 5 stages, and executes 343K warp instructions to Y's 444K. Of nine tiles
 around Y's, cuBLAS's shape among them, Y's tuned tile was the fastest in both
-runs (`docs/benchmarks/f16_square_2026-10-18/512/`).
+runs (`docs/benchmarks/f16_square_2026-10-18/512/`). Split by region, Y's
+extra stall samples are in the K loop: 107 at its barrier and 106 on long
+scoreboards, against cuBLAS's 26 and 29. Moving the barrier to between a
+K-tile's last two steps left 512³ level, and tiles of half the size (two
+CTAs to an SM) took 1.23–1.47x its time, of a quarter 1.59–1.78x
+(`docs/benchmarks/f16_xbar_2026-10-18/`).
+
+The decode shapes, M of 1 to 32 rows against a 4096 x 4096 B, were timed in
+the same loop, where B's 33.5 MB fits in the 48 MB L2 and is read again on
+every call. There Y takes 0.40–0.75x cuBLAS's time at M = 1, 4 and 8, and
+1.30x at M = 32, where every one of Y's 64 CTAs reads all of A. With B read
+from DRAM they were not measured.
 
 ### Memory bandwidth
 

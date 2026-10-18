@@ -1,0 +1,4 @@
+(256, 256, 768) same-sign: elements whose bits differ from cuBLAS: 0 of 65536
+(256, 256, 768) normal: elements whose bits differ from cuBLAS: 0 of 65536
+(512, 512, 512) same-sign: elements whose bits differ from cuBLAS: 0 of 262144
+(512, 512, 512) normal: elements whose bits differ from cuBLAS: 0 of 262144

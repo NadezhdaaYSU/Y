@@ -1,0 +1,2 @@
+table 1: QUIET 21:35:00 mean 3.0%
+table 2: QUIET 21:36:18 mean 0.6%

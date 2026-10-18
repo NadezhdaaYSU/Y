@@ -1,0 +1,2 @@
+K=768: cuBLAS f32-out max rel err 9.763e-06; f32 sum of exact k16 partials 4.301e-07
+K=4096: cuBLAS f32-out max rel err 1.295e-05; f32 sum of exact k16 partials 1.236e-06

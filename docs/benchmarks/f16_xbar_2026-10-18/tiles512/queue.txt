@@ -1,0 +1,2 @@
+sw 1: QUIET 21:28:12 mean 4.9%
+sw 2: QUIET 21:28:32 mean 4.2%

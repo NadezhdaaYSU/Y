@@ -35,6 +35,20 @@ source; each entry there now carries its status. What is still open:
   integers, exact either way, so the comparison is of time at unequal
   precision.
 
+### Precision
+
+- The F16 GEMM (`@tile`, f16 in, f32 out) chains its whole K loop in the
+  tensor core's accumulator, whose additions lose more than float32
+  rounding: on same-sign inputs (|N(0, 1)| as f16) every result lands below
+  float64, on average by 8.1e-6 at K = 768, 5.0e-5 at 4096^3 and 1.0e-4 at
+  8192^3, where a float32 sum of the exact 16-deep partial products is at
+  most 4.3e-7, 1.2e-6 and 1.7e-6 off. cuBLAS (`torch.mm` with a float32
+  output) gives the same bits from 256^3 to 4096^3; at 8192^3 it is
+  3.2e-5 below, and at 256 x 256 x 4096 1.3e-5 at most, so on some shapes it
+  sums differently. The FP8 GEMM had the same property and since 2026-10-18 adds each
+  mma's result in float32. Exactness tests on small integers cannot see it
+  (`docs/benchmarks/f16_xbar_2026-10-18/precision/`).
+
 ### Python packaging
 
 - `python/pyproject.toml` cannot be built into a wheel: its `readme =
@@ -170,7 +184,13 @@ source; each entry there now carries its status. What is still open:
   loop. The kernel was refused before and is refused now. The unroll census
   and `gap.py` give the attention kernels the verdicts they gave before; the
   unroll census's reason now names an irreducible SASS nest of 3 levels
-  rather than 2.
+  rather than 2. The F16 GEMM's barrier between a K-tile's last two steps
+  (2026-10-18) moves no gated figure, and `gap.py` gives every changed kernel
+  the opcode gap it gave before, but `ptxas` now issues the copies of
+  `gemm_f16_1024`, `gemm_f16_bias_relu_1024` and the four decode kernels as
+  `LDGSTS.E.BYPASS.LTC128B.128`, so the validator documentation's opcode
+  list for all 23 F16 GEMMs and its `gemm_f16_1024` row, which name
+  `LDGSTS.E.BYPASS.128`, hold for 17 of them.
 
 ## Fixed
 

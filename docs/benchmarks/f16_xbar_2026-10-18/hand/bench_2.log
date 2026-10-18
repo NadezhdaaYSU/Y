@@ -1,0 +1,5 @@
+           512 Y {'base': '64x64 4x2', 'xbar': '64x64 4x2'} | exact {'base': True, 'xbar': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2490-2490 MHz
+      cuBLAS    min       5.9 median       6.0 us  0.757x Triton
+      xbar      min       6.7 median       6.8 us  0.852x Triton
+      base      min       6.7 median       6.8 us  0.853x Triton
+      Triton    min       7.8 median       9.6 us  1.000x Triton

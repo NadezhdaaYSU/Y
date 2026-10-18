@@ -1,0 +1,16 @@
+   1x4096x4096 Y {'off': '32x64 2x2', 'on': '32x64 2x2'} | exact {'off': True, 'on': True, 'cuBLAS': True} | Triton None | SM 2505-2505 MHz
+      on        min      19.9 median      19.9 us
+      off       min      20.7 median      21.1 us
+      cuBLAS    min      26.6 median      26.8 us
+   4x4096x4096 Y {'off': '32x64 2x2', 'on': '32x64 2x2'} | exact {'off': True, 'on': True, 'cuBLAS': True} | Triton None | SM 2505-2775 MHz
+      on        min      21.6 median      21.7 us
+      off       min      21.8 median      21.9 us
+      cuBLAS    min      54.4 median      54.8 us
+   8x4096x4096 Y {'off': '32x64 2x2', 'on': '32x64 2x2'} | exact {'off': True, 'on': True, 'cuBLAS': True} | Triton None | SM 2775-2775 MHz
+      on        min      22.8 median      23.0 us
+      off       min      22.8 median      23.6 us
+      cuBLAS    min      50.5 median      51.2 us
+  32x4096x4096 Y {'off': '32x64 2x2', 'on': '32x64 2x2'} | exact {'off': True, 'on': True, 'cuBLAS': True} | Triton None | SM 2775-2775 MHz
+      cuBLAS    min      23.8 median      24.2 us
+      on        min      31.0 median      31.2 us
+      off       min      31.1 median      31.6 us

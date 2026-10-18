@@ -1,0 +1,9 @@
+#### gemm_f16_512 samples 973
+  setup + 3 prologue stages          SASS   0-154  exec   79360  samples  125 (12.8%)  imc 60, no_inst 20, lg 19, wait 9, dispatch 6
+  first wait (stage 0 lands)         SASS 155-160  exec    3072  samples   99 (10.2%)  long_sb 73, barrier 26
+  K loop: 16 iters, after first wait SASS 161-725  exec  289280  samples  666 (68.4%)  math 323, barrier 107, long_sb 106, wait 68, mio 31
+  epilogue                           SASS 726-855  exec   72704  samples   83 ( 8.5%)  short_sb 24, barrier 22, wait 21, selected 9, dispatch 3
+#### ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn samples 906
+  before main loop                   SASS   0-319  exec   90112  samples  222 (24.5%)  imc 80, long_sb 55, wait 39, selected 25, lg 9
+  main loop (8 iters)                SASS 320-408  exec  182272  samples  576 (63.6%)  math 383, wait 99, selected 36, long_sb 29, barrier 26
+  after main loop                    SASS 409-695  exec   70912  samples  108 (11.9%)  wait 47, branch_resolving 16, selected 16, barrier 12, no_inst 10
