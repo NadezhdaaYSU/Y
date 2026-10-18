@@ -1,0 +1,4 @@
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","dram__bytes_read.sum","dram__bytes_write.sum","smsp__inst_executed.sum"
+"","","","","","","","","","","","Mbyte","Mbyte","inst"
+"0","511173","python3.14","127.0.0.1","gemm_e4m3_8192","1","7","(256, 1, 1)","(64, 64, 1)","0","8.9","620.113792","266.465792","327450624.000000"
+"1","511173","python3.14","127.0.0.1","sm89_xmma_gemm_e4m3f32_e4m3f32_f32_tn_n_tilesize128x128x64_stage3_warpsize4x2x1_tensor16x8x32_algo2_execute_kernel__5x_cublas","1","7","(256, 1, 1)","(64, 64, 1)","0","8.9","504.916992","268.473344","760610816.000000"

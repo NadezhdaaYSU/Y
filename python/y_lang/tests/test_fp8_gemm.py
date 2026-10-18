@@ -93,6 +93,26 @@ class Fp8GemmIsExact(unittest.TestCase):
         self.run_shape(200, 136, 128, scale_a=0.5, scale_b=0.25)
         self.run_shape(600, 700, 128, scale_a=4.0, scale_b=2.0)
 
+    def test_partial_sums_are_added_in_float32(self):
+        # Exact small integers cannot see how partial sums are added. The
+        # tensor core adds an mma's products into its accumulator at about
+        # 11 bits, truncating; chaining every mma of the K loop in it gave a
+        # median relative error of 6.6% at K = 4096 on positive inputs. Each
+        # mma is added in float32 now. Inputs exact in e4m3, scales 1, so
+        # any error is the summation's; both tile families.
+        for m, n in ((128, 128), (1024, 1024)):
+            k = 4096
+            gen = torch.Generator(device="cuda").manual_seed(m)
+            a = (torch.rand(m, k, device="cuda", generator=gen) * 16).to(torch.float8_e4m3fn).float()
+            b = (torch.rand(k, n, device="cuda", generator=gen) * 16).to(torch.float8_e4m3fn).float()
+            c = torch.full((m, n), float("nan"), device="cuda")
+            kern, grid, block = fp8_gemm(m, n, k)
+            kern.launch(grid, block, [a, b, 1.0, 1.0, c])
+            torch.cuda.synchronize()
+            ref = a.double() @ b.double()
+            err = ((c.double() - ref).abs() / ref.abs()).max().item()
+            self.assertLess(err, 4e-4, f"{m}x{n}x{k}: relative error {err:.2e}; the partial sums are not added in float32")
+
 
 # Ragged shapes of each tile family, run under compute-sanitizer's memcheck:
 # a copy past A's last row or B's last column feeds only outputs the

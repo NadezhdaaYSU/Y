@@ -1,0 +1,46 @@
+QUIET 03:21:18 mean 1.8%
+1024 | exact {'Y e4m3': True, 'Y fused': True, 'PyTorch': True, 'Triton': True, 'Y quant A == torch': True, 'Y quant B == torch': True} | SM 2475-2475 MHz | CTA 64x64x64 | 2x2 warps | 3 stages
+   Y e4m3                         min      25.7 median      25.8 us  0.540x PyTorch
+   Y fused                        min      26.9 median      26.9 us  0.565x PyTorch
+   PyTorch                        min      47.6 median      47.7 us  1.000x PyTorch
+   Triton                         min      41.2 median      41.5 us  0.866x PyTorch
+     Y quant A                    min       4.2 median       4.2 us
+     Y quant B (transposing)      min       5.1 median       5.1 us
+     Y e4m3 GEMM                  min      16.3 median      16.4 us
+     torch quant A                min       7.9 median       7.9 us
+     torch quant B (transposing)  min      23.0 median      23.1 us
+     torch _scaled_mm             min      16.7 median      16.8 us
+2048 | exact {'Y e4m3': True, 'Y fused': True, 'PyTorch': True, 'Triton': True, 'Y quant A == torch': True, 'Y quant B == torch': True} | SM 2715-2775 MHz | CTA 64x64x64 | 2x2 warps | 3 stages
+   Y e4m3                         min     171.8 median     172.2 us  0.610x PyTorch
+   Y fused                        min     192.4 median     192.7 us  0.684x PyTorch
+   PyTorch                        min     281.5 median     282.2 us  1.000x PyTorch
+   Triton                         min     201.5 median     201.8 us  0.716x PyTorch
+     Y quant A                    min      12.7 median      12.7 us
+     Y quant B (transposing)      min      16.2 median      16.5 us
+     Y e4m3 GEMM                  min     103.9 median     104.8 us
+     torch quant A                min      21.7 median      22.1 us
+     torch quant B (transposing)  min      96.6 median      96.8 us
+     torch _scaled_mm             min     105.2 median     105.3 us
+4096 | exact {'Y e4m3': True, 'Y fused': True, 'PyTorch': True, 'Triton': True, 'Y quant A == torch': True, 'Y quant B == torch': True} | SM 2760-2760 MHz | CTA 64x64x64 | 2x2 warps | 3 stages
+   Y e4m3                         min    1085.2 median    1095.2 us  0.606x PyTorch
+   Y fused                        min    1474.6 median    1484.0 us  0.823x PyTorch
+   PyTorch                        min    1791.2 median    1813.0 us  1.000x PyTorch
+   Triton                         min    1578.7 median    1589.0 us  0.881x PyTorch
+     Y quant A                    min     130.6 median     131.1 us
+     Y quant B (transposing)      min     136.4 median     137.4 us
+     Y e4m3 GEMM                  min     795.1 median     796.9 us
+     torch quant A                min     334.1 median     338.9 us
+     torch quant B (transposing)  min     647.2 median     650.2 us
+     torch _scaled_mm             min     816.6 median     823.8 us
+8192 | exact {'Y e4m3': True, 'Y fused': True, 'PyTorch': True, 'Triton': True, 'Y quant A == torch': True, 'Y quant B == torch': True} | SM 2715-2760 MHz | CTA 64x64x64 | 2x2 warps | 3 stages
+   Y e4m3                         min    7386.6 median    7425.5 us  0.707x PyTorch
+   Y fused                        min   11346.4 median   12084.2 us  1.086x PyTorch
+   PyTorch                        min   10443.8 median   10797.0 us  1.000x PyTorch
+   Triton                         min   15369.7 median   15655.1 us  1.472x PyTorch
+     Y quant A                    min     536.1 median     541.7 us
+     Y quant B (transposing)      min     553.5 median     556.5 us
+     Y e4m3 GEMM                  min    6283.8 median    6321.1 us
+     torch quant A                min    1414.7 median    1447.9 us
+     torch quant B (transposing)  min    2719.2 median    2767.9 us
+     torch _scaled_mm             min    6252.8 median    6427.0 us
+done

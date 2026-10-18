@@ -23,7 +23,10 @@ What this does not time, and why:
   `torch.mm` on any exception. The FP8 rows here use the GEMM the compiler
   emits for `@tile(M, N, K)` (`tests/gemm_fp8_*.ysu`): float32 A and B,
   quantised to e4m3 in the kernel, float32 C. The other columns compute that
-  same function, quantisation included; they used to time FP16 matmuls.
+  same function, quantisation included; they used to time FP16 matmuls. The
+  "Y e4m3" column computes it with three Y kernels, as PyTorch's column does
+  with its own: A quantised to e4m3, B quantised and transposed to [N][K],
+  then the @tile GEMM over e4m3 bytes.
 
 Each row's samples start from warmed clocks, and the SM clock is read after
 every sample: short replays left alone run at the idle clock.
@@ -92,6 +95,47 @@ kernel rmsnorm(X: GlobalMemory<F32>, Weight: GlobalMemory<F32>, Out: GlobalMemor
     let idx: I32 = row * hidden_dim + col;
     rmsnorm_v4(X[idx], Weight[col], Out[idx], hidden_dim, eps);
 }
+"""
+
+
+# A [M][K] f32 to e4m3 as it is, and B [K][N] to e4m3 transposed to [N][K]
+# (the manual's §20.5), for the GEMM over e4m3 bytes.
+Y_QUANT = """
+kernel quant_e4m3(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, n: I32) {
+    let idx: I32 = global_thread_id();
+    if idx < n {
+        Q[idx] = X[idx] * inv_s;
+    }
+}
+"""
+
+Y_QUANT_T = """
+kernel quant_e4m3_t(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, rows: I32, cols: I32) {
+    let t: I32 = global_thread_id();
+    let warp: I32 = t / 32;
+    let lane: I32 = t - warp * 32;
+    let groups: I32 = (cols + 7) / 8;
+    let rg: I32 = warp / groups;
+    let c: I32 = (warp - rg * groups) * 8 + lane - (lane / 8) * 8;
+    let r: I32 = rg * 16 + (lane / 8) * 4;
+    if r < rows {
+        if c < cols {
+            let v0: F32 = X[r * cols + c] * inv_s;
+            let v1: F32 = X[(r + 1) * cols + c] * inv_s;
+            let v2: F32 = X[(r + 2) * cols + c] * inv_s;
+            let v3: F32 = X[(r + 3) * cols + c] * inv_s;
+            block_ptr2d_store_v4(Q, c, r, rows, cols, rows, v0, v1, v2, v3);
+        }
+    }
+}
+"""
+
+
+def y_e4m3_gemm_source(n):
+    return f"""
+@tile({n}, {n}, {n})
+kernel gemm_e4m3_{n}(A: GlobalMemory<E4M3>, B: GlobalMemory<E4M3>, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>) {{
+}}
 """
 
 
@@ -380,6 +424,9 @@ def rows(target, y_ptx, gen):
            xd * torch.rsqrt(xd.pow(2).mean(-1, keepdim=True) + eps) * w.double(), 1e-5, False,
            "Y uses rsqrt.approx; the tolerance is relative to the largest output.")
 
+    k_quant = y_kernel(Y_QUANT, "quant_e4m3", target)
+    k_quant_t = y_kernel(Y_QUANT_T, "quant_e4m3_t", target)
+    y_ptx["quant_e4m3"], y_ptx["quant_e4m3_t"] = k_quant.ptx, k_quant_t.ptx
     for size in (1024, 2048, 4096, 8192):
         # Small integers times a power-of-two scale: every implementation
         # quantises them exactly, and the products sum exactly in float32
@@ -391,7 +438,12 @@ def rows(target, y_ptx, gen):
         k = y_kernel(y_fp8_gemm_source(size), f"gemm_fp8_{size}", target)
         y_ptx[f"gemm_fp8_{size}"] = k.ptx
         grid, block = required_launch(k.ptx)
-        C = {name: torch.empty(size, size, device=DEVICE) for name in ("Y", "Triton", "PyTorch")}
+        k8 = y_kernel(y_e4m3_gemm_source(size), f"gemm_e4m3_{size}", target)
+        y_ptx[f"gemm_e4m3_{size}"] = k8.ptx
+        grid8, block8 = required_launch(k8.ptx)
+        a8 = torch.empty(size, size, device=DEVICE, dtype=torch.uint8)
+        b8t = torch.empty(size, size, device=DEVICE, dtype=torch.uint8)
+        C = {name: torch.empty(size, size, device=DEVICE) for name in ("Y", "Y e4m3", "Triton", "PyTorch")}
         sa_t = torch.tensor(sa, device=DEVICE)
         sb_t = torch.tensor(sb, device=DEVICE)
 
@@ -400,6 +452,13 @@ def rows(target, y_ptx, gen):
             b8 = (B * (1.0 / sb)).to(torch.float8_e4m3fn).t().contiguous().t()
             torch._scaled_mm(a8, b8, scale_a=sa_t, scale_b=sb_t, out_dtype=torch.float32, out=C["PyTorch"])
 
+        def y_e4m3(A=A, B=B, C=C, size=size, k8=k8, grid8=grid8, block8=block8, a8=a8, b8t=b8t):
+            n2 = size * size
+            k_quant.launch(grid=((n2 + 255) // 256, 1, 1), block=(256, 1, 1), args=[A, 1.0 / sa, a8, n2])
+            warps = (size + 7) // 8 * ((size + 15) // 16)
+            k_quant_t.launch(grid=((warps * 32 + 255) // 256, 1, 1), block=(256, 1, 1), args=[B, 1.0 / sb, b8t, size, size])
+            k8.launch(grid=grid8, block=block8, args=[a8, b8t, sa, sb, C["Y e4m3"]])
+
         def triton_fp8(A=A, B=B, C=C, size=size):
             grid_t = lambda meta: (size // meta["BM"], size // meta["BN"])
             triton_fp8_gemm[grid_t](A, B, C["Triton"], size, size, size, 1.0 / sa, 1.0 / sb, sa * sb)
@@ -407,12 +466,15 @@ def rows(target, y_ptx, gen):
         yield (f"FP8 GEMM {size}^3 (f32 in, e4m3 tensor cores, f32 out)",
                {"Y": lambda k=k, A=A, B=B, C=C, grid=grid, block=block:
                     k.launch(grid=grid, block=block, args=[A, B, sa, sb, C["Y"]]),
+                "Y e4m3": y_e4m3,
                 "Triton": triton_fp8,
                 "PyTorch": torch_fp8},
                {name: (lambda name=name, C=C: C[name]) for name in C},
                (A.double() @ B.double()), 0.0, True,
                "Every column quantises float32 A and B to e4m3 and returns float32; "
-               "PyTorch's time includes the quantisation and B's transpose, as Y's and Triton's include theirs.")
+               "PyTorch's time includes the quantisation and B's transpose, as Y's and Triton's include theirs. "
+               "Y quantises inside its GEMM; Y e4m3 is three Y kernels (quantise A, quantise and transpose B, "
+               "the GEMM over e4m3 bytes), as PyTorch's column is its quantisation kernels and _scaled_mm.")
 
     gate, up = torch.randn(1 << 22, device=DEVICE, generator=gen), torch.randn(1 << 22, device=DEVICE, generator=gen)
 
@@ -523,7 +585,7 @@ def write_report(out_dir, result):
         lines.append(f"{row['notes']}\n")
         lines.append("| column | check | launch min / median | graph min / median |")
         lines.append("| :--- | :--- | ---: | ---: |")
-        for col in ("Y", "Triton", "PyTorch"):
+        for col in row["checks"]:
             chk = row["checks"][col]
             mark = "exact" if chk.get("exact") else (
                 f"err {chk['max_rel_err']:.1e}" if "max_rel_err" in chk else chk.get("error", "?"))
@@ -589,7 +651,7 @@ def main():
                           + (f"{timing[c]['graph_summary']['min']:.2f}" if timing[c]["graph_summary"] else "n/a")
                           if c in timing else "FAILED")
         clocks = [c for t in timing.values() for c in t["sm_clock_mhz"] if c is not None]
-        print(f"{name:<55} " + " | ".join(f"{c}: {cell(c)}" for c in ("Y", "Triton", "PyTorch"))
+        print(f"{name:<55} " + " | ".join(f"{c}: {cell(c)}" for c in checks)
               + "  (min us, launch/graph)"
               + (f"  SM clock {min(clocks)}-{max(clocks)} MHz" if clocks else "  SM clock unread"), flush=True)
         torch.cuda.empty_cache()

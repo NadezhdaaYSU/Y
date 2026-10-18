@@ -1,0 +1,12 @@
+1024 randn     Y                          rel err: max 3.46e+03 median 3.97e-04 | differs from the rounded exact sum in 1048405 of 1048576
+1024 randn     _scaled_mm                 rel err: max 2.30e+03 median 1.30e-04 | differs from the rounded exact sum in 1048154 of 1048576
+1024 randn     exact sum rounded to f32   rel err: max 5.96e-08 median 0.00e+00 | differs from the rounded exact sum in 0 of 1048576
+1024 positive  Y                          rel err: max 1.65e-02 median 1.36e-02 | differs from the rounded exact sum in 1048576 of 1048576
+1024 positive  _scaled_mm                 rel err: max 8.73e-04 median 5.71e-04 | differs from the rounded exact sum in 1048576 of 1048576
+1024 positive  exact sum rounded to f32   rel err: max 5.96e-08 median 2.03e-08 | differs from the rounded exact sum in 0 of 1048576
+4096 randn     Y                          rel err: max 1.50e+04 median 9.73e-04 | differs from the rounded exact sum in 16776657 of 16777216
+4096 randn     _scaled_mm                 rel err: max 2.47e+03 median 1.37e-04 | differs from the rounded exact sum in 16773391 of 16777216
+4096 randn     exact sum rounded to f32   rel err: max 5.96e-08 median 1.45e-08 | differs from the rounded exact sum in 0 of 16777216
+4096 positive  Y                          rel err: max 7.22e-02 median 6.62e-02 | differs from the rounded exact sum in 16777216 of 16777216
+4096 positive  _scaled_mm                 rel err: max 7.14e-04 median 5.72e-04 | differs from the rounded exact sum in 16777216 of 16777216
+4096 positive  exact sum rounded to f32   rel err: max 5.96e-08 median 1.99e-08 | differs from the rounded exact sum in 0 of 16777216

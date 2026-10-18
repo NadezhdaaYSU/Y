@@ -998,6 +998,29 @@ for i in 0..100 {
   multiples of the tile, each thread's `cp.async` addresses are computed once,
   before the K loop
   ([record](benchmarks/f16_gemm_loop_2026-10-17/README.md)).
+* **FP8 (e4m3) forms**, on sm_89 and later, with five parameters
+  `(A, B, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>)`:
+  - A, B: `GlobalMemory<F32>`, A `M`x`K` and B `K`x`N`: each CTA quantises its
+    tiles to e4m3 (`x / scale`) inside the K loop; `C = scale_a * scale_b *
+    (A' @ B')`.
+  - A, B: `GlobalMemory<E4M3>` (§20.5), A `[M][K]` and B `[N][K]`, both
+    K-contiguous as `torch._scaled_mm` takes them: `C = scale_a * scale_b *
+    (A @ B^T)`. The bytes are copied with `cp.async` straight into the
+    shared tiles; K must be a multiple of 16. The tile is 64x64x64 on 4
+    warps with 3 stages, four CTAs per SM; `Y_FP8_E4M3_TILE=cta_m,cta_n,cta_k,
+    warps_m,warps_n,stages,ctas_per_sm,group_m` pins another, and a tile the
+    kernel cannot stage is refused. Quantising the operands is ordinary Y
+    code over `GlobalMemory<E4M3>` (§20.5).
+
+  Both forms add every `mma`'s result into the f32 accumulator in float32
+  (`add.rn.f32`). The tensor core adds an `mma`'s products into its own
+  accumulator at about 11 bits, truncating, and until 2026-10-18 both forms
+  chained every `mma` of the K loop there: on positive inputs at K = 4096 the
+  median relative error was 6.6%, where `torch._scaled_mm` gives 5.7e-4 and
+  these give 6.5e-5. The head-to-head's Triton kernel (`tl.dot` on e4m3)
+  still accumulates the first way. Exact small integers, the benchmarks'
+  inputs, cannot show the difference
+  ([record](benchmarks/fp8_e4m3_2026-10-18/README.md)).
 * **On a loop, a statement or a `fn` it is refused.** It used to parse there
   and change nothing: on a `for`, the LLVM and PTX backends wrote it into their
   output as a comment (`[Y TILE OPTIMIZATION] Tiled loop dimensions`, the PTX
@@ -3687,6 +3710,7 @@ Y supports the following primitive numeric types. GPU types are only valid in ke
 | Type | Bits | Exponent | Mantissa | Hardware | Notes |
 | :---: | :---: | :---: | :---: | :--- | :--- |
 | `F16` | 16 | 5 | 10 | Volta+ (SM 7.0+) | Half precision. Tensor Core input type. |
+| `E4M3` | 8 | 4 | 3 | Ada+ (SM 8.9+) | FP8 (`torch.float8_e4m3fn`): finite to +-448, no infinity. A `GlobalMemory` element type only (§20.5). |
 | `BF16` | 16 | 8 | 7 | Ampere+ (SM 8.0+) | Brain float. Same range as F32, less precision. |
 | `TF32` | 19 | 8 | 10 | Ampere+ (SM 8.0+) | TensorFloat-32. Tensor Core accumulator intermediate. |
 | `F32` | 32 | 8 | 23 | All | Single precision. Default GPU accumulator type. |
@@ -3747,7 +3771,7 @@ and Y prints no such message.
 | RT Core outputs (`rt_nearest_neighbor`) | `I32` (neighbor indices) + implicit `F32` distances in SMEM |
 | `@ZeroDrift` accumulator | `Q32.32`, `Q16.48` |
 | Kernel values - `let`, scalar parameters (PTX) | `F32`, `F64`, `I32`, `U32`, `I64`, `U64`, `bool` (a 0/1 `U32`) |
-| Buffer element types - `GlobalMemory<T>` (PTX) | `F16`, `F32`, `F64`, `I8`, `I16`, `I32`, `I64`, `U8`, `U16`, `U32`, `U64` |
+| Buffer element types - `GlobalMemory<T>` (PTX) | `F16`, `E4M3` (sm_89+), `F32`, `F64`, `I8`, `I16`, `I32`, `I64`, `U8`, `U16`, `U32`, `U64` |
 | `@atomic` fields | `I32`, `U32`, `U64`, `bool` |
 
 **`F64` is a full value type in a PTX kernel**: `%fd` registers, `.f64`
@@ -3773,6 +3797,59 @@ or parameter is refused**, because an F16 value would be an f32 register whose
 declared type promises rounding to f16 after every operation - which the LLVM
 backend's `half` performs and the PTX backend would not.
 
+**`E4M3` (FP8) is a buffer element type only**, like `F16`. A load widens it
+exactly (`cvt.rn.f16x2.e4m3x2`, then `cvt.f32.f16`). A store rounds to
+nearest-even and saturates: a magnitude past 448, infinity included, becomes
+448, and NaN stays NaN (`cvt.rn.satfinite.e4m3x2.f32`). That is the byte
+`torch.float8_e4m3fn` gives for every float32, checked on all 2^32 of them. An
+`F64`, or a float literal (its exact double), is first rounded to f32 toward
+zero with the lowest bit set if anything was dropped, so it is rounded once:
+`Q[0] = 1.0625000001` stores 1.125, where rounding to float32 first lands on
+the tie and gives 1.0. An `E4M3` local or parameter is refused, as `F16`'s is.
+`block_ptr2d_load_v4` and `block_ptr2d_store_v4` on an `E4M3` buffer move four
+consecutive elements as one 4-byte access, so `row * stride + col` must be a
+multiple of 4. The conversions need sm_89 and PTX ISA 8.1; below sm_89 an
+`E4M3` buffer is refused by name. The LLVM and `--emit-cpu` backends refuse it.
+
+Quantising a float32 matrix for the e4m3 GEMM (§9.12), A as it is and B
+transposed to `[N][K]`:
+
+```ysu
+kernel quant_e4m3(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, n: I32) {
+    let idx: I32 = global_thread_id();
+    if idx < n {
+        Q[idx] = X[idx] * inv_s;
+    }
+}
+
+// X [rows][cols] to Q [cols][rows], rows a multiple of 4. A warp covers 8
+// columns and 16 rows; each lane reads 4 rows of one column and writes their
+// 4 bytes with one store. Launch (cols + 7) / 8 * (rows + 15) / 16 warps.
+kernel quant_e4m3_t(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, rows: I32, cols: I32) {
+    let t: I32 = global_thread_id();
+    let warp: I32 = t / 32;
+    let lane: I32 = t - warp * 32;
+    let groups: I32 = (cols + 7) / 8;
+    let rg: I32 = warp / groups;
+    let c: I32 = (warp - rg * groups) * 8 + lane - (lane / 8) * 8;
+    let r: I32 = rg * 16 + (lane / 8) * 4;
+    if r < rows {
+        if c < cols {
+            let v0: F32 = X[r * cols + c] * inv_s;
+            let v1: F32 = X[(r + 1) * cols + c] * inv_s;
+            let v2: F32 = X[(r + 2) * cols + c] * inv_s;
+            let v3: F32 = X[(r + 3) * cols + c] * inv_s;
+            block_ptr2d_store_v4(Q, c, r, rows, cols, rows, v0, v1, v2, v3);
+        }
+    }
+}
+```
+
+A one-byte store per element, `Q[c * rows + r] = X[idx] * inv_s`, writes
+one 32-byte L2 sector per byte when transposing: at 8192x8192 it took 2.81 ms
+at 93% of L2 throughput, where the kernel above takes 0.56 ms at 93% of DRAM
+bandwidth.
+
 **Measured before this was true (2026-09-26):** `F64` and `F16` were silently
 compiled as `f32`. `let x: F64 = 3.0; store(Out, x + x);` wrote four bytes into
 an eight-byte slot, which read back as -2.53e-98; the `F16` version wrote four
@@ -3783,9 +3860,12 @@ card.
 Refused by name in a PTX kernel: an `F16` or sub-word integer value, a Q format
 outside `@ZeroDrift`, `String`/`char`, and a buffer whose element is none of the
 types above (`GlobalMemory<Q16.16>`, `GlobalMemory<bool>`). The f32-only
-intrinsics (`block_tile_*`, `BlockTile::*`, the 3-D block pointers, the v4
-forms, `vec_add_v4`, `rmsnorm_v4`, `swiglu_v4`) refuse any buffer that is not
-`F32`.
+intrinsics (`block_tile_*`, `BlockTile::*`, the 3-D block pointers,
+`ld_global_v4_f32`/`load_v4`, `st_global_v4_f32`/`store_v4`, `vec_add_v4`,
+`rmsnorm_v4`, `swiglu_v4`) refuse
+any buffer that is not `F32`. `block_ptr2d_load_v4` and `block_ptr2d_store_v4`
+take any 32-bit element type and `E4M3`, and refuse `F16` and the 64-bit
+types.
 
 `rmsnorm_v4(X[idx], W[col], Out[idx], hidden_dim, eps)` normalises one row per
 block, four elements per thread: `idx` is `row * hidden_dim + 4 * thread_idx_x()`.

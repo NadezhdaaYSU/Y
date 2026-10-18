@@ -90,6 +90,7 @@ pub enum TokenKind {
     U16,
     U32,
     U64,
+    E4M3,
     QFixed(String), // e.g. "Q32.32"
     Bool,
     StringTy,
@@ -479,6 +480,7 @@ impl Lexer {
             "U16" => TokenKind::U16,
             "U32" => TokenKind::U32,
             "U64" => TokenKind::U64,
+            "E4M3" => TokenKind::E4M3,
             "u8" => TokenKind::U8,
             "u16" => TokenKind::U16,
             "u32" => TokenKind::U32,

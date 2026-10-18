@@ -1,0 +1,29 @@
+// A [M][K] float32 to e4m3, and B [K][N] to e4m3 transposed to [N][K].
+// Launch quant_e4m3 on n threads and quant_e4m3_t on
+// (cols + 7) / 8 * (rows + 15) / 16 warps (rows a multiple of 4).
+
+kernel quant_e4m3(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, n: I32) {
+    let idx: I32 = global_thread_id();
+    if idx < n {
+        Q[idx] = X[idx] * inv_s;
+    }
+}
+
+kernel quant_e4m3_t(X: GlobalMemory<F32>, inv_s: F32, Q: GlobalMemory<E4M3>, rows: I32, cols: I32) {
+    let t: I32 = global_thread_id();
+    let warp: I32 = t / 32;
+    let lane: I32 = t - warp * 32;
+    let groups: I32 = (cols + 7) / 8;
+    let rg: I32 = warp / groups;
+    let c: I32 = (warp - rg * groups) * 8 + lane - (lane / 8) * 8;
+    let r: I32 = rg * 16 + (lane / 8) * 4;
+    if r < rows {
+        if c < cols {
+            let v0: F32 = X[r * cols + c] * inv_s;
+            let v1: F32 = X[(r + 1) * cols + c] * inv_s;
+            let v2: F32 = X[(r + 2) * cols + c] * inv_s;
+            let v3: F32 = X[(r + 3) * cols + c] * inv_s;
+            block_ptr2d_store_v4(Q, c, r, rows, cols, rows, v0, v1, v2, v3);
+        }
+    }
+}

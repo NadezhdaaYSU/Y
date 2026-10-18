@@ -1,0 +1,33 @@
+QUIET 02:30:03 mean 0.0%
+          1024 {'base': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'g16': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages', 'w128x256': 'CTA 128x256x64 | 2x4 warps | 3 stages', 'w256x128': 'CTA 256x128x64 | 4x2 warps | 3 stages', 'k32s4': 'CTA 128x128x32 | 4x2 warps | 4 stages'} | exact {'base': True, 'g16': True, 's4c1': True, 'w128x256': True, 'w256x128': True, 'k32s4': True, 'scaled_mm': True} | SM 2475-2475 MHz
+      s4c1         min      16.2 median      16.2 us   132.5 TFLOPS  0.975x scaled_mm
+      base         min      16.3 median      16.3 us   132.0 TFLOPS  0.978x scaled_mm
+      g16          min      16.3 median      16.3 us   132.0 TFLOPS  0.979x scaled_mm
+      k32s4        min      16.4 median      16.5 us   130.9 TFLOPS  0.987x scaled_mm
+      scaled_mm    min      16.6 median      16.6 us   129.1 TFLOPS  1.000x scaled_mm
+      w256x128     min      28.2 median      28.3 us    76.1 TFLOPS  1.697x scaled_mm
+      w128x256     min      28.2 median      28.3 us    76.0 TFLOPS  1.698x scaled_mm
+          2048 {'base': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'g16': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages', 'w128x256': 'CTA 128x256x64 | 2x4 warps | 3 stages', 'w256x128': 'CTA 256x128x64 | 4x2 warps | 3 stages', 'k32s4': 'CTA 128x128x32 | 4x2 warps | 4 stages'} | exact {'base': True, 'g16': True, 's4c1': True, 'w128x256': True, 'w256x128': True, 'k32s4': True, 'scaled_mm': True} | SM 2760-2775 MHz
+      base         min     103.4 median     103.5 us   166.1 TFLOPS  0.985x scaled_mm
+      g16          min     103.5 median     103.5 us   166.0 TFLOPS  0.985x scaled_mm
+      scaled_mm    min     105.0 median     105.2 us   163.6 TFLOPS  1.000x scaled_mm
+      k32s4        min     108.1 median     108.1 us   158.9 TFLOPS  1.029x scaled_mm
+      s4c1         min     109.9 median     110.0 us   156.3 TFLOPS  1.047x scaled_mm
+      w256x128     min     116.5 median     116.5 us   147.5 TFLOPS  1.109x scaled_mm
+      w128x256     min     116.5 median     116.6 us   147.4 TFLOPS  1.109x scaled_mm
+          4096 {'base': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'g16': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages', 'w128x256': 'CTA 128x256x64 | 2x4 warps | 3 stages', 'w256x128': 'CTA 256x128x64 | 4x2 warps | 3 stages', 'k32s4': 'CTA 128x128x32 | 4x2 warps | 4 stages'} | exact {'base': True, 'g16': True, 's4c1': True, 'w128x256': True, 'w256x128': True, 'k32s4': True, 'scaled_mm': True} | SM 2760-2760 MHz
+      base         min     814.7 median     815.0 us   168.7 TFLOPS  0.998x scaled_mm
+      g16          min     815.1 median     815.5 us   168.6 TFLOPS  0.999x scaled_mm
+      scaled_mm    min     816.3 median     817.1 us   168.4 TFLOPS  1.000x scaled_mm
+      k32s4        min     850.1 median     850.3 us   161.7 TFLOPS  1.041x scaled_mm
+      w256x128     min     871.8 median     872.9 us   157.6 TFLOPS  1.068x scaled_mm
+      w128x256     min     872.4 median     873.7 us   157.5 TFLOPS  1.069x scaled_mm
+      s4c1         min     909.7 median     910.5 us   151.1 TFLOPS  1.114x scaled_mm
+          8192 {'base': 'CTA 128x128x64 | 4x2 warps | 3 stages', 'g16': 'CTA 128x128x64 | 4x2 warps | 3 stages', 's4c1': 'CTA 128x128x64 | 4x2 warps | 4 stages', 'w128x256': 'CTA 128x256x64 | 2x4 warps | 3 stages', 'w256x128': 'CTA 256x128x64 | 4x2 warps | 3 stages', 'k32s4': 'CTA 128x128x32 | 4x2 warps | 4 stages'} | exact {'base': True, 'g16': True, 's4c1': True, 'w128x256': True, 'w256x128': True, 'k32s4': True, 'scaled_mm': True} | SM 2760-2775 MHz
+      scaled_mm    min    6212.2 median    6221.7 us   177.0 TFLOPS  1.000x scaled_mm
+      base         min    6327.3 median    6375.7 us   173.8 TFLOPS  1.019x scaled_mm
+      g16          min    6327.6 median    6399.5 us   173.8 TFLOPS  1.019x scaled_mm
+      k32s4        min    6531.6 median    6539.3 us   168.3 TFLOPS  1.051x scaled_mm
+      w256x128     min    6766.1 median    6786.6 us   162.5 TFLOPS  1.089x scaled_mm
+      w128x256     min    6782.7 median    6825.9 us   162.1 TFLOPS  1.092x scaled_mm
+      s4c1         min    7020.9 median    7107.5 us   156.6 TFLOPS  1.130x scaled_mm
