@@ -1051,16 +1051,19 @@ Float32 A and B to float32 C through the e4m3 tensor cores, every column
 checked exact first. Y quantises A, quantises and transposes B, and runs its
 `@tile` GEMM over the e4m3 bytes: three kernels, as PyTorch's column is its
 quantisation kernels and cuBLASLt's GEMM. CUDA-graph replays
-(`docs/benchmarks/head_to_head_2026-10-18/`):
+(`docs/benchmarks/head_to_head_2026-10-18/`); as in the tables above, above 1
+is Y faster:
 
 | M=N=K | 1024 | 2048 | 4096 | 8192 |
 |---|---|---|---|---|
-| **Y vs PyTorch** | 0.54x | 0.62x | 0.60x | 0.71x |
-| **Y vs Triton's fused kernel** | 0.75x | 0.86x | 0.69x | 0.47x |
+| **Y vs PyTorch** | 1.85x | 1.61x | 1.66x | 1.41x |
+| **Y vs Triton's fused kernel** | 1.33x | 1.17x | 1.45x | 2.11x |
 
-The GEMM alone ties cuBLASLt's (0.97-0.99x up to 4096, 0.995-1.005x at
-8192); the difference is the quantisation, 1.08 ms against torch's 4.17 at
-8192. Both of Y's FP8 GEMMs add each `mma`'s result in float32. The tensor
+(This table gave Y's time over the other's until 2026-10-18 - 0.54x for
+1.85x - the opposite of the README's other tables.) The GEMM alone takes
+0.97-0.99x cuBLASLt's time up to 4096 and ties it at 8192 (0.995x and
+1.005x in two runs). The difference is the quantisation, 1.08 ms against
+torch's 4.17 at 8192. Both of Y's FP8 GEMMs add each `mma`'s result in float32. The tensor
 core's own accumulator keeps about 11 bits and truncates: chaining a K loop in
 it, as Y did until 2026-10-18 and Triton's `tl.dot` still does, left a median
 relative error of 6.6% at K = 4096 on positive inputs, against 6.5e-5 now
