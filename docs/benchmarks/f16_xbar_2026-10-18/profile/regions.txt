@@ -1,0 +1,34 @@
+#### gemm_f16_512: 856 SASS, 444416 warp instructions executed, 973 samples
+  backward branch: SASS 754..776 (23 instructions), body executed 1024 times (warp-level)
+  backward branch: SASS 817..839 (23 instructions), body executed 1024 times (warp-level)
+  backward branch: SASS 843..843 (1 instructions), body executed 0 times (warp-level)
+  SASS    0.. 753 straight  754 static,  380672 executed ( 85.7%),    910 samples ( 93.5%): math 324, long_sb 179, barrier 147, wait 79, imc 60, mio 33
+  SASS  754.. 776 loop       23 static,   23552 executed (  5.3%),     18 samples (  1.8%): short_sb 6, wait 5, dispatch 2, no_inst 2, selected 2, not_selected 1
+  SASS  777.. 816 straight   40 static,   15104 executed (  3.4%),     24 samples (  2.5%): short_sb 10, barrier 7, wait 5, selected 2
+  SASS  817.. 839 loop       23 static,   23552 executed (  5.3%),     18 samples (  1.8%): wait 8, short_sb 7, selected 2, dispatch 1
+  SASS  840.. 842 straight    3 static,    1536 executed (  0.3%),      2 samples (  0.2%): barrier 1, branch_resolving 1
+  SASS  843.. 843 loop        1 static,       0 executed (  0.0%),      1 samples (  0.1%): wait 1
+  SASS  844.. 855 straight   12 static,       0 executed (  0.0%),      0 samples (  0.0%): 
+#### ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn: 696 SASS, 343296 warp instructions executed, 906 samples
+  backward branch: SASS 13..26 (14 instructions), body executed 256 times (warp-level)
+  backward branch: SASS 199..235 (37 instructions), body executed 1024 times (warp-level)
+  backward branch: SASS 240..243 (4 instructions), body executed 0 times (warp-level)
+  backward branch: SASS 320..408 (89 instructions), body executed 2048 times (warp-level)
+  backward branch: SASS 430..443 (14 instructions), body executed 256 times (warp-level)
+  backward branch: SASS 552..554 (3 instructions), body executed 0 times (warp-level)
+  backward branch: SASS 673..673 (1 instructions), body executed 0 times (warp-level)
+  SASS    0..  12 straight   13 static,    3328 executed (  1.0%),     63 samples (  7.0%): imc 56, no_inst 5, wait 2
+  SASS   13..  26 loop       14 static,    2816 executed (  0.8%),     23 samples (  2.5%): imc 20, selected 3
+  SASS   27.. 198 straight  172 static,   25600 executed (  7.5%),     29 samples (  3.2%): wait 13, selected 5, imc 4, no_inst 4, dispatch 3
+  SASS  199.. 235 loop       37 static,   37888 executed ( 11.0%),     40 samples (  4.4%): wait 17, lg 9, selected 9, long_sb 5
+  SASS  236.. 239 straight    4 static,    1024 executed (  0.3%),      2 samples (  0.2%): selected 1, wait 1
+  SASS  240.. 243 loop        4 static,       0 executed (  0.0%),      1 samples (  0.1%): selected 1
+  SASS  244.. 319 straight   76 static,   19456 executed (  5.7%),     64 samples (  7.1%): long_sb 50, selected 6, wait 6, barrier 2
+  SASS  320.. 408 loop       89 static,  182272 executed ( 53.1%),    576 samples ( 63.6%): math 383, wait 99, selected 36, long_sb 29, barrier 26, short_sb 3
+  SASS  409.. 429 straight   21 static,    5376 executed (  1.6%),      7 samples (  0.8%): wait 4, selected 3
+  SASS  430.. 443 loop       14 static,    2816 executed (  0.8%),      0 samples (  0.0%): 
+  SASS  444.. 551 straight  108 static,   15872 executed (  4.6%),     20 samples (  2.2%): selected 8, no_inst 6, wait 6
+  SASS  552.. 554 loop        3 static,       0 executed (  0.0%),      0 samples (  0.0%): 
+  SASS  555.. 672 straight  118 static,   46848 executed ( 13.6%),     65 samples (  7.2%): wait 35, barrier 12, mio 6, no_inst 4, selected 4, branch_resolving 3
+  SASS  673.. 673 loop        1 static,       0 executed (  0.0%),     16 samples (  1.8%): branch_resolving 13, wait 2, selected 1
+  SASS  674.. 695 straight   22 static,       0 executed (  0.0%),      0 samples (  0.0%): 

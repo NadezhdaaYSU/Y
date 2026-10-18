@@ -1,0 +1,379 @@
+.version 7.8
+.target sm_89
+.address_size 64
+
+.extern .shared .align 16 .b8 smem_pipeline_gemm_f16_512[];
+.visible .entry gemm_f16_512(
+    .param .u64 A_0,
+    .param .u64 B_1,
+    .param .u64 C_2
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 329
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 255 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 16.67% (2 active blocks per SM)
+.maxnreg 255
+{
+    .reg .b32 %r<205>;
+    .reg .f32 %f<24>;
+    .reg .b64 %rd<50>;
+    .reg .pred %p<16>;
+
+    ld.param.u64 %rd0, [A_0];
+    ld.param.u64 %rd1, [B_1];
+    ld.param.u64 %rd2, [C_2];
+    // ========================================================
+    // [Y TENSOR CORE GEMM] M=512 N=512 K=512 | CTA 32x64x32 | 2x2 warps | wmma.sync.m16n16k16.f16->f32
+    // Autotuner selected 6 pipeline stages (6 used after k_tiles/smem clamping); cp.async multi-stage pipelined. Dynamic shared memory required: 43008 bytes.
+    // ========================================================
+    cvta.to.global.u64 %rd3, %rd0;
+    cvta.to.global.u64 %rd4, %rd1;
+    cvta.to.global.u64 %rd5, %rd2;
+    // ========================================================
+    // [AUTOMATED GRID BLOCK SWIZZLING PASS - GROUPED RASTER L2 LOCALITY]
+    // Group size: 8 tiles (Maximizes L2 Cache hit rate)
+    // ========================================================
+    mov.u32 %r0, %ctaid.x;
+    mov.u32 %r1, %ctaid.y;
+    mov.u32 %r2, %nctaid.x;
+    mov.u32 %r3, %nctaid.y;
+    mad.lo.u32 %r4, %r1, %r2, %r0;
+    mul.lo.u32 %r5, %r2, 8;
+    div.u32 %r6, %r4, %r5;
+    rem.u32 %r7, %r4, %r5;
+    mul.lo.u32 %r8, %r6, 8;
+    sub.u32 %r9, %r3, %r8;
+    min.u32 %r10, %r9, 8;
+    rem.u32 %r11, %r7, %r10;
+    add.u32 %r12, %r8, %r11;
+    div.u32 %r13, %r7, %r10;
+    mul.lo.u32 %r14, %r12, 32;
+    mul.lo.u32 %r15, %r13, 64;
+    mov.u32 %r16, %tid.x;
+    shr.u32 %r17, %r16, 5;
+    rem.u32 %r18, %r17, 2;
+    div.u32 %r19, %r17, 2;
+    mul.lo.u32 %r20, %r18, 16;
+    mul.lo.u32 %r21, %r19, 32;
+    and.b32 %r22, %r16, 31;
+    and.b32 %r23, %r22, 15;
+    and.b32 %r24, %r22, 16;
+    shr.u32 %r25, %r24, 1;
+    mov.f32 %f0, 0f00000000;
+    mov.f32 %f1, 0f00000000;
+    mov.f32 %f2, 0f00000000;
+    mov.f32 %f3, 0f00000000;
+    mov.f32 %f4, 0f00000000;
+    mov.f32 %f5, 0f00000000;
+    mov.f32 %f6, 0f00000000;
+    mov.f32 %f7, 0f00000000;
+    mov.f32 %f8, 0f00000000;
+    mov.f32 %f9, 0f00000000;
+    mov.f32 %f10, 0f00000000;
+    mov.f32 %f11, 0f00000000;
+    mov.f32 %f12, 0f00000000;
+    mov.f32 %f13, 0f00000000;
+    mov.f32 %f14, 0f00000000;
+    mov.f32 %f15, 0f00000000;
+    mov.u32 %r26, smem_pipeline_gemm_f16_512;
+    add.u32 %r27, %r26, 15360;
+    mov.u32 %r28, %tid.x;
+    div.u32 %r29, %r28, 4;
+    rem.u32 %r30, %r28, 4;
+    mul.lo.u32 %r31, %r30, 8;
+    add.u32 %r32, %r14, %r29;
+    mad.lo.u32 %r33, %r32, 512, %r31;
+    mul.wide.u32 %rd6, %r33, 2;
+    add.s64 %rd7, %rd3, %rd6;
+    mad.lo.u32 %r34, %r29, 40, %r31;
+    shl.b32 %r35, %r34, 1;
+    mov.u32 %r36, %tid.x;
+    div.u32 %r37, %r36, 8;
+    rem.u32 %r38, %r36, 8;
+    mul.lo.u32 %r39, %r38, 8;
+    add.u32 %r40, %r15, %r39;
+    mad.lo.u32 %r41, %r37, 512, %r40;
+    mul.wide.u32 %rd8, %r41, 2;
+    add.s64 %rd9, %rd4, %rd8;
+    mad.lo.u32 %r42, %r37, 72, %r39;
+    shl.b32 %r43, %r42, 1;
+    setp.lt.u32 %p0, %r14, 512;
+    setp.lt.u32 %p1, %r15, 512;
+    and.pred %p2, %p0, %p1;
+    selp.u32 %r44, 16, 0, %p2;
+    mov.u32 %r45, 0;
+    add.u32 %r46, %r26, 0;
+    add.u32 %r47, %r27, 0;
+    // [Y ASYNC TILE LOAD] PA0 | 128 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd11, %r45;
+    shl.b64 %rd10, %rd11, 1;
+    add.s64 %rd12, %rd7, %rd10;
+    add.u32 %r48, %r46, %r35;
+    cp.async.cg.shared.global [%r48], [%rd12], 16, %r44;
+    // [Y ASYNC TILE LOAD] PB0 | 256 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd14, %r45;
+    shl.b64 %rd13, %rd14, 10;
+    add.s64 %rd15, %rd9, %rd13;
+    add.u32 %r49, %r47, %r43;
+    cp.async.cg.shared.global [%r49], [%rd15], 16, %r44;
+    cp.async.cg.shared.global [%r49+2304], [%rd15+16384], 16, %r44;
+    cp.async.commit_group;
+    mov.u32 %r50, 32;
+    add.u32 %r51, %r26, 2560;
+    add.u32 %r52, %r27, 4608;
+    // [Y ASYNC TILE LOAD] PA1 | 128 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd17, %r50;
+    shl.b64 %rd16, %rd17, 1;
+    add.s64 %rd18, %rd7, %rd16;
+    add.u32 %r53, %r51, %r35;
+    cp.async.cg.shared.global [%r53], [%rd18], 16, %r44;
+    // [Y ASYNC TILE LOAD] PB1 | 256 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd20, %r50;
+    shl.b64 %rd19, %rd20, 10;
+    add.s64 %rd21, %rd9, %rd19;
+    add.u32 %r54, %r52, %r43;
+    cp.async.cg.shared.global [%r54], [%rd21], 16, %r44;
+    cp.async.cg.shared.global [%r54+2304], [%rd21+16384], 16, %r44;
+    cp.async.commit_group;
+    mov.u32 %r55, 64;
+    add.u32 %r56, %r26, 5120;
+    add.u32 %r57, %r27, 9216;
+    // [Y ASYNC TILE LOAD] PA2 | 128 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd23, %r55;
+    shl.b64 %rd22, %rd23, 1;
+    add.s64 %rd24, %rd7, %rd22;
+    add.u32 %r58, %r56, %r35;
+    cp.async.cg.shared.global [%r58], [%rd24], 16, %r44;
+    // [Y ASYNC TILE LOAD] PB2 | 256 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd26, %r55;
+    shl.b64 %rd25, %rd26, 10;
+    add.s64 %rd27, %rd9, %rd25;
+    add.u32 %r59, %r57, %r43;
+    cp.async.cg.shared.global [%r59], [%rd27], 16, %r44;
+    cp.async.cg.shared.global [%r59+2304], [%rd27+16384], 16, %r44;
+    cp.async.commit_group;
+    mov.u32 %r60, 96;
+    add.u32 %r61, %r26, 7680;
+    add.u32 %r62, %r27, 13824;
+    // [Y ASYNC TILE LOAD] PA3 | 128 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd29, %r60;
+    shl.b64 %rd28, %rd29, 1;
+    add.s64 %rd30, %rd7, %rd28;
+    add.u32 %r63, %r61, %r35;
+    cp.async.cg.shared.global [%r63], [%rd30], 16, %r44;
+    // [Y ASYNC TILE LOAD] PB3 | 256 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd32, %r60;
+    shl.b64 %rd31, %rd32, 10;
+    add.s64 %rd33, %rd9, %rd31;
+    add.u32 %r64, %r62, %r43;
+    cp.async.cg.shared.global [%r64], [%rd33], 16, %r44;
+    cp.async.cg.shared.global [%r64+2304], [%rd33+16384], 16, %r44;
+    cp.async.commit_group;
+    mov.u32 %r65, 128;
+    add.u32 %r66, %r26, 10240;
+    add.u32 %r67, %r27, 18432;
+    // [Y ASYNC TILE LOAD] PA4 | 128 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd35, %r65;
+    shl.b64 %rd34, %rd35, 1;
+    add.s64 %rd36, %rd7, %rd34;
+    add.u32 %r68, %r66, %r35;
+    cp.async.cg.shared.global [%r68], [%rd36], 16, %r44;
+    // [Y ASYNC TILE LOAD] PB4 | 256 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd38, %r65;
+    shl.b64 %rd37, %rd38, 10;
+    add.s64 %rd39, %rd9, %rd37;
+    add.u32 %r69, %r67, %r43;
+    cp.async.cg.shared.global [%r69], [%rd39], 16, %r44;
+    cp.async.cg.shared.global [%r69+2304], [%rd39+16384], 16, %r44;
+    cp.async.commit_group;
+    cp.async.wait_group 4;
+    bar.sync 0;
+    add.u32 %r94, %r21, 0;
+    add.u32 %r95, %r94, %r25;
+    add.u32 %r96, %r23, 0;
+    mad.lo.u32 %r97, %r96, 72, %r95;
+    shl.b32 %r98, %r97, 1;
+    add.u32 %r99, %r27, %r98;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r70,%r71,%r72,%r73}, [%r99];
+    add.u32 %r100, %r21, 16;
+    add.u32 %r101, %r100, %r25;
+    add.u32 %r102, %r23, 0;
+    mad.lo.u32 %r103, %r102, 72, %r101;
+    shl.b32 %r104, %r103, 1;
+    add.u32 %r105, %r27, %r104;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r74,%r75,%r76,%r77}, [%r105];
+    add.u32 %r106, %r20, %r23;
+    add.u32 %r107, %r106, 0;
+    add.u32 %r108, %r25, 0;
+    mad.lo.u32 %r109, %r107, 40, %r108;
+    shl.b32 %r110, %r109, 1;
+    add.u32 %r111, %r26, %r110;
+    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r78,%r79,%r80,%r81}, [%r111];
+    mov.u32 %r112, 0;
+    $GEMM_K_LOOP_0:
+    setp.ge.u32 %p3, %r112, 16;
+    @%p3 bra $GEMM_K_DONE_1;
+    rem.u32 %r113, %r112, 6;
+    add.u32 %r114, %r112, 5;
+    rem.u32 %r115, %r114, 6;
+    setp.lt.u32 %p4, %r114, 16;
+    mul.lo.u32 %r116, %r114, 32;
+    mad.lo.u32 %r117, %r115, 2560, %r26;
+    mad.lo.u32 %r118, %r115, 4608, %r27;
+    and.pred %p5, %p4, %p2;
+    selp.u32 %r119, 16, 0, %p5;
+    // [Y ASYNC TILE LOAD] A | 128 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd41, %r116;
+    shl.b64 %rd40, %rd41, 1;
+    add.s64 %rd42, %rd7, %rd40;
+    add.u32 %r120, %r117, %r35;
+    cp.async.cg.shared.global [%r120], [%rd42], 16, %r119;
+    // [Y ASYNC TILE LOAD] B | 256 chunks of 16B over 128 threads, addresses hoisted
+    cvt.u64.u32 %rd44, %r116;
+    shl.b64 %rd43, %rd44, 10;
+    add.s64 %rd45, %rd9, %rd43;
+    add.u32 %r121, %r118, %r43;
+    cp.async.cg.shared.global [%r121], [%rd45], 16, %r119;
+    cp.async.cg.shared.global [%r121+2304], [%rd45+16384], 16, %r119;
+    cp.async.commit_group;
+    mad.lo.u32 %r122, %r113, 2560, %r26;
+    mad.lo.u32 %r123, %r113, 4608, %r27;
+    add.u32 %r124, %r21, 0;
+    add.u32 %r125, %r124, %r25;
+    add.u32 %r126, %r23, 16;
+    mad.lo.u32 %r127, %r126, 72, %r125;
+    shl.b32 %r128, %r127, 1;
+    add.u32 %r129, %r123, %r128;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r82,%r83,%r84,%r85}, [%r129];
+    add.u32 %r130, %r21, 16;
+    add.u32 %r131, %r130, %r25;
+    add.u32 %r132, %r23, 16;
+    mad.lo.u32 %r133, %r132, 72, %r131;
+    shl.b32 %r134, %r133, 1;
+    add.u32 %r135, %r123, %r134;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r86,%r87,%r88,%r89}, [%r135];
+    add.u32 %r136, %r20, %r23;
+    add.u32 %r137, %r136, 0;
+    add.u32 %r138, %r25, 16;
+    mad.lo.u32 %r139, %r137, 40, %r138;
+    shl.b32 %r140, %r139, 1;
+    add.u32 %r141, %r122, %r140;
+    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r90,%r91,%r92,%r93}, [%r141];
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r78,%r79,%r80,%r81}, {%r70,%r71}, {%f0,%f1,%f2,%f3};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r78,%r79,%r80,%r81}, {%r72,%r73}, {%f4,%f5,%f6,%f7};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r78,%r79,%r80,%r81}, {%r74,%r75}, {%f8,%f9,%f10,%f11};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r78,%r79,%r80,%r81}, {%r76,%r77}, {%f12,%f13,%f14,%f15};
+    cp.async.wait_group 4;
+    bar.sync 0;
+    add.u32 %r142, %r112, 1;
+    rem.u32 %r143, %r142, 6;
+    mad.lo.u32 %r144, %r143, 2560, %r26;
+    mad.lo.u32 %r145, %r143, 4608, %r27;
+    add.u32 %r146, %r21, 0;
+    add.u32 %r147, %r146, %r25;
+    add.u32 %r148, %r23, 0;
+    mad.lo.u32 %r149, %r148, 72, %r147;
+    shl.b32 %r150, %r149, 1;
+    add.u32 %r151, %r145, %r150;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r70,%r71,%r72,%r73}, [%r151];
+    add.u32 %r152, %r21, 16;
+    add.u32 %r153, %r152, %r25;
+    add.u32 %r154, %r23, 0;
+    mad.lo.u32 %r155, %r154, 72, %r153;
+    shl.b32 %r156, %r155, 1;
+    add.u32 %r157, %r145, %r156;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r74,%r75,%r76,%r77}, [%r157];
+    add.u32 %r158, %r20, %r23;
+    add.u32 %r159, %r158, 0;
+    add.u32 %r160, %r25, 0;
+    mad.lo.u32 %r161, %r159, 40, %r160;
+    shl.b32 %r162, %r161, 1;
+    add.u32 %r163, %r144, %r162;
+    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r78,%r79,%r80,%r81}, [%r163];
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r90,%r91,%r92,%r93}, {%r82,%r83}, {%f0,%f1,%f2,%f3};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r90,%r91,%r92,%r93}, {%r84,%r85}, {%f4,%f5,%f6,%f7};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r90,%r91,%r92,%r93}, {%r86,%r87}, {%f8,%f9,%f10,%f11};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r90,%r91,%r92,%r93}, {%r88,%r89}, {%f12,%f13,%f14,%f15};
+    add.u32 %r112, %r112, 1;
+    bra $GEMM_K_LOOP_0;
+    $GEMM_K_DONE_1:
+    cp.async.wait_group 0;
+    bar.sync 0;
+    mov.u32 %r164, 36;
+    setp.eq.u32 %p6, %r19, 0;
+    add.u32 %r165, %r20, 0;
+    mad.lo.u32 %r166, %r165, %r164, 0;
+    mul.lo.u32 %r167, %r166, 4;
+    add.u32 %r168, %r26, %r167;
+    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r168], {%f0,%f1,%f2,%f3,%f4,%f5,%f6,%f7}, %r164;
+    add.u32 %r169, %r20, 0;
+    mad.lo.u32 %r170, %r169, %r164, 16;
+    mul.lo.u32 %r171, %r170, 4;
+    add.u32 %r172, %r26, %r171;
+    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r172], {%f8,%f9,%f10,%f11,%f12,%f13,%f14,%f15}, %r164;
+    bar.sync 0;
+    add.u32 %r173, %r15, 0;
+    mov.u32 %r174, %tid.x;
+    $EPI_PLAIN_2:
+    setp.ge.u32 %p7, %r174, 256;
+    @%p7 bra $EPI_PLAIN_DONE_3;
+    div.u32 %r175, %r174, 8;
+    rem.u32 %r176, %r174, 8;
+    mul.lo.u32 %r177, %r176, 4;
+    add.u32 %r178, %r14, %r175;
+    add.u32 %r179, %r173, %r177;
+    add.u32 %r180, %r179, 4;
+    setp.lt.u32 %p8, %r178, 512;
+    setp.le.u32 %p9, %r180, 512;
+    and.pred %p10, %p8, %p9;
+    mad.lo.u32 %r181, %r175, 36, %r177;
+    mul.lo.u32 %r182, %r181, 4;
+    add.u32 %r183, %r26, %r182;
+    @%p10 ld.shared.v4.f32 {%f16,%f17,%f18,%f19}, [%r183];
+    mad.lo.u32 %r184, %r178, 512, %r179;
+    mul.wide.u32 %rd46, %r184, 4;
+    add.s64 %rd47, %rd5, %rd46;
+    @%p10 st.global.v4.f32 [%rd47], {%f16,%f17,%f18,%f19};
+    add.u32 %r174, %r174, 128;
+    bra $EPI_PLAIN_2;
+    $EPI_PLAIN_DONE_3:
+    bar.sync 0;
+    setp.eq.u32 %p11, %r19, 1;
+    add.u32 %r185, %r20, 0;
+    mad.lo.u32 %r186, %r185, %r164, 0;
+    mul.lo.u32 %r187, %r186, 4;
+    add.u32 %r188, %r26, %r187;
+    @%p11 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r188], {%f0,%f1,%f2,%f3,%f4,%f5,%f6,%f7}, %r164;
+    add.u32 %r189, %r20, 0;
+    mad.lo.u32 %r190, %r189, %r164, 16;
+    mul.lo.u32 %r191, %r190, 4;
+    add.u32 %r192, %r26, %r191;
+    @%p11 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r192], {%f8,%f9,%f10,%f11,%f12,%f13,%f14,%f15}, %r164;
+    bar.sync 0;
+    add.u32 %r193, %r15, 32;
+    mov.u32 %r194, %tid.x;
+    $EPI_PLAIN_4:
+    setp.ge.u32 %p12, %r194, 256;
+    @%p12 bra $EPI_PLAIN_DONE_5;
+    div.u32 %r195, %r194, 8;
+    rem.u32 %r196, %r194, 8;
+    mul.lo.u32 %r197, %r196, 4;
+    add.u32 %r198, %r14, %r195;
+    add.u32 %r199, %r193, %r197;
+    add.u32 %r200, %r199, 4;
+    setp.lt.u32 %p13, %r198, 512;
+    setp.le.u32 %p14, %r200, 512;
+    and.pred %p15, %p13, %p14;
+    mad.lo.u32 %r201, %r195, 36, %r197;
+    mul.lo.u32 %r202, %r201, 4;
+    add.u32 %r203, %r26, %r202;
+    @%p15 ld.shared.v4.f32 {%f20,%f21,%f22,%f23}, [%r203];
+    mad.lo.u32 %r204, %r198, 512, %r199;
+    mul.wide.u32 %rd48, %r204, 4;
+    add.s64 %rd49, %rd5, %rd48;
+    @%p15 st.global.v4.f32 [%rd49], {%f20,%f21,%f22,%f23};
+    add.u32 %r194, %r194, 128;
+    bra $EPI_PLAIN_4;
+    $EPI_PLAIN_DONE_5:
+    bar.sync 0;
+    // ========================================================
+}

@@ -1,0 +1,8 @@
+FAIL: test_the_next_tile_is_waited_for_between_the_last_two_k_steps (test_f16_gemm.F16GemmIsExact.test_the_next_tile_is_waited_for_between_the_last_two_k_steps) (tile='64,64,64,4,2,3')
+AssertionError: 0 != 3 : 64,64,64,4,2,3: only the next tile's first fragments after the barrier
+FAIL: test_the_next_tile_is_waited_for_between_the_last_two_k_steps (test_f16_gemm.F16GemmIsExact.test_the_next_tile_is_waited_for_between_the_last_two_k_steps) (tile='128,256,32,4,4,3')
+AssertionError: 0 != 1 : 128,256,32,4,4,3: one commit before the wait
+FAIL: test_the_next_tile_is_waited_for_between_the_last_two_k_steps (test_f16_gemm.F16GemmIsExact.test_the_next_tile_is_waited_for_between_the_last_two_k_steps) (tile='16,32,32,1,1,4')
+AssertionError: 0 != 3 : 16,32,32,1,1,4: only the next tile's first fragments after the barrier
+Ran 2 tests in 0.344s
+FAILED (failures=3)

@@ -1,0 +1,188 @@
+        ... 1 lines
+   1 h  0    256   19  MOV R67, c[0x0][0x1e4]                                       imc 19
+        ... 4 lines
+   6 h  0    256   37  ISETP.NE.AND P0, PT, RZ, c[0x0][0x200], PT                   imc 37
+        ... 8 lines
+  15 h  0    256   20  ISETP.LT.AND P2, PT, R6, c[0x0][0x10], PT                    imc 20
+        ... 7 lines
+  23 h  0    256    0  @P2   BRA 0x100176f3110                                      
+        ... 2 lines
+  26 h  0      0    0  @!P3  BRA 0x100176f2fd0                                      
+        ... 5 lines
+  32 h  0      0    0  BRA 0x100176f3140                                            
+        ... 47 lines
+  80 h  0    256    1  @!P2  BRA.U 0x100176f34b0                                    wait 1
+        ... 1 lines
+  82 h  0      0    0  @!P2  BRA.U 0x100176f3470                                    
+        ... 3 lines
+  86 h  0      0    0  BRA.U 0x100176f34b0                                          
+        ... 9 lines
+  96 h  0    256    0  @!P2  BRA.U 0x100176f35b0                                    
+        ... 1 lines
+  98 h  0      0    0  @!P2  BRA.U 0x100176f3570                                    
+        ... 3 lines
+ 102 h  0      0    0  BRA.U 0x100176f35b0                                          
+        ... 10 lines
+ 113 h  0    256    0  @!P0  BRA.U 0x100176f36f0                                    
+        ... 39 lines
+ 153 h  0    256    0  @P0   BRA.U 0x100176f3ab0                                    
+        ... 16 lines
+ 170 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4][R20.64], P3   
+ 171 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x800][R36.64] 
+ 172 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x1000][R38.64 
+ 173 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x1800][R40.64 
+        ... 1 lines
+ 175 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6][R22.64], P3   
+ 176 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x800][R44.64] 
+ 177 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x1000][R46.64 
+ 178 h  0      0    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x1800][R48.64 
+ 179 h  0      0    0  LDGDEPBAR                                                    
+        ... 21 lines
+ 201 h  0   1024    4  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4][R34.64], P3   wait 4
+ 202 h  0   1024    1  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x800][R36.64] wait 1
+ 203 h  0   1024    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x1000][R38.64 
+ 204 h  0   1024    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x1800][R40.64 
+        ... 1 lines
+ 206 h  0   1024    5  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6][R42.64], P3   wait 5
+ 207 h  0   1024    0  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x800][R44.64] 
+ 208 h  0   1024    1  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x1000][R46.64 lg 1
+ 209 h  0   1024    5  LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x1800][R48.64 lg 4, selected 1
+ 210 h  0   1024    4  LDGDEPBAR                                                    lg 4
+        ... 24 lines
+ 235 h  0   1024    2  @P1   BRA 0x100176f3b70                                      selected 2
+        ... 3 lines
+ 239 h  0    256    0  @!P0  BRA 0x100176f3e40                                      
+        ... 2 lines
+ 242 h  0      0    0  LDGDEPBAR                                                    
+ 243 h  0      0    0  @P0   BRA 0x100176f3e00                                      
+        ... 66 lines
+ 310 h  0    256    0  DEPBAR.LE SB0, 0x3                                           
+ 311 h  0    256   51  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 50, selected 1
+        ... 2 lines
+ 314 h  0    256    0  @P3   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4][R34.64] 
+ 315 h  0    256    0  @P4   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x800][R 
+ 316 h  0    256    3  LDSM.16.MT88.4 R64, [R51+UR8]                                barrier 2, selected 1
+ 317 h  0    256    0  LDSM.16.MT88.4 R68, [R52+UR8]                                
+ 318 h  0    256    1  LDSM.16.M88.4 R80, [R53+UR8+0x2000]                          selected 1
+ 319 h  0    256    0  LDSM.16.M88.4 R84, [R53+UR8+0x2800]                          
+        ... 1 lines
+ 321 h  1   2048    2  LDSM.16.MT88.4 R72, [R51+UR8+0x800]                          selected 1, wait 1
+ 322 h  1   2048    1  @P5   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x1000][ selected 1
+ 323 h  2   2048   13  HMMA.16816.F32 R4, R64, R82, R4                              math 8, wait 4, selected 1
+ 324 h  2   2048    1  LDSM.16.MT88.4 R76, [R52+UR8+0x800]                          wait 1
+ 325 h  3   2048   14  HMMA.16816.F32 R8, R64, R84, R8                              math 11, wait 2, selected 1
+ 326 h  3   2048    0  LDSM.16.M88.4 R88, [R54+UR8+0x2000]                          
+ 327 h  4   2048   13  HMMA.16816.F32 R12, R64, R86, R12                            math 11, wait 2
+ 328 h  4   2048    0  LDSM.16.M88.4 R92, [R54+UR8+0x2800]                          
+ 329 h  4   2048    0  @P6   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x1800][ 
+        ... 1 lines
+ 331 h  5   2048   11  HMMA.16816.F32 R28, R68, R86, R28                            math 10, wait 1
+ 332 h  6   2048   13  HMMA.16816.F32 R24, R68, R84, R24                            math 9, wait 3, selected 1
+ 333 h  7   2048   20  HMMA.16816.F32 R20, R68, R82, R20                            math 15, wait 5
+ 334 h  7   2048    0  @P3   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6][R42.64] 
+ 335 h  8   2048   16  HMMA.16816.F32 R16, R68, R80, R16                            math 12, wait 3, selected 1
+ 336 h  9   2048   23  HMMA.16816.F32 R0, R72, R88, R0                              math 20, wait 3
+ 337 h  9   2048    0  LDSM.16.MT88.4 R64, [R51+UR8+0x1000]                         
+ 338 h 10   2048   26  HMMA.16816.F32 R4, R72, R90, R4                              math 22, wait 4
+ 339 h 10   2048    1  LDSM.16.MT88.4 R68, [R52+UR8+0x1000]                         selected 1
+ 340 h 10   2048    0  @P4   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x800][R 
+ 341 h 11   2048    7  HMMA.16816.F32 R8, R72, R92, R8                              math 7
+ 342 h 11   2048    2  LDSM.16.M88.4 R80, [R55+UR8+0x2000]                          wait 2
+ 343 h 12   2048   11  HMMA.16816.F32 R12, R72, R94, R12                            math 10, wait 1
+ 344 h 12   2048    2  LDSM.16.M88.4 R84, [R55+UR8+0x2800]                          selected 1, wait 1
+ 345 h 13   2048    9  HMMA.16816.F32 R28, R76, R94, R28                            math 9
+ 346 h 13   2048    1  @P5   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x1000][ wait 1
+ 347 h 14   2048   20  HMMA.16816.F32 R24, R76, R92, R24                            math 17, wait 3
+ 348 h 15   2048    7  HMMA.16816.F32 R20, R76, R90, R20                            math 5, wait 2
+ 349 h 16   2048   12  HMMA.16816.F32 R16, R76, R88, R16                            math 8, wait 3, selected 1
+ 350 h 16   2048    0  @P6   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R50+UR6+0x1800][ 
+ 351 h 16   2048    2  LDGDEPBAR                                                    selected 1, wait 1
+        ... 2 lines
+ 354 h 17   2048   13  HMMA.16816.F32 R0, R64, R80, R0                              math 13
+ 355 h 17   2048    2  LDSM.16.MT88.4 R72, [R51+UR8+0x1800]                         wait 2
+        ... 3 lines
+ 359 h 18   2048   10  HMMA.16816.F32 R4, R64, R82, R4                              math 9, selected 1
+ 360 h 18   2048    1  LDSM.16.MT88.4 R76, [R52+UR8+0x1800]                         wait 1
+ 361 h 19   2048   23  HMMA.16816.F32 R8, R64, R84, R8                              math 20, wait 3
+ 362 h 19   2048    1  LDSM.16.M88.4 R88, [R56+UR8+0x2000]                          wait 1
+ 363 h 20   2048   23  HMMA.16816.F32 R12, R64, R86, R12                            math 19, wait 4
+ 364 h 20   2048    0  LDSM.16.M88.4 R92, [R56+UR8+0x2800]                          
+        ... 3 lines
+ 368 h 21   2048   12  HMMA.16816.F32 R28, R68, R86, R28                            math 12
+ 369 h 21   2048    1  DEPBAR.LE SB0, 0x3                                           selected 1
+ 370 h 21   2048   29  ISETP.GT.AND P0, PT, R58, RZ, PT                             long_sb 29
+ 371 h 22   2048   17  HMMA.16816.F32 R24, R68, R84, R24                            math 17
+ 372 h 22   2048    1  BAR.SYNC.DEFER_BLOCKING 0x0                                  wait 1
+ 373 h 23   2048   14  HMMA.16816.F32 R20, R68, R82, R20                            math 10, wait 4
+ 374 h 24   2048   10  HMMA.16816.F32 R16, R68, R80, R16                            math 8, wait 2
+        ... 2 lines
+ 377 h 25   2048   11  HMMA.16816.F32 R0, R72, R88, R0                              math 11
+ 378 h 25   2048   27  LDSM.16.MT88.4 R64, [R51+UR8]                                barrier 26, selected 1
+        ... 2 lines
+ 381 h 26   2048   10  HMMA.16816.F32 R4, R72, R90, R4                              math 6, wait 3, selected 1
+ 382 h 26   2048    1  LDSM.16.MT88.4 R68, [R52+UR8]                                wait 1
+        ... 2 lines
+ 385 h 27   2048   19  HMMA.16816.F32 R8, R72, R92, R8                              math 17, selected 1, wait 1
+ 386 h 27   2048    2  LDSM.16.M88.4 R80, [R53+UR8+0x2000]                          wait 2
+        ... 2 lines
+ 389 h 28   2048   14  HMMA.16816.F32 R12, R72, R94, R12                            math 12, wait 2
+ 390 h 28   2048    2  LDSM.16.M88.4 R84, [R53+UR8+0x2800]                          wait 2
+        ... 2 lines
+ 393 h 29   2048   22  HMMA.16816.F32 R28, R76, R94, R28                            math 20, wait 2
+        ... 2 lines
+ 396 h 30   2048   14  HMMA.16816.F32 R24, R76, R92, R24                            math 11, wait 3
+        ... 2 lines
+ 399 h 31   2048   15  HMMA.16816.F32 R20, R76, R90, R20                            math 11, selected 2, wait 2
+        ... 2 lines
+ 402 h 32   2048   13  HMMA.16816.F32 R16, R76, R88, R16                            math 13
+        ... 3 lines
+ 406 h 32   2048    7  @P3   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4][R34.64] wait 6, selected 1
+ 407 h 32   2048    1  @P4   LDGSTS.E.BYPASS.LTC128B.128.CONSTANT [R33+UR4+0x800][R selected 1
+ 408 h 32   2048    1  @P1   BRA.U 0x100176f4300                                    selected 1
+        ... 13 lines
+ 422 h 32    256    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 17 lines
+ 440 h 32    256    0  @P2   BRA 0x100176f4b20                                      
+        ... 2 lines
+ 443 h 32      0    0  @!P3  BRA 0x100176f49e0                                      
+        ... 5 lines
+ 449 h 32      0    0  BRA 0x100176f4b50                                            
+        ... 38 lines
+ 488 h 32    256    0  @!P6  BRA.U 0x100176f4e60                                    
+        ... 12 lines
+ 501 h 32      0    0  BRA.U 0x100176f4e80                                          
+        ... 14 lines
+ 516 h 32    256    0  @!P4  BRA.U 0x100176f4f80                                    
+        ... 2 lines
+ 519 h 32    256    0  BRA.U 0x100176f50f0                                          
+        ... 2 lines
+ 522 h 32      0    0  @!P6  BRA.U 0x100176f5080                                    
+        ... 12 lines
+ 535 h 32      0    0  BRA.U 0x100176f50a0                                          
+        ... 11 lines
+ 547 h 32    256    0  @!P2  BRA 0x100176f51b0                                      
+        ... 6 lines
+ 554 h 32      0    0  @P2   BRA.U 0x100176f5180                                    
+        ... 4 lines
+ 559 h 32    256    0  @!P1  BRA.U 0x100176f5270                                    
+        ... 65 lines
+ 625 h 32    256    0  @P1   BAR.SYNC 0x0                                           
+        ... 2 lines
+ 628 h 32    256    0  EXIT                                                         
+        ... 8 lines
+ 637 h 32   1024    4  BAR.SYNC.DEFER_BLOCKING 0x0                                  mio 4
+        ... 5 lines
+ 643 h 32   1024   12  LDS.128 R64, [R36]                                           barrier 12
+        ... 1 lines
+ 645 h 32   1024    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 1 lines
+ 647 h 32   1024    8  ISETP.GT.AND P2, PT, R40, 0x0, P2                            wait 8
+ 648 h 32   1024    1  @P2   BRA.U 0x100176f5790                                    wait 1
+ 649 h 32   1024    0  @!P1  BRA 0x100176f5890                                      
+ 650 h 32      0    1  @P2   BRA.U 0x100176f5890                                    selected 1
+        ... 8 lines
+ 659 h 32      0    0  @!P0  BRA.U 0x100176f5890                                    
+        ... 6 lines
+ 666 h 32   1024    2  @P2   BRA.U 0x100176f58b0                                    wait 2
+        ... 6 lines
+ 673 h 32      0   16  BRA `(.L_x_0) 0x100176f5910                                  branch_resolving 13, wait 2, selected 1

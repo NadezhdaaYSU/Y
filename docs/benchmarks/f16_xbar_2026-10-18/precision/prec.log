@@ -1,0 +1,9 @@
+64,128,32,2,2,2      rel err max 9.763e-06 mean 8.080e-06 signed mean -8.080e-06  bitwise == first tile: True
+128,128,32,2,2,2     rel err max 9.763e-06 mean 8.080e-06 signed mean -8.080e-06  bitwise == first tile: True
+64,64,64,4,2,3       rel err max 9.763e-06 mean 8.080e-06 signed mean -8.080e-06  bitwise == first tile: True
+128,256,32,4,4,3     rel err max 9.763e-06 mean 8.080e-06 signed mean -8.080e-06  bitwise == first tile: True
+16,32,32,1,1,4       rel err max 9.763e-06 mean 8.080e-06 signed mean -8.080e-06  bitwise == first tile: True
+128,128,128,4,2,2    rel err max 9.763e-06 mean 8.080e-06 signed mean -8.080e-06  bitwise == first tile: True
+f32 sum of exact k16 partials, max rel err 4.3007406242875093e-07
+torch half matmul (control), max rel err 0.0004949316823135155
+f16 accumulation of k16 partials (control), max rel err 0.003225723355605708

@@ -1,0 +1,15 @@
+           256 Y {'off': '32x64 2x2', 'on': '32x64 2x2'} | exact {'off': True, 'on': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2430-2430 MHz
+      on        min       3.0 median       3.1 us  0.341x Triton
+      off       min       3.1 median       3.1 us  0.343x Triton
+      cuBLAS    min       4.0 median       4.1 us  0.449x Triton
+      Triton    min       8.9 median       9.8 us  1.000x Triton
+           512 Y {'off': '64x64 4x2', 'on': '64x64 4x2'} | exact {'off': True, 'on': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2760 MHz
+      cuBLAS    min       5.9 median       6.0 us  0.657x Triton
+      on        min       6.7 median       6.7 us  0.746x Triton
+      off       min       6.7 median       6.7 us  0.747x Triton
+      Triton    min       9.0 median       9.7 us  1.000x Triton
+          1024 Y {'off': '64x128 2x2', 'on': '64x128 2x2'} | exact {'off': True, 'on': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2760-2760 MHz
+      cuBLAS    min      28.9 median      29.0 us  0.955x Triton
+      on        min      29.4 median      29.7 us  0.971x Triton
+      off       min      29.9 median      30.0 us  0.986x Triton
+      Triton    min      30.3 median      30.4 us  1.000x Triton

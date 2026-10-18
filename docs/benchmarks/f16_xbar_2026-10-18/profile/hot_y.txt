@@ -1,0 +1,372 @@
+   0 h  0    512   35  IMAD.MOV.U32 R1, RZ, RZ, c[0x0][0x28]                        no_inst 18, imc 17
+        ... 28 lines
+  29 h  0    512   38  ULDC.64 UR4, c[0x0][0x118]                                   imc 37, no_inst 1
+        ... 78 lines
+ 108 h  0    512    7  IMAD.WIDE.U32 R62, R2, R65, c[0x0][0x168]                    imc 6, no_inst 1
+        ... 9 lines
+ 118 h  0    512    0  LDGSTS.E.BYPASS.128 [R5][R64.64], P0                         
+        ... 2 lines
+ 121 h  0    512    0  LDGSTS.E.BYPASS.128 [R4+0x5000][R62.64], P0                  
+        ... 2 lines
+ 124 h  0    512    0  LDGDEPBAR                                                    
+        ... 2 lines
+ 127 h  0    512    0  LDGSTS.E.BYPASS.128 [R5+0x1400][R64.64+0x40], P0             
+        ... 2 lines
+ 130 h  0    512    3  LDGSTS.E.BYPASS.128 [R4+0x6200][R8.64], P0                   lg 3
+ 131 h  0    512    3  LDGDEPBAR                                                    lg 3
+        ... 2 lines
+ 134 h  0    512    6  LDGSTS.E.BYPASS.128 [R5+0x2800][R64.64+0x80], P0             lg 6
+        ... 3 lines
+ 138 h  0    512    3  LDGSTS.E.BYPASS.128 [R4+0x7400][R10.64], P0                  lg 3
+        ... 2 lines
+ 141 h  0    512    4  LDGDEPBAR                                                    lg 4
+        ... 13 lines
+ 155 h  0    512    0  DEPBAR.LE SB0, 0x2                                           
+ 156 h  0    512   73  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 73
+        ... 3 lines
+ 160 h  0    512   26  LDSM.16.MT88.4 R16, [R54+0x5000]                             barrier 26
+        ... 1 lines
+ 162 h  0    512    0  LDSM.16.M88.4 R24, [R32]                                     
+ 163 h  0    512    0  LDSM.16.MT88.4 R28, [R54+0x5020]                             
+        ... 3 lines
+ 167 h  0    512    3  LDGSTS.E.BYPASS.128 [R21][R64.64+0xc0], P0                   mio 3
+ 168 h  0    512    2  LDGSTS.E.BYPASS.128 [R33][R34.64], P0                        mio 2
+ 169 h  0    512    3  LDGDEPBAR                                                    lg 1, mio 1, wait 1
+ 170 h  0    512    0  LDSM.16.MT88.4 R8, [R54+0x5900]                              
+ 171 h  0    512    1  LDSM.16.M88.4 R48, [R32+0x20]                                mio 1
+ 172 h  0    512    0  LDSM.16.MT88.4 R12, [R54+0x5920]                             
+ 173 h  0    512    1  DEPBAR.LE SB0, 0x2                                           selected 1
+ 174 h  0    512   11  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 10, lg 1
+        ... 3 lines
+ 178 h  3    512   17  LDSM.16.MT88.4 R44, [R54+0x6200]                             barrier 17
+        ... 2 lines
+ 181 h  4    512    0  LDSM.16.M88.4 R36, [R32+0x1400]                              
+        ... 5 lines
+ 187 h  6    512   11  HMMA.16816.F32 R8, R48, R10, R16                             math 9, not_selected 1, wait 1
+ 188 h  6    512    0  LDSM.16.MT88.4 R16, [R54+0x6220]                             
+        ... 11 lines
+ 200 h  9    512    0  LDGSTS.E.BYPASS.128 [R27][R64.64+0x100], P0                  
+        ... 2 lines
+ 203 h  9    512    0  LDGSTS.E.BYPASS.128 [R31][R24.64], P0                        
+        ... 1 lines
+ 205 h 10    512    0  LDGDEPBAR                                                    
+ 206 h 10    512    2  LDSM.16.M88.4 R32, [R32+0x1420]                              selected 1, wait 1
+        ... 2 lines
+ 209 h 11    512    0  LDSM.16.MT88.4 R12, [R54+0x6b00]                             
+        ... 2 lines
+ 212 h 11    512    0  LDSM.16.MT88.4 R8, [R54+0x6b20]                              
+        ... 5 lines
+ 218 h 12    512    0  DEPBAR.LE SB0, 0x2                                           
+ 219 h 12    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 5 lines
+ 225 h 13    512    7  LDSM.16.M88.4 R28, [R67]                                     barrier 7
+ 226 h 13    512    0  LDSM.16.MT88.4 R16, [R68+0x20]                               
+ 227 h 14    512    7  HMMA.16816.F32 R12, R32, R14, R44                            math 7
+ 228 h 14    512    0  LDSM.16.MT88.4 R24, [R68]                                    
+        ... 10 lines
+ 239 h 16    512    0  LDGSTS.E.BYPASS.128 [R39][R64.64+0x140], P0                  
+ 240 h 16    512    0  LDGSTS.E.BYPASS.128 [R45][R36.64], P0                        
+ 241 h 16    512    1  LDGDEPBAR                                                    wait 1
+        ... 1 lines
+ 243 h 17    512    0  LDSM.16.M88.4 R48, [R67+0x20]                                
+ 244 h 17    512    0  LDSM.16.MT88.4 R8, [R68+0x900]                               
+        ... 4 lines
+ 249 h 19    512    0  LDSM.16.MT88.4 R12, [R68+0x920]                              
+        ... 1 lines
+ 251 h 19    512    0  DEPBAR.LE SB0, 0x2                                           
+        ... 2 lines
+ 254 h 20    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 7 lines
+ 262 h 21    512    1  LDSM.16.MT88.4 R44, [R68]                                    barrier 1
+        ... 2 lines
+ 265 h 22    512    0  LDSM.16.M88.4 R36, [R32]                                     
+ 266 h 22    512    0  LDSM.16.MT88.4 R28, [R68+0x20]                               
+        ... 12 lines
+ 279 h 24    512    0  LDGSTS.E.BYPASS.128 [R17][R64.64+0x180], P0                  
+        ... 3 lines
+ 283 h 24    512    0  LDGSTS.E.BYPASS.128 [R19][R24.64], P0                        
+ 284 h 24    512    0  LDGDEPBAR                                                    
+ 285 h 24    512    1  LDSM.16.M88.4 R32, [R32+0x20]                                mio 1
+        ... 1 lines
+ 287 h 25    512    1  LDSM.16.MT88.4 R12, [R68+0x900]                              mio 1
+        ... 2 lines
+ 290 h 26    512    1  LDSM.16.MT88.4 R8, [R68+0x920]                               mio 1
+        ... 2 lines
+ 293 h 27    512    0  DEPBAR.LE SB0, 0x2                                           
+ 294 h 27    512    3  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 3
+        ... 2 lines
+ 297 h 29    512   12  LDSM.16.M88.4 R16, [R69]                                     barrier 12
+ 298 h 29    512    0  LDSM.16.MT88.4 R28, [R66+0x20]                               
+        ... 1 lines
+ 300 h 30    512    0  LDSM.16.MT88.4 R24, [R66]                                    
+        ... 3 lines
+ 304 h 32    512    8  HMMA.16816.F32 R32, R32, R10, R36                            math 7, wait 1
+        ... 7 lines
+ 312 h 32    512    0  LDGSTS.E.BYPASS.128 [R39][R64.64+0x1c0], P0                  
+ 313 h 32    512    0  LDGSTS.E.BYPASS.128 [R45][R36.64], P0                        
+ 314 h 32    512    0  LDGDEPBAR                                                    
+        ... 1 lines
+ 316 h 33    512    0  LDSM.16.M88.4 R48, [R69+0x20]                                
+ 317 h 33    512    0  LDSM.16.MT88.4 R8, [R66+0x900]                               
+        ... 4 lines
+ 322 h 35    512    0  LDSM.16.MT88.4 R12, [R66+0x920]                              
+        ... 1 lines
+ 324 h 35    512    0  DEPBAR.LE SB0, 0x2                                           
+        ... 2 lines
+ 327 h 36    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 7 lines
+ 335 h 37    512    9  LDSM.16.MT88.4 R44, [R66]                                    barrier 9
+        ... 2 lines
+ 338 h 38    512    0  LDSM.16.M88.4 R36, [R32]                                     
+ 339 h 38    512    0  LDSM.16.MT88.4 R28, [R66+0x20]                               
+        ... 4 lines
+ 344 h 40    512    8  HMMA.16816.F32 R48, R48, R14, R16                            math 7, wait 1
+        ... 7 lines
+ 352 h 40    512    0  LDGSTS.E.BYPASS.128 [R17][R64.64+0x200], P0                  
+        ... 2 lines
+ 355 h 40    512    2  LDGSTS.E.BYPASS.128 [R19][R24.64], P0                        mio 1, wait 1
+        ... 1 lines
+ 357 h 40    512    0  LDGDEPBAR                                                    
+ 358 h 40    512    1  LDSM.16.M88.4 R32, [R32+0x20]                                mio 1
+        ... 2 lines
+ 361 h 41    512    0  LDSM.16.MT88.4 R12, [R66+0x900]                              
+        ... 1 lines
+ 363 h 42    512    0  LDSM.16.MT88.4 R8, [R66+0x920]                               
+        ... 2 lines
+ 366 h 43    512    0  DEPBAR.LE SB0, 0x2                                           
+ 367 h 43    512    8  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 8
+        ... 2 lines
+ 370 h 45    512    6  LDSM.16.M88.4 R16, [R67]                                     barrier 6
+ 371 h 45    512    0  LDSM.16.MT88.4 R28, [R52+0x20]                               
+        ... 1 lines
+ 373 h 46    512    0  LDSM.16.MT88.4 R24, [R52]                                    
+        ... 9 lines
+ 383 h 48    512    0  LDGSTS.E.BYPASS.128 [R39][R64.64+0x240], P0                  
+ 384 h 48    512    1  LDGSTS.E.BYPASS.128 [R45][R36.64], P0                        mio 1
+ 385 h 48    512    1  LDGDEPBAR                                                    wait 1
+        ... 1 lines
+ 387 h 49    512    0  LDSM.16.M88.4 R48, [R67+0x20]                                
+ 388 h 49    512    0  LDSM.16.MT88.4 R8, [R52+0x900]                               
+        ... 1 lines
+ 390 h 50    512    7  HMMA.16816.F32 R40, R16, R24, R40                            math 7
+        ... 1 lines
+ 392 h 51    512    6  HMMA.16816.F32 R24, R16, R26, R12                            math 6
+ 393 h 51    512    0  LDSM.16.MT88.4 R12, [R52+0x920]                              
+        ... 1 lines
+ 395 h 51    512    0  DEPBAR.LE SB0, 0x2                                           
+ 396 h 51    512   13  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 13
+        ... 8 lines
+ 405 h 53    512   12  LDSM.16.MT88.4 R44, [R68]                                    barrier 12
+        ... 1 lines
+ 407 h 53    512    0  LDSM.16.M88.4 R28, [R32]                                     
+        ... 1 lines
+ 409 h 54    512    1  LDSM.16.MT88.4 R36, [R68+0x20]                               wait 1
+        ... 4 lines
+ 414 h 56    512    6  HMMA.16816.F32 R48, R48, R14, R16                            math 5, not_selected 1
+        ... 6 lines
+ 421 h 56    512    0  LDGSTS.E.BYPASS.128 [R17][R64.64+0x280], P0                  
+        ... 1 lines
+ 423 h 56    512    1  LDGSTS.E.BYPASS.128 [R19][R24.64], P0                        mio 1
+ 424 h 56    512    1  LDGDEPBAR                                                    mio 1
+        ... 1 lines
+ 426 h 57    512    0  LDSM.16.M88.4 R32, [R32+0x20]                                
+        ... 1 lines
+ 428 h 57    512    0  LDSM.16.MT88.4 R12, [R68+0x900]                              
+        ... 1 lines
+ 430 h 58    512    0  LDSM.16.MT88.4 R8, [R68+0x920]                               
+        ... 2 lines
+ 433 h 59    512    1  DEPBAR.LE SB0, 0x2                                           selected 1
+ 434 h 59    512   11  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 10, wait 1
+        ... 2 lines
+ 437 h 61    512    7  LDSM.16.M88.4 R16, [R69]                                     barrier 7
+ 438 h 61    512    0  LDSM.16.MT88.4 R28, [R54+0x20]                               
+        ... 1 lines
+ 440 h 62    512    0  LDSM.16.MT88.4 R24, [R54]                                    
+        ... 12 lines
+ 453 h 64    512    0  LDGSTS.E.BYPASS.128 [R39][R64.64+0x2c0], P0                  
+        ... 2 lines
+ 456 h 64    512    0  LDGSTS.E.BYPASS.128 [R45][R36.64], P0                        
+        ... 1 lines
+ 458 h 64    512    0  LDSM.16.M88.4 R48, [R69+0x20]                                
+ 459 h 65    512    7  HMMA.16816.F32 R20, R16, R28, R20                            math 7
+ 460 h 65    512    1  LDGDEPBAR                                                    wait 1
+ 461 h 65    512    0  LDSM.16.MT88.4 R8, [R54+0x900]                               
+        ... 6 lines
+ 468 h 67    512    0  LDSM.16.MT88.4 R12, [R54+0x920]                              
+        ... 1 lines
+ 470 h 68    512    0  DEPBAR.LE SB0, 0x2                                           
+        ... 1 lines
+ 472 h 68    512    1  BAR.SYNC.DEFER_BLOCKING 0x0                                  selected 1
+        ... 10 lines
+ 483 h 70    512    3  LDSM.16.MT88.4 R28, [R36]                                    barrier 3
+        ... 1 lines
+ 485 h 70    512    2  LDSM.16.M88.4 R32, [R44]                                     dispatch 1, wait 1
+        ... 1 lines
+ 487 h 71    512    0  LDSM.16.MT88.4 R24, [R36+0x20]                               
+        ... 3 lines
+ 491 h 71    512    0  LDGSTS.E.BYPASS.128 [R37][R64.64+0x300], P0                  
+        ... 2 lines
+ 494 h 72    512    2  LDGSTS.E.BYPASS.128 [R54][R38.64], P0                        mio 2
+        ... 1 lines
+ 496 h 72    512    2  LDGDEPBAR                                                    mio 2
+ 497 h 72    512    2  LDSM.16.M88.4 R44, [R44+0x20]                                mio 2
+ 498 h 72    512    0  LDSM.16.MT88.4 R16, [R36+0x900]                              
+        ... 1 lines
+ 500 h 72    512    0  LDSM.16.MT88.4 R12, [R36+0x920]                              
+        ... 1 lines
+ 502 h 72    512    0  DEPBAR.LE SB0, 0x2                                           
+ 503 h 73    512   17  HMMA.16816.F32 R40, R32, R28, R40                            long_sb 13, math 3, wait 1
+        ... 5 lines
+ 509 h 75    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 8 lines
+ 518 h 78    512   12  LDSM.16.MT88.4 R8, [R67]                                     barrier 12
+ 519 h 78    512    0  LDSM.16.M88.4 R36, [R52]                                     
+        ... 1 lines
+ 521 h 79    512    0  LDSM.16.MT88.4 R32, [R67+0x20]                               
+        ... 3 lines
+ 525 h 79    512    1  LDGSTS.E.BYPASS.128 [R51][R64.64+0x340], P0                  mio 1
+        ... 1 lines
+ 527 h 80    512    0  LDGSTS.E.BYPASS.128 [R50][R48.64], P0                        
+ 528 h 80    512    0  LDGDEPBAR                                                    
+ 529 h 80    512    0  LDSM.16.M88.4 R12, [R52+0x20]                                
+ 530 h 80    512    0  LDSM.16.MT88.4 R28, [R67+0x900]                              
+        ... 5 lines
+ 536 h 83    512    0  LDSM.16.MT88.4 R16, [R67+0x920]                              
+ 537 h 83    512    0  DEPBAR.LE SB0, 0x2                                           
+ 538 h 83    512    8  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 7, selected 1
+        ... 7 lines
+ 546 h 86    512    3  LDSM.16.MT88.4 R24, [R68]                                    barrier 3
+ 547 h 86    512    1  LDSM.16.M88.4 R48, [R67]                                     wait 1
+        ... 1 lines
+ 549 h 86    512    0  LDSM.16.MT88.4 R8, [R68+0x20]                                
+        ... 2 lines
+ 552 h 88    512    6  HMMA.16816.F32 R12, R12, R18, R32                            math 5, wait 1
+        ... 7 lines
+ 560 h 88    512    0  LDGSTS.E.BYPASS.128 [R35][R64.64+0x380], P0                  
+        ... 1 lines
+ 562 h 88    512    0  LDGSTS.E.BYPASS.128 [R34][R32.64], P0                        
+ 563 h 88    512    1  LDGDEPBAR                                                    mio 1
+        ... 1 lines
+ 565 h 89    512    0  LDSM.16.M88.4 R16, [R67+0x20]                                
+ 566 h 89    512    0  LDSM.16.MT88.4 R36, [R68+0x900]                              
+        ... 2 lines
+ 569 h 90    512    0  LDSM.16.MT88.4 R44, [R68+0x920]                              
+        ... 3 lines
+ 573 h 91    512    0  DEPBAR.LE SB0, 0x2                                           
+ 574 h 91    512    8  IMAD R28, R69, 0xa00, R58                                    long_sb 8
+        ... 2 lines
+ 577 h 92    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 7 lines
+ 585 h 93    512    5  LDSM.16.MT88.4 R8, [R69]                                     barrier 5
+        ... 1 lines
+ 587 h 94    512    0  LDSM.16.M88.4 R32, [R28]                                     
+        ... 3 lines
+ 591 h 94    512    0  LDSM.16.MT88.4 R12, [R69+0x20]                               
+        ... 5 lines
+ 597 h 95    512    0  LDGSTS.E.BYPASS.128 [R27][R64.64+0x3c0], P0                  
+        ... 1 lines
+ 599 h 95    512    1  LDGSTS.E.BYPASS.128 [R29][R24.64], P0                        mio 1
+        ... 2 lines
+ 602 h 96    512    0  LDGDEPBAR                                                    
+        ... 1 lines
+ 604 h 96    512    1  LDSM.16.MT88.4 R48, [R69+0x920]                              wait 1
+        ... 1 lines
+ 606 h 96    512    0  LDSM.16.M88.4 R28, [R28+0x20]                                
+ 607 h 96    512    2  LDSM.16.MT88.4 R24, [R69+0x900]                              mio 1, wait 1
+        ... 3 lines
+ 611 h 97    512    0  DEPBAR.LE SB0, 0x2                                           
+ 612 h 97    512   13  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 13
+        ... 8 lines
+ 621 h100    512    6  LDSM.16.MT88.4 R16, [R54]                                    barrier 6
+        ... 3 lines
+ 625 h101    512    0  LDSM.16.M88.4 R36, [R12]                                     
+        ... 1 lines
+ 627 h101    512    4  LDSM.16.MT88.4 R44, [R54+0x20]                               dispatch 4
+        ... 4 lines
+ 632 h102    512    0  LDGSTS.E.BYPASS.128 [R69][R64.64+0x400], !PT                 
+        ... 7 lines
+ 640 h103    512    0  LDGSTS.E.BYPASS.128 [R68][R8.64], !PT                        
+        ... 1 lines
+ 642 h104    512    0  LDGDEPBAR                                                    
+        ... 1 lines
+ 644 h104    512    0  LDSM.16.M88.4 R8, [R12+0x20]                                 
+        ... 2 lines
+ 647 h104    512    0  LDSM.16.MT88.4 R12, [R54+0x900]                              
+        ... 3 lines
+ 651 h106    512    0  LDSM.16.MT88.4 R24, [R54+0x920]                              
+        ... 1 lines
+ 653 h106    512    0  DEPBAR.LE SB0, 0x2                                           
+ 654 h106    512    9  BAR.SYNC.DEFER_BLOCKING 0x0                                  long_sb 8, wait 1
+        ... 6 lines
+ 661 h108    512    3  LDSM.16.MT88.4 R28, [R68]                                    barrier 3
+        ... 1 lines
+ 663 h109    512    1  LDSM.16.M88.4 R32, [R69]                                     wait 1
+        ... 4 lines
+ 668 h110    512    0  LDSM.16.MT88.4 R44, [R68+0x20]                               
+        ... 4 lines
+ 673 h110    512    0  LDGSTS.E.BYPASS.128 [R13][R64.64+0x440], !PT                 
+ 674 h111    512    6  HMMA.16816.F32 R20, R8, R24, R20                             math 6
+ 675 h111    512    0  LDGSTS.E.BYPASS.128 [R12][R48.64], !PT                       
+ 676 h111    512    1  LDGDEPBAR                                                    wait 1
+        ... 1 lines
+ 678 h112    512    2  LDSM.16.MT88.4 R52, [R68+0x900]                              wait 2
+        ... 1 lines
+ 680 h112    512    2  LDSM.16.M88.4 R48, [R69+0x20]                                long_sb 2
+        ... 1 lines
+ 682 h112    512    0  LDSM.16.MT88.4 R8, [R68+0x920]                               
+        ... 1 lines
+ 684 h113    512    0  DEPBAR.LE SB0, 0x2                                           
+ 685 h114    512    7  HMMA.16816.F32 R16, R32, R30, R16                            long_sb 4, math 3
+ 686 h114    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 6 lines
+ 693 h117    512    4  LDSM.16.MT88.4 R12, [R59]                                    barrier 4
+        ... 1 lines
+ 695 h117    512    0  LDSM.16.M88.4 R24, [R44]                                     
+        ... 2 lines
+ 698 h118    512    0  LDSM.16.MT88.4 R16, [R59+0x20]                               
+        ... 3 lines
+ 702 h118    512    0  LDGSTS.E.BYPASS.128 [R5][R64.64+0x480], !PT                  
+        ... 6 lines
+ 709 h120    512    0  LDGSTS.E.BYPASS.128 [R45][R46.64], !PT                       
+ 710 h120    512    0  LDSM.16.M88.4 R8, [R44+0x20]                                 
+ 711 h120    512    1  LDSM.16.MT88.4 R28, [R59+0x900]                              wait 1
+ 712 h120    512    0  LDSM.16.MT88.4 R32, [R59+0x920]                              
+        ... 1 lines
+ 714 h121    512    1  LDGDEPBAR                                                    mio 1
+        ... 1 lines
+ 716 h122    512    6  HMMA.16816.F32 R52, R24, R14, R52                            math 5, wait 1
+        ... 2 lines
+ 719 h124    512    0  DEPBAR.LE SB0, 0x0                                           
+ 720 h125    512    7  HMMA.16816.F32 R40, R8, R28, R40                             math 6, wait 1
+        ... 3 lines
+ 724 h128    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 1 lines
+ 726 h128    512    8  @P0   BRA 0x100052a9a10                                      barrier 8
+        ... 10 lines
+ 737 h128    512    1  @P0   BRA 0x100052a9ad0                                      wait 1
+        ... 12 lines
+ 750 h128    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+ 751 h128    512    6  BSSY B0, 0x100052a9ca0                                       barrier 6
+ 752 h128    512    1  @P3   BRA 0x100052a9c90                                      selected 1
+        ... 21 lines
+ 774 h128   1024    6  @P0   STG.E.128 [R4.64], R8                                  short_sb 6
+        ... 1 lines
+ 776 h128   1024    0  @!P0  BRA 0x100052a9b20                                      
+        ... 1 lines
+ 778 h128    512    1  BAR.SYNC.DEFER_BLOCKING 0x0                                  wait 1
+        ... 1 lines
+ 780 h128    512    2  @P1   BRA 0x100052a9d70                                      barrier 2
+        ... 10 lines
+ 791 h128    512    0  @P1   BRA 0x100052a9e30                                      
+        ... 12 lines
+ 804 h128    512    0  BAR.SYNC.DEFER_BLOCKING 0x0                                  
+        ... 1 lines
+ 806 h128    512    0  @P2   BRA 0x100052aa080                                      
+        ... 30 lines
+ 837 h128   1024    7  @P0   STG.E.128 [R2.64], R4                                  short_sb 7
+        ... 1 lines
+ 839 h128   1024    2  @!P0  BRA 0x100052a9f10                                      wait 2
+        ... 1 lines
+ 841 h128    512    1  BAR.SYNC.DEFER_BLOCKING 0x0                                  branch_resolving 1
+ 842 h128    512    1  EXIT                                                         barrier 1
+ 843 h128      0    1  BRA `(.L_x_0) 0x100052aa0b0                                  wait 1

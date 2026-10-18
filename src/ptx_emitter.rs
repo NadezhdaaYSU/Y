@@ -11738,6 +11738,83 @@ declare it as a Q format.\n{}",
         );
     }
 
+    /// One 16-deep K step's fragments, at the addresses
+    /// `emit_gemm_compute_block_interleaved` uses, into the given registers:
+    /// `b[j]` (4, both N-halves) and `a[i]` (4).
+    #[allow(clippy::too_many_arguments)]
+    fn emit_gemm_fragment_loads(
+        &mut self,
+        b: &[Vec<String>],
+        a: &[Vec<String>],
+        warp_col0_local: &str,
+        warp_row0_local: &str,
+        smem_a_base: &str,
+        smem_b_base: &str,
+        smem_a_stride: u32,
+        smem_b_stride: u32,
+        row_off: &str,
+        col_bit_a: &str,
+        kk: u32,
+    ) {
+        for (j, frag) in b.iter().enumerate() {
+            let col_base = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_base, warp_col0_local, j * 16).unwrap();
+            let col_reg = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_reg, col_base, col_bit_a).unwrap();
+            let global_k = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_k, row_off, kk).unwrap();
+            let lin = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_k, smem_b_stride, col_reg).unwrap();
+            let byte = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
+            let addr = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_b_base, byte).unwrap();
+            writeln!(&mut self.ptx_buffer, "    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {{{}}}, [{}];", frag.join(","), addr).unwrap();
+        }
+        for (i, frag) in a.iter().enumerate() {
+            let row_reg = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row_reg, warp_row0_local, row_off).unwrap();
+            let global_row = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_row, row_reg, i * 16).unwrap();
+            let col0 = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col0, col_bit_a, kk).unwrap();
+            let lin = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_row, smem_a_stride, col0).unwrap();
+            let byte = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
+            let addr = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_a_base, byte).unwrap();
+            writeln!(&mut self.ptx_buffer, "    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {{{}}}, [{}];", frag.join(","), addr).unwrap();
+        }
+    }
+
+    /// The MMAs of one 16-deep K step on fragments `emit_gemm_fragment_loads`
+    /// loaded, in `emit_gemm_compute_block_interleaved`'s order, with an equal
+    /// share of `interleave` after each i's group.
+    fn emit_gemm_fragment_mmas(&mut self, acc: &[Vec<Vec<String>>], b: &[Vec<String>], a: &[Vec<String>], interleave: &[String]) {
+        let per_group = interleave.len().div_ceil(a.len().max(1)).max(1);
+        let mut pending = interleave.iter();
+        for (i, a_frag) in a.iter().enumerate() {
+            for (j, b_frag) in b.iter().enumerate() {
+                for half in 0..2usize {
+                    let lo = 4 * half;
+                    let d = acc[i][j][lo..lo + 4].join(",");
+                    writeln!(
+                        &mut self.ptx_buffer,
+                        "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
+                        d, a_frag.join(","), b_frag[2 * half..2 * half + 2].join(","), d
+                    ).unwrap();
+                }
+            }
+            for line in pending.by_ref().take(per_group) {
+                writeln!(&mut self.ptx_buffer, "{}", line).unwrap();
+            }
+        }
+        for line in pending {
+            writeln!(&mut self.ptx_buffer, "{}", line).unwrap();
+        }
+    }
+
     /// `emit_gemm_compute_block`, with `interleave` - whole PTX lines, the
     /// next K-tile's `cp.async` copies - written between the A-fragment
     /// groups of the first 16-deep K step, an equal share after each
@@ -12372,10 +12449,40 @@ declare it as a Q format.\n{}",
                 }
                 self.emit_cp_async_commit();
             }
-            if !spreads {
+            // With three stages or more, the wait for the next K-tile and the
+            // barrier sit between this tile's last two 16-deep K steps, and
+            // the next tile's first fragments load while the last step's
+            // MMAs run (CUTLASS's multistage order). At the top of the loop
+            // the barrier was followed at once by the ldmatrix-to-MMA chain,
+            // and every warp of the CTA stalled on both together: at 512^3,
+            // 107 barrier and 106 long-scoreboard stall samples in the loop
+            // against cuBLAS's 26 and 29. Measured faster at 1024^3 (1.2-1.5%),
+            // 256^3 (0.7%) and M = 1 and 4 decode shapes (4.3-4.7%, 0.9-1.0%),
+            // and level at 512^3 and M = 8 and 32. With two stages the wait
+            // would be for the copies this iteration has just issued, so
+            // those tiles keep it where it was. Two register sets alternate
+            // between the K steps, so the number of steps must be even for the
+            // set holding step 0 to be the same on every iteration.
+            let xbar = n_stages >= 3 && k_substeps >= 2 && k_substeps % 2 == 0;
+            if !spreads || xbar {
                 self.emit_cp_async_wait(n_stages - 2);
                 writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             }
+            let xbar_sets = if xbar {
+                let mut sets = Vec::with_capacity(2);
+                for _ in 0..2 {
+                    let b: Vec<Vec<String>> = (0..num_j).map(|_| (0..4).map(|_| self.alloc_reg32()).collect()).collect();
+                    let a: Vec<Vec<String>> = (0..num_i).map(|_| (0..4).map(|_| self.alloc_reg32()).collect()).collect();
+                    sets.push((b, a));
+                }
+                self.emit_gemm_fragment_loads(
+                    &sets[0].0, &sets[0].1, &warp_col0_local, &warp_row0_local, &smem_pipeline_base, &smem_b_region_base,
+                    smem_a_stride, smem_b_stride, &row_off, &col_bit_a, 0,
+                );
+                Some(sets)
+            } else {
+                None
+            };
 
             let k_iter = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", k_iter).unwrap();
@@ -12402,8 +12509,9 @@ declare it as a Q format.\n{}",
             // in Triton's loop: 2048-8192 measured 0.5-1.2% faster. Where
             // the copies are issued first (1024, 64x128) the same move
             // measured 5% slower, so there the pair still ends the
-            // iteration.
-            if spreads {
+            // iteration. Tiles of three stages or more take neither place:
+            // see `xbar` above.
+            if spreads && !xbar {
                 self.emit_cp_async_wait(n_stages - 2);
                 writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             }
@@ -12478,15 +12586,50 @@ declare it as a Q format.\n{}",
             let b_read_base = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", b_read_base, read_stage, stage_b_bytes, smem_b_region_base).unwrap();
 
-            self.emit_gemm_compute_block_interleaved(
-                &acc, &warp_col0_local, &warp_row0_local, &a_read_base, &b_read_base,
-                smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
-                &interleave,
-            );
-            if !interleave.is_empty() {
-                self.emit_cp_async_commit();
+            if let Some(sets) = &xbar_sets {
+                for s in 0..k_substeps as usize {
+                    let (cur, nxt) = (&sets[s % 2], &sets[(s + 1) % 2]);
+                    if s + 1 < k_substeps as usize {
+                        self.emit_gemm_fragment_loads(
+                            &nxt.0, &nxt.1, &warp_col0_local, &warp_row0_local, &a_read_base, &b_read_base,
+                            smem_a_stride, smem_b_stride, &row_off, &col_bit_a, 16 * (s as u32 + 1),
+                        );
+                    } else {
+                        if !interleave.is_empty() {
+                            self.emit_cp_async_commit();
+                        }
+                        // Tile `k_iter+1` has landed and every warp is done
+                        // reading `read_stage`; on the last iteration this
+                        // loads a slot no MMA reads.
+                        self.emit_cp_async_wait(n_stages - 2);
+                        writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+                        let next_tile_r = self.alloc_reg32();
+                        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", next_tile_r, k_iter).unwrap();
+                        let next_stage = self.alloc_reg32();
+                        writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", next_stage, next_tile_r, n_stages).unwrap();
+                        let a_next = self.alloc_reg32();
+                        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", a_next, next_stage, stage_a_bytes, smem_pipeline_base).unwrap();
+                        let b_next = self.alloc_reg32();
+                        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", b_next, next_stage, stage_b_bytes, smem_b_region_base).unwrap();
+                        self.emit_gemm_fragment_loads(
+                            &nxt.0, &nxt.1, &warp_col0_local, &warp_row0_local, &a_next, &b_next,
+                            smem_a_stride, smem_b_stride, &row_off, &col_bit_a, 0,
+                        );
+                    }
+                    let lines: &[String] = if s == 0 { &interleave } else { &[] };
+                    self.emit_gemm_fragment_mmas(&acc, &cur.0, &cur.1, lines);
+                }
+            } else {
+                self.emit_gemm_compute_block_interleaved(
+                    &acc, &warp_col0_local, &warp_row0_local, &a_read_base, &b_read_base,
+                    smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                    &interleave,
+                );
+                if !interleave.is_empty() {
+                    self.emit_cp_async_commit();
+                }
             }
-            if !spreads {
+            if !spreads && !xbar {
                 // Wait until group `k_iter+1` (the tile that will become
                 // read_stage next iteration) has landed, then make it
                 // visible block-wide; also what makes it safe for the NEXT

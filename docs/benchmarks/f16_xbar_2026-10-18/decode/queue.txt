@@ -1,0 +1,2 @@
+dec 1: QUIET 21:27:40 mean 4.8%
+dec 2: QUIET 21:28:17 mean 3.9%

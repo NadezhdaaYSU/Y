@@ -165,6 +165,88 @@ class F16GemmIsExact(unittest.TestCase):
                     elif "ldmatrix" in line:
                         self.assertFalse(unsynchronised, f"ldmatrix after a wait with no barrier, PTX line {n + 1}")
 
+    def test_the_next_tile_is_waited_for_between_the_last_two_k_steps(self):
+        # With three stages or more the loop waits for the next K-tile and
+        # synchronises between this tile's last two 16-deep K steps, and the
+        # next tile's first fragments load while the last step's MMAs run:
+        # one wait, for all but the newest stages - 2 groups, after the
+        # loop's only commit, then one barrier, then only those fragments
+        # (addressed from k_iter + 1) and the last step's MMAs. Measured on
+        # the 512^3 kernel, waiting for one group fewer changed its output in
+        # 4 of 6 trials, and dropping the barrier or loading those fragments
+        # above the wait in all 6; the ordering test above sees only the
+        # missing barrier. With two stages the wait would be for the copies
+        # this same iteration issued, so there the loop keeps one wait and
+        # barrier at its top or its end.
+        for tile in TILES:
+            cm, cn, ck, wm, wn, _ = (int(x) for x in tile.split(","))
+            with self.subTest(tile=tile):
+                ptx = f16_gemm(*shapes_for(tile)[0], tile)[0].ptx
+                used = re.search(r"\((\d+) used", ptx)
+                stages = int(used.group(1)) if used else 1
+                self.assertTrue(used or "stages synchronously" in ptx, f"{tile}: no stage count in the header")
+                lines = ptx.splitlines()
+                top = next(i for i, l in enumerate(lines) if re.match(r"\s*\$GEMM_K_LOOP_\d+:", l))
+                end = next(i for i, l in enumerate(lines) if re.match(r"\s*\$GEMM_K_DONE_\d+:", l))
+                body = lines[top + 1:end]
+                waits = [i for i, l in enumerate(body) if "cp.async.wait_group" in l]
+                bars = [i for i, l in enumerate(body) if "bar.sync" in l]
+                frags, mmas = (cm // wm) // 16 + (cn // wn) // 16, 2 * ((cm // wm) // 16) * ((cn // wn) // 16)
+                if stages < 3 or (ck // 16) % 2:
+                    self.assertEqual((len(waits), len(bars)), (1, 1) if stages > 1 else (0, 2), tile)
+                    if stages > 1:
+                        loads = [i for i, l in enumerate(body) if "ldmatrix" in l]
+                        self.assertTrue(loads[0] > bars[0] or loads[-1] < waits[0],
+                                        f"{tile}: two stages, and fragments load on both sides of the barrier")
+                    continue
+                self.assertEqual((len(waits), len(bars)), (1, 1), f"{tile}: one wait and one barrier in the loop")
+                self.assertEqual(bars[0], waits[0] + 1, f"{tile}: the barrier follows the wait")
+                self.assertIn(f"cp.async.wait_group {stages - 2};", body[waits[0]], tile)
+                before, after = body[:waits[0]], body[bars[0] + 1:]
+                self.assertEqual(sum("cp.async.commit_group" in l for l in before), 1, f"{tile}: one commit before the wait")
+                self.assertFalse(any("cp.async" in l for l in after), f"{tile}: a copy after the wait")
+                self.assertEqual(sum("ldmatrix" in l for l in after), frags, f"{tile}: only the next tile's first fragments after the barrier")
+                self.assertEqual(sum("mma.sync" in l for l in after), mmas, f"{tile}: only the last K step's MMAs after the barrier")
+                self.assertEqual(sum("ldmatrix" in l for l in before), (ck // 16 - 1) * frags, tile)
+                k_iter = re.match(r"\s*setp\.ge\.u32 %p\d+, (%r\d+),", body[0]).group(1)
+                nxt = re.search(rf"add\.u32 (%r\d+), {k_iter}, 1;", "\n".join(after))
+                self.assertTrue(nxt and re.search(rf"rem\.u32 %r\d+, {nxt.group(1)}, {stages};", "\n".join(after)),
+                                f"{tile}: the fragments after the barrier are not addressed from k_iter + 1")
+
+    def test_every_tile_rounds_alike_and_close(self):
+        # Every tile adds the 16-deep K steps of an output in the same order,
+        # so on any input all of them give the same bits; a race or a
+        # misplaced fragment changes some. Same-sign inputs so no
+        # cancellation hides a short accumulator: measured at 256 x 256 x
+        # 768, every tile here (and cuBLAS) is 9.76e-6 from float64 at
+        # worst - the mma's own accumulation, against 4.3e-7 for a float32
+        # sum of exact 16-deep partials - and the controls, a half-precision
+        # result and a half-precision accumulation, are 4.9e-4 and 3.2e-3.
+        m, n, k = 256, 256, 768
+        gen = torch.Generator(device="cuda").manual_seed(3)
+        a = torch.randn(m, k, device="cuda", generator=gen).abs().half()
+        b = torch.randn(k, n, device="cuda", generator=gen).abs().half()
+        ref = a.double() @ b.double()
+        bound = 2e-5
+        worst = lambda x: ((x.double() - ref).abs() / ref).max().item()
+        self.assertGreater(worst((a @ b).float()), bound, "the bound passes a half-precision result")
+        half_acc = torch.zeros(m, n, device="cuda", dtype=torch.float16)
+        for kk in range(0, k, 16):
+            half_acc += (a[:, kk:kk + 16].float() @ b[kk:kk + 16, :].float()).half()
+        self.assertGreater(worst(half_acc.float()), bound, "the bound passes a half-precision accumulation")
+        first = None
+        for tile in TILES:
+            with self.subTest(tile=tile):
+                kern, grid, block, _ = f16_gemm(m, n, k, tile)
+                c = torch.full((m, n), float("nan"), device="cuda")
+                kern.launch(grid, block, [a, b, c])
+                torch.cuda.synchronize()
+                self.assertLessEqual(worst(c), bound, tile)
+                if first is None:
+                    first = (tile, c)
+                differ = int((c.view(torch.int32) != first[1].view(torch.int32)).sum())
+                self.assertEqual(differ, 0, f"{differ} elements of {tile} differ in their bits from {first[0]}'s")
+
     def test_ctas_past_the_matrix_store_nothing(self):
         for tile in ("64,128,32,2,2,2", "64,64,64,4,2,3", "128,128,32,2,2,2"):
             with self.subTest(tile=tile):

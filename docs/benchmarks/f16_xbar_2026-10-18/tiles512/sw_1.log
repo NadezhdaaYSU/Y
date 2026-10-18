@@ -1,0 +1,21 @@
+           512 Y {'off_32_32_32_2_1_4': '32x32 2x1', 'off_32_32_64_2_1_3': '32x32 2x1', 'off_32_64_32_2_2_3': '32x64 2x2', 'off_32_64_32_2_2_4': '32x64 2x2', 'off_32_64_32_2_2_6': '32x64 2x2', 'off_32_64_64_2_2_3': '32x64 2x2', 'off_32_64_64_2_2_4': '32x64 2x2', 'off_64_32_32_2_2_4': '64x32 2x2', 'off_64_64_32_4_2_4': '64x64 4x2', 'on_32_32_32_2_1_4': '32x32 2x1', 'on_32_32_64_2_1_3': '32x32 2x1', 'on_32_64_32_2_2_3': '32x64 2x2', 'on_32_64_32_2_2_4': '32x64 2x2', 'on_32_64_32_2_2_6': '32x64 2x2', 'on_32_64_64_2_2_3': '32x64 2x2', 'on_32_64_64_2_2_4': '32x64 2x2', 'on_64_32_32_2_2_4': '64x32 2x2', 'on_64_64_32_4_2_4': '64x64 4x2'} | exact {'off_32_32_32_2_1_4': True, 'off_32_32_64_2_1_3': True, 'off_32_64_32_2_2_3': True, 'off_32_64_32_2_2_4': True, 'off_32_64_32_2_2_6': True, 'off_32_64_64_2_2_3': True, 'off_32_64_64_2_2_4': True, 'off_64_32_32_2_2_4': True, 'off_64_64_32_4_2_4': True, 'on_32_32_32_2_1_4': True, 'on_32_32_64_2_1_3': True, 'on_32_64_32_2_2_3': True, 'on_32_64_32_2_2_4': True, 'on_32_64_32_2_2_6': True, 'on_32_64_64_2_2_3': True, 'on_32_64_64_2_2_4': True, 'on_64_32_32_2_2_4': True, 'on_64_64_32_4_2_4': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2490-2775 MHz
+      cuBLAS    min       6.0 median       6.1 us  0.700x Triton
+      on_64_64_32_4_2_4 min       6.7 median       6.8 us  0.782x Triton
+      off_64_64_32_4_2_4 min       6.8 median       6.8 us  0.791x Triton
+      on_32_64_32_2_2_3 min       8.4 median       8.4 us  0.971x Triton
+      off_32_64_32_2_2_3 min       8.4 median       8.4 us  0.975x Triton
+      on_32_64_32_2_2_6 min       8.4 median       8.4 us  0.975x Triton
+      on_32_64_64_2_2_3 min       8.5 median       8.5 us  0.981x Triton
+      off_32_64_32_2_2_4 min       8.5 median       8.5 us  0.985x Triton
+      on_32_64_32_2_2_4 min       8.5 median       8.5 us  0.986x Triton
+      off_32_64_32_2_2_6 min       8.5 median       8.5 us  0.987x Triton
+      off_32_64_64_2_2_3 min       8.5 median       8.6 us  0.989x Triton
+      Triton    min       8.6 median       9.8 us  1.000x Triton
+      off_64_32_32_2_2_4 min       9.5 median       9.5 us  1.098x Triton
+      on_64_32_32_2_2_4 min       9.5 median       9.5 us  1.099x Triton
+      off_32_64_64_2_2_4 min       9.8 median       9.8 us  1.135x Triton
+      on_32_64_64_2_2_4 min       9.8 median       9.8 us  1.137x Triton
+      off_32_32_64_2_1_3 min      10.8 median      10.9 us  1.256x Triton
+      on_32_32_64_2_1_3 min      11.1 median      11.1 us  1.285x Triton
+      off_32_32_32_2_1_4 min      12.0 median      12.0 us  1.385x Triton
+      on_32_32_32_2_1_4 min      12.0 median      12.0 us  1.388x Triton
