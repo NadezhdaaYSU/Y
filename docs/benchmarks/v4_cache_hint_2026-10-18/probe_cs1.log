@@ -1,0 +1,50 @@
+== vec_add 1048576  all exact/within tol  calls 544  SM 2520-2520 MHz
+   Y ca      min      4.97 median      4.97 us   2532.4 GB/s  1.000x the fastest
+   Y plain   min      4.97 median      4.99 us   2532.1 GB/s  1.000x the fastest
+   Y cs      min      5.05 median      5.06 us   2489.6 GB/s  1.017x the fastest
+   Triton    min      5.50 median      5.55 us   2286.1 GB/s  1.108x the fastest
+== swiglu 1048576  all exact/within tol  calls 534  SM 2520-2520 MHz
+   Y plain   min      4.98 median      4.99 us   2525.1 GB/s  1.000x the fastest
+   Y ca      min      4.99 median      5.00 us   2520.9 GB/s  1.002x the fastest
+   Y cs      min      5.04 median      5.05 us   2498.8 GB/s  1.011x the fastest
+   Triton    min      5.54 median      5.57 us   2270.2 GB/s  1.112x the fastest
+== vec_add 4194304  all exact/within tol  calls 112  SM 2520-2790 MHz
+   Triton    min     25.80 median     26.16 us   1950.9 GB/s  1.000x the fastest
+   Y plain   min     26.81 median     27.44 us   1877.6 GB/s  1.039x the fastest
+   Y ca      min     27.48 median     27.82 us   1831.3 GB/s  1.065x the fastest
+   Y cs      min     72.15 median     73.47 us    697.6 GB/s  2.797x the fastest
+== swiglu 4194304  all exact/within tol  calls 123  SM 2775-2790 MHz
+   Y plain   min     24.80 median     25.41 us   2029.6 GB/s  1.000x the fastest
+   Triton    min     26.03 median     26.34 us   1933.4 GB/s  1.050x the fastest
+   Y ca      min     27.31 median     27.67 us   1843.1 GB/s  1.101x the fastest
+   Y cs      min     71.95 median     73.02 us    699.5 GB/s  2.901x the fastest
+== vec_add 16777216  all exact/within tol  calls 9  SM 2775-2775 MHz
+   Y cs      min    322.29 median    325.63 us    624.7 GB/s  1.000x the fastest
+   Triton    min    323.36 median    327.57 us    622.6 GB/s  1.003x the fastest
+   Y ca      min    323.58 median    326.43 us    622.2 GB/s  1.004x the fastest
+   Y plain   min    324.10 median    327.45 us    621.2 GB/s  1.006x the fastest
+== swiglu 16777216  all exact/within tol  calls 9  SM 2595-2595 MHz
+   Y cs      min    321.62 median    324.72 us    626.0 GB/s  1.000x the fastest
+   Y ca      min    323.36 median    325.97 us    622.6 GB/s  1.005x the fastest
+   Triton    min    324.72 median    327.22 us    620.0 GB/s  1.010x the fastest
+   Y plain   min    325.06 median    327.34 us    619.3 GB/s  1.011x the fastest
+== RMSNorm 4096 x 1024  all exact/within tol  calls 206  SM 2505-2595 MHz
+   Y plain   min     13.23 median     13.40 us   2536.1 GB/s  1.000x the fastest
+   Y ca      min     13.25 median     13.28 us   2533.2 GB/s  1.001x the fastest
+   Triton    min     13.55 median     13.57 us   2476.5 GB/s  1.024x the fastest
+   Y cs      min     42.71 median     43.04 us    785.6 GB/s  3.228x the fastest
+== RMSNorm 16384 x 1024  all exact/within tol  calls 13  SM 2505-2505 MHz
+   Y ca      min    218.03 median    220.87 us    615.6 GB/s  1.000x the fastest
+   Triton    min    218.34 median    220.63 us    614.7 GB/s  1.001x the fastest
+   Y plain   min    218.35 median    220.63 us    614.7 GB/s  1.001x the fastest
+   Y cs      min    218.74 median    220.87 us    613.6 GB/s  1.003x the fastest
+== RMSNorm 4096 x 4096  all exact/within tol  calls 13  SM 2505-2790 MHz
+   Y cs      min    217.39 median    219.21 us    617.5 GB/s  1.000x the fastest
+   Y plain   min    217.88 median    220.40 us    616.1 GB/s  1.002x the fastest
+   Y ca      min    217.95 median    220.87 us    615.9 GB/s  1.003x the fastest
+   Triton    min    218.27 median    221.03 us    615.0 GB/s  1.004x the fastest
+== RMSNorm 16384 x 4096  all exact/within tol  calls 3  SM 2790-2790 MHz
+   Y cs      min    866.65 median    875.52 us    619.5 GB/s  1.000x the fastest
+   Y plain   min    872.09 median    879.27 us    615.6 GB/s  1.006x the fastest
+   Y ca      min    872.11 median    882.41 us    615.6 GB/s  1.006x the fastest
+   Triton    min    873.81 median    881.66 us    614.4 GB/s  1.008x the fastest

@@ -1,0 +1,4 @@
+gpu_quiet_then.sh output (its stdout, copied here):
+probe_cs1.log: QUIET 19:46:12 mean 2.4%
+probe_cs2.log: QUIET 19:50:53 mean 0.6%
+find.log:      QUIET 19:44:23 mean 0.0%

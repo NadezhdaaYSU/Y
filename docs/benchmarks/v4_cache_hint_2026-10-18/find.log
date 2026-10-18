@@ -1,0 +1,97 @@
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+== vector add 4194304  exact/within tol {'Y': True, 'Triton': True, 'PyTorch': True}  calls 125  SM 2520-2520 MHz
+   Triton   min     23.07 median     23.84 us   2181.8 GB/s  1.000x the fastest
+   PyTorch  min     25.11 median     25.26 us   2004.1 GB/s  1.089x the fastest
+   Y        min     67.93 median     71.58 us    741.0 GB/s  2.945x the fastest
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+== SwiGLU 4194304  exact/within tol {'Y': True, 'Triton': True, 'PyTorch': True}  calls 101  SM 2505-2505 MHz
+   Triton   min     29.44 median     29.78 us   1709.5 GB/s  1.000x the fastest
+   Y        min     68.45 median     75.96 us    735.3 GB/s  2.325x the fastest
+   PyTorch  min     88.90 median     89.62 us    566.1 GB/s  3.020x the fastest
+== vector add 16777216  exact/within tol {'Y': True, 'Triton': True, 'PyTorch': True}  calls 9  SM 2580-2580 MHz
+   Y        min    321.88 median    324.25 us    625.5 GB/s  1.000x the fastest
+   PyTorch  min    324.38 median    326.31 us    620.6 GB/s  1.008x the fastest
+   Triton   min    325.49 median    327.03 us    618.5 GB/s  1.011x the fastest
+== SwiGLU 16777216  exact/within tol {'Y': True, 'Triton': True, 'PyTorch': True}  calls 9  SM 2550-2550 MHz
+   Y        min    324.94 median    328.93 us    619.6 GB/s  1.000x the fastest
+   Triton   min    325.37 median    326.31 us    618.8 GB/s  1.001x the fastest
+   PyTorch  min    542.45 median    546.24 us    371.1 GB/s  1.669x the fastest
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+== RMSNorm 4096 x 1024  exact/within tol {'Y': True, 'Triton': True, 'PyTorch': True}  calls 195  SM 2505-2790 MHz
+   Triton   min     13.63 median     13.75 us   2461.7 GB/s  1.000x the fastest
+   Y        min     36.48 median     44.35 us    919.9 GB/s  2.676x the fastest
+   PyTorch  min    123.94 median    124.60 us    270.8 GB/s  9.091x the fastest
+== RMSNorm 4096 x 4096  exact/within tol {'Y': True, 'Triton': True, 'PyTorch': True}  calls 13  SM 2490-2490 MHz
+   Y        min    217.34 median    219.06 us    617.6 GB/s  1.000x the fastest
+   Triton   min    218.41 median    219.73 us    614.6 GB/s  1.005x the fastest
+   PyTorch  min    951.45 median    959.97 us    141.1 GB/s  4.378x the fastest
+== RMSNorm 16384 x 4096  exact/within tol {'Y': True, 'Triton': True, 'PyTorch': True}  calls 3  SM 2640-2790 MHz
+   Y        min    867.48 median    872.05 us    618.9 GB/s  1.000x the fastest
+   Triton   min    874.50 median    875.81 us    613.9 GB/s  1.008x the fastest
+   PyTorch  min   3938.62 median   3969.37 us    136.3 GB/s  4.540x the fastest

@@ -64,8 +64,11 @@ class TestGpuArchitectFeatures(unittest.TestCase):
         """
         ptx = y_lang.compile_to_ptx(kernel_src, target_sm="sm_90a")
         self.assertIn("Y AUTOMATED VECTORIZING PASS", ptx)
-        self.assertIn("ld.global.cs.v4.f32", ptx)
-        self.assertIn("st.global.cs.v4.f32", ptx)
+        # 128-bit accesses at normal L2 priority: `.cs` (evict-first) cost
+        # 2.7-3.3x wherever the data fit in L2.
+        self.assertIn("ld.global.v4.f32", ptx)
+        self.assertIn("st.global.v4.f32", ptx)
+        self.assertNotIn(".cs.", ptx)
 
 if __name__ == "__main__":
     unittest.main()

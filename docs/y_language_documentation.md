@@ -3867,6 +3867,13 @@ any buffer that is not `F32`. `block_ptr2d_load_v4` and `block_ptr2d_store_v4`
 take any 32-bit element type and `E4M3`, and refuse `F16` and the 64-bit
 types.
 
+`vec_add_v4`, `swiglu_v4`, `rmsnorm_v4` and `block_ptr3d_store_v4` load and
+store at normal cache priority (`ld.global.v4.f32`, `st.global.v4.f32`). Until
+2026-10-18 they marked every line evict-first (`.cs`), which made them
+2.7-3.3x slower wherever the data fitted in L2
+(`docs/benchmarks/v4_cache_hint_2026-10-18/`). A read that should stream says
+`@cache_policy(L2_STREAM)` (section 9.2).
+
 `rmsnorm_v4(X[idx], W[col], Out[idx], hidden_dim, eps)` normalises one row per
 block, four elements per thread: `idx` is `row * hidden_dim + 4 * thread_idx_x()`.
 The launch must be `(hidden_dim / 4, 1, 1)` threads, a whole number of warps;

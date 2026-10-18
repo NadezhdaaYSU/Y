@@ -1,0 +1,10 @@
+# ptxas -arch=sm_89 -O3, cuobjdump -sass: global loads and stores of each variant (CUDA 13.4)
+## vec_add_cs:  2 LDG.E.EF.128; 1 STG.E.EF.128;
+## vec_add_plain:  2 LDG.E.128; 1 STG.E.128;
+## vec_add_ca:  2 LDG.E.128.STRONG.SM; 1 STG.E.128;
+## swiglu_cs:  2 LDG.E.EF.128; 1 STG.E.EF.128;
+## swiglu_plain:  2 LDG.E.128; 1 STG.E.128;
+## swiglu_ca:  2 LDG.E.128.STRONG.SM; 1 STG.E.128;
+## rmsnorm_cs:  2 LDG.E.EF.128; 1 STG.E.EF.128;
+## rmsnorm_plain:  2 LDG.E.128; 1 STG.E.128;
+## rmsnorm_ca:  2 LDG.E.128.STRONG.SM; 1 STG.E.128;

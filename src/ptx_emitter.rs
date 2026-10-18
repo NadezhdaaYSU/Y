@@ -5569,6 +5569,15 @@ declare it as a Q format.\n{}",
                             let b_ptr = if args.len() >= 2 { self.emit_addr(&args[1], cache_policy, hw_profile) } else { "%rd1".to_string() };
                             let c_ptr = if args.len() >= 3 { self.emit_addr(&args[2], cache_policy, hw_profile) } else { "%rd2".to_string() };
 
+                            // The v4 built-ins (this one, rmsnorm_v4, swiglu_v4 and
+                            // the 3-D block-pointer store) load and store with no
+                            // cache hint. They used `.cs`, evict-first in L1 and L2,
+                            // which gained at most 1.1% once the data no longer fit in
+                            // L2 and cost 2.7-3.3x when it did: the lines were
+                            // evicted before the next call, or the next kernel,
+                            // read them (docs/benchmarks/v4_cache_hint_2026-10-18/).
+                            // A read that wants it says `@cache_policy(L2_STREAM)`.
+
                             // By NAME only: a 4th argument used to turn unrolling
                             // on by its presence, value discarded (`builtin_arity`).
                             let unroll_count = if fname == "vec_add_unrolled4" { 4 } else { 1 };
@@ -5595,13 +5604,13 @@ declare it as a Q format.\n{}",
                                 let a1 = self.alloc_regf32();
                                 let a2 = self.alloc_regf32();
                                 let a3 = self.alloc_regf32();
-                                writeln!(&mut self.ptx_buffer, "    ld.global.cs.v4.f32 {{{}, {}, {}, {}}}, [{}];", a0, a1, a2, a3, a_addr).unwrap();
+                                writeln!(&mut self.ptx_buffer, "    ld.global.v4.f32 {{{}, {}, {}, {}}}, [{}];", a0, a1, a2, a3, a_addr).unwrap();
 
                                 let b0 = self.alloc_regf32();
                                 let b1 = self.alloc_regf32();
                                 let b2 = self.alloc_regf32();
                                 let b3 = self.alloc_regf32();
-                                writeln!(&mut self.ptx_buffer, "    ld.global.cs.v4.f32 {{{}, {}, {}, {}}}, [{}];", b0, b1, b2, b3, b_addr).unwrap();
+                                writeln!(&mut self.ptx_buffer, "    ld.global.v4.f32 {{{}, {}, {}, {}}}, [{}];", b0, b1, b2, b3, b_addr).unwrap();
 
                                 let c0 = self.alloc_regf32();
                                 let c1 = self.alloc_regf32();
@@ -5612,7 +5621,7 @@ declare it as a Q format.\n{}",
                                 writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", c2, a2, b2).unwrap();
                                 writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", c3, a3, b3).unwrap();
 
-                                writeln!(&mut self.ptx_buffer, "    st.global.cs.v4.f32 [{}], {{{}, {}, {}, {}}};", c_addr, c0, c1, c2, c3).unwrap();
+                                writeln!(&mut self.ptx_buffer, "    st.global.v4.f32 [{}], {{{}, {}, {}, {}}};", c_addr, c0, c1, c2, c3).unwrap();
                             }
                             "".into()
                         } else if fname == "rmsnorm_v4" || fname == "rmsnorm_fast" {
@@ -5665,13 +5674,13 @@ declare it as a Q format.\n{}",
                             let x1 = self.alloc_regf32();
                             let x2 = self.alloc_regf32();
                             let x3 = self.alloc_regf32();
-                            writeln!(&mut self.ptx_buffer, "    ld.global.cs.v4.f32 {{{}, {}, {}, {}}}, [{}];", x0, x1, x2, x3, x_ptr).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    ld.global.v4.f32 {{{}, {}, {}, {}}}, [{}];", x0, x1, x2, x3, x_ptr).unwrap();
 
                             let w0 = self.alloc_regf32();
                             let w1 = self.alloc_regf32();
                             let w2 = self.alloc_regf32();
                             let w3 = self.alloc_regf32();
-                            writeln!(&mut self.ptx_buffer, "    ld.global.cs.v4.f32 {{{}, {}, {}, {}}}, [{}];", w0, w1, w2, w3, w_ptr).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    ld.global.v4.f32 {{{}, {}, {}, {}}}, [{}];", w0, w1, w2, w3, w_ptr).unwrap();
 
                             let sq0 = self.alloc_regf32();
                             let sq1 = self.alloc_regf32();
@@ -5771,7 +5780,7 @@ declare it as a Q format.\n{}",
                             writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", o2, o2, w2).unwrap();
                             writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", o3, o3, w3).unwrap();
 
-                            writeln!(&mut self.ptx_buffer, "    st.global.cs.v4.f32 [{}], {{{}, {}, {}, {}}};", out_ptr, o0, o1, o2, o3).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    st.global.v4.f32 [{}], {{{}, {}, {}, {}}};", out_ptr, o0, o1, o2, o3).unwrap();
                             "".into()
                         } else if fname == "swiglu_v4" || fname == "swiglu_fast" {
                             if self.reject_non_f32_buffers(fname, &args[..args.len().min(3)]) {
@@ -5786,13 +5795,13 @@ declare it as a Q format.\n{}",
                             let g1 = self.alloc_regf32();
                             let g2 = self.alloc_regf32();
                             let g3 = self.alloc_regf32();
-                            writeln!(&mut self.ptx_buffer, "    ld.global.cs.v4.f32 {{{}, {}, {}, {}}}, [{}];", g0, g1, g2, g3, gate_ptr).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    ld.global.v4.f32 {{{}, {}, {}, {}}}, [{}];", g0, g1, g2, g3, gate_ptr).unwrap();
 
                             let u0 = self.alloc_regf32();
                             let u1 = self.alloc_regf32();
                             let u2 = self.alloc_regf32();
                             let u3 = self.alloc_regf32();
-                            writeln!(&mut self.ptx_buffer, "    ld.global.cs.v4.f32 {{{}, {}, {}, {}}}, [{}];", u0, u1, u2, u3, up_ptr).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    ld.global.v4.f32 {{{}, {}, {}, {}}}, [{}];", u0, u1, u2, u3, up_ptr).unwrap();
 
                             // Fast Sigmoid & Swish Math for 4 lanes
                             let s0 = self.alloc_regf32();
@@ -5855,7 +5864,7 @@ declare it as a Q format.\n{}",
                             writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", res2, swish2, u2).unwrap();
                             writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", res3, swish3, u3).unwrap();
 
-                            writeln!(&mut self.ptx_buffer, "    st.global.cs.v4.f32 [{}], {{{}, {}, {}, {}}};", out_ptr, res0, res1, res2, res3).unwrap();
+                            writeln!(&mut self.ptx_buffer, "    st.global.v4.f32 [{}], {{{}, {}, {}, {}}};", out_ptr, res0, res1, res2, res3).unwrap();
                             "".into()
                         } else if fname == "ld_global_v4_f32" || fname == "load_v4" {
                             if !args.is_empty() && self.reject_non_f32_buffer(fname, &args[0]) {
@@ -6530,7 +6539,7 @@ declare it as a Q format.\n{}",
                             writeln!(&mut self.ptx_buffer, "    and.pred {}, {}, {};", p_valid, p01, p2).unwrap();
 
                             if is_v4 {
-                                writeln!(&mut self.ptx_buffer, "    @{} st.global.cs.v4.f32 [{}], {{{}, {}, {}, {}}};", p_valid, addr, val0, val1, val2, val3).unwrap();
+                                writeln!(&mut self.ptx_buffer, "    @{} st.global.v4.f32 [{}], {{{}, {}, {}, {}}};", p_valid, addr, val0, val1, val2, val3).unwrap();
                             } else {
                                 writeln!(&mut self.ptx_buffer, "    @{} st.global.f32 [{}], {};", p_valid, addr, val0).unwrap();
                             }

@@ -1,0 +1,1 @@
+gpu_quiet_then.sh output: ncu QUIET 18:57:05 mean 0.0%; sweep QUIET 18:57:58 mean 0.0%
