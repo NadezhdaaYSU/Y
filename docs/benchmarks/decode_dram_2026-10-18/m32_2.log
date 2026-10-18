@@ -1,0 +1,19 @@
+32x4096x4096: exact {'t_32_128_32_2_2_4': True, 't_32_128_64_2_2_3': True, 't_32_128_64_2_4_3': True, 't_32_256_32_2_4_3': True, 't_32_32_64_2_1_4': True, 't_32_64_128_2_2_2': True, 't_32_64_32_2_2_4': True, 't_32_64_64_2_2_3': True, 'cuBLAS': True} | SM 2760-2760 MHz
+   cuBLAS warm      min   23.418 median   23.488 us   1466.5 GB/s of A, B and C
+   t_32_128_64_2_4_3 warm min   29.587 median   29.837 us   1160.7 GB/s of A, B and C
+   t_32_64_64_2_2_3 warm min   30.714 median   30.963 us   1118.1 GB/s of A, B and C
+   t_32_64_128_2_2_2 warm min   32.832 median   35.184 us   1046.0 GB/s of A, B and C
+   t_32_64_32_2_2_4 warm min   33.094 median   33.154 us   1037.7 GB/s of A, B and C
+   t_32_128_32_2_2_4 warm min   33.286 median   33.822 us   1031.7 GB/s of A, B and C
+   t_32_128_64_2_2_3 warm min   34.683 median   35.334 us    990.1 GB/s of A, B and C
+   t_32_32_64_2_1_4 warm min   40.262 median   42.332 us    852.9 GB/s of A, B and C
+   t_32_64_32_2_2_4 cold min   55.790 median   55.910 us    615.5 GB/s of A, B and C
+   t_32_128_32_2_2_4 cold min   56.166 median   58.815 us    611.4 GB/s of A, B and C
+   cuBLAS cold      min   56.218 median   59.136 us    610.9 GB/s of A, B and C
+   t_32_64_64_2_2_3 cold min   56.422 median   56.649 us    608.6 GB/s of A, B and C
+   t_32_128_64_2_4_3 cold min   56.441 median   59.232 us    608.4 GB/s of A, B and C
+   t_32_128_64_2_2_3 cold min   56.499 median   59.244 us    607.8 GB/s of A, B and C
+   t_32_64_128_2_2_2 cold min   56.690 median   56.866 us    605.8 GB/s of A, B and C
+   t_32_32_64_2_1_4 cold min   57.190 median   57.348 us    600.5 GB/s of A, B and C
+   t_32_256_32_2_4_3 warm min   74.963 median   77.421 us    458.1 GB/s of A, B and C
+   t_32_256_32_2_4_3 cold min   75.642 median   77.805 us    454.0 GB/s of A, B and C

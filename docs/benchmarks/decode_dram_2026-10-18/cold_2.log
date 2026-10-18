@@ -1,0 +1,20 @@
+1x4096x4096: exact {'Y': True, 'cuBLAS': True} | SM 2460-2460 MHz
+   Y warm           min   20.275 median   20.378 us   1656.2 GB/s of A, B and C
+   cuBLAS warm      min   26.720 median   42.482 us   1256.7 GB/s of A, B and C
+   cuBLAS cold      min   55.840 median   58.148 us    601.3 GB/s of A, B and C
+   Y cold           min   56.179 median   58.729 us    597.7 GB/s of A, B and C
+4x4096x4096: exact {'Y': True, 'cuBLAS': True} | SM 2460-2760 MHz
+   Y warm           min   23.821 median   24.044 us   1412.7 GB/s of A, B and C
+   cuBLAS warm      min   54.699 median   56.806 us    615.2 GB/s of A, B and C
+   Y cold           min   55.917 median   58.438 us    601.8 GB/s of A, B and C
+   cuBLAS cold      min   56.407 median   58.739 us    596.6 GB/s of A, B and C
+8x4096x4096: exact {'Y': True, 'cuBLAS': True} | SM 2760-2760 MHz
+   Y warm           min   23.468 median   23.674 us   1438.2 GB/s of A, B and C
+   cuBLAS warm      min   50.598 median   52.864 us    667.0 GB/s of A, B and C
+   Y cold           min   56.076 median   58.470 us    601.9 GB/s of A, B and C
+   cuBLAS cold      min   57.440 median   60.090 us    587.6 GB/s of A, B and C
+32x4096x4096: exact {'Y': True, 'cuBLAS': True} | SM 2760-2760 MHz
+   cuBLAS warm      min   23.649 median   23.825 us   1452.1 GB/s of A, B and C
+   Y warm           min   31.219 median   31.501 us   1100.0 GB/s of A, B and C
+   cuBLAS cold      min   55.936 median   56.307 us    613.9 GB/s of A, B and C
+   Y cold           min   56.316 median   59.169 us    609.8 GB/s of A, B and C

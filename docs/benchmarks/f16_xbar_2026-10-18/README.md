@@ -78,8 +78,9 @@ kernel's time over the new one's; above 1, the new one is faster.
 | 8x4096x4096 | 23.004 / 22.824 | 22.976 / 22.794 | 50.811 / 50.463 | 1.001 / 1.001 | 2.211 / 2.214 |
 | 32x4096x4096 | 31.375 / 31.093 | 31.268 / 30.985 | 24.037 / 23.772 | 1.003 / 1.003 | 0.769 / 0.767 |
 
-B (33.5 MB) fits in the 48 MB L2 and the loop reads it again on every call;
-with B read from DRAM these shapes were not measured.
+B (33.5 MB) fits in the 48 MB L2 and the loop reads it again on every call.
+With B read from DRAM these shapes were measured afterwards, in
+`../decode_dram_2026-10-18/`: there Y and cuBLAS tie at every M.
 
 `tiles512/`: nine tiles at 512^3 (`Y_CTA_OVERRIDE`, `ptx/`), each before and
 after, all 18 bit for bit equal to the committed kernel on random inputs

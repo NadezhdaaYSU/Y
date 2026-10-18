@@ -1122,7 +1122,7 @@ different baseline.
 |---|---|---|
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
 | Square F16 GEMM, 512³ | cuBLAS | 0.87–0.88x |
-| Decode-shaped F16 GEMM, M=32, N=K=4096 | cuBLAS | 0.77x |
+| Decode-shaped F16 GEMM, M=32, N=K=4096, B resident in L2 | cuBLAS | 0.75–0.77x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
@@ -1139,11 +1139,14 @@ K-tile's last two steps left 512³ level, and tiles of half the size (two
 CTAs to an SM) took 1.23–1.47x its time, of a quarter 1.59–1.78x
 (`docs/benchmarks/f16_xbar_2026-10-18/`).
 
-The decode shapes, M of 1 to 32 rows against a 4096 x 4096 B, were timed in
-the same loop, where B's 33.5 MB fits in the 48 MB L2 and is read again on
-every call. There Y takes 0.40–0.75x cuBLAS's time at M = 1, 4 and 8, and
-1.30x at M = 32, where every one of Y's 64 CTAs reads all of A. With B read
-from DRAM they were not measured.
+The decode shapes are M of 1 to 32 rows against a 4096 x 4096 B
+(`docs/benchmarks/decode_dram_2026-10-18/`). With B read from DRAM, as in a
+decode step whose weights do not fit in the L2 (each call takes the next of
+four copies, 134 MB), Y and cuBLAS tie at every M: cuBLAS takes 0.99–1.05x
+Y's time, and both move 575–618 GB/s of the card's 672. With one B, whose
+33.5 MB fits in the 48 MB L2, Y takes 0.44–0.76x cuBLAS's time at M = 1, 4
+and 8 and 1.32–1.34x at M = 32, where every one of Y's 64 CTAs reads all of
+A; the best of eight tiles there (32x128x64 on 2x4 warps) takes 1.24–1.26x.
 
 ### Memory bandwidth
 
