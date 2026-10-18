@@ -1,0 +1,40 @@
+== add1 1999872 (24 MB)  all checked  calls 340  SM 2505-2505 MHz
+   Y plain   min      7.89 median      8.61 us   3042.5 GB/s  1.000x the fastest
+   Y ca      min      7.89 median      8.64 us   3041.3 GB/s  1.000x the fastest
+   Triton    min      9.07 median      9.27 us   2645.5 GB/s  1.150x the fastest
+== fma1 1499904 (24 MB)  all checked  calls 370  SM 2505-2505 MHz
+   Y ca      min      7.32 median      7.44 us   3278.3 GB/s  1.000x the fastest
+   Y plain   min      7.33 median      7.64 us   3275.9 GB/s  1.001x the fastest
+   Triton    min      8.55 median      8.81 us   2808.1 GB/s  1.167x the fastest
+== add1 2666752 (32 MB)  all checked  calls 268  SM 2505-2505 MHz
+   Y ca      min     10.10 median     10.30 us   3167.7 GB/s  1.000x the fastest
+   Y plain   min     10.11 median     10.24 us   3164.1 GB/s  1.001x the fastest
+   Triton    min     11.29 median     11.48 us   2834.3 GB/s  1.118x the fastest
+== fma1 1999872 (32 MB)  all checked  calls 290  SM 2505-2505 MHz
+   Y ca      min      9.33 median      9.54 us   3429.2 GB/s  1.000x the fastest
+   Y plain   min      9.34 median      9.53 us   3427.4 GB/s  1.001x the fastest
+   Triton    min     10.74 median     11.11 us   2979.4 GB/s  1.151x the fastest
+== add1 3333376 (40 MB)  all checked  calls 220  SM 2505-2505 MHz
+   Y ca      min     12.37 median     12.47 us   3234.4 GB/s  1.000x the fastest
+   Y plain   min     12.40 median     12.70 us   3227.1 GB/s  1.002x the fastest
+   Triton    min     13.65 median     14.21 us   2929.4 GB/s  1.104x the fastest
+== fma1 2500096 (40 MB)  all checked  calls 238  SM 2565-2565 MHz
+   Y plain   min     11.35 median     11.55 us   3524.7 GB/s  1.000x the fastest
+   Y ca      min     11.36 median     11.53 us   3520.3 GB/s  1.001x the fastest
+   Triton    min     12.61 median     12.90 us   3173.2 GB/s  1.111x the fastest
+== add1 8000000 (96 MB)  all checked  calls 19  SM 2565-2745 MHz
+   Triton    min    153.94 median    154.79 us    623.6 GB/s  1.000x the fastest
+   Y plain   min    154.03 median    154.35 us    623.3 GB/s  1.001x the fastest
+   Y ca      min    154.30 median    156.54 us    622.2 GB/s  1.002x the fastest
+== fma1 6000128 (96 MB)  all checked  calls 19  SM 2745-2745 MHz
+   Y plain   min    155.29 median    155.49 us    618.2 GB/s  1.000x the fastest
+   Y ca      min    155.32 median    155.44 us    618.1 GB/s  1.000x the fastest
+   Triton    min    155.59 median    156.88 us    617.0 GB/s  1.002x the fastest
+== add1 16000000 (192 MB)  all checked  calls 9  SM 2490-2490 MHz
+   Y ca      min    308.00 median    308.90 us    623.4 GB/s  1.000x the fastest
+   Y plain   min    308.31 median    309.14 us    622.8 GB/s  1.001x the fastest
+   Triton    min    309.36 median    312.55 us    620.6 GB/s  1.004x the fastest
+== fma1 12000000 (192 MB)  all checked  calls 9  SM 2490-2775 MHz
+   Y plain   min    308.41 median    310.39 us    622.6 GB/s  1.000x the fastest
+   Y ca      min    308.57 median    309.96 us    622.2 GB/s  1.001x the fastest
+   Triton    min    309.02 median    311.18 us    621.3 GB/s  1.002x the fastest
