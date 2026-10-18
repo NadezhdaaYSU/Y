@@ -1,0 +1,54 @@
+.version 7.8
+.target sm_89
+.address_size 64
+
+.visible .entry vec_add(
+    .param .u64 A_0,
+    .param .u64 B_1,
+    .param .u64 C_2,
+    .param .b32 N_3
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 44
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 64 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 66.67% (4 active blocks per SM)
+.maxnreg 64
+{
+    .reg .b32 %r<8>;
+    .reg .f32 %f<12>;
+    .reg .b64 %rd<12>;
+    .reg .pred %p<2>;
+
+    ld.param.u64 %rd0, [A_0];
+    ld.param.u64 %rd1, [B_1];
+    ld.param.u64 %rd2, [C_2];
+    ld.param.u32 %r0, [N_3];
+    mov.u32 %r1, %tid.x;
+    mov.u32 %r2, %ntid.x;
+    mov.u32 %r3, %ctaid.x;
+    mad.lo.s32 %r4, %r3, %r2, %r1;
+    mov.u32 %r5, 4;
+    mul.lo.s32 %r6, %r4, %r5;
+    setp.lt.s32 %p0, %r6, %r0;
+    selp.u32 %r7, 1, 0, %p0;
+    // [HEURISTIC] Branch Divergence Penalty is 4.53 cycles.
+    // if: emitting BRANCH execution (block cost 1 cy).
+    setp.eq.u32 %p1, %r7, 0;
+    @%p1 bra $IF_END_1;
+    cvt.u64.u32 %rd3, %r6;
+    shl.b64 %rd4, %rd3, 2;
+    add.u64 %rd5, %rd0, %rd4;
+    cvt.u64.u32 %rd6, %r6;
+    shl.b64 %rd7, %rd6, 2;
+    add.u64 %rd8, %rd1, %rd7;
+    cvt.u64.u32 %rd9, %r6;
+    shl.b64 %rd10, %rd9, 2;
+    add.u64 %rd11, %rd2, %rd10;
+    ld.global.v4.f32 {%f0, %f1, %f2, %f3}, [%rd5];
+    ld.global.v4.f32 {%f4, %f5, %f6, %f7}, [%rd8];
+    add.f32 %f8, %f0, %f4;
+    add.f32 %f9, %f1, %f5;
+    add.f32 %f10, %f2, %f6;
+    add.f32 %f11, %f3, %f7;
+    st.global.v4.f32 [%rd11], {%f8, %f9, %f10, %f11};
+    $IF_END_1:
+}

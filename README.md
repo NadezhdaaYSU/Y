@@ -1111,7 +1111,6 @@ different baseline.
 |---|---|---|
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
 | Square F16 GEMM, 512³ | cuBLAS | 0.86–0.88x |
-| Vector add, 2^22 floats (50 MB, about the L2) | Triton | 0.95–0.96x |
 | Decode-shaped GEMM (M=4–8) | cuBLAS | at the DRAM roofline; tied |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
@@ -1122,9 +1121,7 @@ in both runs, about the size of FlashInfer's own run-to-run variation
 64x64 tile on the same 64-CTA grid as Y, on 4 warps with a 64-deep K step and
 5 stages, and executes 343K warp instructions to Y's 444K. Of nine tiles
 around Y's, cuBLAS's shape among them, Y's tuned tile was the fastest in both
-runs (`docs/benchmarks/f16_square_2026-10-18/512/`). The vector add at 2^22 is the one
-size of those measured where Triton's is faster
-(`docs/benchmarks/v4_cache_hint_2026-10-18/`).
+runs (`docs/benchmarks/f16_square_2026-10-18/512/`).
 
 ### Memory bandwidth
 
@@ -1132,10 +1129,12 @@ Y's elementwise and normalization built-ins (`vec_add_v4`, `swiglu_v4`,
 `rmsnorm_v4`) emit 128-bit loads and stores. From DRAM — 2^24 floats a vector
 add or SwiGLU, RMSNorm on 134 MB or more — they move **612–621 GB/s against
 this card's 672 GB/s GDDR6X ceiling**, 1.00x Triton's kernels in every row;
-PyTorch's vector add moves 621 GB/s and its two-kernel SwiGLU 371. When the
-data fits in the 48 MB L2 they reach 1.8–2.5 TB/s, 0.95–1.42x Triton. Until
-2026-10-18 they marked every line evict-first, which held them to 690–790 GB/s
-there (`docs/benchmarks/v4_cache_hint_2026-10-18/`).
+PyTorch's vector add moves 621 GB/s and its two-kernel SwiGLU 371. Up to
+44 MB, inside the 48 MB L2, they reach 2.5–3.2 TB/s, 1.02–1.14x Triton. At
+48–56 MB, the L2's own size, either side leads by up to 1.4x from one run to
+the next. Until 2026-10-18 they marked every line evict-first, which held them
+to 690–790 GB/s where the data fitted
+(`docs/benchmarks/v4_cache_hint_2026-10-18/`).
 
 ### Cold compilation latency
 
