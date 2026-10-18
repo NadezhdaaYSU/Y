@@ -1,0 +1,36 @@
+p_mask_dropped               killed                           18s  AssertionError: 0.21155610701509014 not less than or equal to 0.003 : row 7 (len 17): relative L2 2.116e-01
+valid_uses_le                killed                           18s  AssertionError: 0.21155610701509014 not less than or equal to 0.003 : row 7 (len 17): relative L2 2.116e-01
+clamp_dropped                killed                           19s  torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+per_warp_not_whole_groups    killed                           18s  AssertionError: 0.20807374789111296 not less than or equal to 0.003 : row 12 (len 257): relative L2 2.081e-01
+w_end_unclamped              killed                           16s  torch.AcceleratorError: CUDA error: an illegal memory access was encountered
+n_tok_unclamped              killed                           17s      raise RuntimeError(f"CUDA Error cuModuleLoadData failed with error code {res}")
+bfly_crosses_tokens          killed                           18s  AssertionError: 0.19426439338572252 not less than or equal to 0.003 : row 2 (len 2): relative L2 1.943e-01
+bfly_too_short               killed                           18s  AssertionError: 0.3464345770443635 not less than or equal to 0.003 : row 2 (len 2): relative L2 3.464e-01
+sub_offset_is_lane           killed                           20s  AssertionError: 0.715886958078677 not less than or equal to 0.003 : row 7 (len 17): relative L2 7.159e-01
+kv_lane_stride_halved        killed                           18s      raise RuntimeError(f"CUDA Error cuModuleLoadData failed with error code {res}")
+q_in_merge_layout            killed                           19s      raise RuntimeError(f"CUDA Error cuModuleLoadData failed with error code {res}")
+smem_store_merge_layout      killed                           18s  AssertionError: 1.1974784773543048 not less than or equal to 0.003 : row 1 (len 1): relative L2 1.197e+00
+smem_store_unpredicated      SURVIVED (expected survivor)     18s  OK
+rescale_acc_dropped          killed                           19s  AssertionError: 0.023709310404944107 not less than or equal to 0.003 : row 12 (len 257): relative L2 2.371e-02
+rescale_l_dropped            killed                           19s  AssertionError: 0.01635887550362534 not less than or equal to 0.003 : row 12 (len 257): relative L2 1.636e-02
+rescale_d_stale              killed                           18s  AssertionError: tensor(False, device='cuda:0') is not true : row 1 (len 1) not finite
+rescale_never                killed                           18s  AssertionError: tensor(False, device='cuda:0') is not true : row 1 (len 1) not finite
+vote_is_lane_local           SURVIVED (expected survivor)     18s  OK
+need_skips_last_head         killed                           19s  AssertionError: tensor(False, device='cuda:0') is not true : row 12 (len 257) not finite
+need_inverted                killed                           18s  AssertionError: tensor(False, device='cuda:0') is not true : row 1 (len 1) not finite
+threshold_100                killed                           18s  AssertionError: tensor(False, device='cuda:0') is not true : row 12 (len 257) not finite
+prefetch_not_rotated         killed                           18s  AssertionError: 0.9701219067684135 not less than or equal to 0.003 : row 12 (len 257): relative L2 9.701e-01
+loop_test_dropped            killed                          309s  TIMEOUT (hang) after 300 s
+prefetch_same_token          killed                          309s  TIMEOUT (hang) after 300 s
+prologue_skip_dropped        SURVIVED                         19s  OK
+page_reload_inverted         killed                           18s  AssertionError: 1.423190651939266 not less than or equal to 0.003 : row 1 (len 1): relative L2 1.423e+00
+page_cache_not_updated       SURVIVED (expected survivor)     18s  OK
+combine_skipped              killed                           18s  AssertionError: 0.8868340958070227 not less than or equal to 0.003 : row 7 (len 17): relative L2 8.868e-01
+combine_one_step             killed                           18s  AssertionError: 0.8868340958070227 not less than or equal to 0.003 : row 7 (len 17): relative L2 8.868e-01
+combine_other_acc_dropped    killed                           18s  AssertionError: 0.6694951134862414 not less than or equal to 0.003 : row 7 (len 17): relative L2 6.695e-01
+combine_other_l_dropped      killed                           18s  AssertionError: 1.290307612506116 not less than or equal to 0.003 : row 7 (len 17): relative L2 1.290e+00
+combine_m_not_updated        killed                           18s  AssertionError: 0.5171097200759112 not less than or equal to 0.003 : row 7 (len 17): relative L2 5.171e-01
+policy_always_32_lanes       SURVIVED (expected survivor)     18s  OK
+restored; rebuild: True
+
+33 mutants, 1 unexpected survivors / not applied: ['prologue_skip_dropped']

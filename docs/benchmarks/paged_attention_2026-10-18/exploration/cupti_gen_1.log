@@ -1,0 +1,140 @@
+== hd128 32/4 b1c1024  (SM MHz per round: 1725 1545 1545 2790 2730)
+   paged_decode_attention_split_128_32_4_16_16_8.base/s16x8w total     8.27 us | 6.39  1.88
+   paged_decode_attention_split_128_32_4_16_16_8.z32/s16x8w total     7.90 us | 6.02  1.88
+   paged_decode_attention_split_128_32_4_16_16_8.z16/s16x8w total     7.73 us | 5.84  1.89
+   paged_decode_attention_split_128_32_4_16_4_4.base/s4x4w total    23.46 us | 22.34  1.12
+   paged_decode_attention_split_128_32_4_16_4_4.z32/s4x4w total    22.37 us | 21.24  1.12
+   paged_decode_attention_split_128_32_4_16_4_4.z16/s4x4w total    14.88 us | 13.76  1.12
+   paged_decode_attention_split_128_32_4_16_16_4.base/s16x4w total     9.28 us | 7.40  1.88
+   paged_decode_attention_split_128_32_4_16_16_4.z32/s16x4w total     9.23 us | 7.34  1.89
+   paged_decode_attention_split_128_32_4_16_16_4.z16/s16x4w total     7.82 us | 5.95  1.87
+== hd128 32/4 b1c4096  (SM MHz per round: 2775 2745 2775 2775 2760)
+   paged_decode_attention_split_128_32_4_16_16_8.base/s16x8w total    18.50 us | 16.61  1.89
+   paged_decode_attention_split_128_32_4_16_16_8.z32/s16x8w total    16.96 us | 15.06  1.90
+   paged_decode_attention_split_128_32_4_16_16_8.z16/s16x8w total    12.89 us | 11.02  1.88
+   paged_decode_attention_split_128_32_4_16_4_4.base/s4x4w total    84.83 us | 83.71  1.12
+   paged_decode_attention_split_128_32_4_16_4_4.z32/s4x4w total    79.27 us | 78.15  1.12
+   paged_decode_attention_split_128_32_4_16_4_4.z16/s4x4w total    47.04 us | 45.92  1.12
+   paged_decode_attention_split_128_32_4_16_16_4.base/s16x4w total    24.43 us | 22.54  1.89
+   paged_decode_attention_split_128_32_4_16_16_4.z32/s16x4w total    23.58 us | 21.70  1.88
+   paged_decode_attention_split_128_32_4_16_16_4.z16/s16x4w total    15.95 us | 14.06  1.88
+== hd128 32/4 b8c1024  (SM MHz per round: 2775 2760 2760 2760 2745)
+   paged_decode_attention_split_128_32_4_16_16_8.base/s16x8w total    30.69 us | 28.40  2.29
+   paged_decode_attention_split_128_32_4_16_16_8.z32/s16x8w total    28.99 us | 26.72  2.27
+   paged_decode_attention_split_128_32_4_16_16_8.z16/s16x8w total    41.54 us | 39.26  2.28
+   paged_decode_attention_split_128_32_4_16_4_4.base/s4x4w total    27.09 us | 25.65  1.44
+   paged_decode_attention_split_128_32_4_16_4_4.z32/s4x4w total    25.95 us | 24.50  1.45
+   paged_decode_attention_split_128_32_4_16_4_4.z16/s4x4w total    18.66 us | 17.24  1.41
+   paged_decode_attention_split_128_32_4_16_16_4.base/s16x4w total    25.55 us | 23.26  2.29
+   paged_decode_attention_split_128_32_4_16_16_4.z32/s16x4w total    24.48 us | 22.21  2.27
+   paged_decode_attention_split_128_32_4_16_16_4.z16/s16x4w total    27.33 us | 25.06  2.27
+== hd128 32/4 b32c1024  (SM MHz per round: 2775 2775 2760 2760 2730)
+   paged_decode_attention_split_128_32_4_16_16_8.base/s16x8w total   121.92 us | 116.50  5.42
+   paged_decode_attention_split_128_32_4_16_16_8.z32/s16x8w total   119.57 us | 114.03  5.54
+   paged_decode_attention_split_128_32_4_16_16_8.z16/s16x8w total   173.53 us | 168.08  5.46
+   paged_decode_attention_split_128_32_4_16_4_4.base/s4x4w total    93.20 us | 90.94  2.26
+   paged_decode_attention_split_128_32_4_16_4_4.z32/s4x4w total    88.53 us | 86.26  2.26
+   paged_decode_attention_split_128_32_4_16_4_4.z16/s4x4w total    87.94 us | 85.81  2.13
+   paged_decode_attention_split_128_32_4_16_16_4.base/s16x4w total   104.77 us | 99.61  5.17
+   paged_decode_attention_split_128_32_4_16_16_4.z32/s16x4w total   105.25 us | 100.24  5.02
+   paged_decode_attention_split_128_32_4_16_16_4.z16/s16x4w total   129.16 us | 123.63  5.53
+== hd64 32/8 b1c1024  (SM MHz per round: 2745 1950 1950 2775 2775)
+   paged_decode_attention_split_64_32_8_16_16_8.base/s16x8w total     6.35 us | 4.80  1.55
+   paged_decode_attention_split_64_32_8_16_16_8.z32/s16x8w total     6.34 us | 4.78  1.56
+   paged_decode_attention_split_64_32_8_16_16_8.z16/s16x8w total     5.42 us | 3.87  1.55
+   paged_decode_attention_split_64_32_8_16_16_8.z8/s16x8w total     6.01 us | 4.47  1.54
+   paged_decode_attention_split_64_32_8_16_4_4.base/s4x4w total    19.53 us | 18.47  1.06
+   paged_decode_attention_split_64_32_8_16_4_4.z32/s4x4w total    18.82 us | 17.79  1.04
+   paged_decode_attention_split_64_32_8_16_4_4.z16/s4x4w total    11.81 us | 10.66  1.15
+   paged_decode_attention_split_64_32_8_16_4_4.z8/s4x4w total     7.61 us | 6.57  1.04
+   paged_decode_attention_split_64_32_8_16_16_4.base/s16x4w total     7.96 us | 6.40  1.56
+   paged_decode_attention_split_64_32_8_16_16_4.z32/s16x4w total     7.73 us | 6.18  1.55
+   paged_decode_attention_split_64_32_8_16_16_4.z16/s16x4w total     5.92 us | 4.37  1.55
+   paged_decode_attention_split_64_32_8_16_16_4.z8/s16x4w total     5.50 us | 3.95  1.54
+== hd64 32/8 b1c4096  (SM MHz per round: 2775 2760 2775 2760 2775)
+   paged_decode_attention_split_64_32_8_16_16_8.base/s16x8w total    14.43 us | 12.87  1.56
+   paged_decode_attention_split_64_32_8_16_16_8.z32/s16x8w total    13.73 us | 12.17  1.56
+   paged_decode_attention_split_64_32_8_16_16_8.z16/s16x8w total     9.50 us | 7.94  1.56
+   paged_decode_attention_split_64_32_8_16_16_8.z8/s16x8w total     8.40 us | 6.83  1.57
+   paged_decode_attention_split_64_32_8_16_4_4.base/s4x4w total    70.24 us | 69.18  1.05
+   paged_decode_attention_split_64_32_8_16_4_4.z32/s4x4w total    67.88 us | 66.83  1.05
+   paged_decode_attention_split_64_32_8_16_4_4.z16/s4x4w total    35.93 us | 34.88  1.05
+   paged_decode_attention_split_64_32_8_16_4_4.z8/s4x4w total    20.79 us | 19.74  1.05
+   paged_decode_attention_split_64_32_8_16_16_4.base/s16x4w total    21.04 us | 19.49  1.55
+   paged_decode_attention_split_64_32_8_16_16_4.z32/s16x4w total    20.31 us | 18.76  1.56
+   paged_decode_attention_split_64_32_8_16_16_4.z16/s16x4w total    12.72 us | 11.16  1.55
+   paged_decode_attention_split_64_32_8_16_16_4.z8/s16x4w total     9.07 us | 7.50  1.56
+== hd64 32/8 b8c1024  (SM MHz per round: 2775 2775 2775 2760 2775)
+   paged_decode_attention_split_64_32_8_16_16_8.base/s16x8w total    24.54 us | 22.77  1.77
+   paged_decode_attention_split_64_32_8_16_16_8.z32/s16x8w total    24.31 us | 22.52  1.79
+   paged_decode_attention_split_64_32_8_16_16_8.z16/s16x8w total    20.93 us | 19.14  1.79
+   paged_decode_attention_split_64_32_8_16_16_8.z8/s16x8w total    27.85 us | 26.06  1.79
+   paged_decode_attention_split_64_32_8_16_4_4.base/s4x4w total    24.67 us | 23.45  1.22
+   paged_decode_attention_split_64_32_8_16_4_4.z32/s4x4w total    23.24 us | 21.99  1.24
+   paged_decode_attention_split_64_32_8_16_4_4.z16/s4x4w total    14.22 us | 13.00  1.22
+   paged_decode_attention_split_64_32_8_16_4_4.z8/s4x4w total    10.92 us | 9.69  1.22
+   paged_decode_attention_split_64_32_8_16_16_4.base/s16x4w total    23.41 us | 21.65  1.76
+   paged_decode_attention_split_64_32_8_16_16_4.z32/s16x4w total    23.22 us | 21.45  1.77
+   paged_decode_attention_split_64_32_8_16_16_4.z16/s16x4w total    15.91 us | 14.13  1.78
+   paged_decode_attention_split_64_32_8_16_16_4.z8/s16x4w total    17.45 us | 15.68  1.77
+== hd64 32/8 b32c1024  (SM MHz per round: 2775 2745 2715 2715 2715)
+   paged_decode_attention_split_64_32_8_16_16_8.base/s16x8w total    96.74 us | 93.36  3.38
+   paged_decode_attention_split_64_32_8_16_16_8.z32/s16x8w total    98.10 us | 94.67  3.43
+   paged_decode_attention_split_64_32_8_16_16_8.z16/s16x8w total    89.53 us | 86.31  3.22
+   paged_decode_attention_split_64_32_8_16_16_8.z8/s16x8w total   118.22 us | 114.85  3.37
+   paged_decode_attention_split_64_32_8_16_4_4.base/s4x4w total    87.41 us | 85.45  1.97
+   paged_decode_attention_split_64_32_8_16_4_4.z32/s4x4w total    86.26 us | 84.33  1.93
+   paged_decode_attention_split_64_32_8_16_4_4.z16/s4x4w total    67.12 us | 65.20  1.92
+   paged_decode_attention_split_64_32_8_16_4_4.z8/s4x4w total    61.31 us | 59.39  1.92
+   paged_decode_attention_split_64_32_8_16_16_4.base/s16x4w total    87.55 us | 84.25  3.30
+   paged_decode_attention_split_64_32_8_16_16_4.z32/s16x4w total    87.19 us | 83.96  3.23
+   paged_decode_attention_split_64_32_8_16_16_4.z16/s16x4w total    78.72 us | 75.45  3.27
+   paged_decode_attention_split_64_32_8_16_16_4.z8/s16x4w total    79.84 us | 76.55  3.29
+== hd256 32/8 b1c1024  (SM MHz per round: 2775 1995 2505 2505 2505)
+   paged_decode_attention_split_256_32_8_16_16_8.base/s16x8w total     9.23 us | 7.02  2.21
+   paged_decode_attention_split_256_32_8_16_16_8.z32/s16x8w total     9.04 us | 6.85  2.19
+   paged_decode_attention_split_256_32_8_16_4_4.base/s4x4w total    22.39 us | 21.05  1.34
+   paged_decode_attention_split_256_32_8_16_4_4.z32/s4x4w total    21.72 us | 20.37  1.35
+== hd256 32/8 b1c4096  (SM MHz per round: 2730 2775 2745 2730 2760)
+   paged_decode_attention_split_256_32_8_16_16_8.base/s16x8w total    20.04 us | 17.84  2.20
+   paged_decode_attention_split_256_32_8_16_16_8.z32/s16x8w total    18.70 us | 16.51  2.19
+   paged_decode_attention_split_256_32_8_16_4_4.base/s4x4w total    82.54 us | 81.18  1.37
+   paged_decode_attention_split_256_32_8_16_4_4.z32/s4x4w total    78.85 us | 77.50  1.34
+== hd256 32/8 b8c1024  (SM MHz per round: 2760 2760 2760 2745 2760)
+   paged_decode_attention_split_256_32_8_16_16_8.base/s16x8w total    82.96 us | 79.31  3.65
+   paged_decode_attention_split_256_32_8_16_16_8.z32/s16x8w total    86.32 us | 82.29  4.03
+   paged_decode_attention_split_256_32_8_16_4_4.base/s4x4w total    71.35 us | 69.57  1.78
+   paged_decode_attention_split_256_32_8_16_4_4.z32/s4x4w total    69.43 us | 67.52  1.91
+== hd256 32/8 b32c1024  (SM MHz per round: 2775 2760 2760 2715 2760)
+   paged_decode_attention_split_256_32_8_16_16_8.base/s16x8w total   498.35 us | 471.68  26.67
+   paged_decode_attention_split_256_32_8_16_16_8.z32/s16x8w total   466.20 us | 439.46  26.74
+   paged_decode_attention_split_256_32_8_16_4_4.base/s4x4w total   437.52 us | 430.46  7.06
+   paged_decode_attention_split_256_32_8_16_4_4.z32/s4x4w total   424.63 us | 417.50  7.13
+== hd128 32/8 b1c1024  (SM MHz per round: 2775 2025 2325 2325 2325)
+   paged_decode_attention_128_32_8_16_32.base/p0x32w total    12.97 us | 12.97
+   paged_decode_attention_128_32_8_16_32.z32/p0x32w total    12.46 us | 12.46
+   paged_decode_attention_128_32_8_16_32.z16/p0x32w total     9.18 us | 9.18
+   paged_decode_attention_128_32_8_16_8.base/p0x8w total    32.30 us | 32.30
+   paged_decode_attention_128_32_8_16_8.z32/p0x8w total    33.35 us | 33.35
+   paged_decode_attention_128_32_8_16_8.z16/p0x8w total    19.09 us | 19.09
+== hd128 32/8 b1c4096  (SM MHz per round: 2730 2775 2730 2760 2760)
+   paged_decode_attention_128_32_8_16_32.base/p0x32w total    42.52 us | 42.52
+   paged_decode_attention_128_32_8_16_32.z32/p0x32w total    43.93 us | 43.93
+   paged_decode_attention_128_32_8_16_32.z16/p0x32w total    28.43 us | 28.43
+   paged_decode_attention_128_32_8_16_8.base/p0x8w total   127.19 us | 127.19
+   paged_decode_attention_128_32_8_16_8.z32/p0x8w total   127.98 us | 127.98
+   paged_decode_attention_128_32_8_16_8.z16/p0x8w total    70.31 us | 70.31
+== hd128 32/8 b8c1024  (SM MHz per round: 2760 2760 2775 2760 2730)
+   paged_decode_attention_128_32_8_16_32.base/p0x32w total    52.57 us | 52.57
+   paged_decode_attention_128_32_8_16_32.z32/p0x32w total    53.73 us | 53.73
+   paged_decode_attention_128_32_8_16_32.z16/p0x32w total    52.53 us | 52.53
+   paged_decode_attention_128_32_8_16_8.base/p0x8w total    42.87 us | 42.87
+   paged_decode_attention_128_32_8_16_8.z32/p0x8w total    43.32 us | 43.32
+   paged_decode_attention_128_32_8_16_8.z16/p0x8w total    37.03 us | 37.03
+== hd128 32/8 b32c1024  (SM MHz per round: 2775 2760 2745 2700 2760)
+   paged_decode_attention_128_32_8_16_32.base/p0x32w total   256.65 us | 256.65
+   paged_decode_attention_128_32_8_16_32.z32/p0x32w total   270.13 us | 270.13
+   paged_decode_attention_128_32_8_16_32.z16/p0x32w total   214.00 us | 214.00
+   paged_decode_attention_128_32_8_16_8.base/p0x8w total   235.88 us | 235.88
+   paged_decode_attention_128_32_8_16_8.z32/p0x8w total   248.51 us | 248.51
+   paged_decode_attention_128_32_8_16_8.z16/p0x8w total   187.24 us | 187.24

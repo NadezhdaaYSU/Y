@@ -146,7 +146,7 @@ source; each entry there now carries its status. What is still open:
   re-measured here; the current state is in
   [the validator documentation](ptxas_translation_validation.md) and Codex's
   2026-10-08 review.
-- `python3 tools/ptxas_tval/docgate.py` reports 14 figures in the validator
+- `python3 tools/ptxas_tval/docgate.py` reports 15 figures in the validator
   documentation and the README that disagree with its measurement (checked
   2026-10-17 at `ff3526f`): the loop census's buckets and its
   `loopval`/`nestval` split; the multi-back-edge kernels (33 of 48 published,
@@ -161,7 +161,16 @@ source; each entry there now carries its status. What is still open:
   PTX loop it cannot pair with a SASS one. The FP8 GEMM's float32
   accumulation (2026-10-18) moved it to 26 `MATCHED`, and its "no loop"
   bucket from the 21 published to 20, the fourteenth figure: `ptxas` no
-  longer unrolls the whole K loop of `gemm_fp8_256`.
+  longer unrolls the whole K loop of `gemm_fp8_256`. The paged decode
+  attention KV loop (2026-10-18) added a fifteenth: the loop census's bucket
+  for the SASS branch form `BRA.DIV ~URZ` (1 published) is now measured by no
+  kernel, because `paged_decode_attention_128_32_8_16`, refused there before,
+  is now refused as "PTX loop body has more than one branch" (6 measured
+  before and 7 now, 2 published): the lazy rescale is a branch inside the
+  loop. The kernel was refused before and is refused now. The unroll census
+  and `gap.py` give the attention kernels the verdicts they gave before; the
+  unroll census's reason now names an irreducible SASS nest of 3 levels
+  rather than 2.
 
 ## Fixed
 

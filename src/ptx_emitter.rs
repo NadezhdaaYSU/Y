@@ -1199,6 +1199,31 @@ struct AttnSplit<'a> {
     meta: &'a str,
 }
 
+/// What `PtxEmitter::emit_attn_kv_fetch` needs to turn a warp's token
+/// position into one token's K and V words, for each lane.
+struct AttnFetch {
+    /// The lane's token group within the warp (`None`: one token per warp).
+    grp: Option<String>,
+    /// The warp's last token; every fetched token is clamped to it.
+    w_last: String,
+    /// Loop-carried: the logical page whose physical page is in `phys`.
+    cached_page: String,
+    phys: String,
+    seq: String,
+    max_pages: String,
+    pt_ptr: String,
+    k_ptr: String,
+    v_ptr: String,
+    kv_head: String,
+    /// The lane's position within its token's `lpt` lanes.
+    sub: String,
+    page_size: u32,
+    num_kv_heads: u32,
+    head_dim: u32,
+    /// Elements per lane inside the loop.
+    epl_k: u32,
+}
+
 impl PtxEmitter {
     pub fn new() -> Self {
         Self::new_with_profile(&HardwareProfile::default())
@@ -14126,8 +14151,9 @@ declare it as a Q format.\n{}",
     ///   b32 ctx 4096    1046.89    1071.66    1332.68     8  (32w is 1.27x worse)
     /// ```
     ///
-    /// The optimum is entirely a function of how many CTAs the grid already
-    /// supplies (`num_q_heads * batch`) against the SM count - and batch is a
+    /// (Measured on the 32-lanes-a-token loop this kernel had before
+    /// 2026-10-18.) The optimum is entirely a function of how many CTAs the
+    /// grid already supplies (`num_q_heads * batch`) against the SM count - and batch is a
     /// RUNTIME value, so no compile-time constant is right for every launch.
     /// 32 is the default because this compiler targets consumer-GPU
     /// inference, where decode runs at batch 1-4 and the win is 3x; a
@@ -14138,7 +14164,8 @@ declare it as a Q format.\n{}",
     /// Neither choice fixes the grid being too small at batch 1 outright -
     /// that needs a split-K decode (partition the KV sequence across CTAs
     /// plus a second reduction pass over the partial softmax states), which
-    /// is not implemented. See the kernel's doc comment.
+    /// is the `paged_decode_attention_split_*` kernel. See the kernel's doc
+    /// comment.
     const ATTN_DEFAULT_NUM_WARPS: u32 = 32;
 
     /// Parses `<prefix>_<d0>_<d1>_..._<dn-1>` into its `n` trailing positive
@@ -14402,21 +14429,39 @@ declare it as a Q format.\n{}",
     ///   block = `(ATTN_NUM_WARPS * 32, 1, 1)`
     /// Shared memory is statically declared, so no dynamic-smem opt-in.
     ///
-    /// **Algorithm.** Lane `L` of every warp owns head-dimension elements
-    /// `[L*elems_per_lane, (L+1)*elems_per_lane)`, so a whole `head_dim` row
-    /// is one fully-coalesced vector load per warp (`head_dim=128` -> 4 f16
-    /// per lane -> `ld.global.v2.u32`, 256 contiguous bytes per warp). Each
-    /// warp strides the KV sequence by `ATTN_NUM_WARPS` and maintains its own
-    /// running `(m, l, acc)` softmax state:
+    /// **Algorithm.** Inside the KV loop a token's `head_dim` row spans
+    /// `lpt = head_dim / epl` lanes, `epl` elements each - eight, one 128-bit
+    /// load, unless the CTA's query heads would need more than 64 registers
+    /// of Q and accumulators (`attn_loop_elems_per_lane`) - so a warp works on
+    /// `32 / lpt` tokens at once: two at head_dim 128 and GQA 4:1. Each warp
+    /// takes one contiguous block of the CTA's tokens, so its page-table entry
+    /// changes once a page rather than whenever a stride crosses one, and each
+    /// token group of each warp keeps its own running `(m, l, acc)`:
     ///
     /// ```text
-    ///   score  = warp_reduce_sum(dot(Q, K_t))          // scale folded into Q
-    ///   m_new  = max(m, score)
-    ///   corr   = exp(m - m_new)
-    ///   p      = exp(score - m_new)
-    ///   l      = l*corr + p
-    ///   acc[j] = acc[j]*corr + p*V_t[j]
+    ///   score = sum over the token's lpt lanes of dot(Q, K_t)   // scale folded into Q
+    ///   if some lane of the warp has score - m > ATTN_LAZY_RESCALE:   // rare
+    ///       m_new = max(m, score);  c = exp(m - m_new)
+    ///       l = l*c;  acc[j] = acc[j]*c;  m = m_new
+    ///   p      = exp(score - m)
+    ///   l      = l + p
+    ///   acc[j] = acc[j] + p*V_t[j]
     /// ```
+    ///
+    /// The rescale is lazy because the result does not depend on which
+    /// reference `m` the sums are taken against, only on `(m, l, acc)`
+    /// agreeing; see `ATTN_LAZY_RESCALE`. The next iteration's page lookup and
+    /// K/V loads are issued before this iteration's arithmetic. A lane whose
+    /// token lies past its warp's block reads the block's last token instead,
+    /// with its weight zeroed, so every shuffle runs on the full
+    /// warp; after the loop a warp's token groups are folded into one state by
+    /// the same max-rescale-and-sum as the cross-warp merge below.
+    ///
+    /// At head_dim 128, GQA 4:1, the split kernel's loop is 239 sm_89 SASS
+    /// instructions per iteration, 60 of them in the rescale block, so 179
+    /// for two tokens when no rescale is taken; the 32-lanes-a-token loop it
+    /// replaced was 157 for one
+    /// (docs/benchmarks/paged_attention_2026-10-18/sass_loop_census.txt).
     ///
     /// `m`, `l` and `acc[]` are LOOP-CARRIED across a real runtime loop, so
     /// every write above targets those exact registers. Allocating a fresh
@@ -14449,7 +14494,9 @@ declare it as a Q format.\n{}",
     /// `head_dim` 64/128/256, `page_size` 1/16/32/64, 1..16 warps, and 4096-token
     /// contexts - worst relative L2 error 2.11e-4 (the f16 storage floor),
     /// plus 50 fixed-input launches confirming bit-level determinism across
-    /// the shared-memory merge.
+    /// the shared-memory merge. The loop layout, lazy rescale and prefetch
+    /// that replaced that loop's on 2026-10-18 are checked on the GPU by
+    /// `python/y_lang/tests/test_paged_decode_attention.py`.
     ///
     /// **Two shapes, selected by `split`.** With `split == None` the grid is
     /// `num_q_heads x num_seqs` and one CTA owns a whole sequence for one
@@ -14580,17 +14627,55 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    setp.le.s32 {}, {}, 0;", p_empty, seq_len).unwrap();
         writeln!(&mut self.ptx_buffer, "    @{} bra ATTN_ZERO_{};", p_empty, kernel_name).unwrap();
 
+        // ---- loop layout: `lpt` lanes per token ----
+        //
+        // Inside the KV loop a token's `head_dim` row is spread over `lpt`
+        // lanes, `epl_k` elements each, so a warp holds `groups = 32 / lpt`
+        // tokens at once. The cross-warp merge and both stores keep the
+        // `elems_per_lane = head_dim / 32` layout; the loop layout only has
+        // to agree with itself, and is folded back into that one by the
+        // in-warp combine after the loop. See `attn_loop_elems_per_lane`.
+        let epl_k = Self::attn_loop_elems_per_lane(head_dim, heads_per_cta as u32);
+        let lpt = head_dim / epl_k;
+        let groups = 32 / lpt;
+        let words_k = (epl_k / 2) as usize;
+        let (grp, sub) = if groups == 1 {
+            (None, lane.clone())
+        } else {
+            let g = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", g, lane, lpt.trailing_zeros()).unwrap();
+            let s = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", s, lane, lpt - 1).unwrap();
+            (Some(g), s)
+        };
+        let sub_off_k = if groups == 1 {
+            lane_off.clone()
+        } else {
+            let r = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mul.lo.s32 {}, {}, {};", r, sub, epl_k).unwrap();
+            r
+        };
+        let q_byte_off = if groups == 1 {
+            byte_off.clone()
+        } else {
+            let qe = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", qe, elem, sub_off_k).unwrap();
+            let qb = self.alloc_reg64();
+            writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, 2;", qb, qe).unwrap();
+            qb
+        };
+
         // Q is read once per CTA, per head - fold 1/sqrt(head_dim) in here
         // rather than scaling every score inside the loop.
         let scale = Self::f32_to_ptx_hex(1.0 / (head_dim as f32).sqrt());
         let mut q_vals: Vec<Vec<String>> = Vec::with_capacity(heads_per_cta);
         for h in 0..heads_per_cta {
             let q_addr = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", q_addr, q_ptr, byte_off).unwrap();
+            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", q_addr, q_ptr, q_byte_off).unwrap();
             if h > 0 {
                 writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", q_addr, q_addr, h as u32 * head_dim * 2).unwrap();
             }
-            let q_words = self.emit_vec_load_u32(&q_addr, words_per_lane);
+            let q_words = self.emit_vec_load_u32_chunked(&q_addr, words_k, None);
             let q_raw = self.emit_unpack_f16_pairs(&q_words);
             let mut scaled = Vec::with_capacity(q_raw.len());
             for r in &q_raw {
@@ -14614,8 +14699,8 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", l_reg).unwrap();
             m_regs.push(m_reg);
             l_regs.push(l_reg);
-            let mut acc = Vec::with_capacity(elems_per_lane as usize);
-            for _ in 0..elems_per_lane {
+            let mut acc = Vec::with_capacity(epl_k as usize);
+            for _ in 0..epl_k {
                 let a = self.alloc_regf32();
                 writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", a).unwrap();
                 acc.push(a);
@@ -14628,7 +14713,7 @@ declare it as a Q format.\n{}",
         // splits)`, so split 0 is non-empty whenever `seq_len > 0` and a
         // trailing split that got nothing exits the loop immediately, leaving
         // the `(-1e30, 0, 0)` identity state for the combine to absorb.
-        let (t_reg, t_end) = if let Some(s) = &split {
+        let (t_start, t_end) = if let Some(s) = &split {
             let ctaid_z = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.z;", ctaid_z).unwrap();
             let chunk = self.alloc_reg32();
@@ -14649,129 +14734,244 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", t_hi, t_start, chunk).unwrap();
             let t_end = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    min.s32 {}, {}, {};", t_end, t_hi, seq_len).unwrap();
-            let t_reg = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", t_reg, t_start, warp).unwrap();
-            (t_reg, t_end)
+            (Some(t_start), t_end)
         } else {
-            let t_reg = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", t_reg, warp).unwrap();
-            (t_reg, seq_len.clone())
+            (None, seq_len.clone())
         };
-        // A warp advances by num_warps tokens. When that stride is smaller
-        // than a page, consecutive tokens can share the page-table entry.
-        // Cache only the physical page base; the token's slot is still
-        // recomputed every iteration, including unaligned split starts.
-        let cached_page = if num_warps < page_size {
-            let r = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0xffffffff;", r).unwrap();
-            Some(r)
-        } else {
-            None
-        };
-        let kv_base = self.alloc_reg64();
-        if cached_page.is_some() {
-            writeln!(&mut self.ptx_buffer, "    mov.u64 {}, 0;", kv_base).unwrap();
+
+        // Each warp takes ONE CONTIGUOUS block of the CTA's tokens, not every
+        // `num_warps`-th token: consecutive iterations then stay on one page,
+        // so the page-table entry is reloaded once per `page_size / groups`
+        // iterations instead of whenever the stride crosses a page. The block
+        // is a whole number of `groups`, so every iteration but a warp's last
+        // fills all of its token groups.
+        //   n        = max(t_end - t_start, 0)
+        //   per_warp = ceil(n / (num_warps * groups)) * groups
+        //   [ws, we) = [t_start + warp*per_warp, min(ws + per_warp, t_end))
+        let n_tok = self.alloc_reg32();
+        match &t_start {
+            Some(ts) => writeln!(&mut self.ptx_buffer, "    sub.s32 {}, {}, {};", n_tok, t_end, ts).unwrap(),
+            None => writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", n_tok, t_end).unwrap(),
         }
+        writeln!(&mut self.ptx_buffer, "    max.s32 {}, {}, 0;", n_tok, n_tok).unwrap();
+        let tok_per_iter = num_warps * groups;
+        let n_up = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", n_up, n_tok, tok_per_iter - 1).unwrap();
+        let iters = self.alloc_reg32();
+        if tok_per_iter.is_power_of_two() {
+            writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", iters, n_up, tok_per_iter.trailing_zeros()).unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", iters, n_up, tok_per_iter).unwrap();
+        }
+        let per_warp = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.s32 {}, {}, {};", per_warp, iters, groups).unwrap();
+        let t_w = self.alloc_reg32();
+        match &t_start {
+            Some(ts) => writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, {}, {};", t_w, warp, per_warp, ts).unwrap(),
+            None => writeln!(&mut self.ptx_buffer, "    mul.lo.s32 {}, {}, {};", t_w, warp, per_warp).unwrap(),
+        }
+        let w_hi = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", w_hi, t_w, per_warp).unwrap();
+        let w_end = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    min.s32 {}, {}, {};", w_end, w_hi, t_end).unwrap();
+        // Every fetched token is clamped to the warp's last one. A lane past
+        // the warp's end (with several token groups) still has to reach every
+        // shuffle, and the final iteration's prefetch looks one step past the
+        // block; both read the block's last token instead, so no load leaves
+        // the sequence, and a past-the-end lane's weight is zeroed below.
+        let w_last = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, -1;", w_last, w_end).unwrap();
+
+        // The physical page of the lane's token, reloaded only when the
+        // logical page changes. A predicated load rather than a branch,
+        // because with several token groups the lanes of one warp can be on
+        // two different pages.
+        let cached_page = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0xffffffff;", cached_page).unwrap();
+        let phys = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", phys).unwrap();
+        let fetch = AttnFetch {
+            grp: grp.clone(),
+            w_last: w_last.clone(),
+            cached_page: cached_page.clone(),
+            phys: phys.clone(),
+            seq: ctaid_y.clone(),
+            max_pages: max_pages_reg.to_string(),
+            pt_ptr: pt_ptr.to_string(),
+            k_ptr: k_ptr.to_string(),
+            v_ptr: v_ptr.to_string(),
+            kv_head: kv_head.clone(),
+            sub: sub.clone(),
+            page_size,
+            num_kv_heads,
+            head_dim,
+            epl_k,
+        };
+        // Software-pipelined: the warp's first K/V are loaded before the
+        // loop, and every iteration issues the NEXT iteration's page lookup
+        // and K/V loads before it computes with the current ones, so their
+        // latency overlaps this iteration's arithmetic. The next token is
+        // clamped to the warp's last one, so the final iteration's prefetch
+        // reads a token of this warp again rather than leaving the sequence.
+        let p_none = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ge.s32 {}, {}, {};", p_none, t_w, w_end).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} bra ATTN_LOOP_END_{};", p_none, kernel_name).unwrap();
+        let (k_words, v_words) = self.emit_attn_kv_fetch(&fetch, &t_w);
+        // The loop tests at its top, the shape the translation validator's
+        // loop recogniser reads. The test above only spares an empty warp a
+        // useless first fetch: `w_end` lies in [1, seq_len] whenever the
+        // kernel gets here, so even that warp's clamped token is a real one.
         writeln!(&mut self.ptx_buffer, "ATTN_LOOP_{}:", kernel_name).unwrap();
         let p_done = self.alloc_pred();
-        writeln!(&mut self.ptx_buffer, "    setp.ge.s32 {}, {}, {};", p_done, t_reg, t_end).unwrap();
+        writeln!(&mut self.ptx_buffer, "    setp.ge.s32 {}, {}, {};", p_done, t_w, w_end).unwrap();
         writeln!(&mut self.ptx_buffer, "    @{} bra ATTN_LOOP_END_{};", p_done, kernel_name).unwrap();
+        let t_n = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", t_n, t_w, groups).unwrap();
+        let (k_next, v_next) = self.emit_attn_kv_fetch(&fetch, &t_n);
 
-        // token -> (logical page, slot)
-        let page = self.alloc_reg32();
-        let slot = self.alloc_reg32();
-        if page_size.is_power_of_two() {
-            writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", page, t_reg, page_size.trailing_zeros()).unwrap();
-            writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", slot, t_reg, page_size - 1).unwrap();
-        } else {
-            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", page, t_reg, page_size).unwrap();
-            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", slot, t_reg, page_size).unwrap();
-        }
-
-        // The page is warp-uniform. All lanes skip the lookup together;
-        // the invalid initial cache guarantees the first token loads it.
-        if let Some(cached) = &cached_page {
-            let p_same_page = self.alloc_pred();
-            writeln!(&mut self.ptx_buffer, "    setp.eq.s32 {}, {}, {};", p_same_page, page, cached).unwrap();
-            writeln!(&mut self.ptx_buffer, "    @{} bra ATTN_PAGE_READY_{};", p_same_page, kernel_name).unwrap();
-        }
-
-        // page_table[seq, page] -> physical page
-        let pt_idx = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, {}, {};", pt_idx, ctaid_y, max_pages_reg, page).unwrap();
-        let pt_off = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, 4;", pt_off, pt_idx).unwrap();
-        let pt_addr = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", pt_addr, pt_ptr, pt_off).unwrap();
-        let phys = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    ld.global.s32 {}, [{}];", phys, pt_addr).unwrap();
-
-        // KV element index = ((phys*PS + slot)*NKVH + kv_head)*HD + lane*EPL.
-        // Computed in 64 bits: num_pages*page_size*num_kv_heads*head_dim
-        // overflows 32 bits for a realistically sized cache.
-        writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, {};", kv_base, phys, page_size * num_kv_heads * head_dim).unwrap();
-        if let Some(cached) = &cached_page {
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", cached, page).unwrap();
-            writeln!(&mut self.ptx_buffer, "ATTN_PAGE_READY_{}:", kernel_name).unwrap();
-        }
-        let s1 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.s32 {}, {}, {};", s1, slot, num_kv_heads * head_dim).unwrap();
-        let s2 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, {}, {};", s2, kv_head, head_dim, s1).unwrap();
-        let s3 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, {}, {};", s3, lane, elems_per_lane, s2).unwrap();
-        let kv_small = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, 1;", kv_small, s3).unwrap();
-        let kv_idx = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", kv_idx, kv_base, kv_small).unwrap();
-        let kv_bytes = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    shl.b64 {}, {}, 1;", kv_bytes, kv_idx).unwrap();
-
-        // K and V for this token are issued back to back and then shared by
-        // every query head this CTA owns. Issuing both loads before any of the
-        // dependent arithmetic is the point of the whole shape: one token's
-        // K/V now feeds `heads_per_cta` scores instead of being re-read by
-        // `gqa_ratio` separate CTAs.
-        let k_addr = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", k_addr, k_ptr, kv_bytes).unwrap();
-        let k_words = self.emit_vec_load_u32(&k_addr, words_per_lane);
-        let v_addr = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", v_addr, v_ptr, kv_bytes).unwrap();
-        let v_words = self.emit_vec_load_u32(&v_addr, words_per_lane);
+        // This iteration's token is real for the lane only below the warp's
+        // end; past it the lane computed with its clamped token and its
+        // weight is zeroed below.
+        let p_valid = match &grp {
+            Some(g) => {
+                let t_tok = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", t_tok, t_w, g).unwrap();
+                let pv = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    setp.lt.s32 {}, {}, {};", pv, t_tok, w_end).unwrap();
+                Some(pv)
+            }
+            None => None,
+        };
         let k_vals = self.emit_unpack_f16_pairs(&k_words);
         let v_vals = self.emit_unpack_f16_pairs(&v_words);
 
+        let mut scores: Vec<String> = Vec::with_capacity(heads_per_cta);
         for h in 0..heads_per_cta {
-            // score = warp_reduce_sum(dot(Q_h, K_t))
+            // score = reduce_sum over the token's `lpt` lanes of dot(Q_h, K_t)
             let mut dot = self.alloc_regf32();
             writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", dot, q_vals[h][0], k_vals[0]).unwrap();
-            for j in 1..elems_per_lane as usize {
+            for j in 1..epl_k as usize {
                 let nx = self.alloc_regf32();
                 writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", nx, q_vals[h][j], k_vals[j], dot).unwrap();
                 dot = nx;
             }
-            let score = self.emit_warp_reduce_sum(&dot);
-
-            // online softmax update
-            writeln!(&mut self.ptx_buffer, "    // online softmax: rescale the running sum AND accumulator by exp(m_old - m_new)").unwrap();
-            let m_reg = m_regs[h].clone();
-            let l_reg = l_regs[h].clone();
-            let m_new = self.alloc_regf32();
-            writeln!(&mut self.ptx_buffer, "    max.f32 {}, {}, {};", m_new, m_reg, score).unwrap();
-            let corr = self.emit_exp_f32(&m_reg, &m_new, LOG2E);
-            let p_w = self.emit_exp_f32(&score, &m_new, LOG2E);
-            writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", l_reg, l_reg, corr, p_w).unwrap();
-            for j in 0..elems_per_lane as usize {
-                let a = accs[h][j].clone();
-                let t = self.alloc_regf32();
-                writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", t, a, corr).unwrap();
-                writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", a, p_w, v_vals[j], t).unwrap();
+            let mut score = dot;
+            let mut off = lpt / 2;
+            while off >= 1 {
+                let tmp = self.emit_warp_butterfly_shuffle(&score, off);
+                let nx = self.alloc_regf32();
+                writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", nx, score, tmp).unwrap();
+                score = nx;
+                off /= 2;
             }
-            writeln!(&mut self.ptx_buffer, "    mov.f32 {}, {};", m_reg, m_new).unwrap();
+            scores.push(score);
         }
-        writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", t_reg, t_reg, num_warps).unwrap();
+
+        // ---- online softmax with a LAZY rescale ----
+        //
+        // `out = sum_t exp(s_t - m) v_t / sum_t exp(s_t - m)` holds for ANY
+        // reference `m`, so `m` need not be the running max - only `(m, l,
+        // acc)` must stay consistent. The state is rescaled to the current
+        // max only when some lane of the warp sees `s - m > ATTN_LAZY_RESCALE`
+        // for some head; otherwise the weights are taken against the stale
+        // `m`, each at most `e^ATTN_LAZY_RESCALE`. That removes the per-token
+        // `acc *= exp(m_old - m_new)` - `epl_k` multiplies and one `ex2` per
+        // head per token - from the common path. `vote.any` makes the branch
+        // warp-uniform, so the shuffles above never run under divergence.
+        //
+        // The test: some head has `d_h = score_h - m_h > margin` exactly when
+        // `t = max(d_0, ..., d_n, margin)` is not the margin itself. `max`
+        // returns one of its operands bit for bit, and a NaN `d_h` drops out
+        // of it as it would from `setp.gt.f32`, so the only float operation is
+        // the `max.f32` the translation validator models and the comparison is
+        // an exact one of `t`'s bits with the margin's.
+        let margin = Self::f32_to_ptx_hex(Self::ATTN_LAZY_RESCALE);
+        let mut ds = Vec::with_capacity(heads_per_cta);
+        let mut t_max: Option<String> = None;
+        for h in 0..heads_per_cta {
+            let d = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    sub.f32 {}, {}, {};", d, scores[h], m_regs[h]).unwrap();
+            let t = self.alloc_regf32();
+            match &t_max {
+                None => writeln!(&mut self.ptx_buffer, "    max.f32 {}, {}, {};", t, d, margin).unwrap(),
+                Some(prev) => writeln!(&mut self.ptx_buffer, "    max.f32 {}, {}, {};", t, prev, d).unwrap(),
+            }
+            t_max = Some(t);
+            ds.push(d);
+        }
+        let need = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ne.b32 {}, {}, 0x{:08X};", need, t_max.unwrap(), Self::ATTN_LAZY_RESCALE.to_bits()).unwrap();
+        let need_w = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    vote.sync.any.pred {}, {}, 0xffffffff;", need_w, need).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @!{} bra ATTN_NO_RESCALE_{};", need_w, kernel_name).unwrap();
+        writeln!(&mut self.ptx_buffer, "    // rescale (m, l, acc) to m_new = max(m, score) by exp(m - m_new)").unwrap();
+        for h in 0..heads_per_cta {
+            let m_new = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    max.f32 {}, {}, {};", m_new, m_regs[h], scores[h]).unwrap();
+            let corr = self.emit_exp_f32(&m_regs[h], &m_new, LOG2E);
+            writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", l_regs[h], l_regs[h], corr).unwrap();
+            for j in 0..epl_k as usize {
+                writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", accs[h][j], accs[h][j], corr).unwrap();
+            }
+            writeln!(&mut self.ptx_buffer, "    mov.f32 {}, {};", m_regs[h], m_new).unwrap();
+            writeln!(&mut self.ptx_buffer, "    sub.f32 {}, {}, {};", ds[h], scores[h], m_regs[h]).unwrap();
+        }
+        writeln!(&mut self.ptx_buffer, "ATTN_NO_RESCALE_{}:", kernel_name).unwrap();
+        for h in 0..heads_per_cta {
+            let ds_ = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", ds_, ds[h], Self::f32_to_ptx_hex(LOG2E)).unwrap();
+            let p_w = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    ex2.approx.ftz.f32 {}, {};", p_w, ds_).unwrap();
+            // A lane past its warp's block computed with the block's last
+            // token, which another lane counts: its weight is zeroed, so it
+            // adds nothing to l or acc. Its score is left alone - it can only
+            // move the reference max m, and a rescale keeps (m, l, acc)
+            // consistent whatever m is.
+            if let Some(pv) = &p_valid {
+                writeln!(&mut self.ptx_buffer, "    @!{} mov.f32 {}, 0f00000000;", pv, p_w).unwrap();
+            }
+            writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", l_regs[h], l_regs[h], p_w).unwrap();
+            for j in 0..epl_k as usize {
+                writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", accs[h][j], p_w, v_vals[j], accs[h][j]).unwrap();
+            }
+        }
+
+        // The prefetched words become the next iteration's current ones only
+        // now, after every use of this iteration's.
+        for (cur, nx) in k_words.iter().zip(&k_next).chain(v_words.iter().zip(&v_next)) {
+            writeln!(&mut self.ptx_buffer, "    mov.b32 {}, {};", cur, nx).unwrap();
+        }
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", t_w, t_n).unwrap();
         writeln!(&mut self.ptx_buffer, "    bra ATTN_LOOP_{};", kernel_name).unwrap();
         writeln!(&mut self.ptx_buffer, "ATTN_LOOP_END_{}:", kernel_name).unwrap();
+
+        // ---- in-warp combine: the `groups` token groups of a warp each hold a
+        // partial state over different tokens. Fold them pairwise across lane
+        // distance lpt, 2*lpt, ..., 16 with the same max-rescale-and-sum as
+        // the cross-warp merge; afterwards every group holds the warp's
+        // state, and group 0's lanes cover the whole head_dim row. ----
+        let mut dist = lpt;
+        while dist < 32 {
+            for h in 0..heads_per_cta {
+                let m_o = self.emit_warp_butterfly_shuffle(&m_regs[h], dist);
+                let l_o = self.emit_warp_butterfly_shuffle(&l_regs[h], dist);
+                let m_n = self.alloc_regf32();
+                writeln!(&mut self.ptx_buffer, "    max.f32 {}, {}, {};", m_n, m_regs[h], m_o).unwrap();
+                let c_s = self.emit_exp_f32(&m_regs[h], &m_n, LOG2E);
+                let c_o = self.emit_exp_f32(&m_o, &m_n, LOG2E);
+                let l_s = self.alloc_regf32();
+                writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", l_s, l_regs[h], c_s).unwrap();
+                writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", l_regs[h], l_o, c_o, l_s).unwrap();
+                for j in 0..epl_k as usize {
+                    let a_o = self.emit_warp_butterfly_shuffle(&accs[h][j], dist);
+                    let a_s = self.alloc_regf32();
+                    writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", a_s, accs[h][j], c_s).unwrap();
+                    writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", accs[h][j], a_o, c_o, a_s).unwrap();
+                }
+                writeln!(&mut self.ptx_buffer, "    mov.f32 {}, {};", m_regs[h], m_n).unwrap();
+            }
+            dist *= 2;
+        }
 
         // ---- cross-warp merge: each warp holds a PARTIAL softmax state, so
         // this is a max-rescale-and-sum, not a plain sum ----
@@ -14793,8 +14993,18 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", a_l, a_m, num_warps * 4).unwrap();
         let acc_off = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mul.lo.s32 {}, {}, {};", acc_off, warp, head_dim).unwrap();
+        // The acc slice goes in in the LOOP layout (`sub*epl_k`) - after the
+        // in-warp combine group 0 holds the whole row - and is read back by
+        // warp 0 below in the merge layout (`lane*elems_per_lane`).
         let acc_off2 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", acc_off2, acc_off, lane_off).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", acc_off2, acc_off, sub_off_k).unwrap();
+        let p_grp0 = if groups > 1 {
+            let pg = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", pg, lane, lpt).unwrap();
+            Some(pg)
+        } else {
+            None
+        };
         let a_acc = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, 4, {};", a_acc, acc_off2, smem_base).unwrap();
         let a_acc2 = self.alloc_reg32();
@@ -14838,8 +15048,11 @@ declare it as a Q format.\n{}",
             }
             writeln!(&mut self.ptx_buffer, "    @{} st.shared.f32 [{}], {};", p_lane0, a_m, m_regs[h]).unwrap();
             writeln!(&mut self.ptx_buffer, "    @{} st.shared.f32 [{}], {};", p_lane0, a_l, l_regs[h]).unwrap();
-            for j in 0..elems_per_lane as usize {
-                writeln!(&mut self.ptx_buffer, "    st.shared.f32 [{}+{}], {};", a_acc2, j * 4, accs[h][j]).unwrap();
+            for j in 0..epl_k as usize {
+                match &p_grp0 {
+                    Some(pg) => writeln!(&mut self.ptx_buffer, "    @{} st.shared.f32 [{}+{}], {};", pg, a_acc2, j * 4, accs[h][j]).unwrap(),
+                    None => writeln!(&mut self.ptx_buffer, "    st.shared.f32 [{}+{}], {};", a_acc2, j * 4, accs[h][j]).unwrap(),
+                }
             }
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
 
@@ -14951,6 +15164,140 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "ATTN_END_{}:", kernel_name).unwrap();
 
         num_warps * 32
+    }
+
+    /// One token's K and V for `emit_paged_decode_attention_kernel`'s loop:
+    /// the lane's token `t_w + grp`, clamped to the warp's last token, through
+    /// the page table (reloaded only when the logical page changes) to its KV
+    /// row, and both vector loads issued back to back. Returns the raw f16
+    /// pair words of K and V.
+    fn emit_attn_kv_fetch(&mut self, f: &AttnFetch, t_w: &str) -> (Vec<String>, Vec<String>) {
+        let t_tok = match &f.grp {
+            Some(g) => {
+                let r = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.s32 {}, {}, {};", r, t_w, g).unwrap();
+                r
+            }
+            None => t_w.to_string(),
+        };
+        let t_ld = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    min.s32 {}, {}, {};", t_ld, t_tok, f.w_last).unwrap();
+
+        // token -> (logical page, slot)
+        let page = self.alloc_reg32();
+        let slot = self.alloc_reg32();
+        if f.page_size.is_power_of_two() {
+            writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", page, t_ld, f.page_size.trailing_zeros()).unwrap();
+            writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", slot, t_ld, f.page_size - 1).unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", page, t_ld, f.page_size).unwrap();
+            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", slot, t_ld, f.page_size).unwrap();
+        }
+
+        // page_table[seq, page] -> physical page
+        let p_new_page = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ne.s32 {}, {}, {};", p_new_page, page, f.cached_page).unwrap();
+        let pt_idx = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, {}, {};", pt_idx, f.seq, f.max_pages, page).unwrap();
+        let pt_off = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, 4;", pt_off, pt_idx).unwrap();
+        let pt_addr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", pt_addr, f.pt_ptr, pt_off).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} ld.global.s32 {}, [{}];", p_new_page, f.phys, pt_addr).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", f.cached_page, page).unwrap();
+
+        // KV element index = ((phys*PS + slot)*NKVH + kv_head)*HD + sub*EPL.
+        // Computed in 64 bits: num_pages*page_size*num_kv_heads*head_dim
+        // overflows 32 bits for a realistically sized cache.
+        let kv_base = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, {};", kv_base, f.phys, f.page_size * f.num_kv_heads * f.head_dim).unwrap();
+        let s1 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.s32 {}, {}, {};", s1, slot, f.num_kv_heads * f.head_dim).unwrap();
+        let s2 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, {}, {};", s2, f.kv_head, f.head_dim, s1).unwrap();
+        let s3 = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.s32 {}, {}, {}, {};", s3, f.sub, f.epl_k, s2).unwrap();
+        let kv_small = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, 1;", kv_small, s3).unwrap();
+        let kv_idx = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", kv_idx, kv_base, kv_small).unwrap();
+        let kv_bytes = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    shl.b64 {}, {}, 1;", kv_bytes, kv_idx).unwrap();
+
+        // K and V for this token are issued back to back and then shared by
+        // every query head this CTA owns: one token's K/V feeds
+        // `heads_per_cta` scores instead of being re-read by `gqa_ratio`
+        // separate CTAs.
+        let words = (f.epl_k / 2) as usize;
+        let k_addr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", k_addr, f.k_ptr, kv_bytes).unwrap();
+        let k_words = self.emit_vec_load_u32_chunked(&k_addr, words, None);
+        let v_addr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", v_addr, f.v_ptr, kv_bytes).unwrap();
+        let v_words = self.emit_vec_load_u32_chunked(&v_addr, words, None);
+        (k_words, v_words)
+    }
+
+    /// Elements of a token's `head_dim` row that each lane holds inside
+    /// `emit_paged_decode_attention_kernel`'s KV loop; the token then spans
+    /// `head_dim / epl` lanes and a warp works on `32 * epl / head_dim`
+    /// tokens at once.
+    ///
+    /// Eight f16 is one 128-bit load per lane, and the per-token cost that
+    /// does not shrink with it - a `log2(lanes)`-step butterfly per head, the
+    /// softmax update, the address arithmetic - is paid once per token-group
+    /// instead of once per warp. With all 32 lanes on one token (`head_dim /
+    /// 32` elements, what this kernel did before) the hd-128 split kernel's
+    /// loop was 157 sm_89 SASS instructions a token; this layout alone, before
+    /// the lazy rescale and the prefetch, made it 216 for two
+    /// (docs/benchmarks/paged_attention_2026-10-18/sass_loop_census.txt).
+    ///
+    /// The bound is registers: Q and the accumulators cost `2 * epl` f32 per
+    /// query head the CTA carries, so 8 is taken only while that stays within
+    /// 64. At GQA 8:1 it would be 128: ptxas reported 194 registers for the
+    /// hd-128 split kernel, one 8-warp CTA fit an SM, and with 16 splits at
+    /// batch 8 it took 1.47x the time of four elements per lane (an
+    /// exploratory run on a busy GPU, docs/benchmarks/paged_attention_2026-10-18/exploration/),
+    /// so there it is four. Never fewer than `head_dim / 32` (32 lanes is a
+    /// warp).
+    fn attn_loop_elems_per_lane(head_dim: u32, heads_per_cta: u32) -> u32 {
+        let mut epl = 8;
+        while epl > 2 && 2 * epl * heads_per_cta > 64 {
+            epl /= 2;
+        }
+        epl.max(head_dim / 32)
+    }
+
+    /// The lazy-rescale margin of `emit_paged_decode_attention_kernel`, in
+    /// natural-log units of the score: the softmax state is rescaled only
+    /// when a score exceeds its reference max by more than this, so every
+    /// weight it accumulates is at most `e^8`, about 2981 - far from f32's
+    /// range for any sequence length a page table can address.
+    const ATTN_LAZY_RESCALE: f32 = 8.0;
+
+    /// `emit_vec_load_u32` for any even-sized run of words: `n_words` up to 8
+    /// as `v4` chunks at `addr`, `addr+16`, each optionally predicated.
+    fn emit_vec_load_u32_chunked(&mut self, addr: &str, n_words: usize, pred: Option<&str>) -> Vec<String> {
+        if n_words <= 4 && pred.is_none() {
+            return self.emit_vec_load_u32(addr, n_words);
+        }
+        let mut out = Vec::with_capacity(n_words);
+        let mut i = 0usize;
+        while i < n_words {
+            let n = (n_words - i).min(4);
+            let regs: Vec<String> = (0..n).map(|_| self.alloc_reg32()).collect();
+            let guard = pred.map(|p| format!("@{} ", p)).unwrap_or_default();
+            let at = if i == 0 { addr.to_string() } else { format!("{}+{}", addr, i * 4) };
+            match n {
+                1 => writeln!(&mut self.ptx_buffer, "    {}ld.global.u32 {}, [{}];", guard, regs[0], at).unwrap(),
+                2 => writeln!(&mut self.ptx_buffer, "    {}ld.global.v2.u32 {{{}}}, [{}];", guard, regs.join(","), at).unwrap(),
+                4 => writeln!(&mut self.ptx_buffer, "    {}ld.global.v4.u32 {{{}}}, [{}];", guard, regs.join(","), at).unwrap(),
+                _ => unreachable!("emit_vec_load_u32_chunked: n_words must be a multiple of 2 or below 4"),
+            }
+            out.extend(regs);
+            i += n;
+        }
+        out
     }
 
     /// `st.global` of `vals` f32 registers at `addr + base_off`, vectorized
@@ -16727,15 +17074,22 @@ mod tests_paged_decode_attention {
         assert!(ptx.contains("%ctaid.z"), "split kernel must index the KV sequence by %ctaid.z: {}", ptx);
 
         // The whole point of the merge: ONE K load and ONE V load per token,
-        // feeding four scores. Four `ld.global.v2.u32` in the loop body would
-        // mean the GQA re-read came back.
+        // feeding four scores. Four pairs of K/V loads in the loop body would
+        // mean the GQA re-read came back. At GQA 4:1 a token spans 16 lanes,
+        // 8 f16 each, so each is one 128-bit load - the next iteration's,
+        // the current one's having been issued before the loop or by the
+        // previous iteration.
         let body = ptx.split("ATTN_LOOP_paged_decode_attention_split_128_32_8_16_16_8:").nth(1)
             .and_then(|s| s.split("ATTN_LOOP_END_paged_decode_attention_split_128_32_8_16_16_8:").next())
             .expect("loop body");
-        assert_eq!(body.matches("ld.global.v2.u32").count(), 2,
+        assert_eq!(body.matches("ld.global.v4.u32").count(), 2,
                    "expected exactly one K and one V vector load per token: {}", body);
+        assert!(!body.contains("ld.global.v2.u32"), "a 32-lane token layout came back: {}", body);
+        // One exp per head on the common path, and one per head in the
+        // rescale block a warp-uniform vote branches around.
         assert_eq!(body.matches("ex2.approx.ftz.f32").count(), 8,
-                   "expected two exp per head for four heads: {}", body);
+                   "expected one exp per head on each of the two paths: {}", body);
+        assert_eq!(body.matches("vote.sync.any.pred").count(), 1, "the rescale must be warp-uniform: {}", body);
 
         // Shared memory does NOT scale with the head count - the heads go
         // through one buffer sequentially, or a GQA-4 kernel at 32 warps would
@@ -16743,6 +17097,46 @@ mod tests_paged_decode_attention {
         assert!(ptx.contains(&format!(".b8 smem_attn_paged_decode_attention_split_128_32_8_16_16_8[{}]",
                                       (8 * 2 + 8 * 128) * 4)),
                 "shared memory must be sized per warp, not per (warp, head): {}", ptx);
+    }
+
+    /// Lanes per token follow the register budget of
+    /// `attn_loop_elems_per_lane`: eight elements a lane (a 128-bit load)
+    /// while Q and the accumulators of the CTA's query heads fit 64
+    /// registers, four past it, and never fewer lanes than a warp has.
+    #[test]
+    fn loop_layout_follows_the_register_budget() {
+        for (hd, heads, epl) in [(128, 4, 8), (128, 8, 4), (128, 1, 8), (128, 5, 4), (64, 4, 8), (64, 8, 4), (256, 8, 8), (256, 1, 8)] {
+            assert_eq!(PtxEmitter::attn_loop_elems_per_lane(hd, heads), epl, "head_dim {} with {} heads", hd, heads);
+        }
+        // The butterfly inside the loop spans one token's lanes only: with
+        // 16 lanes a token it must never shuffle across 16, which would add
+        // the other token's partial dot product into this one's score.
+        fn loop_body(ptx: &str, name: &str) -> String {
+            ptx.split(&format!("ATTN_LOOP_{}:", name)).nth(1)
+                .and_then(|s| s.split(&format!("ATTN_LOOP_END_{}:", name)).next())
+                .expect("loop body")
+                .to_string()
+        }
+        fn bfly_offsets(body: &str) -> Vec<u32> {
+            let mut v: Vec<u32> = body.lines()
+                .filter(|l| l.contains("shfl.sync.bfly.b32"))
+                .map(|l| l.split(',').nth(2).unwrap().trim().parse().unwrap())
+                .collect();
+            v.sort();
+            v.dedup();
+            v
+        }
+        for (name, split, loads, offsets) in [
+            ("paged_decode_attention_split_128_32_8_16_16_8", true, "ld.global.v4.u32", vec![1, 2, 4, 8]),
+            ("paged_decode_attention_split_128_32_4_16_16_8", true, "ld.global.v2.u32", vec![1, 2, 4, 8, 16]),
+            ("paged_decode_attention_split_64_16_4_16_8_8", true, "ld.global.v4.u32", vec![1, 2, 4]),
+            ("paged_decode_attention_128_32_8_16_8", false, "ld.global.v4.u32", vec![1, 2, 4, 8]),
+        ] {
+            let ptx = if split { compile_split(name) } else { compile(name) };
+            let body = loop_body(&ptx, name);
+            assert_eq!(body.matches(loads).count(), 2, "{}: one K and one V {} a token: {}", name, loads, body);
+            assert_eq!(bfly_offsets(&body), offsets, "{}: butterfly offsets inside the loop", name);
+        }
     }
 
     #[test]

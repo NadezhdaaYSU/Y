@@ -88,15 +88,24 @@ def import_flashinfer():
     except ImportError:
         return None
 
+    # The copy is keyed by version and only trusted once it is complete: a
+    # partial one (an interrupted copy, or an older version's) has no
+    # `__init__.py` or the wrong files, and the import below would then fall
+    # back to the original package and fail as before.
     import shutil
-    shim = os.path.join(os.environ.get("TMPDIR", "/tmp"), "y_flashinfer_shim")
+    shim = os.path.join(os.environ.get("TMPDIR", "/tmp"),
+                        "y_flashinfer_shim-%s" % getattr(flashinfer, "__version__", "unknown"))
     site = os.path.dirname(os.path.dirname(flashinfer.__file__))
-    os.makedirs(shim, exist_ok=True)
-    for pkg in ("flashinfer", "tvm_ffi"):
-        src, dst = os.path.join(site, pkg), os.path.join(shim, pkg)
-        if os.path.isdir(src) and not os.path.isdir(dst):
-            print("[*] copying %s to a space-free path (%s) - see import_flashinfer()" % (pkg, shim))
-            shutil.copytree(src, dst)
+    done = os.path.join(shim, ".complete")
+    if not os.path.exists(done):
+        shutil.rmtree(shim, ignore_errors=True)
+        os.makedirs(shim)
+        for pkg in ("flashinfer", "tvm_ffi"):
+            src, dst = os.path.join(site, pkg), os.path.join(shim, pkg)
+            if os.path.isdir(src):
+                print("[*] copying %s to a space-free path (%s) - see import_flashinfer()" % (pkg, shim))
+                shutil.copytree(src, dst)
+        open(done, "w").close()
     for mod in [m for m in list(sys.modules) if m.split(".")[0] in ("flashinfer", "tvm_ffi")]:
         del sys.modules[mod]
     sys.path.insert(0, shim)

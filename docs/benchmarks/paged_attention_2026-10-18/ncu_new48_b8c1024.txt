@@ -1,0 +1,8 @@
+kernel | inst_executed.sum | registers_per_thread | grid_size | block_size
+- | inst | register/thread |  | 
+paged_decode_attention_split_128_3 | 7014400.000000 | 122 | 256 | 256
+paged_decode_attention_split_128_3 | 28416.000000 | 36 | 256 | 32
+paged_decode_attention_split_128_3 | 7014400.000000 | 122 | 256 | 256
+paged_decode_attention_split_128_3 | 28416.000000 | 36 | 256 | 32
+void flashinfer::BatchDecodeWithPa | 8562304.000000 | 60 | 512 | 128
+void flashinfer::PersistentVariabl | 510080.000000 | 40 | 264 | 128
