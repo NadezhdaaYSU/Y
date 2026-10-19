@@ -145,6 +145,65 @@ pub const FP8_TILE_64X64: Fp8Tile = Fp8Tile {
     stages: 0,
 };
 
+/// How an F16 GEMM operand tile's rows of 16-byte chunks sit in shared
+/// memory: rows `stride` elements apart and, when `swizzle` is
+/// `Some((shift, mask))`, chunk `c` of row `r` stored as chunk
+/// `c ^ ((r >> shift) & mask)` of that row.
+///
+/// The padded layout (`stride = cols + 8`, no swizzle) keeps `ldmatrix`
+/// free of bank conflicts, but a warp's `cp.async` copies into rows that
+/// are not whole 128-byte lines read 1.5 times the L2 sectors they need:
+/// Nsight Compute counts 24 sectors for each 16-sector copy instruction of
+/// the padded GEMMs and 16 for cuBLAS's, which swizzles
+/// (`docs/benchmarks/smem_swizzle_2026-10-20/`). The swizzled layout packs
+/// rows at `cols` and spreads the 8 rows one `ldmatrix` matrix reads over
+/// the 8 16-byte slots of a 128-byte line, so neither side conflicts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SmemTile {
+    pub stride: u32,
+    pub swizzle: Option<(u32, u32)>,
+}
+
+impl SmemTile {
+    /// Rows of `cols` elements, `pad` elements apart beyond them, unswizzled.
+    pub fn padded(cols: u32, pad: u32) -> Self {
+        SmemTile { stride: cols + pad, swizzle: None }
+    }
+
+    /// Rows of `cols` elements packed and swizzled, or `None` where a row is
+    /// not a power-of-two number of at least two 16-byte chunks. A row of
+    /// `c >= 8` chunks XORs the row's low three bits into the chunk's; a
+    /// row of 4 (2) chunks, two (four) rows to a 128-byte line, XORs bits
+    /// 1-2 (bit 2), so that any 8 consecutive rows starting at a multiple
+    /// of 8 put a given chunk in 8 different 16-byte slots.
+    pub fn swizzled(cols: u32) -> Option<Self> {
+        let chunks = cols / 8;
+        if cols % 8 != 0 || chunks < 2 || !chunks.is_power_of_two() {
+            return None;
+        }
+        let width = chunks.min(8);
+        Some(SmemTile { stride: cols, swizzle: Some(((8 / width).trailing_zeros(), width - 1)) })
+    }
+
+    /// Rows after which the swizzle repeats: chunk placement is the same in
+    /// row `r` and row `r + period()`. 1 for a padded tile, 8 otherwise.
+    pub fn period(&self) -> u32 {
+        match self.swizzle {
+            None => 1,
+            Some((shift, mask)) => (mask + 1) << shift,
+        }
+    }
+
+    /// Byte offset, from the tile's start, of chunk `chunk` of row `row`.
+    pub fn chunk_offset(&self, row: u32, chunk: u32) -> u32 {
+        let stored = match self.swizzle {
+            None => chunk,
+            Some((shift, mask)) => chunk ^ ((row >> shift) & mask),
+        };
+        row * self.stride * 2 + stored * 16
+    }
+}
+
 /// A thread's share of one `cp.async` tile load, from
 /// `PtxEmitter::emit_gemm_tile_load_async_setup`.
 struct HoistedTileLoad {
@@ -159,6 +218,18 @@ struct HoistedTileLoad {
     chunk_gmem_bytes: u32,
     chunk_smem_bytes: u32,
     threads_per_cta: u32,
+}
+
+/// An F16 GEMM's A and B tile layouts as its `ldmatrix` addresses see them.
+/// `a_xor`/`b_xor` hold, for a swizzled tile, a lane's `(lane >> 4) ^
+/// swizzle(lane & 15)`: the lane's rows are `lane & 15` plus multiples of 16
+/// and its chunk an even number plus `lane >> 4`, so its stored chunk is
+/// that even number XOR this term.
+struct GemmFragLayout {
+    a: SmemTile,
+    b: SmemTile,
+    a_xor: Option<String>,
+    b_xor: Option<String>,
 }
 
 /// The shape and shared layout `emit_fp8_k_loop_async` works on.
@@ -11347,11 +11418,11 @@ declare it as a Q format.\n{}",
         local_rows: u32,
         local_cols: u32,
         smem_base: &str,
-        smem_stride: u32,
+        smem: SmemTile,
         threads_per_cta: u32,
     ) {
         debug_assert_eq!(local_cols % 8, 0, "vectorized tile load requires local_cols a multiple of 8");
-        debug_assert_eq!(smem_stride % 8, 0, "vectorized tile load requires smem_stride a multiple of 8");
+        debug_assert_eq!(smem.stride % 8, 0, "vectorized tile load requires smem_stride a multiple of 8");
         debug_assert_eq!(gmem_row_stride % 8, 0, "vectorized tile load requires gmem_row_stride a multiple of 8");
 
         let cols_per_chunk = local_cols / 8;
@@ -11401,8 +11472,9 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    @!{} mov.u32 {}, 0;", p_ok, r).unwrap();
         }
 
+        let slc = self.emit_smem_stored_col(&smem, &lr, &lc_chunk, &lc);
         let sidx = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", sidx, lr, smem_stride, lc).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", sidx, lr, smem.stride, slc).unwrap();
         let sbyte = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", sbyte, sidx).unwrap();
         let saddr = self.alloc_reg32();
@@ -11412,6 +11484,69 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", idx, idx, threads_per_cta).unwrap();
         writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
         writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
+    }
+
+    /// The element column at which tile row `row` stores its chunk `chunk`
+    /// (registers; `col` is `chunk * 8`): `col` itself for a padded tile,
+    /// `(chunk ^ ((row >> shift) & mask)) * 8` for a swizzled one.
+    fn emit_smem_stored_col(&mut self, smem: &SmemTile, row: &str, chunk: &str, col: &str) -> String {
+        let Some(stored) = self.emit_smem_stored_chunk(smem, row, chunk) else {
+            return col.to_string();
+        };
+        let stored_col = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 3;", stored_col, stored).unwrap();
+        stored_col
+    }
+
+    /// `chunk ^ ((row >> shift) & mask)` of registers `row` and `chunk`, the
+    /// chunk index row `row` of a swizzled `smem` stores `chunk` at; `None`
+    /// for a padded tile.
+    fn emit_smem_stored_chunk(&mut self, smem: &SmemTile, row: &str, chunk: &str) -> Option<String> {
+        let (shift, mask) = smem.swizzle?;
+        let shifted = if shift > 0 {
+            let r = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", r, row, shift).unwrap();
+            r
+        } else {
+            row.to_string()
+        };
+        let x = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", x, shifted, mask).unwrap();
+        let stored = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    xor.b32 {}, {}, {};", stored, chunk, x).unwrap();
+        Some(stored)
+    }
+
+    /// `GemmFragLayout` for A and B tiles `a` and `b`, emitting each
+    /// swizzled tile's per-lane term from `row_off` (`lane & 15`) and
+    /// `col_bit_a` (`(lane & 16) >> 1`).
+    fn emit_gemm_frag_layout(&mut self, a: SmemTile, b: SmemTile, row_off: &str, col_bit_a: &str) -> GemmFragLayout {
+        let mut layout = GemmFragLayout { a, b, a_xor: None, b_xor: None };
+        if a.swizzle.is_none() && b.swizzle.is_none() {
+            return layout;
+        }
+        let half = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 3;", half, col_bit_a).unwrap();
+        layout.a_xor = self.emit_smem_stored_chunk(&a, row_off, &half);
+        layout.b_xor = self.emit_smem_stored_chunk(&b, row_off, &half);
+        layout
+    }
+
+    /// The A (`cta_k` columns) and B (`cta_n` columns) tile layouts of
+    /// `emit_tensor_core_gemm_kernel`: swizzled where both tiles' rows allow
+    /// it, padded by 8 elements otherwise. `Y_SMEM_SWIZZLE=0` selects the
+    /// padded layout, and `Y_SMEM_PAD` sets its pad (and selects it), to A/B
+    /// the two. `Autotuner::score_candidate` sizes its stages with it.
+    pub fn gemm_smem_tiles(cta_k: u32, cta_n: u32) -> (SmemTile, SmemTile) {
+        let pad: Option<u32> = std::env::var("Y_SMEM_PAD").ok().and_then(|v| v.parse().ok());
+        let swizzle = pad.is_none() && std::env::var("Y_SMEM_SWIZZLE").map_or(true, |v| v != "0");
+        if swizzle {
+            if let (Some(a), Some(b)) = (SmemTile::swizzled(cta_k), SmemTile::swizzled(cta_n)) {
+                return (a, b);
+            }
+        }
+        let pad = pad.unwrap_or(8);
+        (SmemTile::padded(cta_k, pad), SmemTile::padded(cta_n, pad))
     }
 
     /// Async (`cp.async`) sibling of `emit_gemm_tile_load`: identical thread
@@ -11463,12 +11598,12 @@ declare it as a Q format.\n{}",
         local_rows: u32,
         local_cols: u32,
         smem_stage_base: &str,
-        smem_stride: u32,
+        smem: SmemTile,
         threads_per_cta: u32,
         extra_valid_pred: Option<&str>,
     ) {
         debug_assert_eq!(local_cols % 8, 0, "vectorized async tile load requires local_cols a multiple of 8");
-        debug_assert_eq!(smem_stride % 8, 0, "vectorized async tile load requires smem_stride a multiple of 8");
+        debug_assert_eq!(smem.stride % 8, 0, "vectorized async tile load requires smem_stride a multiple of 8");
         debug_assert_eq!(gmem_row_stride % 8, 0, "vectorized async tile load requires gmem_row_stride a multiple of 8");
 
         let cols_per_chunk = local_cols / 8;
@@ -11534,7 +11669,7 @@ declare it as a Q format.\n{}",
                 self.emit_gemm_tile_load_async_chunk(
                     &idx, gmem_ptr, gmem_row0, gmem_col0, gmem_row_stride,
                     gmem_row_bound, gmem_col_bound, cols_per_chunk,
-                    smem_stage_base, smem_stride, extra_valid_pred,
+                    smem_stage_base, smem, extra_valid_pred,
                 );
             }
             return;
@@ -11552,7 +11687,7 @@ declare it as a Q format.\n{}",
         self.emit_gemm_tile_load_async_chunk(
             &idx, gmem_ptr, gmem_row0, gmem_col0, gmem_row_stride,
             gmem_row_bound, gmem_col_bound, cols_per_chunk,
-            smem_stage_base, smem_stride, extra_valid_pred,
+            smem_stage_base, smem, extra_valid_pred,
         );
 
         writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", idx, idx, threads_per_cta).unwrap();
@@ -11578,7 +11713,7 @@ declare it as a Q format.\n{}",
         gmem_col_bound: u32,
         cols_per_chunk: u32,
         smem_stage_base: &str,
-        smem_stride: u32,
+        smem: SmemTile,
         extra_valid_pred: Option<&str>,
     ) {
         let lr = self.alloc_reg32();
@@ -11618,8 +11753,9 @@ declare it as a Q format.\n{}",
         let rsize = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    selp.u32 {}, 16, 0, {};", rsize, p_ok).unwrap();
 
+        let slc = self.emit_smem_stored_col(&smem, &lr, &lc_chunk, &lc);
         let sidx = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", sidx, lr, smem_stride, lc).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", sidx, lr, smem.stride, slc).unwrap();
         let sbyte = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", sbyte, sidx).unwrap();
         let saddr = self.alloc_reg32();
@@ -11659,12 +11795,12 @@ declare it as a Q format.\n{}",
         gmem_row_stride: u32,
         local_rows: u32,
         local_cols: u32,
-        smem_stride: u32,
+        smem: SmemTile,
         threads_per_cta: u32,
         k_step_bytes: u32,
     ) -> Option<HoistedTileLoad> {
         let (chunks, chunk_gmem_bytes, chunk_smem_bytes) =
-            Self::hoisted_tile_load_shape(gmem_row_stride, local_rows, local_cols, smem_stride, threads_per_cta)?;
+            Self::hoisted_tile_load_shape(gmem_row_stride, local_rows, local_cols, smem, threads_per_cta)?;
         let chunks_per_row = local_cols / 8;
 
         let tid = self.alloc_reg32();
@@ -11699,8 +11835,9 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 2;", gbyte, gidx).unwrap();
         let gmem_thread = self.alloc_reg64();
         writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gmem_thread, gmem_ptr, gbyte).unwrap();
+        let slc = self.emit_smem_stored_col(&smem, &lr, &lc_chunk, &lc);
         let sidx = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", sidx, lr, smem_stride, lc).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", sidx, lr, smem.stride, slc).unwrap();
         let smem_thread = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", smem_thread, sidx).unwrap();
         Some(HoistedTileLoad {
@@ -11717,16 +11854,19 @@ declare it as a Q format.\n{}",
     /// `(chunks per thread, global bytes between them, shared bytes between
     /// them)` for `emit_gemm_tile_load_async_setup`, or `None` when the tile
     /// does not split into whole rows of chunks per pass of the CTA, the
-    /// unroll would pass `emit_gemm_tile_load_async`'s cap, or a chunk
-    /// offset would not fit an address immediate.
+    /// unroll would pass `emit_gemm_tile_load_async`'s cap, a chunk offset
+    /// would not fit an address immediate, or a swizzled tile's passes are
+    /// not a whole number of swizzle periods apart (the chunks of a thread
+    /// would then sit in different columns).
     fn hoisted_tile_load_shape(
         gmem_row_stride: u32,
         local_rows: u32,
         local_cols: u32,
-        smem_stride: u32,
+        smem: SmemTile,
         threads_per_cta: u32,
     ) -> Option<(u32, u32, u32)> {
         const MAX_STAGE_UNROLL: u32 = 16;
+        let smem_stride = smem.stride;
         if local_cols % 8 != 0 || smem_stride % 8 != 0 || gmem_row_stride % 8 != 0 || threads_per_cta == 0 {
             return None;
         }
@@ -11735,6 +11875,9 @@ declare it as a Q format.\n{}",
             return None;
         }
         let chunks = local_rows * chunks_per_row / threads_per_cta;
+        if chunks > 1 && (threads_per_cta / chunks_per_row) % smem.period() != 0 {
+            return None;
+        }
         let rows_per_chunk_step = u64::from(threads_per_cta / chunks_per_row);
         let chunk_gmem_bytes = rows_per_chunk_step * u64::from(gmem_row_stride) * 2;
         let chunk_smem_bytes = rows_per_chunk_step * u64::from(smem_stride) * 2;
@@ -11861,14 +12004,14 @@ declare it as a Q format.\n{}",
     /// Offline bank-conflict analysis (project scratchpad's
     /// swizzle_design.py, using this exact validated address formula,
     /// swept across every warp/i/j/kk/N-half combination this function
-    /// actually issues for every autotuned CTA shape) found the EXISTING
-    /// `+8`-element row padding already fully bank-conflict-free for this
-    /// access pattern - no XOR swizzle needed. The ncu-measured conflicts
-    /// referenced above appear to be an artifact of wmma.load's opaque
-    /// access pattern specifically, not the padded layout itself. This is
-    /// a prediction from static analysis, not yet re-confirmed by ncu on
-    /// this rewritten kernel - see benchmark docs for the real measurement
-    /// once taken.
+    /// actually issues for every autotuned CTA shape) found the
+    /// `+8`-element row padding bank-conflict-free for this access pattern,
+    /// and chose it over an XOR swizzle; the ncu-measured conflicts
+    /// referenced above were an artifact of wmma.load's opaque access
+    /// pattern. That analysis looked at the reads only: the padding made
+    /// every `cp.async` copy into the tiles read 1.5 times the L2 sectors
+    /// it needs, and the tiles are swizzled now (`SmemTile`). Both layouts'
+    /// reads are swept by `test_ldmatrix_addressing_bank_conflict_free_*`.
     ///
     /// `acc[i][j]` keeps the EXACT SAME external shape/order the prior
     /// wmma-based version used (8 f32 regs: `[0..4)` = this `(i,j)`
@@ -11893,8 +12036,7 @@ declare it as a Q format.\n{}",
         warp_row0_local: &str,
         smem_a_base: &str,
         smem_b_base: &str,
-        smem_a_stride: u32,
-        smem_b_stride: u32,
+        frag: &GemmFragLayout,
         row_off: &str,
         col_bit_a: &str,
         k_substeps: u32,
@@ -11902,9 +12044,100 @@ declare it as a Q format.\n{}",
         num_j: u32,
     ) {
         self.emit_gemm_compute_block_interleaved(
-            acc, warp_col0_local, warp_row0_local, smem_a_base, smem_b_base, smem_a_stride,
-            smem_b_stride, row_off, col_bit_a, k_substeps, num_i, num_j, &[],
+            acc, warp_col0_local, warp_row0_local, smem_a_base, smem_b_base, frag,
+            row_off, col_bit_a, k_substeps, num_i, num_j, &[],
         );
+    }
+
+    /// The shared address lane-row `row_off + kk` of B's 16-column block `j`
+    /// gives `ldmatrix.x4.trans`.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_gemm_b_frag_addr(
+        &mut self,
+        frag: &GemmFragLayout,
+        warp_col0_local: &str,
+        smem_b_base: &str,
+        row_off: &str,
+        col_bit_a: &str,
+        j: u32,
+        kk: u32,
+    ) -> String {
+        let col_base = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_base, warp_col0_local, j * 16).unwrap();
+        let Some(b_xor) = &frag.b_xor else {
+            let col_reg = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_reg, col_base, col_bit_a).unwrap();
+            let global_k = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_k, row_off, kk).unwrap();
+            let lin = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_k, frag.b.stride, col_reg).unwrap();
+            let byte = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
+            let addr = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_b_base, byte).unwrap();
+            return addr;
+        };
+        // The block's first chunk is even (a warp's columns start at a
+        // multiple of 16), so it and the lane's half bit combine without a
+        // carry and the lane's term applies to their XOR.
+        let chunk = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 3;", chunk, col_base).unwrap();
+        let stored = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    xor.b32 {}, {}, {};", stored, chunk, b_xor).unwrap();
+        let col_byte = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 4;", col_byte, stored).unwrap();
+        let global_k = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_k, row_off, kk).unwrap();
+        let byte = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", byte, global_k, frag.b.stride * 2, col_byte).unwrap();
+        let addr = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_b_base, byte).unwrap();
+        addr
+    }
+
+    /// The shared address lane-row `row_off` of A's 16-row block `i` gives
+    /// `ldmatrix.x4` for the 16-deep K step at `kk`.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_gemm_a_frag_addr(
+        &mut self,
+        frag: &GemmFragLayout,
+        warp_row0_local: &str,
+        smem_a_base: &str,
+        row_off: &str,
+        col_bit_a: &str,
+        i: u32,
+        kk: u32,
+    ) -> String {
+        let row_reg = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row_reg, warp_row0_local, row_off).unwrap();
+        let global_row = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_row, row_reg, i * 16).unwrap();
+        let Some(a_xor) = &frag.a_xor else {
+            let col0 = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col0, col_bit_a, kk).unwrap();
+            let lin = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_row, frag.a.stride, col0).unwrap();
+            let byte = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
+            let addr = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_a_base, byte).unwrap();
+            return addr;
+        };
+        // The step's first chunk, kk / 8, is even: see emit_gemm_b_frag_addr.
+        let stored = if kk == 0 {
+            a_xor.clone()
+        } else {
+            let r = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    xor.b32 {}, {}, {};", r, a_xor, kk / 8).unwrap();
+            r
+        };
+        let col_byte = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 4;", col_byte, stored).unwrap();
+        let byte = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", byte, global_row, frag.a.stride * 2, col_byte).unwrap();
+        let addr = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_a_base, byte).unwrap();
+        addr
     }
 
     /// One 16-deep K step's fragments, at the addresses
@@ -11919,40 +12152,17 @@ declare it as a Q format.\n{}",
         warp_row0_local: &str,
         smem_a_base: &str,
         smem_b_base: &str,
-        smem_a_stride: u32,
-        smem_b_stride: u32,
+        layout: &GemmFragLayout,
         row_off: &str,
         col_bit_a: &str,
         kk: u32,
     ) {
         for (j, frag) in b.iter().enumerate() {
-            let col_base = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_base, warp_col0_local, j * 16).unwrap();
-            let col_reg = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_reg, col_base, col_bit_a).unwrap();
-            let global_k = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_k, row_off, kk).unwrap();
-            let lin = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_k, smem_b_stride, col_reg).unwrap();
-            let byte = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
-            let addr = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_b_base, byte).unwrap();
+            let addr = self.emit_gemm_b_frag_addr(layout, warp_col0_local, smem_b_base, row_off, col_bit_a, j as u32, kk);
             writeln!(&mut self.ptx_buffer, "    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {{{}}}, [{}];", frag.join(","), addr).unwrap();
         }
         for (i, frag) in a.iter().enumerate() {
-            let row_reg = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row_reg, warp_row0_local, row_off).unwrap();
-            let global_row = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_row, row_reg, i * 16).unwrap();
-            let col0 = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col0, col_bit_a, kk).unwrap();
-            let lin = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_row, smem_a_stride, col0).unwrap();
-            let byte = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
-            let addr = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_a_base, byte).unwrap();
+            let addr = self.emit_gemm_a_frag_addr(layout, warp_row0_local, smem_a_base, row_off, col_bit_a, i as u32, kk);
             writeln!(&mut self.ptx_buffer, "    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {{{}}}, [{}];", frag.join(","), addr).unwrap();
         }
     }
@@ -12001,8 +12211,7 @@ declare it as a Q format.\n{}",
         warp_row0_local: &str,
         smem_a_base: &str,
         smem_b_base: &str,
-        smem_a_stride: u32,
-        smem_b_stride: u32,
+        layout: &GemmFragLayout,
         row_off: &str,
         col_bit_a: &str,
         k_substeps: u32,
@@ -12019,8 +12228,8 @@ declare it as a Q format.\n{}",
         // elements (16 bytes) if the stride itself is - true for every
         // `+8`-padded cta_k/cta_n `Autotuner::generate_candidates` produces
         // (32/64/128-multiple base + 8), not true in general.
-        debug_assert_eq!(smem_a_stride % 8, 0, "ldmatrix alignment requires smem_a_stride a multiple of 8 elements");
-        debug_assert_eq!(smem_b_stride % 8, 0, "ldmatrix alignment requires smem_b_stride a multiple of 8 elements");
+        debug_assert_eq!(layout.a.stride % 8, 0, "ldmatrix alignment requires smem_a_stride a multiple of 8 elements");
+        debug_assert_eq!(layout.b.stride % 8, 0, "ldmatrix alignment requires smem_b_stride a multiple of 8 elements");
 
         for kk_step in 0..k_substeps {
             let kk = kk_step * 16;
@@ -12039,18 +12248,7 @@ declare it as a Q format.\n{}",
             // MIO-throttle stalls). ----
             let mut b_frags: Vec<[Vec<String>; 2]> = Vec::with_capacity(num_j as usize);
             for j in 0..num_j {
-                let col_base = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_base, warp_col0_local, j * 16).unwrap();
-                let col_reg = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col_reg, col_base, col_bit_a).unwrap();
-                let global_k = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_k, row_off, kk).unwrap();
-                let lin = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_k, smem_b_stride, col_reg).unwrap();
-                let byte = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
-                let addr = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_b_base, byte).unwrap();
+                let addr = self.emit_gemm_b_frag_addr(layout, warp_col0_local, smem_b_base, row_off, col_bit_a, j, kk);
                 let frag: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
                 writeln!(
                     &mut self.ptx_buffer,
@@ -12063,18 +12261,7 @@ declare it as a Q format.\n{}",
             // ---- A: ldmatrix.x4, reused across every j below (same
             // reuse-across-j optimization the prior wmma.load.a loop used) ----
             for i in 0..num_i {
-                let row_reg = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row_reg, warp_row0_local, row_off).unwrap();
-                let global_row = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", global_row, row_reg, i * 16).unwrap();
-                let col0 = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col0, col_bit_a, kk).unwrap();
-                let lin = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", lin, global_row, smem_a_stride, col0).unwrap();
-                let byte = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 1;", byte, lin).unwrap();
-                let addr = self.alloc_reg32();
-                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", addr, smem_a_base, byte).unwrap();
+                let addr = self.emit_gemm_a_frag_addr(layout, warp_row0_local, smem_a_base, row_off, col_bit_a, i, kk);
                 let a_frag: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
                 writeln!(
                     &mut self.ptx_buffer,
@@ -12285,20 +12472,15 @@ declare it as a Q format.\n{}",
             k % 8
         );
 
-        // Padding, elements/row - see doc comment. `Y_SMEM_PAD` exists to A/B
-        // the padding against the shared-memory budget it costs: at
-        // 128x128x32 the +8 costs 2560 B/stage, which is exactly what keeps a
-        // 3-stage pipeline from fitting two CTAs per SM (3 * 18944 * 2 =
-        // 113664 > 102400, but 3 * 16384 * 2 = 98304 fits). All the
-        // downstream addressing derives from these two strides, so a
-        // different pad is self-consistent - only the bank-conflict behaviour
-        // changes.
-        let smem_pad: u32 = std::env::var("Y_SMEM_PAD")
-            .ok()
-            .and_then(|v| v.parse().ok())
-            .unwrap_or(8);
-        let smem_a_stride = cta_k + smem_pad;
-        let smem_b_stride = cta_n + smem_pad;
+        // Shared layouts, see `SmemTile` and `gemm_smem_tiles`. The padded
+        // layout's +8 also costs shared memory: at 128x128x32 2560 B/stage,
+        // which is exactly what keeps a 3-stage pipeline from fitting two
+        // CTAs per SM (3 * 18944 * 2 = 113664 > 102400, but 3 * 16384 * 2 =
+        // 98304 fits). All the downstream addressing derives from these two
+        // layouts.
+        let (smem_a, smem_b) = Self::gemm_smem_tiles(cta_k, cta_n);
+        let smem_a_stride = smem_a.stride;
+        let smem_b_stride = smem_b.stride;
         let k_tiles = (k + cta_k - 1) / cta_k;
 
         // ---- effective pipeline depth: see doc comment ----
@@ -12434,6 +12616,7 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 16;", col_bit_a_wide, lane).unwrap();
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
+        let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
 
         // ---- accumulator fragments acc[i][j]: 8 f32 regs each, zeroed ----
         let mut acc: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -12514,16 +12697,16 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0, k_iter, cta_k).unwrap();
 
             self.emit_gemm_tile_load(
-                "A", &a_g, &cta_m_start, &k0, k, m, k, cta_m, cta_k, &smem_a_base, smem_a_stride, threads_per_cta,
+                "A", &a_g, &cta_m_start, &k0, k, m, k, cta_m, cta_k, &smem_a_base, smem_a, threads_per_cta,
             );
             self.emit_gemm_tile_load(
-                "B", &b_g, &k0, &cta_n_start, n, k, n, cta_k, cta_n, &smem_b_base, smem_b_stride, threads_per_cta,
+                "B", &b_g, &k0, &cta_n_start, n, k, n, cta_k, cta_n, &smem_b_base, smem_b, threads_per_cta,
             );
 
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             self.emit_gemm_compute_block(
                 &acc, &warp_col0_local, &warp_row0_local, &smem_a_base, &smem_b_base,
-                smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                &frag_layout, &row_off, &col_bit_a, k_substeps, num_i, num_j,
             );
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
@@ -12562,14 +12745,14 @@ declare it as a Q format.\n{}",
             // - still loads zeros and stores nothing, as the per-chunk checks
             // made it do. ----
             let hoisted = if m % cta_m == 0 && n % cta_n == 0 && k % cta_k == 0
-                && Self::hoisted_tile_load_shape(k, cta_m, cta_k, smem_a_stride, threads_per_cta).is_some()
-                && Self::hoisted_tile_load_shape(n, cta_k, cta_n, smem_b_stride, threads_per_cta).is_some()
+                && Self::hoisted_tile_load_shape(k, cta_m, cta_k, smem_a, threads_per_cta).is_some()
+                && Self::hoisted_tile_load_shape(n, cta_k, cta_n, smem_b, threads_per_cta).is_some()
             {
                 let a = self.emit_gemm_tile_load_async_setup(
-                    &a_g, Some(&cta_m_start), None, k, cta_m, cta_k, smem_a_stride, threads_per_cta, 2,
+                    &a_g, Some(&cta_m_start), None, k, cta_m, cta_k, smem_a, threads_per_cta, 2,
                 ).expect("shape checked above");
                 let b = self.emit_gemm_tile_load_async_setup(
-                    &b_g, None, Some(&cta_n_start), n, cta_k, cta_n, smem_b_stride, threads_per_cta, 2 * n,
+                    &b_g, None, Some(&cta_n_start), n, cta_k, cta_n, smem_b, threads_per_cta, 2 * n,
                 ).expect("shape checked above");
                 let p_m = self.alloc_pred();
                 writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_m, cta_m_start, m).unwrap();
@@ -12610,10 +12793,10 @@ declare it as a Q format.\n{}",
                     self.emit_gemm_tile_load_async_hoisted(&format!("PB{}", s), b, &k0_s, &b_stage_base, rsize_cta);
                 } else {
                     self.emit_gemm_tile_load_async(
-                        &format!("PA{}", s), &a_g, &cta_m_start, &k0_s, k, m, k, cta_m, cta_k, &a_stage_base, smem_a_stride, threads_per_cta, None,
+                        &format!("PA{}", s), &a_g, &cta_m_start, &k0_s, k, m, k, cta_m, cta_k, &a_stage_base, smem_a, threads_per_cta, None,
                     );
                     self.emit_gemm_tile_load_async(
-                        &format!("PB{}", s), &b_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &b_stage_base, smem_b_stride, threads_per_cta, None,
+                        &format!("PB{}", s), &b_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &b_stage_base, smem_b, threads_per_cta, None,
                     );
                 }
                 self.emit_cp_async_commit();
@@ -12646,7 +12829,7 @@ declare it as a Q format.\n{}",
                 }
                 self.emit_gemm_fragment_loads(
                     &sets[0].0, &sets[0].1, &warp_col0_local, &warp_row0_local, &smem_pipeline_base, &smem_b_region_base,
-                    smem_a_stride, smem_b_stride, &row_off, &col_bit_a, 0,
+                    &frag_layout, &row_off, &col_bit_a, 0,
                 );
                 Some(sets)
             } else {
@@ -12741,10 +12924,10 @@ declare it as a Q format.\n{}",
                 }
             } else {
                 self.emit_gemm_tile_load_async(
-                    "A", &a_g, &cta_m_start, &k0_next, k, m, k, cta_m, cta_k, &a_write_base, smem_a_stride, threads_per_cta, Some(&p_tile_valid),
+                    "A", &a_g, &cta_m_start, &k0_next, k, m, k, cta_m, cta_k, &a_write_base, smem_a, threads_per_cta, Some(&p_tile_valid),
                 );
                 self.emit_gemm_tile_load_async(
-                    "B", &b_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &b_write_base, smem_b_stride, threads_per_cta, Some(&p_tile_valid),
+                    "B", &b_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &b_write_base, smem_b, threads_per_cta, Some(&p_tile_valid),
                 );
                 self.emit_cp_async_commit();
                 Vec::new()
@@ -12761,7 +12944,7 @@ declare it as a Q format.\n{}",
                     if s + 1 < k_substeps as usize {
                         self.emit_gemm_fragment_loads(
                             &nxt.0, &nxt.1, &warp_col0_local, &warp_row0_local, &a_read_base, &b_read_base,
-                            smem_a_stride, smem_b_stride, &row_off, &col_bit_a, 16 * (s as u32 + 1),
+                            &frag_layout, &row_off, &col_bit_a, 16 * (s as u32 + 1),
                         );
                     } else {
                         if !interleave.is_empty() {
@@ -12782,7 +12965,7 @@ declare it as a Q format.\n{}",
                         writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", b_next, next_stage, stage_b_bytes, smem_b_region_base).unwrap();
                         self.emit_gemm_fragment_loads(
                             &nxt.0, &nxt.1, &warp_col0_local, &warp_row0_local, &a_next, &b_next,
-                            smem_a_stride, smem_b_stride, &row_off, &col_bit_a, 0,
+                            &frag_layout, &row_off, &col_bit_a, 0,
                         );
                     }
                     let lines: &[String] = if s == 0 { &interleave } else { &[] };
@@ -12791,7 +12974,7 @@ declare it as a Q format.\n{}",
             } else {
                 self.emit_gemm_compute_block_interleaved(
                     &acc, &warp_col0_local, &warp_row0_local, &a_read_base, &b_read_base,
-                    smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                    &frag_layout, &row_off, &col_bit_a, k_substeps, num_i, num_j,
                     &interleave,
                 );
                 if !interleave.is_empty() {
@@ -13318,8 +13501,9 @@ declare it as a Q format.\n{}",
         assert_eq!(n % cta_n, 0, "@tile N={} must be a multiple of the fused SwiGLU kernel's fixed cta_n={}; this kernel has no N-tail path and would silently drop the remainder", n, cta_n);
         assert_eq!(k % cta_k, 0, "@tile K={} must be a multiple of the fused SwiGLU kernel's fixed cta_k={}; this kernel has no K-tail path and would silently drop the remainder", k, cta_k);
 
-        let smem_a_stride = cta_k + 8;
-        let smem_b_stride = cta_n + 8;
+        let (smem_a, smem_b) = (SmemTile::padded(cta_k, 8), SmemTile::padded(cta_n, 8));
+        let smem_a_stride = smem_a.stride;
+        let smem_b_stride = smem_b.stride;
         let k_tiles = k / cta_k;
 
         let stage_a_bytes = cta_m * smem_a_stride * 2;
@@ -13408,6 +13592,7 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 16;", col_bit_a_wide, lane).unwrap();
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
+        let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
 
         let mut acc_gate: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
         let mut acc_up: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -13464,22 +13649,22 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0, k_iter, cta_k).unwrap();
 
             self.emit_gemm_tile_load(
-                "SWX", &x_g, &cta_m_start, &k0, k, m, k, cta_m, cta_k, &smem_a_base, smem_a_stride, threads_per_cta,
+                "SWX", &x_g, &cta_m_start, &k0, k, m, k, cta_m, cta_k, &smem_a_base, smem_a, threads_per_cta,
             );
             self.emit_gemm_tile_load(
-                "SWG", &wgate_g, &k0, &cta_n_start, n, k, n, cta_k, cta_n, &smem_bgate_base, smem_b_stride, threads_per_cta,
+                "SWG", &wgate_g, &k0, &cta_n_start, n, k, n, cta_k, cta_n, &smem_bgate_base, smem_b, threads_per_cta,
             );
             self.emit_gemm_tile_load(
-                "SWU", &wup_g, &k0, &cta_n_start, n, k, n, cta_k, cta_n, &smem_bup_base, smem_b_stride, threads_per_cta,
+                "SWU", &wup_g, &k0, &cta_n_start, n, k, n, cta_k, cta_n, &smem_bup_base, smem_b, threads_per_cta,
             );
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             self.emit_gemm_compute_block(
                 &acc_gate, &warp_col0_local, &warp_row0_local, &smem_a_base, &smem_bgate_base,
-                smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                &frag_layout, &row_off, &col_bit_a, k_substeps, num_i, num_j,
             );
             self.emit_gemm_compute_block(
                 &acc_up, &warp_col0_local, &warp_row0_local, &smem_a_base, &smem_bup_base,
-                smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                &frag_layout, &row_off, &col_bit_a, k_substeps, num_i, num_j,
             );
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
@@ -13513,13 +13698,13 @@ declare it as a Q format.\n{}",
                 writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", bup_stage_base, smem_bup_region_base, s * stage_b_bytes).unwrap();
 
                 self.emit_gemm_tile_load_async(
-                    &format!("SWPX{}", s), &x_g, &cta_m_start, &k0_s, k, m, k, cta_m, cta_k, &a_stage_base, smem_a_stride, threads_per_cta, None,
+                    &format!("SWPX{}", s), &x_g, &cta_m_start, &k0_s, k, m, k, cta_m, cta_k, &a_stage_base, smem_a, threads_per_cta, None,
                 );
                 self.emit_gemm_tile_load_async(
-                    &format!("SWPG{}", s), &wgate_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &bgate_stage_base, smem_b_stride, threads_per_cta, None,
+                    &format!("SWPG{}", s), &wgate_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &bgate_stage_base, smem_b, threads_per_cta, None,
                 );
                 self.emit_gemm_tile_load_async(
-                    &format!("SWPU{}", s), &wup_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &bup_stage_base, smem_b_stride, threads_per_cta, None,
+                    &format!("SWPU{}", s), &wup_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &bup_stage_base, smem_b, threads_per_cta, None,
                 );
                 self.emit_cp_async_commit();
             }
@@ -13559,13 +13744,13 @@ declare it as a Q format.\n{}",
             // prefetch's async-copy-engine traffic with the tensor-core
             // work below instead of waiting for it first.
             self.emit_gemm_tile_load_async(
-                "SWX", &x_g, &cta_m_start, &k0_next, k, m, k, cta_m, cta_k, &a_write_base, smem_a_stride, threads_per_cta, Some(&p_tile_valid),
+                "SWX", &x_g, &cta_m_start, &k0_next, k, m, k, cta_m, cta_k, &a_write_base, smem_a, threads_per_cta, Some(&p_tile_valid),
             );
             self.emit_gemm_tile_load_async(
-                "SWG", &wgate_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &bgate_write_base, smem_b_stride, threads_per_cta, Some(&p_tile_valid),
+                "SWG", &wgate_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &bgate_write_base, smem_b, threads_per_cta, Some(&p_tile_valid),
             );
             self.emit_gemm_tile_load_async(
-                "SWU", &wup_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &bup_write_base, smem_b_stride, threads_per_cta, Some(&p_tile_valid),
+                "SWU", &wup_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &bup_write_base, smem_b, threads_per_cta, Some(&p_tile_valid),
             );
             self.emit_cp_async_commit();
 
@@ -13578,11 +13763,11 @@ declare it as a Q format.\n{}",
 
             self.emit_gemm_compute_block(
                 &acc_gate, &warp_col0_local, &warp_row0_local, &a_read_base, &bgate_read_base,
-                smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                &frag_layout, &row_off, &col_bit_a, k_substeps, num_i, num_j,
             );
             self.emit_gemm_compute_block(
                 &acc_up, &warp_col0_local, &warp_row0_local, &a_read_base, &bup_read_base,
-                smem_a_stride, smem_b_stride, &row_off, &col_bit_a, k_substeps, num_i, num_j,
+                &frag_layout, &row_off, &col_bit_a, k_substeps, num_i, num_j,
             );
 
             // Wait until group `k_iter+1` (the tile that will become
@@ -17302,13 +17487,14 @@ mod tests {
         *counts.iter().max().unwrap()
     }
 
-    /// Regression guard for the "no XOR swizzle needed" finding (see
+    /// Regression guard for the padded layout's `ldmatrix` side (see
     /// emit_gemm_compute_block's doc comment): sweeps every
     /// warp/i/j/kk/N-half position `emit_gemm_compute_block` actually
     /// issues, for every CTA shape `Autotuner::generate_candidates` can
     /// select in the m/n > 512 regime this codegen targets plus one
-    /// smaller shape, and asserts the EXISTING `+8`-element padding (no
-    /// swizzle) stays bank-conflict-free. If this ever fails, it means
+    /// smaller shape, and asserts the `+8`-element padding (no swizzle; the
+    /// SwiGLU kernel's layout, and the F16 GEMM's under `Y_SMEM_SWIZZLE=0`)
+    /// stays bank-conflict-free. If this ever fails, it means
     /// either the padding constant or `emit_gemm_compute_block`'s address
     /// formula changed in a way that reopens the ncu-measured bank-conflict
     /// regression this rewrite fixed - see project scratchpad's
@@ -17327,8 +17513,8 @@ mod tests {
             let num_i = per_warp_m / 16;
             let num_j = per_warp_n / 16;
             let k_substeps = cta_k / 16;
-            let a_stride = cta_k + 8; // matches emit_tensor_core_gemm_kernel's smem_a_stride
-            let b_stride = cta_n + 8; // matches emit_tensor_core_gemm_kernel's smem_b_stride
+            let a_stride = cta_k + 8; // SmemTile::padded(cta_k, 8)
+            let b_stride = cta_n + 8; // SmemTile::padded(cta_n, 8)
 
             for warp_m in 0..warps_m {
                 for i in 0..num_i {
@@ -17362,6 +17548,62 @@ mod tests {
                 }
             }
         }
+    }
+
+    /// `ldmatrix_a_byte_addr` / `ldmatrix_b_byte_addr` in a tile of any
+    /// layout: the row a lane gives and its first column's chunk, placed by
+    /// `tile`. For a padded tile it is those functions' value.
+    fn ldmatrix_byte_addr_in(tile: &SmemTile, lane: u32, row_offset: u32, col_offset: u32) -> u32 {
+        let group = lane >> 3;
+        let row = row_offset + (lane & 7) + ((group & 1) << 3);
+        let col0 = col_offset + ((group >> 1) << 3);
+        tile.chunk_offset(row, col0 / 8)
+    }
+
+    /// The sweep above, through the swizzled tiles `emit_tensor_core_gemm_kernel`
+    /// uses by default, for rows of 2 to 32 chunks on either side.
+    #[test]
+    fn test_ldmatrix_addressing_bank_conflict_free_with_the_swizzle() {
+        let configs: [(u32, u32, u32, u32, u32); 9] = [
+            (128, 256, 32, 4, 4),
+            (128, 128, 32, 4, 2),
+            (128, 128, 32, 2, 2),
+            (64, 128, 32, 2, 2),
+            (64, 64, 64, 2, 2),
+            (64, 64, 32, 4, 2),
+            (32, 64, 64, 2, 2),
+            (64, 32, 32, 2, 2),
+            (64, 64, 16, 2, 2),
+        ];
+        for (cta_m, cta_n, cta_k, warps_m, warps_n) in configs {
+            let (a, b) = (SmemTile::swizzled(cta_k).unwrap(), SmemTile::swizzled(cta_n).unwrap());
+            let (per_warp_m, per_warp_n) = (cta_m / warps_m, cta_n / warps_n);
+            for kk in 0..cta_k / 16 {
+                for warp_m in 0..warps_m {
+                    for i in 0..per_warp_m / 16 {
+                        let addrs: Vec<u32> = (0..32).map(|lane| ldmatrix_byte_addr_in(&a, lane, warp_m * per_warp_m + i * 16, kk * 16)).collect();
+                        let worst = max_bank_hits(&addrs);
+                        assert!(worst <= 4, "A: cta={cta_m}x{cta_n}x{cta_k} warp_m={warp_m} i={i} kk={kk} worst_bank_hits={worst}");
+                    }
+                }
+                for warp_n in 0..warps_n {
+                    for j in 0..per_warp_n / 16 {
+                        let addrs: Vec<u32> = (0..32).map(|lane| ldmatrix_byte_addr_in(&b, lane, kk * 16, warp_n * per_warp_n + j * 16)).collect();
+                        let worst = max_bank_hits(&addrs);
+                        assert!(worst <= 4, "B: cta={cta_m}x{cta_n}x{cta_k} warp_n={warp_n} j={j} kk={kk} worst_bank_hits={worst}");
+                    }
+                }
+            }
+            // The helper is the padded formula on a padded tile.
+            let p = SmemTile::padded(cta_k, 8);
+            for lane in 0..32 {
+                assert_eq!(ldmatrix_byte_addr_in(&p, lane, 16, 16), ldmatrix_a_byte_addr(lane, 16, 16, cta_k + 8));
+            }
+        }
+        // The control: packed rows without the swizzle conflict.
+        let flat = SmemTile { stride: 64, swizzle: None };
+        let addrs: Vec<u32> = (0..32).map(|lane| ldmatrix_byte_addr_in(&flat, lane, 0, 0)).collect();
+        assert!(max_bank_hits(&addrs) > 4);
     }
 }
 

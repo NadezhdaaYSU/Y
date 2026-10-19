@@ -625,7 +625,7 @@ impl Autotuner {
     /// The shared-memory/pipeline-depth accounting below is deliberately a
     /// byte-for-byte match of `emit_tensor_core_gemm_kernel`'s real
     /// `per_stage_bytes`/`effective_stages` derivation in `ptx_emitter.rs`
-    /// (same `+8`-element row padding, same `hw_profile.max_smem_per_sm_bytes
+    /// (same row layout, same `hw_profile.max_smem_per_sm_bytes
     /// - 4096` safety margin, same `k_tiles` clamp) rather than a cheaper
     /// approximation. A prior version of this function used unpadded byte
     /// counts and a `cta_k >= 64 -> 1 byte/elem` "FP8 detection" heuristic
@@ -667,12 +667,13 @@ impl Autotuner {
         };
 
         // Real per-stage shared-memory footprint: F16 operands, 2 bytes/elem
-        // always, WITH the same +8-element/row padding
-        // `emit_tensor_core_gemm_kernel` actually applies (`smem_a_stride =
-        // cta_k+8`, `smem_b_stride = cta_n+8`) - see this function's doc
-        // comment for why matching exactly (not approximating) matters here.
-        let smem_a_stride = (candidate.cta_k + 8) as f64;
-        let smem_b_stride = (candidate.cta_n + 8) as f64;
+        // always, in the row layout `emit_tensor_core_gemm_kernel` actually
+        // uses (`PtxEmitter::gemm_smem_tiles`: packed and swizzled, or padded
+        // by 8 elements) - see this function's doc comment for why matching
+        // exactly (not approximating) matters here.
+        let (smem_a, smem_b) = crate::ptx_emitter::PtxEmitter::gemm_smem_tiles(candidate.cta_k, candidate.cta_n);
+        let smem_a_stride = smem_a.stride as f64;
+        let smem_b_stride = smem_b.stride as f64;
         let stage_a_bytes = candidate.cta_m as f64 * smem_a_stride * 2.0;
         let stage_b_bytes = candidate.cta_k as f64 * smem_b_stride * 2.0;
         let per_stage_bytes = stage_a_bytes + stage_b_bytes;

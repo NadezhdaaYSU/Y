@@ -1,0 +1,6 @@
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","gpu__time_duration.sum","l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum","l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ldgsts.sum","l1tex__data_pipe_lsu_wavefronts_mem_shared_op_ld.sum","lts__t_sectors_srcunit_tex_op_read.sum"
+"","","","","","","","","","","","us","","","","sector"
+"0","587354","python3.14","127.0.0.1","gemm_f16_512x512x1024","1","7","(256, 1, 1)","(8, 8, 1)","0","8.9","21.216000","2.263.040","0","2.670.592","524288.000000"
+"1","587354","python3.14","127.0.0.1","gemm_f16_512x512x1024","1","7","(256, 1, 1)","(8, 8, 1)","0","8.9","21.120000","2.263.040","0","2.670.592","524288.000000"
+"2","587354","python3.14","127.0.0.1","gemm_f16_512x512x1024","1","7","(128, 1, 1)","(8, 8, 1)","0","8.9","19.872000","1.834.560","0","2.104.704","524288.000000"
+"3","587354","python3.14","127.0.0.1","gemm_f16_512x512x1024","1","7","(128, 1, 1)","(8, 8, 1)","0","8.9","19.648000","1.863.680","0","2.138.112","524288.000000"

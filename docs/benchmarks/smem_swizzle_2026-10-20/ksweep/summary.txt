@@ -1,0 +1,10 @@
+run 1 exit 0
+run 2 exit 0
+tiles run 1 exit 0
+tiles run 2 exit 0
+pad run 1 exit 0
+pad run 2 exit 0
+pad ncu exit 0
+swz run 1 exit 0
+swz run 2 exit 0
+swz ncu exit 0

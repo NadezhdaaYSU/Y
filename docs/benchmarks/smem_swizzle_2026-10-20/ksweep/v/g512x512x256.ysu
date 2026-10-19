@@ -1,0 +1,6 @@
+@tile(512, 512, 256)
+kernel gemm_f16_512x512x256(A: GlobalMemory<F16>, B: GlobalMemory<F16>, C: GlobalMemory<F32>) {
+}
+
+fn main() {
+}

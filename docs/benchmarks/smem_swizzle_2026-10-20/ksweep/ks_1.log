@@ -1,0 +1,18 @@
+USDT:2026-10-20 00:17:05 570890:570890 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:17:05 570890:570890 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=  256 exact {'Y': True, 'cuBLAS': True} graph {'Y': True, 'cuBLAS': True} SM 2775-2775 MHz | Y min 3.88 med 4.12 | cuBLAS min 4.10 med 4.12 | cuBLAS/Y 1.057 | ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+USDT:2026-10-20 00:17:05 570890:570890 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:17:05 570890:570890 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=  512 exact {'Y': True, 'cuBLAS': True} graph {'Y': True, 'cuBLAS': True} SM 2775-2775 MHz | Y min 6.72 med 6.95 | cuBLAS min 5.98 med 6.22 | cuBLAS/Y 0.889 | ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+USDT:2026-10-20 00:17:05 570890:570890 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:17:05 570890:570890 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 1024 exact {'Y': True, 'cuBLAS': True} graph {'Y': True, 'cuBLAS': True} SM 2775-2775 MHz | Y min 11.60 med 11.83 | cuBLAS min 9.45 med 9.68 | cuBLAS/Y 0.814 | ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+USDT:2026-10-20 00:17:06 570890:570890 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:17:06 570890:570890 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 2048 exact {'Y': True, 'cuBLAS': True} graph {'Y': True, 'cuBLAS': True} SM 2775-2775 MHz | Y min 19.89 med 20.15 | cuBLAS min 18.56 med 18.72 | cuBLAS/Y 0.933 | ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+USDT:2026-10-20 00:17:06 570890:570890 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:17:06 570890:570890 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 4096 exact {'Y': True, 'cuBLAS': True} graph {'Y': True, 'cuBLAS': True} SM 2775-2775 MHz | Y min 37.05 med 40.41 | cuBLAS min 29.86 med 32.84 | cuBLAS/Y 0.806 | ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+USDT:2026-10-20 00:17:06 570890:570890 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:17:06 570890:570890 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 8192 exact {'Y': True, 'cuBLAS': True} graph {'Y': True, 'cuBLAS': True} SM 2760-2760 MHz | Y min 72.86 med 73.67 | cuBLAS min 55.38 med 55.77 | cuBLAS/Y 0.760 | ['void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, float, float, true, false, false, false>(cublasLt::cublasSplitKParams<float>, float const*, float const*, float*, float*, float const*, float const*, float const*, float const*, float*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)', 'void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8>(cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8::Params)']

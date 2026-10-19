@@ -1,0 +1,33 @@
+.version 7.8
+.target sm_89
+.address_size 64
+.visible .entry vprobe(.param .u64 I, .param .u64 O)
+{
+    .reg .b32 %r<16>;
+    .reg .b64 %rd<6>;
+    .reg .pred %p<4>;
+    .shared .align 16 .b8 sm[8192];
+    ld.param.u64 %rd0, [I];
+    ld.param.u64 %rd4, [O];
+    cvta.to.global.u64 %rd1, %rd0;
+    mov.u32 %r0, %tid.x;
+    mul.wide.u32 %rd3, %r0, 16;
+    add.s64 %rd2, %rd1, %rd3;
+    mov.u32 %r1, sm;
+    shl.b32 %r4, %r0, 4;
+    add.u32 %r2, %r1, %r4;
+    add.u32 %r6, %r2, 4096;
+    cp.async.cg.shared.global [%r2], [%rd2], 16;
+    cp.async.commit_group;
+    bar.sync 0;
+    setp.lt.u32 %p1, %r0, 100;
+    @%p1 cp.async.cg.shared.global.L2::128B [%r6], [%rd2+16], 16;
+    cp.async.commit_group;
+    cp.async.wait_group 0;
+    bar.sync 0;
+    ld.shared.u32 %r12, [%r2];
+    cvta.to.global.u64 %rd5, %rd4;
+    add.s64 %rd5, %rd5, %rd3;
+    st.global.u32 [%rd5], %r12;
+    ret;
+}
