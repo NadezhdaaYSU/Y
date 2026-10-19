@@ -3586,6 +3586,16 @@ or `shared_alloc_u32` for a shared-memory array.",
         } else if let Some((m, n, k, x_ptr, wgate_ptr, wup_ptr, out_ptr)) = self.tile_gemm_swiglu_operands(kernel) {
             Some(self.emit_gemm_swiglu_kernel(m, n, k, &x_ptr, &wgate_ptr, &wup_ptr, &out_ptr, hw_profile, &kernel.name))
         } else if let Some((hidden_dim, x_ptr, res_ptr, w_ptr, out_ptr, newres_ptr)) = self.rmsnorm_residual_operands(kernel) {
+            if hidden_dim % 8 != 0 {
+                // The kernel moves whole 16-byte groups of 8 f16; a row of
+                // any other width left its last elements unwritten.
+                self.emit_errors.push(format!(
+                    "[PTX] kernel `{}`: hidden size {} is not a multiple of 8, the f16 group \
+                     `rmsnorm_residual_<hidden>` loads and stores 16 bytes at a time",
+                    kernel.name, hidden_dim
+                ));
+                return;
+            }
             Some(self.emit_rmsnorm_residual_kernel(hidden_dim, &x_ptr, &res_ptr, &w_ptr, &out_ptr, &newres_ptr))
         } else if let Some((head_dim, x_ptr, pos_ptr, out_ptr)) = self.rope_operands(kernel) {
             Some(self.emit_rope_kernel(head_dim, &x_ptr, &pos_ptr, &out_ptr))
@@ -13739,25 +13749,19 @@ declare it as a Q format.\n{}",
     /// engines use (e.g. vLLM/FlashInfer's `fused_add_rmsnorm`), writing
     /// both `Out` and `h` (as `NewResidual`) from one launch.
     ///
-    /// `hidden_dim` must be a multiple of 256 (`debug_assert`ed - 32 lanes x
-    /// 8 f16 elements/lane per vectorized group; true for every realistic
-    /// LLM hidden size: 2048, 3072, 4096, 5120, 7168, 8192, ...).
+    /// `hidden_dim` must be a multiple of 8 (one 16-byte group of f16); the
+    /// dispatch refuses any other with an error, where a row of another
+    /// width used to leave its last elements unwritten.
     ///
-    /// **`num_warps`**: the largest of `{8, 4, 2, 1}` that divides
-    /// `hidden_dim/256` evenly (so every thread gets a whole number of
-    /// 8-wide vector groups, no remainder handling needed) - 8 warps (256
-    /// threads/row) at every hidden_dim in the realistic range (2048+),
-    /// falling back toward 1 warp only for tiny/edge-case sizes. Each
-    /// thread handles `hidden_dim / (num_warps*256)` groups of 8 contiguous
-    /// elements, strided by `num_warps*256` (thread `T`'s groups are `T`,
-    /// `T+num_warps*32`, ... in group units) so consecutive threads still
-    /// touch consecutive 16-byte chunks (fully coalesced, same principle as
-    /// the single-warp version, just spread over a whole block instead of
-    /// one warp) - one 128-bit `ld.global.v4.u32` / `st.global.v4.u32` per
-    /// tensor per group (`emit_vec_load_u32` / `emit_vec_store_u32` /
-    /// `emit_unpack_f16_pairs` / `emit_pack_f16_pairs` - see those doc
-    /// comments for the standalone hardware validation this went through
-    /// first).
+    /// **`num_warps`**: one group a thread on up to 16 warps, past that up to
+    /// two a thread on up to 32 (see the measurement at its definition).
+    /// Thread `T`'s groups are `T`, `T + num_warps*32`, ..., so consecutive
+    /// threads touch consecutive 16-byte chunks (fully coalesced) - one
+    /// 128-bit `ld.global.v4.u32` / `st.global.v4.u32` per tensor per group
+    /// (`emit_vec_load_u32` / `emit_vec_store_u32` / `emit_unpack_f16_pairs`
+    /// / `emit_pack_f16_pairs` - see those doc comments for the standalone
+    /// hardware validation this went through first). A last group past the
+    /// row's end is predicated off.
     ///
     /// **Real block-level reduction, not just a single warp's**: each warp
     /// folds its own partial `sum(h^2)` via the existing 5-step
@@ -13771,25 +13775,11 @@ declare it as a Q format.\n{}",
     /// row's true total - a real cross-warp combine, not a rename of the
     /// old single-warp path.
     ///
-    /// **`h` is staged in `.shared` memory between the two passes, closing
-    /// the double-DRAM-read gap the vectorization pass alone left open**:
-    /// pass 1 computes `h = X + Residual`, folds `h^2` into this thread's
-    /// running sum AND writes `h` (as f32, not re-rounded to f16 - avoids
-    /// adding a precision step that wasn't in the original two-read design)
-    /// into `smem_h` (`hidden_dim` floats, e.g. 16KB at hidden_dim=4096 -
-    /// comfortably inside this GPU's ~100KB/SM shared memory budget); pass
-    /// 2 reads `h` back from `smem_h` instead of re-reading `X`/`Residual`
-    /// from DRAM a second time. Every thread only ever reads back the exact
-    /// `smem_h` locations it itself wrote in pass 1 (same `tid`-strided
-    /// index sequence in both passes), so no extra synchronization is
-    /// needed for that specifically; the `bar.sync 0` already required for
-    /// the cross-warp sum combine above happens to also cover it. `X`/
-    /// `Residual` are now each read from DRAM exactly once per row, not
-    /// twice - the double-read this function's doc comment flagged as open
-    /// after the vectorization pass is now actually closed, confirmed via
-    /// `benchmark_y_vs_flashinfer_results.md`'s re-measurement (vectorizing
-    /// alone left RMSNorm at 0.71-0.78x of FlashInfer; occupancy + this fix
-    /// were the next levers, not optional polish).
+    /// **`h` stays in registers between the two passes** (pass 1's
+    /// comment in the body has the measurement): X and Residual are each
+    /// read once, and nothing but the cross-warp sum goes through shared
+    /// memory. It used to be staged through `hidden_dim * 4` bytes of
+    /// static `.shared`, which `ptxas` refuses above 48 KB (hidden 12288).
     ///
     /// `rsqrt.approx.f32` was validated standalone on real sm_89 hardware
     /// before being wired in here (max relative error 1.2e-7 over 2000
@@ -13800,8 +13790,9 @@ declare it as a Q format.\n{}",
     /// Returns `num_warps*32` (the real thread count this kernel now
     /// expects per row/block) - callers (the PTX kernel launcher, and any
     /// Python/host code choosing a launch's block size) MUST use this
-    /// value, not a hardcoded 32; the `.maxnreg` register-limit computation
-    /// downstream already does (see `block_size` in the caller).
+    /// value, which the PTX header also states; the `.maxnreg`
+    /// register-limit computation downstream already does (see `block_size`
+    /// in the caller). A launch with any other block size traps.
     fn emit_rmsnorm_residual_kernel(
         &mut self,
         hidden_dim: u32,
@@ -13819,19 +13810,21 @@ declare it as a Q format.\n{}",
             "hidden_dim must be a multiple of 256 (32 lanes x 8-wide vectorized f16 groups)"
         );
         let vec_groups = hidden_dim / VEC;
-        let num_warps: u32 = [8u32, 4, 2, 1]
-            .into_iter()
-            .find(|&w| vec_groups % (w * WARP) == 0)
-            .unwrap_or(1);
+        // One group a thread on up to 16 warps; past that, up to two a thread
+        // on up to 32 (the most a block holds). Measured against 1-32 warps at
+        // hidden 896-16384, this is within 1.1% of the fastest at every size
+        // inside the L2 and 1.4% from DRAM (`docs/benchmarks/rmsnorm_residual_2026-10-19/`).
+        // The rule it replaced took the most warps that divide the groups
+        // evenly, so 896 and 12032 ran on one warp a row and 3072 and 5120 on
+        // four; the predicated tail group below removes the need to divide.
+        let threads_for = |groups_per_thread: u32| (vec_groups.div_ceil(WARP * groups_per_thread)).next_power_of_two();
+        let num_warps: u32 = if threads_for(1) <= 16 { threads_for(1) } else { threads_for(2).min(32) };
         let threads_per_row = num_warps * WARP;
 
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
-        writeln!(&mut self.ptx_buffer, "    // [Y FUSED ADD+RMSNORM] hidden_dim={} | {} warps ({} threads) per row | 8-wide vectorized f16 | shared-mem h staging", hidden_dim, num_warps, threads_per_row).unwrap();
+        writeln!(&mut self.ptx_buffer, "    // [Y FUSED ADD+RMSNORM] hidden_dim={} | {} warps ({} threads) per row | 8-wide vectorized f16 | h in registers", hidden_dim, num_warps, threads_per_row).unwrap();
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
 
-        writeln!(&mut self.ptx_buffer, "    .shared .align 16 .b8 smem_h[{}];", hidden_dim * 4).unwrap();
-        let smem_h_base = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, smem_h;", smem_h_base).unwrap();
         let smem_reduce_base = if num_warps > 1 {
             writeln!(&mut self.ptx_buffer, "    .shared .align 4 .b8 smem_reduce[{}];", num_warps * 4).unwrap();
             let base = self.alloc_reg32();
@@ -13856,81 +13849,100 @@ declare it as a Q format.\n{}",
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", row).unwrap();
         let tid = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
+        // The groups a thread owns are fixed at compile time for this block
+        // size, so a launch with any other one would leave groups unwritten
+        // or write them twice. It traps instead.
+        let ntid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ntid.x;", ntid).unwrap();
+        let wrong_block = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ne.u32 {}, {}, {};", wrong_block, ntid, threads_per_row).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} trap;", wrong_block).unwrap();
         let row_offset = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", row_offset, row, hidden_dim).unwrap();
 
-        // ---- Pass 1: accumulate this thread's partial sum(h^2), stage h into smem_h ----
-        // A real runtime loop (idx/running_sum updated in place via their
-        // own registers, branching back), not unrolled: an earlier fully-
-        // unrolled SCALAR version of this loop (hidden_dim=4096, 128
-        // iterations/thread, 202 registers/thread per `ptxas -v`) measured
-        // non-deterministic wrong output on real hardware - see
-        // benchmark_y_rmsnorm_rope_results.md for the full account. This
-        // loop (and its vectorized/multi-warp descendants) has been re-run
-        // through the same repeated-fixed-seed-launch determinism check
-        // every time its structure changed - see
-        // benchmark_y_vs_flashinfer_results.md.
-        let idx = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", idx, tid).unwrap();
+        // ---- Pass 1: thread `tid` owns the 8-wide groups
+        // `tid + g * threads_per_row` below `vec_groups`. Up to
+        // `max_unrolled_groups` a thread, the groups are unrolled: every
+        // load - X, Residual and the broadcast Weight, for every group - is
+        // issued before any arithmetic, NewResidual is stored as soon as h
+        // exists, and h stays in registers for pass 2. Where the groups do
+        // not divide evenly over the threads, the last one is predicated:
+        // its loads are zero-filled (h = 0 adds nothing to the sum) and its
+        // stores skipped. Both passes used to be runtime loops over `tid`,
+        // which `ptxas` keeps rolled: a thread had one group's two 16-byte
+        // loads in flight at a time, staged h through `hidden_dim * 4` bytes
+        // of static shared memory (which `ptxas` refuses above 48 KB, so from
+        // hidden 12288 up) and loaded Weight only after the reduction. Inside
+        // the L2 that took 1.08-1.10x Triton's time at 512 and 1024 rows of
+        // 4096 (`docs/benchmarks/rmsnorm_residual_2026-10-19/`). Past
+        // `max_unrolled_groups` (hidden 65536 and up) the passes stay
+        // top-tested loops, and pass 2 reads X and Residual again rather
+        // than staging h. Both paths do the same arithmetic - each thread
+        // folds its groups' squares, in order, into one chain, then
+        // (h * inv_rms) * w - so for one block size they give the same bits.
+        // An earlier fully unrolled SCALAR version (128 scalar iterations a
+        // thread, 202 registers) measured non-deterministic wrong output
+        // (benchmark_y_rmsnorm_rope_results.md); `test_rmsnorm_residual.py`
+        // checks repeated launches bit for bit.
+        // A block of 1024 threads leaves 64 registers a thread, which held 4
+        // groups at hidden 32768 and spilled 516 bytes holding 8 at 65536.
+        let max_unrolled_groups: u32 = if threads_per_row > 512 { 4 } else { 8 };
+        let groups_per_thread = vec_groups.div_ceil(threads_per_row);
+        let unrolled = groups_per_thread <= max_unrolled_groups;
         let running_sum = self.alloc_regf32();
         writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", running_sum).unwrap();
-        let loop1_start = self.alloc_label("RMSNORM_SUMSQ");
-        let loop1_end = self.alloc_label("RMSNORM_SUMSQ_DONE");
-        writeln!(&mut self.ptx_buffer, "    {}:", loop1_start).unwrap();
-        let p1_done = self.alloc_pred();
-        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p1_done, idx, vec_groups).unwrap();
-        writeln!(&mut self.ptx_buffer, "    @{} bra {};", p1_done, loop1_end).unwrap();
-        {
-            let elem_base = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", elem_base, idx, VEC, row_offset).unwrap();
-            let byte_base = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 2;", byte_base, elem_base).unwrap();
-
-            let x_addr = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", x_addr, x_g, byte_base).unwrap();
-            let x_words = self.emit_vec_load_u32(&x_addr, 4);
-            let x_f = self.emit_unpack_f16_pairs(&x_words);
-
-            let r_addr = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", r_addr, res_g, byte_base).unwrap();
-            let r_words = self.emit_vec_load_u32(&r_addr, 4);
-            let r_f = self.emit_unpack_f16_pairs(&r_words);
-
-            // Accumulate in place (dest register == running_sum's own,
-            // fixed register - no new allocation): this loop body is
-            // emitted ONCE as static PTX text but executed repeatedly at
-            // runtime via the branch below, so `running_sum` must stay
-            // bound to the SAME physical register across dynamic
-            // iterations for the accumulation to actually carry over (see
-            // this function's doc comment history / benchmark_y_vs_
-            // flashinfer_results.md for the bug this caused when violated).
-            let mut h_vals = Vec::with_capacity(8);
-            for k in 0..8 {
-                let h = self.alloc_regf32();
-                writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", h, x_f[k], r_f[k]).unwrap();
-                // One `fma.rn.f32` rather than a `mul.f32` and an `add.f32`.
-                // `ptxas` fuses this pair anyway -- the SASS is byte-identical
-                // either way -- so the two-instruction form was asking for a
-                // rounding the hardware does not perform.
-                writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", running_sum, h, h, running_sum).unwrap();
-                h_vals.push(h);
+        // (group index register, byte offset of its 8 elements in this row,
+        // Weight byte offset, predicate if it is a tail group)
+        let mut groups = Vec::new();
+        let mut words = Vec::new();
+        let mut h_groups = Vec::new();
+        // The loop index exists only where the groups are a runtime loop.
+        let loop_idx = if unrolled { String::new() } else { self.alloc_reg32() };
+        if unrolled {
+            for g in 0..groups_per_thread {
+                let group = self.alloc_reg32();
+                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", group, tid, g * threads_per_row).unwrap();
+                let pred = if (g + 1) * threads_per_row > vec_groups {
+                    let p = self.alloc_pred();
+                    writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, group, vec_groups).unwrap();
+                    Some(p)
+                } else {
+                    None
+                };
+                groups.push((group, pred));
             }
-
-            // Stage h (f32, unrounded) into smem_h at this group's byte
-            // offset (idx*8*4 = idx*32) via two 128-bit vector stores -
-            // read back in pass 2 below instead of re-reading X/Residual.
-            let smem_off = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 32;", smem_off, idx).unwrap();
-            let smem_addr0 = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", smem_addr0, smem_h_base, smem_off).unwrap();
-            writeln!(&mut self.ptx_buffer, "    st.shared.v4.f32 [{}], {{{}, {}, {}, {}}};", smem_addr0, h_vals[0], h_vals[1], h_vals[2], h_vals[3]).unwrap();
-            let smem_addr1 = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 16;", smem_addr1, smem_addr0).unwrap();
-            writeln!(&mut self.ptx_buffer, "    st.shared.v4.f32 [{}], {{{}, {}, {}, {}}};", smem_addr1, h_vals[4], h_vals[5], h_vals[6], h_vals[7]).unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", loop_idx, tid).unwrap();
+            groups.push((loop_idx.clone(), None));
         }
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", idx, idx, threads_per_row).unwrap();
-        writeln!(&mut self.ptx_buffer, "    bra {};", loop1_start).unwrap();
-        writeln!(&mut self.ptx_buffer, "    {}:", loop1_end).unwrap();
+        let loop1 = (!unrolled).then(|| (self.alloc_label("RMSNORM_SUMSQ"), self.alloc_label("RMSNORM_SUMSQ_DONE")));
+        if let Some((top, done)) = &loop1 {
+            writeln!(&mut self.ptx_buffer, "    {}:", top).unwrap();
+            let p = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p, loop_idx, vec_groups).unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{} bra {};", p, done).unwrap();
+        }
+        let mut offsets = Vec::new();
+        for (group, _) in &groups {
+            offsets.push(self.emit_rmsnorm_group_offsets(group, &row_offset));
+        }
+        for ((_, pred), (byte_base, w_byte_base)) in groups.iter().zip(&offsets) {
+            let x_words = self.emit_rmsnorm_group_load(&x_g, byte_base, pred.as_deref());
+            let r_words = self.emit_rmsnorm_group_load(&res_g, byte_base, pred.as_deref());
+            let w_words = if unrolled { Some(self.emit_rmsnorm_group_load(&w_g, w_byte_base, pred.as_deref())) } else { None };
+            words.push((x_words, r_words, w_words));
+        }
+        for (g, (x_words, r_words, _)) in words.iter().enumerate() {
+            let h_vals = self.emit_rmsnorm_h(x_words, r_words, &running_sum);
+            let newres_words = self.emit_pack_f16_pairs(&h_vals);
+            self.emit_rmsnorm_group_store(&newres_g, &offsets[g].0, &newres_words, groups[g].1.as_deref());
+            h_groups.push(h_vals);
+        }
+        if let Some((top, done)) = &loop1 {
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", loop_idx, loop_idx, threads_per_row).unwrap();
+            writeln!(&mut self.ptx_buffer, "    bra {};", top).unwrap();
+            writeln!(&mut self.ptx_buffer, "    {}:", done).unwrap();
+        }
 
         // ---- per-warp reduction, then (if >1 warp) real cross-warp combine via smem ----
         let warp_total = self.emit_warp_reduce_sum(&running_sum);
@@ -13972,82 +13984,116 @@ declare it as a Q format.\n{}",
         let inv_rms = self.alloc_regf32();
         writeln!(&mut self.ptx_buffer, "    rsqrt.approx.f32 {}, {};", inv_rms, mean_sq_eps).unwrap();
 
-        // ---- Pass 2: read h back from smem_h (NOT X/Residual again), scale by inv_rms * Weight, write Out + NewResidual ----
-        // Real runtime loop, same rationale as pass 1 above. Same idx
-        // stride as pass 1, so every thread reads back exactly the smem_h
-        // locations it itself wrote - no extra sync needed beyond the
-        // bar.sync already issued above for the cross-warp combine.
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", idx, tid).unwrap();
-        let loop2_start = self.alloc_label("RMSNORM_WRITE");
-        let loop2_end = self.alloc_label("RMSNORM_WRITE_DONE");
-        writeln!(&mut self.ptx_buffer, "    {}:", loop2_start).unwrap();
-        let p2_done = self.alloc_pred();
-        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p2_done, idx, vec_groups).unwrap();
-        writeln!(&mut self.ptx_buffer, "    @{} bra {};", p2_done, loop2_end).unwrap();
-        {
-            let elem_base = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", elem_base, idx, VEC, row_offset).unwrap();
-            let byte_base = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 2;", byte_base, elem_base).unwrap();
-
-            let smem_off = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 32;", smem_off, idx).unwrap();
-            let smem_addr0 = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", smem_addr0, smem_h_base, smem_off).unwrap();
-            let h0 = self.alloc_regf32();
-            let h1 = self.alloc_regf32();
-            let h2 = self.alloc_regf32();
-            let h3 = self.alloc_regf32();
-            writeln!(&mut self.ptx_buffer, "    ld.shared.v4.f32 {{{}, {}, {}, {}}}, [{}];", h0, h1, h2, h3, smem_addr0).unwrap();
-            let smem_addr1 = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 16;", smem_addr1, smem_addr0).unwrap();
-            let h4 = self.alloc_regf32();
-            let h5 = self.alloc_regf32();
-            let h6 = self.alloc_regf32();
-            let h7 = self.alloc_regf32();
-            writeln!(&mut self.ptx_buffer, "    ld.shared.v4.f32 {{{}, {}, {}, {}}}, [{}];", h4, h5, h6, h7, smem_addr1).unwrap();
-            let h_vals = vec![h0, h1, h2, h3, h4, h5, h6, h7];
-
-            // Weight is a single [hidden_dim] vector broadcast across every
-            // row (the standard RMSNorm gamma contract) - indexed by
-            // `idx*VEC` alone, NOT `elem_base` (which folds in
-            // `row_offset`); reusing `byte_base` here would have been a
-            // real bug (indexing past the end of a [hidden_dim]-sized
-            // buffer for every row after the first) - deliberately given
-            // its own byte offset instead, computed directly from `idx`
-            // without ever touching `row_offset`.
-            let w_byte_base = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, {};", w_byte_base, idx, VEC * 2).unwrap();
-            let w_addr = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", w_addr, w_g, w_byte_base).unwrap();
-            let w_words = self.emit_vec_load_u32(&w_addr, 4);
-            let w_f = self.emit_unpack_f16_pairs(&w_words);
-
-            let mut scaled_vals = Vec::with_capacity(8);
-            for k in 0..8 {
-                let normed = self.alloc_regf32();
-                writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", normed, h_vals[k], inv_rms).unwrap();
-                let scaled = self.alloc_regf32();
-                writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", scaled, normed, w_f[k]).unwrap();
-                scaled_vals.push(scaled);
+        // ---- Pass 2: scale h by inv_rms * Weight and write Out - from the
+        // registers pass 1 left it in, or, past `max_unrolled_groups`, from X
+        // and Residual read again ----
+        if unrolled {
+            for (g, (_, _, w_words)) in words.iter().enumerate() {
+                let w_words = w_words.as_ref().expect("unrolled groups load Weight in pass 1");
+                self.emit_rmsnorm_out(&h_groups[g], w_words, &inv_rms, &out_g, &offsets[g].0, groups[g].1.as_deref());
             }
-
-            let out_words = self.emit_pack_f16_pairs(&scaled_vals);
-            let out_addr = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", out_addr, out_g, byte_base).unwrap();
-            self.emit_vec_store_u32(&out_addr, &out_words);
-
-            let newres_words = self.emit_pack_f16_pairs(&h_vals);
-            let newres_addr = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", newres_addr, newres_g, byte_base).unwrap();
-            self.emit_vec_store_u32(&newres_addr, &newres_words);
+        } else {
+            let top = self.alloc_label("RMSNORM_WRITE");
+            let done = self.alloc_label("RMSNORM_WRITE_DONE");
+            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", loop_idx, tid).unwrap();
+            writeln!(&mut self.ptx_buffer, "    {}:", top).unwrap();
+            let p = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p, loop_idx, vec_groups).unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{} bra {};", p, done).unwrap();
+            let (byte_base, w_byte_base) = self.emit_rmsnorm_group_offsets(&loop_idx, &row_offset);
+            let x_words = self.emit_rmsnorm_group_load(&x_g, &byte_base, None);
+            let r_words = self.emit_rmsnorm_group_load(&res_g, &byte_base, None);
+            let w_words = self.emit_rmsnorm_group_load(&w_g, &w_byte_base, None);
+            let scratch = self.alloc_regf32();
+            let h_vals = self.emit_rmsnorm_h(&x_words, &r_words, &scratch);
+            self.emit_rmsnorm_out(&h_vals, &w_words, &inv_rms, &out_g, &byte_base, None);
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", loop_idx, loop_idx, threads_per_row).unwrap();
+            writeln!(&mut self.ptx_buffer, "    bra {};", top).unwrap();
+            writeln!(&mut self.ptx_buffer, "    {}:", done).unwrap();
         }
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", idx, idx, threads_per_row).unwrap();
-        writeln!(&mut self.ptx_buffer, "    bra {};", loop2_start).unwrap();
-        writeln!(&mut self.ptx_buffer, "    {}:", loop2_end).unwrap();
 
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
         threads_per_row
+    }
+
+    /// Byte offsets of 8-element group `group` of this row (`row_offset`
+    /// elements in) and of the same group of the broadcast Weight. Weight is
+    /// a single [hidden_dim] vector (the RMSNorm gamma contract), indexed by
+    /// the group alone: offsetting it by the row would read past its end for
+    /// every row after the first.
+    fn emit_rmsnorm_group_offsets(&mut self, group: &str, row_offset: &str) -> (String, String) {
+        let elem_base = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 8, {};", elem_base, group, row_offset).unwrap();
+        let byte_base = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 2;", byte_base, elem_base).unwrap();
+        let w_byte_base = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 16;", w_byte_base, group).unwrap();
+        (byte_base, w_byte_base)
+    }
+
+    /// One 16-byte group from `base + off`; under `pred` the words are zero
+    /// first and the load predicated, so an absent tail group reads as +0.
+    fn emit_rmsnorm_group_load(&mut self, base: &str, off: &str, pred: Option<&str>) -> Vec<String> {
+        let addr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", addr, base, off).unwrap();
+        match pred {
+            None => self.emit_vec_load_u32(&addr, 4),
+            Some(p) => {
+                let regs: Vec<String> = (0..4).map(|_| self.alloc_reg32()).collect();
+                for r in &regs {
+                    writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", r).unwrap();
+                }
+                writeln!(&mut self.ptx_buffer, "    @{} ld.global.v4.u32 {{{}}}, [{}];", p, regs.join(","), addr).unwrap();
+                regs
+            }
+        }
+    }
+
+    /// `emit_vec_store_u32` of one 16-byte group at `base + off`, predicated
+    /// for a tail group.
+    fn emit_rmsnorm_group_store(&mut self, base: &str, off: &str, words: &[String], pred: Option<&str>) {
+        let addr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", addr, base, off).unwrap();
+        match pred {
+            None => self.emit_vec_store_u32(&addr, words),
+            Some(p) => writeln!(&mut self.ptx_buffer, "    @{} st.global.v4.u32 [{}], {{{}}};", p, addr, words.join(",")).unwrap(),
+        }
+    }
+
+    /// h = X + Residual for one group, each element's square folded into
+    /// `running_sum` in element order. The fold writes `running_sum` in
+    /// place, so in a runtime loop it carries over iterations in one register.
+    fn emit_rmsnorm_h(&mut self, x_words: &[String], r_words: &[String], running_sum: &str) -> Vec<String> {
+        let x_f = self.emit_unpack_f16_pairs(x_words);
+        let r_f = self.emit_unpack_f16_pairs(r_words);
+        let mut h_vals = Vec::with_capacity(x_f.len());
+        for (x, r) in x_f.iter().zip(&r_f) {
+            let h = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", h, x, r).unwrap();
+            // One `fma.rn.f32` rather than a `mul.f32` and an `add.f32`.
+            // `ptxas` fuses this pair anyway -- the SASS is byte-identical
+            // either way -- so the two-instruction form was asking for a
+            // rounding the hardware does not perform.
+            writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", running_sum, h, h, running_sum).unwrap();
+            h_vals.push(h);
+        }
+        h_vals
+    }
+
+    /// Out = f16((h * inv_rms) * w) for one group, stored at `base + off`.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_rmsnorm_out(&mut self, h_vals: &[String], w_words: &[String], inv_rms: &str, base: &str, off: &str, pred: Option<&str>) {
+        let w_f = self.emit_unpack_f16_pairs(w_words);
+        let mut scaled_vals = Vec::with_capacity(h_vals.len());
+        for (h, w) in h_vals.iter().zip(&w_f) {
+            let normed = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", normed, h, inv_rms).unwrap();
+            let scaled = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", scaled, normed, w).unwrap();
+            scaled_vals.push(scaled);
+        }
+        let out_words = self.emit_pack_f16_pairs(&scaled_vals);
+        self.emit_rmsnorm_group_store(base, off, &out_words, pred);
     }
 
     /// Detects the 3-parameter (X: `GlobalMemory<F16>`, Positions:
