@@ -1,0 +1,26 @@
+pad run 1 Sal 20 Eki 2026 00:30:07 +03
+42 %, 240 MHz
+69 %, 540 MHz
+11 %, 540 MHz
+9 %, 210 MHz
+26 %, 210 MHz
+14 %, 210 MHz
+14 %, 210 MHz
+100 %, 2640 MHz
+2 %, 2640 MHz
+8 %, 765 MHz
+351102 bash /home/yumin/.local/share/Steam/steam.sh -srt-logger-opened steam://rungameid/250900
+351229 /home/yumin/.local/share/Steam/ubuntu12_32/steam -srt-logger-opened steam://rungameid/250900
+pad run 2 Sal 20 Eki 2026 00:30:20 +03
+99 %, 2760 MHz
+3 %, 2760 MHz
+7 %, 630 MHz
+4 %, 2640 MHz
+2 %, 2640 MHz
+3 %, 2640 MHz
+3 %, 720 MHz
+21 %, 570 MHz
+22 %, 435 MHz
+11 %, 270 MHz
+351102 bash /home/yumin/.local/share/Steam/steam.sh -srt-logger-opened steam://rungameid/250900
+351229 /home/yumin/.local/share/Steam/ubuntu12_32/steam -srt-logger-opened steam://rungameid/250900

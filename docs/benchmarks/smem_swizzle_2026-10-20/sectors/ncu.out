@@ -1,0 +1,22 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==PROF== Connected to process 584277 (/usr/bin/python3.14)
+==PROF== Profiling "A_y_pad80_srcsize": 0%....50%....100% - 5 passes
+A_y_pad80_srcsize exact True
+==PROF== Profiling "A_pad80": 0%....50%....100% - 5 passes
+A_pad80 exact True
+==PROF== Profiling "A_dense64": 0%....50%....100% - 5 passes
+A_dense64 exact True
+==PROF== Profiling "A_dense64_srcsize": 0%....50%....100% - 5 passes
+A_dense64_srcsize exact True
+==PROF== Profiling "A_swz64": 0%....50%....100% - 5 passes
+A_swz64 exact True
+==PROF== Profiling "B_y_pad144_srcsize": 0%....50%....100% - 5 passes
+B_y_pad144_srcsize exact True
+==PROF== Profiling "B_pad144": 0%....50%....100% - 5 passes
+B_pad144 exact True
+==PROF== Profiling "B_dense128": 0%....50%....100% - 5 passes
+B_dense128 exact True
+==PROF== Profiling "B_swz128": 0%....50%....100% - 5 passes
+B_swz128 exact True
+==PROF== Disconnected from process 584277
+==PROF== Report: /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/sectors/sec.ncu-repz

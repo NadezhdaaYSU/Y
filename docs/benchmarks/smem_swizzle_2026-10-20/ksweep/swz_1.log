@@ -1,0 +1,24 @@
+USDT:2026-10-20 00:39:33 596911:596911 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:39:33 596911:596911 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=  512 exact True graph True SM 2475-2475 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      tuned_swz          min     5.33 median     5.35 us  cuBLAS/this 1.062
+      cuBLAS             min     5.66 median     5.88 us  cuBLAS/this 1.000
+      cublas_shape_swz   min     5.91 median     6.17 us  cuBLAS/this 0.958
+      tuned              min     6.68 median     6.71 us  cuBLAS/this 0.847
+      cublas_shape       min     7.10 median     7.12 us  cuBLAS/this 0.797
+USDT:2026-10-20 00:39:33 596911:596911 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:39:33 596911:596911 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 1024 exact True graph True SM 2475-2475 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      tuned_swz          min     8.33 median     8.41 us  cuBLAS/this 1.067
+      cuBLAS             min     8.89 median     8.94 us  cuBLAS/this 1.000
+      cublas_shape_swz   min     9.19 median     9.86 us  cuBLAS/this 0.967
+      tuned              min    10.84 median    11.27 us  cuBLAS/this 0.819
+      cublas_shape       min    11.35 median    11.62 us  cuBLAS/this 0.783
+USDT:2026-10-20 00:39:34 596911:596911 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:39:34 596911:596911 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 4096 exact True graph True SM 2475-2475 MHz | cuBLAS ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+      tuned_swz          min    26.39 median    26.84 us  cuBLAS/this 1.133
+      cublas_shape_swz   min    29.20 median    30.17 us  cuBLAS/this 1.024
+      cuBLAS             min    29.91 median    30.44 us  cuBLAS/this 1.000
+      cublas_shape       min    36.88 median    37.38 us  cuBLAS/this 0.811
+      tuned              min    37.21 median    37.59 us  cuBLAS/this 0.804

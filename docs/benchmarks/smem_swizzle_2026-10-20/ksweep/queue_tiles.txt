@@ -1,0 +1,26 @@
+tiles run 1 Sal 20 Eki 2026 00:20:39 +03
+10 %, 210 MHz
+12 %, 210 MHz
+26 %, 210 MHz
+7 %, 210 MHz
+42 %, 210 MHz
+16 %, 210 MHz
+10 %, 210 MHz
+10 %, 210 MHz
+11 %, 210 MHz
+9 %, 210 MHz
+351102 bash /home/yumin/.local/share/Steam/steam.sh -srt-logger-opened steam://rungameid/250900
+351229 /home/yumin/.local/share/Steam/ubuntu12_32/steam -srt-logger-opened steam://rungameid/250900
+tiles run 2 Sal 20 Eki 2026 00:20:52 +03
+1 %, 2775 MHz
+1 %, 2775 MHz
+4 %, 600 MHz
+4 %, 390 MHz
+3 %, 255 MHz
+9 %, 210 MHz
+16 %, 210 MHz
+24 %, 210 MHz
+11 %, 210 MHz
+12 %, 210 MHz
+351102 bash /home/yumin/.local/share/Steam/steam.sh -srt-logger-opened steam://rungameid/250900
+351229 /home/yumin/.local/share/Steam/ubuntu12_32/steam -srt-logger-opened steam://rungameid/250900

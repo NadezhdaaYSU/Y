@@ -1,0 +1,14 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==PROF== Connected to process 597521 (/usr/bin/python3.14)
+==PROF== Profiling "gemm_f16_512x512x1024": 0%....50%....100% - 3 passes
+tuned_swz exact True
+==PROF== Profiling "gemm_f16_512x512x1024": 0%....50%....100% - 3 passes
+tuned_swz exact True
+==PROF== Profiling "gemm_f16_512x512x1024": 0%....50%....100% - 3 passes
+cublas_shape_swz exact True
+==PROF== Profiling "gemm_f16_512x512x1024": 0%....50%....100% - 3 passes
+cublas_shape_swz exact True
+cuBLAS exact True
+cuBLAS exact True
+==PROF== Disconnected from process 597521
+==PROF== Report: /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/ksweep/prof/swz.ncu-repz

@@ -160,7 +160,19 @@ source; each entry there now carries its status. What is still open:
   follows a `bar.sync`, and after nothing else probed. The F16 GEMM's K loop
   issues the next tile's copies after its barrier every K-tile: at 512^3 that
   is 48 dead loads a warp, 7.9% of the 311K instructions it executes
-  (`docs/benchmarks/const_div_2026-10-19/probes/`).
+  (`docs/benchmarks/const_div_2026-10-19/probes/`). Every form of the copy
+  probed gets them, from `ptxas` 12.8 and 13.4, on sm_80 to sm_89
+  (`docs/benchmarks/smem_swizzle_2026-10-20/probes_dead_lds/`).
+- The F16 GEMM's A and B tiles are swizzled since 2026-10-20 because the
+  padded rows made every `cp.async` copy read 1.5 times the L2 sectors it
+  needs (`docs/benchmarks/smem_swizzle_2026-10-20/`). The SwiGLU kernel and
+  the FP8 and int8 GEMMs have their own copy code and layouts; whether
+  theirs cost the same was not measured. The profile's tiles were tuned
+  with the padded layout and not re-tuned.
+- `Autotuner::score_candidate` is documented as a byte-for-byte match of
+  `emit_tensor_core_gemm_kernel`'s stage accounting and now sizes stages
+  with `PtxEmitter::gemm_smem_tiles`, but no test holds its stage count to
+  the emitter's.
 - The validator and proof-scope items in archive entries 587-2049 are research
   queue, not wrong answers: 923 of the 925 emitted `mma.sync` are floating point
   and carry no proof; the f16 GEMMs carry no exactness argument; validation is

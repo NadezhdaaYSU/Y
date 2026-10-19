@@ -1,0 +1,46 @@
+           256 Y {'base': '32x64 2x2', 'swz': '32x64 2x2'} | exact {'base': True, 'swz': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2505-2505 MHz
+      swz       min       2.6 median       2.9 us  0.325x Triton
+      base      min       2.8 median       3.1 us  0.345x Triton
+      cuBLAS    min       3.4 median       3.9 us  0.420x Triton
+      Triton    min       8.1 median       9.6 us  1.000x Triton
+           512 Y {'base': '64x64 4x2', 'swz': '64x64 4x2'} | exact {'base': True, 'swz': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2775-2775 MHz
+      swz       min       5.5 median       5.6 us  0.690x Triton
+      cuBLAS    min       5.9 median       6.0 us  0.743x Triton
+      base      min       6.5 median       6.6 us  0.822x Triton
+      Triton    min       7.9 median       9.6 us  1.000x Triton
+          1024 Y {'base': '64x128 2x2', 'swz': '64x128 2x2'} | exact {'base': True, 'swz': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2760-2760 MHz
+      swz       min      27.4 median      27.4 us  0.908x Triton
+      cuBLAS    min      28.9 median      29.1 us  0.957x Triton
+      base      min      29.1 median      29.2 us  0.965x Triton
+      Triton    min      30.2 median      30.4 us  1.000x Triton
+          2048 Y {'base': '128x128 2x2', 'swz': '128x128 2x2'} | exact {'base': True, 'swz': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2460-2460 MHz
+      cuBLAS    min     204.4 median     208.1 us  0.987x Triton
+      swz       min     205.4 median     221.5 us  0.992x Triton
+      base      min     206.6 median     213.6 us  0.998x Triton
+      Triton    min     207.1 median     223.2 us  1.000x Triton
+          4096 Y {'base': '128x128 2x2', 'swz': '128x128 2x2'} | exact {'base': True, 'swz': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2445-2445 MHz
+      cuBLAS    min    1545.6 median    1565.2 us  0.968x Triton
+      swz       min    1576.4 median    1597.9 us  0.987x Triton
+      base      min    1576.8 median    1599.2 us  0.988x Triton
+      Triton    min    1596.4 median    1611.3 us  1.000x Triton
+          8192 Y {'base': '128x128 2x2', 'swz': '128x128 2x2'} | exact {'base': True, 'swz': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2745-2760 MHz
+      base      min   12319.7 median   12433.9 us  0.896x Triton
+      swz       min   12343.3 median   12438.9 us  0.898x Triton
+      cuBLAS    min   12464.0 median   12601.2 us  0.907x Triton
+      Triton    min   13745.7 median   13850.6 us  1.000x Triton
+   1x4096x4096 Y {'base': '32x64 2x2', 'swz': '32x64 2x2'} | exact {'base': True, 'swz': True, 'cuBLAS': True} | Triton None | SM 2745-2745 MHz
+      swz       min      18.0 median      18.1 us
+      base      min      19.7 median      19.7 us
+      cuBLAS    min      26.7 median      26.8 us
+   4x4096x4096 Y {'base': '32x64 2x2', 'swz': '32x64 2x2'} | exact {'base': True, 'swz': True, 'cuBLAS': True} | Triton None | SM 2730-2730 MHz
+      swz       min      18.1 median      18.4 us
+      base      min      21.7 median      21.7 us
+      cuBLAS    min      53.8 median      54.5 us
+   8x4096x4096 Y {'base': '32x64 2x2', 'swz': '32x64 2x2'} | exact {'base': True, 'swz': True, 'cuBLAS': True} | Triton None | SM 2430-2430 MHz
+      swz       min      19.0 median      19.0 us
+      base      min      23.1 median      23.1 us
+      cuBLAS    min      50.6 median      50.7 us
+  32x4096x4096 Y {'base': '32x64 2x2', 'swz': '32x64 2x2'} | exact {'base': True, 'swz': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      swz       min      21.1 median      21.2 us
+      cuBLAS    min      24.2 median      24.2 us
+      base      min      30.6 median      30.6 us

@@ -1,0 +1,326 @@
+bn254_fr_mul                       ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (1): bra
+bn254_fr_mul                       sass first=UNMODELLED SASS OPCODE 'CALL.REL.NOINC'  (refusing, not guessing)
+                                        opcode gap (1): CALL.REL.NOINC
+                                        other (2, contaminated): backward BRA -- this kernel has a loop, which need; UNMODELLED SASS OPERAND COUNT in 'IADD3': expected
+bn254_fr_mul_fast                  ptx  first=None
+                                        opcode gap (0): -
+bn254_fr_mul_fast                  sass first=None
+                                        opcode gap (0): -
+bn254_g1_add                       ptx  first=None
+                                        opcode gap (0): -
+bn254_g1_add                       sass first=None
+                                        opcode gap (0): -
+bn254_g1_dbl                       ptx  first=None
+                                        opcode gap (0): -
+bn254_g1_dbl                       sass first=None
+                                        opcode gap (0): -
+bn254_msm_bucket                   ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (1): bra
+bn254_msm_bucket                   sass first=UNMODELLED SASS OPCODE 'UIADD3'  (refusing, not guessing)
+                                        opcode gap (2): UIADD3, CALL.REL.NOINC
+                                        other (1, contaminated): backward BRA -- this kernel has a loop, which need
+bn254_ntt4_fused                   ptx  first=None
+                                        opcode gap (0): -
+bn254_ntt4_fused                   sass first=None
+                                        opcode gap (0): -
+bn254_ntt4_fused_high2             ptx  first=None
+                                        opcode gap (0): -
+bn254_ntt4_fused_high2             sass first=UNMODELLED SASS OPCODE 'IABS'  (refusing, not guessing)
+                                        opcode gap (4): IABS, I2F.RP, MUFU.RCP, F2I.FTZ.U32.TRUNC.NTZ
+bn254_ntt4_fused_high3             ptx  first=None
+                                        opcode gap (0): -
+bn254_ntt4_fused_high3             sass first=UNMODELLED SASS OPCODE 'IABS'  (refusing, not guessing)
+                                        opcode gap (4): IABS, I2F.RP, MUFU.RCP, F2I.FTZ.U32.TRUNC.NTZ
+bn254_ntt4_fused_high4             ptx  first=None
+                                        opcode gap (0): -
+bn254_ntt4_fused_high4             sass first=UNMODELLED SASS OPCODE 'IABS'  (refusing, not guessing)
+                                        opcode gap (4): IABS, I2F.RP, MUFU.RCP, F2I.FTZ.U32.TRUNC.NTZ
+bn254_ntt4_stage                   ptx  first=None
+                                        opcode gap (0): -
+bn254_ntt4_stage                   sass first=UNMODELLED SASS OPCODE 'IABS'  (refusing, not guessing)
+                                        opcode gap (4): IABS, I2F.RP, MUFU.RCP, F2I.FTZ.U32.TRUNC.NTZ
+bn254_ntt_stage                    ptx  first=None
+                                        opcode gap (0): -
+bn254_ntt_stage                    sass first=UNMODELLED SASS OPCODE 'IABS'  (refusing, not guessing)
+                                        opcode gap (4): IABS, I2F.RP, MUFU.RCP, F2I.FTZ.U32.TRUNC.NTZ
+bn254_permute                      ptx  first=None
+                                        opcode gap (0): -
+bn254_permute                      sass first=None
+                                        opcode gap (0): -
+bn254_sub_vec                      ptx  first=None
+                                        opcode gap (0): -
+bn254_sub_vec                      sass first=None
+                                        opcode gap (0): -
+coprocessor_attention.coprocessor  ptx  first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_attention.coprocessor  sass first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_collision.coprocessor  ptx  first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_collision.coprocessor  sass first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_combined.coprocessor   ptx  first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_combined.coprocessor   sass first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_db_index.coprocessor   ptx  first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_db_index.coprocessor   sass first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_large.coprocessor      ptx  first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_large.coprocessor      sass first=setup: UNMODELLED PTX nested lexical scope: the register model does
+                                        opcode gap (0): -
+coprocessor_test.coprocessor       ptx  first=UNMODELLED PTX wide destination 'rt_A_ptr'  (refusing, not guessing)
+                                        opcode gap (4): ld.global.ca.f32, @%rt_p0, cvt.rn.f32.u32, @%rt_p1
+                                        other (32, contaminated): UNMODELLED PTX wide destination 'rt_A_ptr'  (refus; UNMODELLED PTX wide destination 'nns_query_ptr'  (; UNMODELLED PTX integer destination '%rt_r0'  (refu
+coprocessor_test.coprocessor       sass first=unmodelled shared address form '[0x10]'  (refusing, not guessing)
+                                        opcode gap (0): -
+                                        other (15, contaminated): unmodelled shared address form '[0x10]'  (refusing; unmodelled shared address form '[0x20]'  (refusing; unmodelled shared address form '[0x30]'  (refusing
+deterministic_reduce               ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (3): bra, red.global.add.u64, red.global.max.s32
+deterministic_reduce               sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (10): S2UR, USHF.R.S32.HI, CS2R, ISETP.GE.AND.EX, LEA.HI.X.SX32, REDUX.MAX.S32, VOTEU.ANY, UFLO.U32, RED.E.ADD.64.STRONG.GPU, RED.E.MAX.S32.STRONG.GPU
+                                        other (2, contaminated): backward BRA -- this kernel has a loop, which need; unmodelled special register SR_LANEID
+exact_pv                           ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (1): bra
+exact_pv                           sass first=UNMODELLED SASS OPCODE 'CS2R'  (refusing, not guessing)
+                                        opcode gap (3): CS2R, PLOP3.LUT, UIADD3
+                                        other (3, contaminated): backward BRA -- this kernel has a loop, which need; unmodelled BRA form 'BRA P1, `(.L_x_0)'  (refusing; self-branch reached under a satisfiable path condi
+gemm_f16_1024                      ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mul.hi.u32, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_1024                      sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (19): S2UR, UIADD3, CS2R, UISETP.NE.U32.AND, UIMAD, ULOP3.LUT, R2UR, UIMAD.WIDE.U32, UISETP.GE.U32.AND, USEL, UISETP.LT.U32.AND, ULEA, PLOP3.LUT, LDGSTS.E.BYPASS.LTC128B.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, USHF.R.U32.HI, WARPSYNC
+                                        other (11, contaminated): UNMODELLED SASS uniform predicate '@UP0'  (refusin; UNMODELLED SASS uniform predicate '@UP2'  (refusin; UNMODELLED SASS uniform predicate '@UP1'  (refusin
+gemm_f16_16384                     ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_16384                     sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_2048                      ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_2048                      sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_256                       ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_256                       sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (8): S2UR, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (9, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_4096                      ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_4096                      sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_512                       ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_512                       sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (8): S2UR, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.M88.4': shared m
+gemm_f16_8192                      ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_8192                      sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_bias_relu_1024            ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (11): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mul.hi.u32, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, ld.global.v4.f32, st.global.v4.f32
+gemm_f16_bias_relu_1024            sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (19): S2UR, CS2R, UIMAD, R2UR, UISETP.LT.U32.AND, USEL, UIADD3, UISETP.NE.U32.AND, UIMAD.WIDE.U32, ULOP3.LUT, UISETP.GE.U32.AND, ULEA, PLOP3.LUT, LDGSTS.E.BYPASS.LTC128B.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, USHF.R.U32.HI, WARPSYNC
+                                        other (11, contaminated): UNMODELLED SASS uniform predicate '@UP2'  (refusin; UNMODELLED SASS uniform predicate '@UP1'  (refusin; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref
+gemm_f16_bias_relu_2048            ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, ld.global.v4.f32, st.global.v4.f32
+gemm_f16_bias_relu_2048            sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (9, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_bias_relu_4096            ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, ld.global.v4.f32, st.global.v4.f32
+gemm_f16_bias_relu_4096            sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (9, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_bias_relu_512             ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, ld.global.v4.f32, st.global.v4.f32
+gemm_f16_bias_relu_512             sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (8): S2UR, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (9, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.M88.4': shared m
+gemm_f16_bias_relu_64              ptx  first=UNMODELLED PTX OPCODE 'mov.b32'  (refusing, not guessing)
+                                        opcode gap (11): mov.b32, cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, bra, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, ld.global.v4.f32, st.global.v4.f32
+gemm_f16_bias_relu_64              sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (8): S2UR, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (9, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_bias_relu_8192            ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, ld.global.v4.f32, st.global.v4.f32
+gemm_f16_bias_relu_8192            sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (9, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_decode_m1                 ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mul.hi.u32, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_decode_m1                 sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (15): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.LTC128B.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, UIADD3, UIMAD.WIDE.U32, USHF.R.U32.HI, ULEA, UISETP.GE.U32.AND, PLOP3.LUT, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_decode_m32                ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mul.hi.u32, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_decode_m32                sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (19): S2UR, UIADD3, CS2R, UISETP.NE.U32.AND, UIMAD, ULOP3.LUT, R2UR, UIMAD.WIDE.U32, UISETP.GE.U32.AND, USEL, UISETP.LT.U32.AND, ULEA, PLOP3.LUT, LDGSTS.E.BYPASS.LTC128B.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, USHF.R.U32.HI, WARPSYNC
+                                        other (11, contaminated): UNMODELLED SASS uniform predicate '@UP0'  (refusin; UNMODELLED SASS uniform predicate '@UP2'  (refusin; UNMODELLED SASS uniform predicate '@UP1'  (refusin
+gemm_f16_decode_m4                 ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mul.hi.u32, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_decode_m4                 sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (15): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.LTC128B.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, UIADD3, UIMAD.WIDE.U32, USHF.R.U32.HI, ULEA, UISETP.GE.U32.AND, PLOP3.LUT, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_decode_m8                 ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_decode_m8                 sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (14): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.LTC128B.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, UIADD3, ULOP3.LUT, ULEA, UISETP.GE.U32.AND, PLOP3.LUT, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_f16_swiglu_1024               ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, bra, mul.hi.u32, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32
+                                        other (2, contaminated): TRANSLITERATED MACRO-OP 'ex2.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'rcp.approx.f32'  (refusin
+gemm_f16_swiglu_1024               sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (13): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC, FSETP.GEU.AND, MUFU.EX2, FSETP.GT.AND, MUFU.RCP
+                                        other (13, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x170]'  (ref
+gemm_f16_swiglu_2048               ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, bra, mul.hi.u32, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32
+                                        other (2, contaminated): TRANSLITERATED MACRO-OP 'ex2.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'rcp.approx.f32'  (refusin
+gemm_f16_swiglu_2048               sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (13): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC, FSETP.GEU.AND, MUFU.EX2, FSETP.GT.AND, MUFU.RCP
+                                        other (13, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x170]'  (ref
+gemm_f16_swiglu_4096               ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, bra, mul.hi.u32, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32
+                                        other (2, contaminated): TRANSLITERATED MACRO-OP 'ex2.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'rcp.approx.f32'  (refusin
+gemm_f16_swiglu_4096               sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (13): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC, FSETP.GEU.AND, MUFU.EX2, FSETP.GT.AND, MUFU.RCP
+                                        other (13, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x170]'  (ref
+gemm_f16_swiglu_512                ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, bra, mul.hi.u32, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32
+                                        other (2, contaminated): TRANSLITERATED MACRO-OP 'ex2.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'rcp.approx.f32'  (refusin
+gemm_f16_swiglu_512                sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (13): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC, FSETP.GEU.AND, MUFU.EX2, FSETP.GT.AND, MUFU.RCP
+                                        other (13, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x170]'  (ref
+gemm_f16_uneven_grid               ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (9): cp.async.cg.shared.global, cp.async.commit_group, bra, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+gemm_f16_uneven_grid               sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (9): S2UR, CS2R, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (8, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+gemm_fp8_1024                      ptx  first=UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (refusing, not guessing)
+                                        opcode gap (12): cp.async.cg.shared.global, bfe.u32, cp.async.commit_group, cp.async.wait_group, cvt.rn.satfinite.e4m3x2.f32, cvt.u32.u16, bra, bra.uni, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32, cp.async.wait_all, st.global.v4.f32
+                                        other (4, contaminated): UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (ref; EXPANDED MACRO-OP 'rcp.rn.f32', which ptxas expand; UNMODELLED SHARED ACCESS 'st.shared.v2.f32': share
+gemm_fp8_1024                      sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (19): S2UR, IMNMX.U32, LEA.HI, CALL.REL.NOINC, MUFU.RCP, FADD.FTZ, CS2R, SGXT.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C, PRMT, QMMA.16832.F32.E4M3.E4M3, FFMA.RM, FFMA.RP, FSETP.NEU.FTZ.AND, PLOP3.LUT, RET.REL.NODEC
+                                        other (13, contaminated): UNMODELLED SASS scalar operand '1'  (refusing, not; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref
+gemm_fp8_256                       ptx  first=UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (refusing, not guessing)
+                                        opcode gap (12): cp.async.cg.shared.global, bfe.u32, cp.async.commit_group, cp.async.wait_group, cvt.rn.satfinite.e4m3x2.f32, cvt.u32.u16, bra, bra.uni, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32, cp.async.wait_all, st.global.v4.f32
+                                        other (4, contaminated): UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (ref; EXPANDED MACRO-OP 'rcp.rn.f32', which ptxas expand; UNMODELLED SHARED ACCESS 'st.shared.v2.f32': share
+gemm_fp8_256                       sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (19): S2UR, IMNMX.U32, LEA.HI, CALL.REL.NOINC, MUFU.RCP, FADD.FTZ, CS2R, SGXT.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C, PRMT, QMMA.16832.F32.E4M3.E4M3, FFMA.RM, FFMA.RP, FSETP.NEU.FTZ.AND, PLOP3.LUT, RET.REL.NODEC
+                                        other (13, contaminated): UNMODELLED SASS scalar operand '1'  (refusing, not; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref
+gemm_fp8_4096                      ptx  first=UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (refusing, not guessing)
+                                        opcode gap (12): cp.async.cg.shared.global, bfe.u32, cp.async.commit_group, cp.async.wait_group, cvt.rn.satfinite.e4m3x2.f32, cvt.u32.u16, bra, bra.uni, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32, cp.async.wait_all, st.global.v4.f32
+                                        other (4, contaminated): UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (ref; EXPANDED MACRO-OP 'rcp.rn.f32', which ptxas expand; UNMODELLED SHARED ACCESS 'st.shared.v2.f32': share
+gemm_fp8_4096                      sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (19): S2UR, IMNMX.U32, LEA.HI, CALL.REL.NOINC, MUFU.RCP, FADD.FTZ, CS2R, SGXT.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C, PRMT, QMMA.16832.F32.E4M3.E4M3, FFMA.RM, FFMA.RP, FSETP.NEU.FTZ.AND, PLOP3.LUT, RET.REL.NODEC
+                                        other (13, contaminated): UNMODELLED SASS scalar operand '1'  (refusing, not; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref
+gemm_fp8_512                       ptx  first=UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (refusing, not guessing)
+                                        opcode gap (12): cp.async.cg.shared.global, bfe.u32, cp.async.commit_group, cp.async.wait_group, cvt.rn.satfinite.e4m3x2.f32, cvt.u32.u16, bra, bra.uni, ldmatrix.sync.aligned.m8n8.x4.shared.b16, mma.sync.aligned.m16n8k32.row.col.f32.e4m3.e4m3.f32, cp.async.wait_all, st.global.v4.f32
+                                        other (4, contaminated): UNMODELLED PTX PARAMETER LOAD 'ld.param.f32'  (ref; EXPANDED MACRO-OP 'rcp.rn.f32', which ptxas expand; UNMODELLED SHARED ACCESS 'st.shared.v2.f32': share
+gemm_fp8_512                       sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (19): S2UR, IMNMX.U32, LEA.HI, CALL.REL.NOINC, MUFU.RCP, FADD.FTZ, CS2R, SGXT.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, F2FP.SATFINITE.E4M3.F32.PACK_AB_MERGE_C, PRMT, QMMA.16832.F32.E4M3.E4M3, FFMA.RM, FFMA.RP, FSETP.NEU.FTZ.AND, PLOP3.LUT, RET.REL.NODEC
+                                        other (13, contaminated): UNMODELLED SASS scalar operand '1'  (refusing, not; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref
+int8_gemm                          ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (3): bra, mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32, red.global.add.s32
+int8_gemm                          sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (4): S2UR, CS2R, IMMA.16832.S8.S8, RED.E.ADD.S32.STRONG.GPU
+                                        other (2, contaminated): UNMODELLED SASS OPERAND COUNT in 'IADD3': expected; backward BRA -- this kernel has a loop, which need
+int8_gemm_scaled                   ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (3): bra, mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32, cvt.rn.f32.s32
+int8_gemm_scaled                   sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (3): S2UR, IMMA.16832.S8.S8, I2FP.F32.S32
+                                        other (2, contaminated): UNMODELLED SASS uniform predicate '@!UPT'  (refusi; backward BRA -- this kernel has a loop, which need
+naive_gemm_f32                     ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (1): bra
+naive_gemm_f32                     sass first=UNMODELLED SASS OPCODE 'PLOP3.LUT'  (refusing, not guessing)
+                                        opcode gap (2): PLOP3.LUT, UIADD3
+                                        other (3, contaminated): backward BRA -- this kernel has a loop, which need; unmodelled BRA form 'BRA P1, `(.L_x_0)'  (refusing; self-branch reached under a satisfiable path condi
+paged_decode_attention_128_32_8_16 ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (6): bra, cvt.f32.f16, shfl.sync.bfly.b32, vote.sync.any.pred, mov.b32, cvt.rn.f16.f32
+                                        other (3, contaminated): unmodelled 32-bit operand '%f59'; TRANSLITERATED MACRO-OP 'ex2.approx.ftz.f32'  (ref; EXPANDED MACRO-OP 'div.rn.f32', which ptxas expand
+paged_decode_attention_128_32_8_16 sass first=UNMODELLED SASS wide operand 'c[0x0][0x180]'  (refusing, not guessing)
+                                        opcode gap (26): STL.64, IMNMX, CS2R, LEA.HI, SHF.L.U64.HI, HADD2.F32, BRA.DIV, SHFL.BFLY, VOTE.ANY, MUFU.EX2, WARPSYNC, MUFU.RCP, FCHK, CALL.REL.NOINC, LDL.LU.64, F2F.F16.F32, PRMT, FSETP.GTU.FTZ.AND, PLOP3.LUT, FSETP.NEU.FTZ.AND, FADD.FTZ, FFMA.RZ, FFMA.RM, FFMA.RP, MUFU.RSQ, RET.REL.NODEC
+                                        other (30, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x180]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x188]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref
+paged_decode_attention_128_32_8_16_8 ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (6): bra, cvt.f32.f16, shfl.sync.bfly.b32, vote.sync.any.pred, mov.b32, cvt.rn.f16.f32
+                                        other (3, contaminated): unmodelled 32-bit operand '%f59'; TRANSLITERATED MACRO-OP 'ex2.approx.ftz.f32'  (ref; EXPANDED MACRO-OP 'div.rn.f32', which ptxas expand
+paged_decode_attention_128_32_8_16_8 sass first=UNMODELLED SASS wide operand 'c[0x0][0x180]'  (refusing, not guessing)
+                                        opcode gap (24): IMNMX, CS2R, LEA.HI, SHF.L.U64.HI, HADD2.F32, BRA.DIV, SHFL.BFLY, VOTE.ANY, MUFU.EX2, WARPSYNC, MUFU.RCP, FCHK, CALL.REL.NOINC, F2F.F16.F32, PRMT, FSETP.GTU.FTZ.AND, PLOP3.LUT, FSETP.NEU.FTZ.AND, FADD.FTZ, FFMA.RZ, FFMA.RM, FFMA.RP, MUFU.RSQ, RET.REL.NODEC
+                                        other (18, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x180]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x188]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref
+paged_decode_attention_split_128_32_8_16_16_8 ptx  first=setup: this PTX module holds 2 entry points (paged_decode_attention
+                                        opcode gap (0): -
+paged_decode_attention_split_128_32_8_16_16_8 sass first=UNMODELLED SASS wide operand 'c[0x0][0x180]'  (refusing, not guessing)
+                                        opcode gap (27): S2UR, CS2R, IMNMX, LEA.HI, SHF.L.U64.HI, HADD2.F32, BRA.DIV, SHFL.BFLY, VOTE.ANY, MUFU.EX2, WARPSYNC, BREAK, CALL.REL.NOINC, RET.REL.NODEC, LDG.E.64, MUFU.RCP, FCHK, F2F.F16.F32, PRMT, FSETP.GTU.FTZ.AND, PLOP3.LUT, FSETP.NEU.FTZ.AND, FADD.FTZ, FFMA.RZ, FFMA.RM, FFMA.RP, MUFU.RSQ
+                                        other (21, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x180]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x178]'  (ref
+paged_decode_attention_split_128_32_8_16_4_8 ptx  first=setup: this PTX module holds 2 entry points (paged_decode_attention
+                                        opcode gap (0): -
+paged_decode_attention_split_128_32_8_16_4_8 sass first=UNMODELLED SASS wide operand 'c[0x0][0x180]'  (refusing, not guessing)
+                                        opcode gap (27): S2UR, CS2R, IMNMX, LEA.HI, SHF.L.U64.HI, HADD2.F32, BRA.DIV, SHFL.BFLY, VOTE.ANY, MUFU.EX2, WARPSYNC, BREAK, CALL.REL.NOINC, RET.REL.NODEC, LDG.E.64, MUFU.RCP, FCHK, F2F.F16.F32, PRMT, FSETP.GTU.FTZ.AND, PLOP3.LUT, FSETP.NEU.FTZ.AND, FADD.FTZ, FFMA.RZ, FFMA.RM, FFMA.RP, MUFU.RSQ
+                                        other (21, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x180]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x178]'  (ref
+ptx_carry_chain                    ptx  first=None
+                                        opcode gap (0): -
+ptx_carry_chain                    sass first=None
+                                        opcode gap (0): -
+ptx_integer_ops                    ptx  first=None
+                                        opcode gap (0): -
+ptx_integer_ops                    sass first=None
+                                        opcode gap (0): -
+ptx_subword_ops                    ptx  first=None
+                                        opcode gap (0): -
+ptx_subword_ops                    sass first=None
+                                        opcode gap (0): -
+rmsnorm_residual_4096              ptx  first=UNMODELLED PTX OPCODE 'trap'  (refusing, not guessing)
+                                        opcode gap (4): trap, cvt.f32.f16, cvt.rn.f16.f32, shfl.sync.bfly.b32
+                                        other (1, contaminated): TRANSLITERATED MACRO-OP 'rsqrt.approx.f32'  (refus
+rmsnorm_residual_4096              sass first=UNMODELLED SASS OPCODE 'BPT.TRAP'  (refusing, not guessing)
+                                        opcode gap (7): BPT.TRAP, HADD2.F32, F2F.F16.F32, SHFL.BFLY, PRMT, FSETP.GEU.AND, MUFU.RSQ
+                                        other (12, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; unmodelled LOP3.LUT form 'LOP3.LUT P0, RZ, R12, 0x
+rope_128                           ptx  first=UNMODELLED PTX OPCODE 'trap'  (refusing, not guessing)
+                                        opcode gap (6): trap, mad.wide.u32, cvt.rn.f32.s32, cvt.f32.f16, cvt.rn.f32.u32, cvt.rn.f16.f32
+                                        other (3, contaminated): TRANSLITERATED MACRO-OP 'ex2.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'sin.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'cos.approx.f32'  (refusin
+rope_128                           sass first=UNMODELLED SASS OPCODE 'BPT.TRAP'  (refusing, not guessing)
+                                        opcode gap (16): BPT.TRAP, USHF.R.S32.HI, ISETP.GE.AND.EX, LEA.HI, CS2R, LDG.E.64, I2FP.F32.U32, FSETP.GEU.AND, MUFU.EX2, I2FP.F32.S32, FMUL.RZ, MUFU.SIN, HADD2.F32, MUFU.COS, F2F.F16.F32, PRMT
+                                        other (3, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS scalar operand '0.2076205015182495; UNMODELLED SASS scalar operand '0.5'  (refusing, n
+rope_256                           ptx  first=UNMODELLED PTX OPCODE 'trap'  (refusing, not guessing)
+                                        opcode gap (6): trap, mad.wide.u32, cvt.rn.f32.s32, cvt.f32.f16, cvt.rn.f32.u32, cvt.rn.f16.f32
+                                        other (3, contaminated): TRANSLITERATED MACRO-OP 'ex2.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'sin.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'cos.approx.f32'  (refusin
+rope_256                           sass first=UNMODELLED SASS OPCODE 'BPT.TRAP'  (refusing, not guessing)
+                                        opcode gap (15): BPT.TRAP, USHF.R.S32.HI, ISETP.GE.AND.EX, LEA.HI, CS2R, I2FP.F32.U32, FSETP.GEU.AND, MUFU.EX2, I2FP.F32.S32, FMUL.RZ, MUFU.SIN, MUFU.COS, HADD2.F32, F2F.F16.F32, PRMT
+                                        other (3, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS scalar operand '0.1038102507591247; UNMODELLED SASS scalar operand '0.5'  (refusing, n
+rope_64                            ptx  first=UNMODELLED PTX OPCODE 'trap'  (refusing, not guessing)
+                                        opcode gap (6): trap, mad.wide.u32, cvt.rn.f32.s32, cvt.f32.f16, cvt.rn.f32.u32, cvt.rn.f16.f32
+                                        other (3, contaminated): TRANSLITERATED MACRO-OP 'ex2.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'sin.approx.f32'  (refusin; TRANSLITERATED MACRO-OP 'cos.approx.f32'  (refusin
+rope_64                            sass first=UNMODELLED SASS OPCODE 'BPT.TRAP'  (refusing, not guessing)
+                                        opcode gap (16): BPT.TRAP, USHF.R.S32.HI, ISETP.GE.AND.EX, LEA.HI, CS2R, LDG.E.64, I2FP.F32.U32, FSETP.GEU.AND, MUFU.EX2, I2FP.F32.S32, FMUL.RZ, MUFU.SIN, HADD2.F32, MUFU.COS, F2F.F16.F32, PRMT
+                                        other (3, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS scalar operand '0.4152410030364990; UNMODELLED SASS scalar operand '0.5'  (refusing, n
+smem_roundtrip                     ptx  first=None
+                                        opcode gap (0): -
+smem_roundtrip                     sass first=None
+                                        opcode gap (0): -
+tensor_core_gemm_f16_rect          ptx  first=UNMODELLED PTX OPCODE 'cp.async.cg.shared.global'  (refusing, not gues
+                                        opcode gap (10): cp.async.cg.shared.global, cp.async.commit_group, cp.async.wait_group, ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16, ldmatrix.sync.aligned.m8n8.x4.shared.b16, bra, mul.hi.u32, mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32, wmma.store.d.sync.aligned.row.m16n16k16.shared.f32, st.global.v4.f32
+tensor_core_gemm_f16_rect          sass first=UNMODELLED SASS OPCODE 'S2UR'  (refusing, not guessing)
+                                        opcode gap (8): S2UR, UIMAD, IMNMX.U32, LDGSTS.E.BYPASS.128, LDGDEPBAR, DEPBAR.LE, HMMA.16816.F32, WARPSYNC
+                                        other (9, contaminated): UNMODELLED SASS wide operand 'c[0x0][0x168]'  (ref; UNMODELLED SASS wide operand 'c[0x0][0x160]'  (ref; UNMODELLED SHARED ACCESS 'LDSM.16.MT88.4': shared 
+test_drift                         ptx  first=UNMODELLED PTX OPCODE 'cvt.f64.f32'  (refusing, not guessing)
+                                        opcode gap (7): cvt.f64.f32, mul.f64, selp.f64, add.f64, trap, cvt.rzi.s64.f64, bra
+                                        other (3, contaminated): UNMODELLED PTX COMPARISON 'setp.lt.f64'  (refusing; UNMODELLED PTX COMPARISON 'setp.geu.f64'  (refusin; UNMODELLED PTX COMPARISON 'setp.ltu.f64'  (refusin
+test_drift                         sass first=None
+                                        opcode gap (0): -
+train_spec                         ptx  first=UNMODELLED PTX OPCODE 'ld.global.ca.f32'  (refusing, not guessing)
+                                        opcode gap (10): ld.global.ca.f32, cvt.f64.f32, mul.f64, selp.f64, add.f64, trap, cvt.rzi.s64.f64, bra, xor.b64, and.b64
+                                        other (3, contaminated): UNMODELLED PTX COMPARISON 'setp.lt.f64'  (refusing; UNMODELLED PTX COMPARISON 'setp.geu.f64'  (refusin; UNMODELLED PTX COMPARISON 'setp.ltu.f64'  (refusin
+train_spec                         sass first=UNMODELLED SASS OPCODE 'LDG.E.STRONG.SM'  (refusing, not guessing)
+                                        opcode gap (10): LDG.E.STRONG.SM, F2F.F64.F32, DMUL, DSETP.GEU.AND, DADD, DSETP.GE.AND, F2I.S64.F64.TRUNC, ISETP.GE.AND.EX, ISETP.GT.AND.EX, BPT.TRAP
+                                        other (3, contaminated): UNMODELLED SASS scalar operand '1.75'  (refusing, ; backward BRA -- this kernel has a loop, which need; self-branch reached under a satisfiable path condi
+y_cpu_matmul                       ptx  first=UNMODELLED PTX OPCODE 'bra'  (refusing, not guessing)
+                                        opcode gap (1): bra
+y_cpu_matmul                       sass first=UNMODELLED SASS OPCODE 'PLOP3.LUT'  (refusing, not guessing)
+                                        opcode gap (2): PLOP3.LUT, UIADD3
+                                        other (2, contaminated): backward BRA -- this kernel has a loop, which need; unmodelled BRA form 'BRA P1, `(.L_x_1)'  (refusing

@@ -902,22 +902,21 @@ the 2.61 GHz boost clock is **88.1 TFLOPS**.
 The committed `tests/gemm_f16_<N>.ptx` — the compiler's own output, not a
 hand-written CUDA reference — against cuBLAS (`torch.mm` with a float32
 output, as Y's C is float32) and an autotuned Triton GEMM. Every column is
-checked exact first; interleaved rounds, ranked by minimum; two runs on
-2026-10-18 (`docs/benchmarks/f16_xbar_2026-10-18/table/`).
+checked exact first; interleaved rounds, ranked by minimum; two runs on a
+quiet GPU on 2026-10-20 (`docs/benchmarks/smem_swizzle_2026-10-20/ab/`).
 
 | M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 |
 |---|---|---|---|---|---|---|
-| **Y vs cuBLAS** | 1.080x / 1.222x | 0.866x / 0.883x | 0.987x / 0.985x | 0.986x / 0.987x | 0.978x / 0.977x | 1.006x / 1.007x |
-| **Y vs Triton** | 2.65x / 2.93x | 1.19x / 1.38x | 1.03x / 1.05x | 1.00x / 1.00x | 1.01x / 1.01x | 1.13x / 1.13x |
-| **Y TFLOPS** | 11.1 / 10.5 | 39.4 / 39.1 | 73.2 / 73.5 | 82.9 / 83.3 | 86.8 / 87.0 | 85.8 / 87.5 |
+| **Y vs cuBLAS** | 1.29x / 1.48x | 1.08x / 1.08x | 1.05x / 1.05x | 0.995x / 1.002x | 0.980x / 0.981x | 1.010x / 1.010x |
+| **Y vs Triton** | 3.08x / 3.35x | 1.45x / 1.78x | 1.10x / 1.10x | 1.01x / 1.02x | 1.01x / 1.01x | 1.11x / 1.12x |
+| **Y TFLOPS** | 12.8 / 12.7 | 49.2 / 49.4 | 78.4 / 78.3 | 83.6 / 84.2 | 87.2 / 86.9 | 89.1 / 89.4 |
 
-**From 1024 up Y is 0.98–1.01x cuBLAS; at 8192, whose kernel did not change,
-the order differs from the previous two runs (0.995x and 1.001x), a tie.** Y
-is ahead at 256 and 0.87–0.88x at 512. Against Triton it ties at 2048 and
-4096, and is 1.03–1.05x at 1024 and 1.13x at 8192, where Triton's autotuner
-picks a 128x256 tile on 8 warps. Triton's 256 and 512 minima, and cuBLAS's at
-256, moved by 17–20% between the runs, so those ratios carry little weight. The
-8192 TFLOPS were measured with the SM at up to 2775 MHz, where the peak is 93.7.
+**Y is ahead of cuBLAS at 256, 512 and 1024, ties it at 2048, is 0.98x at
+4096 and 1.01x at 8192.** Against Triton it is ahead at every size, 1.01–1.02x at 2048
+and 4096 and 1.11–1.12x at 8192, where Triton's autotuner picks a 128x256 tile
+on 8 warps. Triton's 512 minimum and cuBLAS's 256 one moved by 22% and 15%
+between the runs, so those ratios carry little weight. The 8192 TFLOPS were
+measured with the SM at up to 2760 MHz, where the peak is 93.2.
 
 On 2026-10-18 the tiles with three stages or more (256, 512, 1024 and the
 decode shapes) moved the K loop's wait and barrier to between a K-tile's last
@@ -939,7 +938,19 @@ multiply-high sequences, exact for every input; the 512 kernel executes 311K
 warp instructions where it executed 450K. Against the parent's kernels it is
 0.1–3.7% faster at every square size and decode shape in every run, by
 1.8–2.9% at 512 and 1.1–2.0% at M = 1. That is one run on a quiet GPU and
-two with a game running; the record says which is which. The table above predates it.
+two with a game running; the record says which is which.
+
+On 2026-10-20 the A and B tiles in shared memory stopped being padded
+(`docs/benchmarks/smem_swizzle_2026-10-20/`). Each row was 8 elements longer
+than its data so that `ldmatrix` had no bank conflicts, but a warp's
+`cp.async` copies into such rows read 1.5 times the L2 sectors they need: at
+512x512x1024 Y read 786,432 sectors to cuBLAS's 524,288, the minimum. The rows
+are now packed and each 16-byte chunk's index is XORed with bits of its row,
+which keeps `ldmatrix` conflict-free and makes the copies whole 128-byte
+lines, as cuBLAS's are. On a quiet GPU it is 19–21% faster at 512, 6% at 256
+and 1024, 0.6–1.3% at 2048, level at 4096 and 0.2% slower at 8192 (inside that
+size's 0.5–0.9% run-to-run spread), and 9–46% faster on the decode shapes. The
+table above was measured after it.
 
 This table read 0.84–0.94x above 256 when it was measured on 2026-08-09, by
 a harness that commit does not record. On 2026-10-17 the K loop
@@ -1157,15 +1168,16 @@ different baseline.
 | workload | baseline | result |
 |---|---|---|
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
-| Square F16 GEMM, 512³ | cuBLAS | 0.88–0.89x |
-| Decode-shaped F16 GEMM, M=32, N=K=4096, B resident in L2 | cuBLAS | 0.75–0.77x |
+| Square F16 GEMM, 4096³ | cuBLAS | 0.98x |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
 shapes it is behind only at batch 32 / ctx 1024, by 2–5% of CUPTI device time
 in both runs, about the size of FlashInfer's own run-to-run variation
-(`docs/benchmarks/paged_attention_2026-10-18/`). At 512³ cuBLAS runs the same
+(`docs/benchmarks/paged_attention_2026-10-18/`).
+
+The square F16 GEMM lost at 512³ until 2026-10-20 (0.88–0.89x). cuBLAS runs the same
 64x64 tile on the same 64-CTA grid as Y, on 4 warps with a 64-deep K step and
 5 stages, and executes 343K warp instructions. Of nine tiles around Y's,
 cuBLAS's shape among them, Y's tuned tile was the fastest in both runs
@@ -1175,20 +1187,28 @@ cuBLAS's 26 and 29. Moving the barrier to between a K-tile's last two steps
 left 512³ level, and tiles of half the size (two CTAs to an SM) took
 1.23–1.47x its time, of a quarter 1.59–1.78x
 (`docs/benchmarks/f16_xbar_2026-10-18/`). Y executed 444–450K instructions
-until 2026-10-19, when it stopped dividing by constants. It executes 311K now,
-fewer than cuBLAS, and is still 0.88–0.89x cuBLAS. What is left in its K
-loop is three dead loads `ptxas` places after each barrier, 7.9% of the
-instructions it executes, and 0.70 `ldmatrix` a HMMA on its 4x2 warps against cuBLAS's
-0.50 on 2x2 (`docs/benchmarks/const_div_2026-10-19/`).
+until 2026-10-19, when it stopped dividing by constants, and 311K after,
+fewer than cuBLAS, and was still 0.88–0.89x cuBLAS
+(`docs/benchmarks/const_div_2026-10-19/`). At M = N = 512 the loss grew with K
+against the same cuBLAS kernel, in every one of six tiles: it was the padding
+of Y's shared-memory rows, which made each K-tile's copies read 1.5 times the
+L2 sectors they needed. With the rows swizzled Y is 1.08x cuBLAS at 512³
+(`docs/benchmarks/smem_swizzle_2026-10-20/`). Its K loop still holds three
+dead loads `ptxas` places after each barrier, 7.9% of the instructions it
+executes, and 0.70 `ldmatrix` a HMMA on its 4x2 warps against cuBLAS's 0.50
+on 2x2. At 4096³ Y uses 128x128 tiles, which the swizzle left level.
 
 The decode shapes are M of 1 to 32 rows against a 4096 x 4096 B
 (`docs/benchmarks/decode_dram_2026-10-18/`). With B read from DRAM, as in a
 decode step whose weights do not fit in the L2 (each call takes the next of
 four copies, 134 MB), Y and cuBLAS tie at every M: cuBLAS takes 0.99–1.05x
 Y's time, and both move 575–618 GB/s of the card's 672. With one B, whose
-33.5 MB fits in the 48 MB L2, Y takes 0.44–0.76x cuBLAS's time at M = 1, 4
+33.5 MB fits in the 48 MB L2, Y took 0.44–0.76x cuBLAS's time at M = 1, 4
 and 8 and 1.32–1.34x at M = 32, where every one of Y's 64 CTAs reads all of
-A; the best of eight tiles there (32x128x64 on 2x4 warps) takes 1.24–1.26x.
+A. Since the shared-memory rows are swizzled Y takes 0.87–0.88x cuBLAS's time
+at M = 32 with B in the L2 (1.26–1.29x before, in the same two runs of
+another harness, `docs/benchmarks/smem_swizzle_2026-10-20/ab/`) and 0.34–0.68x
+at M = 1, 4 and 8; the DRAM case was not measured again.
 
 RoPE in place touches half the bytes of RoPE out of place, so the rows that
 are 100 MB out of place are about 50 MB in place, the L2's own size
@@ -2181,7 +2201,7 @@ all. Counted as **instructions**, not as lines that mention one:
 ```
 kernel                lines  mma.sync  cp.async  ldmatrix  bar.sync
 int8_gemm.ptx           134         1         0         0         0
-gemm_f16_4096.ptx       674        64        20        16         6
+gemm_f16_4096.ptx       691        64        20        16         6
 ```
 
 The f16 row read `964 / 64 / 21 / 24 / 7` until 2026-10-17, when that
@@ -2189,7 +2209,9 @@ kernel's K loop began computing its copy addresses once and loading B with one
 `ldmatrix.x4.trans` per 16 columns
 (`docs/benchmarks/f16_gemm_loop_2026-10-17/`). It read 672 lines until
 2026-10-19, when the epilogue's two copy loops were marked
-`.pragma "nounroll"` (`docs/benchmarks/const_div_2026-10-19/`).
+`.pragma "nounroll"` (`docs/benchmarks/const_div_2026-10-19/`), and 674 until
+2026-10-20, when its shared-memory tiles were swizzled
+(`docs/benchmarks/smem_swizzle_2026-10-20/`).
 
 > **Those figures read `89 lines with 2 mma … against 964 / 65 / 22 / 24 / 7`
 > until 2026-09-08, and the correction above had already been written.** The

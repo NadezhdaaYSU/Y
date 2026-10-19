@@ -1,0 +1,30 @@
+USDT:2026-10-20 00:21:04 575547:575547 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:21:04 575547:575547 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=  512 exact True graph True SM 2490-2490 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      cuBLAS             min     5.66 median     5.87 us  cuBLAS/this 1.000
+      64_64_32_4_2_4     min     6.16 median     6.64 us  cuBLAS/this 0.918
+      64_64_32_4_2_6     min     6.43 median     6.69 us  cuBLAS/this 0.880
+      64_64_64_4_2_4     min     6.47 median     6.71 us  cuBLAS/this 0.874
+      64_64_32_2_2_4     min     6.67 median     6.93 us  cuBLAS/this 0.848
+      64_64_64_2_2_4     min     6.68 median     6.96 us  cuBLAS/this 0.846
+      64_64_64_2_2_5     min     6.81 median     7.13 us  cuBLAS/this 0.831
+USDT:2026-10-20 00:21:04 575547:575547 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:21:04 575547:575547 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 1024 exact True graph True SM 2490-2490 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      cuBLAS             min     8.83 median     8.87 us  cuBLAS/this 1.000
+      64_64_32_2_2_4     min    10.75 median    11.00 us  cuBLAS/this 0.822
+      64_64_32_4_2_4     min    10.77 median    10.80 us  cuBLAS/this 0.820
+      64_64_64_2_2_4     min    10.84 median    11.09 us  cuBLAS/this 0.815
+      64_64_64_4_2_4     min    10.86 median    10.88 us  cuBLAS/this 0.813
+      64_64_32_4_2_6     min    11.01 median    11.05 us  cuBLAS/this 0.802
+      64_64_64_2_2_5     min    11.32 median    11.37 us  cuBLAS/this 0.780
+USDT:2026-10-20 00:21:04 575547:575547 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 00:21:04 575547:575547 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 4096 exact True graph True SM 2490-2760 MHz | cuBLAS ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+      cuBLAS             min    29.78 median    29.92 us  cuBLAS/this 1.000
+      64_64_64_4_2_4     min    36.26 median    36.54 us  cuBLAS/this 0.821
+      64_64_64_2_2_4     min    36.56 median    36.86 us  cuBLAS/this 0.815
+      64_64_64_2_2_5     min    36.85 median    37.16 us  cuBLAS/this 0.808
+      64_64_32_4_2_4     min    37.20 median    37.44 us  cuBLAS/this 0.801
+      64_64_32_2_2_4     min    37.30 median    37.52 us  cuBLAS/this 0.798
+      64_64_32_4_2_6     min    37.72 median    38.01 us  cuBLAS/this 0.789

@@ -1,0 +1,16 @@
+# @!PT LDS dead loads in the SASS of each probe (ptxas -O3); probes are ../../const_div_2026-10-19/probes/barrier_bar.ptx with the second copy changed
+# Build cuda_13.4.r13.4/compiler.38855100_0
+sm_89 base: 3
+sm_89 guard: 3
+sm_89 l2: 3
+sm_89 guardl2: 3
+sm_89 ca: 3
+sm_89 srcsize: 3
+sm_89 ign: 3
+sm_80 base: 3
+sm_86 base: 3
+sm_87 base: 3
+sm_90 base: 6
+sm_120 base: 6
+# Triton bundled: Build cuda_12.8.r12.8/compiler.35583870_0
+sm_89 base (Triton ptxas): 3
