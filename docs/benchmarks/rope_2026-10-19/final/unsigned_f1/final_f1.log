@@ -1,0 +1,133 @@
+#### head_dim 64: after = 256 threads a CTA, 16 rows
+checked rows 32771: after equals before bit for bit, nothing written past Rows
+flashinfer pos_ids dtype torch.int32
+triton FAST=False PTX: sin.approx 0, cos.approx 0, ex2.approx 1, lines 555
+triton FAST=True PTX: sin.approx 1, cos.approx 1, ex2.approx 1, lines 322
+== rope_64 rows 8192  2.1 MB  all checked  calls 325  SM 2505-2505 MHz
+   after              graph      1.57 us  launch      2.10 us   1354.7 GB/s  this/after 1.000
+   triton_fast_r8w8   graph      1.81 us  launch      5.56 us   1175.7 GB/s  this/after 1.152
+   flashinfer         graph      1.91 us  launch      5.79 us   1117.4 GB/s  this/after 1.212
+   triton_fast_r4w4   graph      2.05 us  launch      6.22 us   1036.8 GB/s  this/after 1.307
+   triton_r16w8       graph      2.43 us  launch      6.20 us    877.0 GB/s  this/after 1.545
+   triton_r8w4        graph      2.47 us  launch      5.61 us    863.3 GB/s  this/after 1.569
+   before             graph      4.79 us  launch      5.23 us    445.0 GB/s  this/after 3.044
+== rope_64 rows 32768  8.5 MB  all checked  calls 279  SM 2760-2760 MHz
+   after              graph      3.70 us  launch      4.25 us   2300.6 GB/s  this/after 1.000
+   flashinfer         graph      4.13 us  launch      5.44 us   2065.2 GB/s  this/after 1.114
+   triton_fast_r8w8   graph      5.53 us  launch      6.07 us   1541.4 GB/s  this/after 1.493
+   triton_fast_r4w4   graph      5.78 us  launch      6.31 us   1472.9 GB/s  this/after 1.562
+   triton_r8w4        graph      6.60 us  launch      7.04 us   1291.8 GB/s  this/after 1.781
+   triton_r4w2        graph      6.72 us  launch      7.21 us   1267.8 GB/s  this/after 1.815
+   before             graph     16.23 us  launch     16.62 us    524.8 GB/s  this/after 4.384
+== rope_64 rows 65536  17.0 MB  all checked  calls 217  SM 2745-2760 MHz
+   after              graph      6.64 us  launch      7.20 us   2566.4 GB/s  this/after 1.000
+   flashinfer         graph      7.00 us  launch      7.64 us   2433.2 GB/s  this/after 1.055
+   triton_fast_r8w8   graph     10.47 us  launch     11.05 us   1627.3 GB/s  this/after 1.577
+   triton_fast_r4w4   graph     10.77 us  launch     11.32 us   1581.6 GB/s  this/after 1.623
+   triton_r8w4        graph     11.97 us  launch     12.47 us   1423.5 GB/s  this/after 1.803
+   triton_r4w2        graph     12.17 us  launch     12.67 us   1399.6 GB/s  this/after 1.834
+   before             graph     31.40 us  launch     31.80 us    542.6 GB/s  this/after 4.730
+== rope_64 rows 131072  34.1 MB  all checked  calls 97  SM 2760-2760 MHz
+   after              graph     12.46 us  launch     13.05 us   2735.7 GB/s  this/after 1.000
+   flashinfer         graph     12.70 us  launch     13.55 us   2683.4 GB/s  this/after 1.019
+   triton_fast_r8w8   graph     20.44 us  launch     21.06 us   1667.4 GB/s  this/after 1.641
+   triton_fast_r4w4   graph     20.71 us  launch     21.32 us   1645.3 GB/s  this/after 1.663
+   triton_r8w4        graph     22.75 us  launch     23.28 us   1498.0 GB/s  this/after 1.826
+   triton_r4w2        graph     23.19 us  launch     23.72 us   1469.3 GB/s  this/after 1.862
+   before             graph     62.05 us  launch     62.30 us    549.2 GB/s  this/after 4.981
+== rope_64 rows 393216  102.2 MB  all checked  calls 16  SM 2520-2760 MHz
+   flashinfer         graph    112.74 us  launch    115.33 us    906.8 GB/s  this/after 0.683
+   after              graph    165.18 us  launch    165.33 us    618.9 GB/s  this/after 1.000
+   triton_fast_r4w2   graph    165.25 us  launch    165.76 us    618.7 GB/s  this/after 1.000
+   triton_fast_r32w2  graph    165.70 us  launch    165.82 us    617.0 GB/s  this/after 1.003
+   triton_r8w4        graph    165.82 us  launch    166.85 us    616.5 GB/s  this/after 1.004
+   triton_r16w4       graph    166.08 us  launch    166.40 us    615.6 GB/s  this/after 1.005
+   before             graph    198.21 us  launch    199.04 us    515.8 GB/s  this/after 1.200
+#### head_dim 128: after = 256 threads a CTA, 8 rows
+checked rows 16387: after equals before bit for bit, nothing written past Rows
+triton FAST=False PTX: sin.approx 0, cos.approx 0, ex2.approx 2, lines 829
+triton FAST=True PTX: sin.approx 2, cos.approx 2, ex2.approx 2, lines 364
+== rope_128 rows 4096  2.1 MB  all checked  calls 361  SM 2775-2775 MHz
+   after              graph      1.59 us  launch      2.10 us   1331.5 GB/s  this/after 1.000
+   triton_fast_r4w8   graph      1.83 us  launch      6.23 us   1155.2 GB/s  this/after 1.153
+   flashinfer         graph      1.91 us  launch      5.88 us   1105.5 GB/s  this/after 1.204
+   triton_fast_r2w4   graph      2.08 us  launch      6.29 us   1017.9 GB/s  this/after 1.308
+   triton_r4w4        graph      2.47 us  launch      5.99 us    856.4 GB/s  this/after 1.555
+   triton_r4w8        graph      2.48 us  launch      5.87 us    853.9 GB/s  this/after 1.559
+   before             graph      2.85 us  launch      3.35 us    741.4 GB/s  this/after 1.796
+== rope_128 rows 16384  8.5 MB  all checked  calls 282  SM 2760-2760 MHz
+   after              graph      3.69 us  launch      4.24 us   2293.8 GB/s  this/after 1.000
+   flashinfer         graph      4.11 us  launch      5.38 us   2054.9 GB/s  this/after 1.116
+   triton_fast_r4w8   graph      5.47 us  launch      6.03 us   1544.9 GB/s  this/after 1.485
+   triton_fast_r2w4   graph      5.74 us  launch      6.26 us   1471.8 GB/s  this/after 1.559
+   triton_r2w2        graph      6.42 us  launch      6.87 us   1317.6 GB/s  this/after 1.741
+   triton_r4w4        graph      6.57 us  launch      7.00 us   1287.7 GB/s  this/after 1.781
+   before             graph      8.65 us  launch      9.06 us    977.0 GB/s  this/after 2.348
+== rope_128 rows 32768  16.9 MB  all checked  calls 217  SM 2700-2730 MHz
+   after              graph      6.63 us  launch      7.19 us   2550.3 GB/s  this/after 1.000
+   flashinfer         graph      6.95 us  launch      7.61 us   2432.5 GB/s  this/after 1.048
+   triton_fast_r4w8   graph     10.41 us  launch     10.98 us   1624.3 GB/s  this/after 1.570
+   triton_fast_r2w4   graph     10.68 us  launch     11.20 us   1582.6 GB/s  this/after 1.611
+   triton_r2w2        graph     11.67 us  launch     12.13 us   1448.3 GB/s  this/after 1.761
+   triton_r4w4        graph     12.00 us  launch     12.47 us   1408.6 GB/s  this/after 1.810
+   before             graph     16.26 us  launch     16.68 us   1039.8 GB/s  this/after 2.453
+== rope_128 rows 65536  33.8 MB  all checked  calls 130  SM 2655-2760 MHz
+   after              graph     12.41 us  launch     12.99 us   2725.8 GB/s  this/after 1.000
+   flashinfer         graph     12.63 us  launch     13.45 us   2676.5 GB/s  this/after 1.018
+   triton_fast_r4w8   graph     20.27 us  launch     20.87 us   1668.5 GB/s  this/after 1.634
+   triton_fast_r2w4   graph     20.62 us  launch     21.13 us   1639.8 GB/s  this/after 1.662
+   triton_r2w2        graph     22.08 us  launch     22.53 us   1531.6 GB/s  this/after 1.780
+   triton_r4w4        graph     22.87 us  launch     23.34 us   1478.9 GB/s  this/after 1.843
+   before             graph     31.47 us  launch     31.97 us   1074.6 GB/s  this/after 2.537
+== rope_128 rows 196608  101.4 MB  all checked  calls 16  SM 2760-2760 MHz
+   flashinfer         graph    118.71 us  launch    120.58 us    854.6 GB/s  this/after 0.724
+   after              graph    163.90 us  launch    164.16 us    619.0 GB/s  this/after 1.000
+   triton_fast_r2w2   graph    163.90 us  launch    164.35 us    619.0 GB/s  this/after 1.000
+   before             graph    163.97 us  launch    164.03 us    618.7 GB/s  this/after 1.000
+   triton_fast_r8w8   graph    164.16 us  launch    164.48 us    618.0 GB/s  this/after 1.002
+   triton_r4w2        graph    164.54 us  launch    165.70 us    616.6 GB/s  this/after 1.004
+   triton_r8w8        graph    164.61 us  launch    165.12 us    616.3 GB/s  this/after 1.004
+#### head_dim 256: after = 256 threads a CTA, 8 rows
+checked rows 8195: after equals before bit for bit, nothing written past Rows
+triton FAST=False PTX: sin.approx 0, cos.approx 0, ex2.approx 4, lines 1365
+triton FAST=True PTX: sin.approx 4, cos.approx 4, ex2.approx 4, lines 436
+== rope_256 rows 2048  2.1 MB  all checked  calls 372  SM 2775-2775 MHz
+   after              graph      1.43 us  launch      1.96 us   1476.5 GB/s  this/after 1.000
+   triton_fast_r2w8   graph      1.83 us  launch      5.96 us   1148.4 GB/s  this/after 1.286
+   flashinfer         graph      1.92 us  launch      5.99 us   1094.2 GB/s  this/after 1.349
+   before             graph      1.94 us  launch      2.40 us   1088.0 GB/s  this/after 1.357
+   triton_fast_r1w4   graph      2.05 us  launch      6.02 us   1025.4 GB/s  this/after 1.440
+   triton_r2w4        graph      2.37 us  launch      4.88 us    889.3 GB/s  this/after 1.660
+   triton_r2w8        graph      2.47 us  launch      4.91 us    852.7 GB/s  this/after 1.732
+== rope_256 rows 8192  8.4 MB  all checked  calls 328  SM 2625-2775 MHz
+   after              graph      3.76 us  launch      4.32 us   2242.3 GB/s  this/after 1.000
+   flashinfer         graph      4.12 us  launch      4.72 us   2043.5 GB/s  this/after 1.097
+   before             graph      4.90 us  launch      5.34 us   1717.6 GB/s  this/after 1.306
+   triton_fast_r2w8   graph      5.35 us  launch      5.89 us   1574.7 GB/s  this/after 1.424
+   triton_fast_r1w4   graph      5.67 us  launch      6.20 us   1485.4 GB/s  this/after 1.510
+   triton_r2w4        graph      6.36 us  launch      6.88 us   1323.2 GB/s  this/after 1.695
+   triton_r1w2        graph      6.40 us  launch      6.90 us   1315.8 GB/s  this/after 1.704
+== rope_256 rows 16384  16.8 MB  all checked  calls 217  SM 2745-2775 MHz
+   after              graph      6.64 us  launch      7.21 us   2535.4 GB/s  this/after 1.000
+   flashinfer         graph      6.97 us  launch      7.60 us   2417.1 GB/s  this/after 1.049
+   before             graph      8.75 us  launch      9.16 us   1924.1 GB/s  this/after 1.318
+   triton_fast_r2w8   graph     10.36 us  launch     10.93 us   1625.4 GB/s  this/after 1.560
+   triton_fast_r1w4   graph     10.58 us  launch     11.15 us   1591.3 GB/s  this/after 1.593
+   triton_r2w4        graph     11.36 us  launch     11.89 us   1482.8 GB/s  this/after 1.710
+   triton_r1w2        graph     11.70 us  launch     12.25 us   1439.8 GB/s  this/after 1.761
+== rope_256 rows 32768  33.7 MB  all checked  calls 139  SM 2640-2745 MHz
+   after              graph     12.40 us  launch     12.99 us   2716.9 GB/s  this/after 1.000
+   flashinfer         graph     12.63 us  launch     13.47 us   2666.2 GB/s  this/after 1.019
+   before             graph     16.51 us  launch     16.99 us   2040.4 GB/s  this/after 1.332
+   triton_fast_r2w8   graph     20.19 us  launch     20.78 us   1668.4 GB/s  this/after 1.628
+   triton_fast_r1w4   graph     20.30 us  launch     20.83 us   1659.7 GB/s  this/after 1.637
+   triton_r2w4        graph     21.70 us  launch     22.22 us   1552.7 GB/s  this/after 1.750
+   triton_r1w2        graph     22.26 us  launch     22.80 us   1513.6 GB/s  this/after 1.795
+== rope_256 rows 98304  101.1 MB  all checked  calls 16  SM 2760-2775 MHz
+   flashinfer         graph    117.06 us  launch    119.23 us    863.3 GB/s  this/after 0.709
+   before             graph    164.74 us  launch    165.23 us    613.4 GB/s  this/after 0.997
+   after              graph    165.18 us  launch    165.70 us    611.8 GB/s  this/after 1.000
+   triton_fast_r2w4   graph    165.25 us  launch    165.63 us    611.5 GB/s  this/after 1.000
+   triton_r8w8        graph    165.43 us  launch    166.54 us    610.9 GB/s  this/after 1.002
+   triton_fast_r8w1   graph    165.50 us  launch    166.34 us    610.6 GB/s  this/after 1.002
+   triton_r4w4        graph    165.55 us  launch    166.78 us    610.4 GB/s  this/after 1.002

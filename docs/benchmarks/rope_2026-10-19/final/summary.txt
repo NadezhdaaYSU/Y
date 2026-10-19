@@ -1,0 +1,4 @@
+final f1 exit 1
+final f1 exit 0
+final f1 exit 0
+final f2 exit 0

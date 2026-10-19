@@ -40,6 +40,15 @@ def build():
         sys.exit(1)
 
 
+def rope_launch(ptx_path):
+    """(threads, rows a CTA) that `rope_<hd>`'s PTX header states: the grid is
+    ceil(rows / rows a CTA) CTAs, and the row count is the fourth argument."""
+    import re
+    m = re.search(r"\[Y FUSED ROPE\].*?\| (\d+) threads a CTA: (\d+) rows", open(ptx_path).read())
+    if m is None:
+        raise RuntimeError("%s has no [Y FUSED ROPE] header" % ptx_path)
+    return int(m.group(1)), int(m.group(2))
+
 def compile_once(ysu_name):
     res = subprocess.run([Y_BIN, f"tests/{ysu_name}.ysu", "--emit-ptx"], capture_output=True, text=True, cwd=REPO_ROOT)
     if res.returncode != 0:
@@ -50,6 +59,7 @@ def run_once(rows, head_dim):
     import torch
     import cupy as cp
     import flashinfer
+    import numpy as np
 
     device = torch.device("cuda:0")
     torch.manual_seed(0)
@@ -57,21 +67,28 @@ def run_once(rows, head_dim):
     Positions = torch.randint(0, 4096, (rows,), dtype=torch.int32, device=device)
     Out = torch.zeros(rows, head_dim, dtype=torch.float16, device=device)
 
-    X_cp, Pos_cp, Out_cp = cp.asarray(X), cp.asarray(Positions), cp.asarray(Out)
+    # FlashInfer rotates q and k (X as both), so Y rotates X twice over:
+    # the same rows, the same positions, as one tensor of 2 x rows. Until
+    # 2026-10-19 Y rotated X alone against FlashInfer's two, half the work.
+    XY, PosY = torch.cat([X, X]), torch.cat([Positions, Positions])
+    OutY = torch.zeros_like(XY)
+    X_cp, Pos_cp, Out_cp = cp.asarray(XY), cp.asarray(PosY), cp.asarray(OutY)
 
     kernel_name = f"rope_{head_dim}"
     mod = cp.RawModule(path=os.path.join(REPO_ROOT, f"tests/{kernel_name}.ptx"))
     fn = mod.get_function(kernel_name)
 
-    grid, threads = (rows, 1), (32, 1, 1)
+    n_threads, per_cta = rope_launch(os.path.join(REPO_ROOT, f"tests/{kernel_name}.ptx"))
+    grid, threads = (-(-(2 * rows) // per_cta), 1), (n_threads, 1, 1)
+    args = (X_cp, Pos_cp, Out_cp, np.int32(2 * rows))
 
     for _ in range(10):
-        fn(grid, threads, (X_cp, Pos_cp, Out_cp))
+        fn(grid, threads, args)
     cp.cuda.Device(0).synchronize()
     y_start, y_end = cp.cuda.Event(), cp.cuda.Event()
     y_start.record()
     for _ in range(ITERS):
-        fn(grid, threads, (X_cp, Pos_cp, Out_cp))
+        fn(grid, threads, args)
     y_end.record()
     y_end.synchronize()
     y_us = (cp.cuda.get_elapsed_time(y_start, y_end) / ITERS) * 1000.0
@@ -87,8 +104,8 @@ def run_once(rows, head_dim):
     out0 = x0 * cos_t - x1 * sin_t
     out1 = x0 * sin_t + x1 * cos_t
     out_ref = torch.stack([out0, out1], dim=-1).reshape(rows, head_dim).to(torch.float16)
-    correct = bool(torch.allclose(Out, out_ref, rtol=0.02, atol=0.02))
-    max_abs_diff = (Out.float() - out_ref.float()).abs().max().item()
+    correct = all(bool(torch.allclose(h, out_ref, rtol=0.02, atol=0.02)) for h in (OutY[:rows], OutY[rows:]))
+    max_abs_diff = (OutY.float() - torch.cat([out_ref, out_ref]).float()).abs().max().item()
 
     # ---- FlashInfer: real production fused kernel ----
     fi_q, fi_k = X.clone(), X.clone()

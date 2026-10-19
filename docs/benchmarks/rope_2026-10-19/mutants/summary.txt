@@ -1,0 +1,11 @@
+CONTROL: exit 0; OK; failing: 
+M1_no_block_guard: exit 1; FAILED (failures=1); failing:  1 test_wrong_launches_trap;
+M2_no_negative_guard: exit 1; FAILED (failures=1); failing:  1 test_wrong_launches_trap;
+M3_no_short_grid_guard: exit 1; FAILED (failures=1); failing:  1 test_wrong_launches_trap;
+M4_stores_unpredicated: exit 1; FAILED (failures=25); failing:  1 test_a_larger_grid_is_allowed_and_writes_nothing_more; 21 test_every_row_is_rotated_once_and_nothing_past_the_last; 3 test_wrong_launches_trap;
+M5_rows_per_cta_halved: exit 1; FAILED (failures=13); failing:  1 test_a_larger_grid_is_allowed_and_writes_nothing_more; 9 test_every_row_is_rotated_once_and_nothing_past_the_last; 3 test_wrong_launches_trap;
+M6_one_warp_a_row: exit 1; FAILED (failures=2); failing:  1 test_a_lane_loads_its_pairs_first_in_vectors; 1 test_every_row_is_rotated_once_and_nothing_past_the_last;
+M7_no_head_dim_refusal: exit 1; FAILED (failures=3); failing:  3 test_the_old_signature_and_other_widths_are_refused;
+M8_old_form_unmatched: exit 1; FAILED (failures=1); failing:  1 test_the_old_signature_and_other_widths_are_refused;
+M9_pair_offset_halved: exit 1; FAILED (failures=4, errors=7); failing:  1 test_a_larger_grid_is_allowed_and_writes_nothing_more; 7 test_every_row_is_rotated_once_and_nothing_past_the_last; 3 test_wrong_launches_trap;
+RESTORED, build exit 0

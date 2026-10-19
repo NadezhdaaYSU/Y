@@ -1,0 +1,6 @@
+f1: QUIET 18:43:51 mean 0.8%
+f0 (above): flashinfer JIT build failed (path with a space); rerun with the shim
+f1: QUIET 18:44:47 mean 2.6%
+f1 above measured the kernel before Rows became signed (setp.lt.u64); moved to unsigned_f1/. FlashInfer column there is in place.
+f1: QUIET 18:48:37 mean 2.0%
+f2: QUIET 19:09:07 mean 2.6%

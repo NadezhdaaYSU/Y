@@ -1,0 +1,65 @@
+#### head_dim 64: after = 256 threads a CTA, 16 rows
+checked rows 32771: after equals before bit for bit, nothing written past Rows
+flashinfer pos_ids torch.int32: RuntimeError: Ninja build failed. Ninja output:
+ninja: Entering directory `/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope'
+ninja: error: '/home/yumin/NVME', needed by '/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope/csrc_rope.cuda.o', missing and no known rule to make it
+
+flashinfer pos_ids torch.int64: RuntimeError: Ninja build failed. Ninja output:
+ninja: Entering directory `/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope'
+ninja: error: '/home/yumin/NVME', needed by '/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope/csrc_rope.cuda.o', missing and no known rule to make it
+
+flashinfer pos_ids dtype torch.int64
+Traceback (most recent call last):
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/jit/cpp_ext.py", line 370, in run_ninja
+    subprocess.run(
+    ~~~~~~~~~~~~~~^
+        command,
+        ^^^^^^^^
+    ...<4 lines>...
+        text=True,
+        ^^^^^^^^^^
+    )
+    ^
+  File "/usr/lib/python3.14/subprocess.py", line 578, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command '['ninja', '-v', '-C', '/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope', '-f', '/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope/build.ninja']' returned non-zero exit status 1.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/rope/final/probe_final.py", line 142, in <module>
+    fi_call(ofi, half, hd)
+    ~~~~~~~^^^^^^^^^^^^^^^
+  File "/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/rope/final/probe_final.py", line 83, in fi_call
+    flashinfer.apply_rope_pos_ids_inplace(xfi[:n].view(n, 1, hd), xfi[n:].view(n, 1, hd), half.to(pos_dtype),
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                          interleave=True, rope_theta=10000.0)
+                                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/api_logging.py", line 2333, in _auto_dump_wrapper
+    return _inner(*args, **kwargs)
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/rope.py", line 574, in apply_rope_pos_ids_inplace
+    _apply_rope_pos_ids(
+    ~~~~~~~~~~~~~~~~~~~^
+        q, k, q, k, pos_ids, rotary_dim, interleave, rope_scale, rope_theta
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/rope.py", line 154, in _apply_rope_pos_ids
+    get_rope_module().apply_rope_pos_ids(
+    ~~~~~~~~~~~~~~~^^
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/rope.py", line 44, in get_rope_module
+    return gen_rope_module().build_and_load()
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/jit/core.py", line 320, in build_and_load
+    self.build()
+    ~~~~~~~~~~^^
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/jit/core.py", line 427, in build
+    run_ninja(self.build_dir, self.ninja_path, verbose)
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/flashinfer/jit/cpp_ext.py", line 382, in run_ninja
+    raise RuntimeError(msg) from e
+RuntimeError: Ninja build failed. Ninja output:
+ninja: Entering directory `/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope'
+ninja: error: '/home/yumin/NVME', needed by '/home/yumin/.cache/flashinfer/0.6.16/89/cached_ops/rope/csrc_rope.cuda.o', missing and no known rule to make it
+

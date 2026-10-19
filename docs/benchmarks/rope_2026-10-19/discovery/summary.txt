@@ -1,0 +1,3 @@
+rope d1 exit 0
+rope d64 exit 0
+rope d256 exit 0

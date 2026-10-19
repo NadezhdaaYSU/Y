@@ -601,13 +601,15 @@ fn stating_the_fusion_is_free_and_forbidding_it_is_not() {
 ///
 /// The rope counts are TWO per rotated pair - `out0 = x0*cos - x1*sin` and
 /// `out1 = x0*sin + x1*cos` - where they used to be one, because the subtract
-/// half now states its fusion as well.
+/// half now states its fusion as well. A lane rotates two pairs at head_dim 64
+/// and 128 and four at 256 (`emit_rope_kernel`); head_dim 64 rotated one until
+/// a row came to span 16 lanes instead of 32.
 #[test]
 fn the_hand_written_kernels_state_their_fusions() {
     let want: &[(&str, usize)] = &[
         ("rmsnorm_residual_4096", 9),
         ("int8_gemm_scaled", 4),
-        ("rope_64", 2),
+        ("rope_64", 4),
         ("rope_128", 4),
         ("rope_256", 8),
     ];
@@ -712,8 +714,8 @@ fn the_rope_rotation_states_its_subtract_on_the_addend() {
             checked += 1;
         }
     }
-    assert_eq!(checked, 7, "expected 1 + 2 + 4 rotated pairs across the three \
-         rope kernels; the fixture list or the schedule moved");
+    assert_eq!(checked, 8, "expected 2 + 2 + 4 rotated pairs a lane across the \
+         three rope kernels; the fixture list or the schedule moved");
 }
 
 /// Forbidding the fusion is a NO-OP for every kernel that states all of it.

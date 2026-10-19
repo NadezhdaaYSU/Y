@@ -1,0 +1,3 @@
+d1: QUIET 18:31:29 mean 0.0%
+d64: QUIET 18:33:47 mean 0.0%
+d256: QUIET 18:34:20 mean 0.0%

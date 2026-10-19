@@ -3597,8 +3597,29 @@ or `shared_alloc_u32` for a shared-memory array.",
                 return;
             }
             Some(self.emit_rmsnorm_residual_kernel(hidden_dim, &x_ptr, &res_ptr, &w_ptr, &out_ptr, &newres_ptr))
-        } else if let Some((head_dim, x_ptr, pos_ptr, out_ptr)) = self.rope_operands(kernel) {
-            Some(self.emit_rope_kernel(head_dim, &x_ptr, &pos_ptr, &out_ptr))
+        } else if let Some((head_dim, x_ptr, pos_ptr, out_ptr, rows)) = self.rope_operands(kernel) {
+            if head_dim % 64 != 0 {
+                // A row's lanes take whole pairs. Until this refusal the 32
+                // lanes took head_dim / 64 pairs each, rounded down: rope_96
+                // left a third of every row unwritten, rope_32 all of it.
+                self.emit_errors.push(format!(
+                    "[PTX] kernel `{}`: head_dim {} is not a multiple of 64, which \
+                     `rope_<head_dim>` splits over its lanes in whole pairs",
+                    kernel.name, head_dim
+                ));
+                return;
+            }
+            let Some(rows) = rows else {
+                self.emit_errors.push(format!(
+                    "[PTX] kernel `{}`: `rope_<head_dim>` takes a fourth parameter, `Rows: I32`, \
+                     the number of rows: a CTA covers {} of them, and the last CTA needs the \
+                     count to stop",
+                    kernel.name,
+                    Self::ROPE_THREADS / Self::rope_lanes(head_dim)
+                ));
+                return;
+            };
+            Some(self.emit_rope_kernel(head_dim, &x_ptr, &pos_ptr, &out_ptr, &rows))
         } else if let Some((head_dim, nqh, nkvh, page_size, splits, warps, q, kc, vc, pt, sl, out, part, meta, max_pages)) =
             self.paged_decode_attention_split_operands(kernel)
         {
@@ -14096,10 +14117,16 @@ declare it as a Q format.\n{}",
         self.emit_rmsnorm_group_store(base, off, &out_words, pred);
     }
 
-    /// Detects the 3-parameter (X: `GlobalMemory<F16>`, Positions:
-    /// `GlobalMemory<I32>`, Out: `GlobalMemory<F16>`) kernel shape, named
-    /// `rope_<head_dim>`, that dispatches `emit_rope_kernel`.
-    fn rope_operands(&self, kernel: &KernelDecl) -> Option<(u32, String, String, String)> {
+    /// Detects `rope_<head_dim>(X: GlobalMemory<F16>, Positions:
+    /// GlobalMemory<I32>, Out: GlobalMemory<F16>, Rows: I32)`, which
+    /// dispatches `emit_rope_kernel`. The last field is `Rows`'s register.
+    ///
+    /// The three-parameter form, without `Rows`, is matched too (`None` in
+    /// the last field) so that the dispatch can refuse it: it was this
+    /// kernel's signature until 2026-10-19, when a CTA came to cover several
+    /// rows and the last CTA needed the count to stop. Unmatched, it would
+    /// compile as an ordinary kernel with an empty body.
+    fn rope_operands(&self, kernel: &KernelDecl) -> Option<(u32, String, String, String, Option<String>)> {
         if kernel.tile.is_some() {
             return None;
         }
@@ -14113,30 +14140,43 @@ declare it as a Q format.\n{}",
                         && matches!(args.as_slice(), [GenericArg::Type(Type::Primitive(p, _))] if p == elem)
             )
         }
-        if kernel.params.len() != 3
+        if !(kernel.params.len() == 3 || kernel.params.len() == 4)
             || !is_global_memory_of(&kernel.params[0].ty, "F16")
             || !is_global_memory_of(&kernel.params[1].ty, "I32")
             || !is_global_memory_of(&kernel.params[2].ty, "F16")
         {
             return None;
         }
+        let rows = match kernel.params.get(3) {
+            Some(p) if matches!(&p.ty, Type::Primitive(t, _) if t == "I32") => Some(self.variables.get(&p.name)?.clone()),
+            Some(_) => return None,
+            None => None,
+        };
 
         let x = self.variables.get(&kernel.params[0].name)?.clone();
         let positions = self.variables.get(&kernel.params[1].name)?.clone();
         let out = self.variables.get(&kernel.params[2].name)?.clone();
-        Some((head_dim, x, positions, out))
+        Some((head_dim, x, positions, out, rows))
+    }
+
+    /// Threads in a `rope_<head_dim>` CTA, at every head dim.
+    const ROPE_THREADS: u32 = 256;
+
+    /// Lanes a `rope_<head_dim>` row is split over: two pairs (8 bytes) a
+    /// lane up to head_dim 128, a warp from there up.
+    fn rope_lanes(head_dim: u32) -> u32 {
+        (head_dim / 4).min(32)
     }
 
     /// Emits a complete, self-contained Rotary Position Embedding (RoPE)
-    /// kernel: one warp (32 threads) per row, where a row is one token's
-    /// query or key vector of `head_dim` elements. Computes, for each pair
-    /// index `i` in `0..head_dim/2` (the **interleaved-pairs** convention -
-    /// pairs are `(2i, 2i+1)`, the original RoPE paper/GPT-NeoX layout, NOT
-    /// the "rotate-half"/split-in-two layout HuggingFace's Llama
-    /// implementation uses - a deliberate, disclosed choice of one
-    /// well-defined convention, matched exactly by this kernel's own
-    /// correctness reference rather than assumed compatible with a
-    /// specific model family):
+    /// kernel over `Rows` rows, where a row is one token's query or key
+    /// vector of `head_dim` elements. Computes, for each pair index `i` in
+    /// `0..head_dim/2` (the **interleaved-pairs** convention - pairs are
+    /// `(2i, 2i+1)`, the original RoPE paper/GPT-NeoX layout, NOT the
+    /// "rotate-half"/split-in-two layout HuggingFace's Llama implementation
+    /// uses - a deliberate, disclosed choice of one well-defined convention,
+    /// matched exactly by this kernel's own correctness reference rather
+    /// than assumed compatible with a specific model family):
     /// `theta_i = pos * base^(-2i/head_dim)`, `base = 10000.0`, then
     /// `out[2i]   = x[2i]*cos(theta_i) - x[2i+1]*sin(theta_i)`,
     /// `out[2i+1] = x[2i]*sin(theta_i) + x[2i+1]*cos(theta_i)`.
@@ -14154,50 +14194,41 @@ declare it as a Q format.\n{}",
     /// ~6e-6 over 2000 random angles in [-50, 50] radians) - see
     /// `benchmark_y_rmsnorm_rope_results.md`.
     ///
-    /// `head_dim` must be a multiple of 64 (`debug_assert`ed: needs
-    /// `head_dim/2` pairs to split evenly across 32 lanes, i.e. `head_dim`
-    /// a multiple of 64 - true for every common LLM head dim: 64, 128,
-    /// 256); each thread handles `head_dim / 64` pairs.
+    /// **The launch.** A CTA is `ROPE_THREADS` threads covering
+    /// `ROPE_THREADS / rope_lanes(head_dim)` rows (8, or 16 at head_dim 64),
+    /// so the grid is at least `ceil(Rows / rows_per_cta)` CTAs; rows past
+    /// `Rows` are predicated off. A block of another size, a grid too small
+    /// to cover `Rows`, or a negative `Rows` traps. Until 2026-10-19 a CTA
+    /// was one 32-thread row: at most 24 CTAs fit an SM, so it ran at half
+    /// occupancy and was bound by how fast CTAs launch: inside the L2 it took
+    /// 1.30-1.35x (head_dim 256) to 3.0-5.1x (64) the time of this mapping
+    /// (`docs/benchmarks/rope_2026-10-19/`).
     ///
-    /// **Blocked, not strided, pair-to-thread mapping, so pairs can be
-    /// vector-loaded**: lane `L` owns the contiguous run of pairs
-    /// `[L*pairs_per_thread, (L+1)*pairs_per_thread)`, not the old
-    /// `{L, L+32, L+64, ...}` stride. Every pair is still computed by
-    /// exactly one thread (any bijective lane/pair assignment is correct -
-    /// RoPE has no cross-lane dependency, unlike RMSNorm's reduction), and
-    /// warp-wide coalescing is preserved: for a fixed chunk index, lane
-    /// `L`'s bytes start exactly where lane `L-1`'s end, so the union
-    /// across the warp is still one contiguous span - the same shape as a
-    /// `float4`-style blocked-vectorized CUDA access, and the same
-    /// principle `emit_gemm_tile_load` already uses. The old strided
-    /// mapping could not be vector-loaded at all: consecutive `t` values
-    /// for one thread were `head_dim` bytes apart, not adjacent.
+    /// **Blocked pairs, vector loads.** Lane `L` of a row owns the
+    /// contiguous run of pairs `[L*ppt, (L+1)*ppt)`, `ppt = head_dim / 2 /
+    /// lanes`: at least 8 bytes, one 64-bit load at head_dim 64 and 128 and
+    /// one 128-bit load at 256. At head_dim 64 that measured 1.16-1.19x
+    /// faster at 8-34 MB than one pair (4 bytes) on each of a warp's lanes.
+    /// For a fixed chunk, lane `L`'s bytes start where lane `L-1`'s end, so
+    /// a row's lanes read one contiguous span. Chunk width (in pairs; 1 pair
+    /// = 1 packed 32-bit word) is the largest of {4, 2, 1} dividing `ppt`.
+    /// Every load is issued before any arithmetic; the per-pair body is
+    /// unrolled at compile time, so there is no loop-carried register.
     ///
-    /// Chunk width (in pairs; 1 pair = 1 packed 32-bit word) is the
-    /// largest of {4, 2, 1} dividing `pairs_per_thread` evenly - 128-bit
-    /// `ld/st.global.v4.u32` at head_dim=256 (4 pairs/thread), 64-bit `v2`
-    /// at head_dim=128 (2 pairs/thread), a single 32-bit word at
-    /// head_dim=64 (1 pair/thread, still a real win over the old scheme's
-    /// two separate 16-bit loads for that one pair). See
-    /// `emit_vec_load_u32`/`emit_unpack_f16_pairs`/`emit_pack_f16_pairs`/
-    /// `emit_vec_store_u32` for the shared, standalone-hardware-validated
-    /// pack/unpack primitives (also used by `emit_rmsnorm_residual_kernel`).
-    /// The per-chunk, per-pair body is still fully unrolled at Rust/compile
-    /// time (a small, fixed count for realistic head dims - never a real
-    /// PTX runtime loop), so - unlike RMSNorm's accumulator - there is no
-    /// loop-carried register to get wrong here; still re-verified with the
-    /// same real-hardware correctness + repeated-launch determinism checks
-    /// regardless, per this codebase's standing validation discipline.
+    /// `head_dim` must be a multiple of 64, which the dispatch enforces.
     fn emit_rope_kernel(
         &mut self,
         head_dim: u32,
         x_ptr: &str,
         positions_ptr: &str,
         out_ptr: &str,
+        rows_reg: &str,
     ) -> u32 {
-        const WARP: u32 = 32;
-        debug_assert_eq!(head_dim % (WARP * 2), 0, "head_dim must be a multiple of 64 (32 lanes x 2 elements/pair)");
-        let pairs_per_thread = head_dim / (WARP * 2);
+        let threads = Self::ROPE_THREADS;
+        let lanes = Self::rope_lanes(head_dim);
+        let rows_per_cta = threads / lanes;
+        let pairs_per_thread = head_dim / 2 / lanes;
+        debug_assert!(head_dim % 64 == 0 && lanes.is_power_of_two() && pairs_per_thread >= 2);
         let chunk_pairs: u32 = if pairs_per_thread % 4 == 0 {
             4
         } else if pairs_per_thread % 2 == 0 {
@@ -14212,7 +14243,12 @@ declare it as a Q format.\n{}",
         let exponent_scale = (-2.0 / head_dim as f32) * 10000.0f32.log2();
 
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
-        writeln!(&mut self.ptx_buffer, "    // [Y FUSED ROPE] head_dim={} | 1 warp (32 threads) per row | interleaved pairs, base=10000 | {}-pair vectorized blocks", head_dim, chunk_pairs).unwrap();
+        writeln!(
+            &mut self.ptx_buffer,
+            "    // [Y FUSED ROPE] head_dim={} | {} threads a CTA: {} rows of {} lanes (grid >= ceil(Rows / {})) | interleaved pairs, base=10000 | {}-pair vectorized blocks",
+            head_dim, threads, rows_per_cta, lanes, rows_per_cta, chunk_pairs
+        )
+        .unwrap();
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
 
         let x_g = self.alloc_reg64();
@@ -14222,12 +14258,51 @@ declare it as a Q format.\n{}",
         let out_g = self.alloc_reg64();
         writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", out_g, out_ptr).unwrap();
 
-        let row = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", row).unwrap();
+        // The rows a thread owns are fixed at compile time for this block
+        // size, and the grid must reach the last row: a launch that breaks
+        // either would leave rows unwritten, and traps instead.
+        let ntid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ntid.x;", ntid).unwrap();
+        let wrong_block = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ne.u32 {}, {}, {};", wrong_block, ntid, threads).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} trap;", wrong_block).unwrap();
+        // `Rows` is sign-extended and every comparison with it signed, so a
+        // negative count is caught by its own check alone; read unsigned it
+        // would be 2^31 or more, which a large enough grid covers.
+        let rows64 = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvt.s64.s32 {}, {};", rows64, rows_reg).unwrap();
+        let negative = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {}, {}, 0;", negative, rows64).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} trap;", negative).unwrap();
+        let nctaid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %nctaid.x;", nctaid).unwrap();
+        let covered = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, {};", covered, nctaid, rows_per_cta).unwrap();
+        let short_grid = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {}, {}, {};", short_grid, covered, rows64).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} trap;", short_grid).unwrap();
+
+        // row = ctaid.x * rows_per_cta + tid / lanes, in 64 bits: a grid
+        // larger than it needs to be is allowed, and its row index must not
+        // wrap onto a real row.
+        let cta = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", cta).unwrap();
+        let tid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
         let lane = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", lane).unwrap();
-        let row_offset = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", row_offset, row, head_dim).unwrap();
+        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, {};", lane, tid, lanes - 1).unwrap();
+        let slot = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, {};", slot, tid, lanes.trailing_zeros()).unwrap();
+        let slot64 = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", slot64, slot).unwrap();
+        let row64 = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mad.wide.u32 {}, {}, {}, {};", row64, cta, rows_per_cta, slot64).unwrap();
+        let valid = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {}, {}, {};", valid, row64, rows64).unwrap();
+        // Below `Rows`, so below 2^31: exact wherever `valid` holds, and
+        // only used there.
+        let row = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    cvt.u32.u64 {}, {};", row, row64).unwrap();
 
         // pos = Positions[row] (I32, one scalar per row)
         let pos_byte = self.alloc_reg64();
@@ -14235,28 +14310,42 @@ declare it as a Q format.\n{}",
         let pos_addr = self.alloc_reg64();
         writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", pos_addr, pos_g, pos_byte).unwrap();
         let pos_i = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    ld.global.u32 {}, [{}];", pos_i, pos_addr).unwrap();
-        let pos_f = self.alloc_regf32();
-        writeln!(&mut self.ptx_buffer, "    cvt.rn.f32.s32 {}, {};", pos_f, pos_i).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", pos_i).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} ld.global.u32 {}, [{}];", valid, pos_i, pos_addr).unwrap();
 
+        let row_byte = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, {};", row_byte, row, head_dim * 2).unwrap();
+        let lane_pair = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", lane_pair, lane, pairs_per_thread).unwrap();
+
+        // Every chunk's load first, zero-filled where the row is past `Rows`.
+        let mut chunks = Vec::with_capacity(num_chunks as usize);
         for c in 0..num_chunks {
             // pair_i_start = lane*pairs_per_thread + c*chunk_pairs (this
             // chunk's first pair index, owned entirely by this lane).
-            let pair_i_partial = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", pair_i_partial, lane, pairs_per_thread).unwrap();
             let pair_i_start = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", pair_i_start, pair_i_partial, c * chunk_pairs).unwrap();
-
-            let elem_group_base = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 2;", elem_group_base, pair_i_start).unwrap();
-            let elem_global_base = self.alloc_reg32();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", elem_global_base, row_offset, elem_group_base).unwrap();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", pair_i_start, lane_pair, c * chunk_pairs).unwrap();
+            let pair_byte = self.alloc_reg64();
+            writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 4;", pair_byte, pair_i_start).unwrap();
             let byte_base = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 2;", byte_base, elem_global_base).unwrap();
-
+            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", byte_base, row_byte, pair_byte).unwrap();
             let x_addr = self.alloc_reg64();
             writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", x_addr, x_g, byte_base).unwrap();
-            let x_words = self.emit_vec_load_u32(&x_addr, chunk_pairs as usize);
+            let x_words: Vec<String> = (0..chunk_pairs).map(|_| self.alloc_reg32()).collect();
+            for w in &x_words {
+                writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", w).unwrap();
+            }
+            match chunk_pairs {
+                1 => writeln!(&mut self.ptx_buffer, "    @{} ld.global.u32 {}, [{}];", valid, x_words[0], x_addr).unwrap(),
+                n => writeln!(&mut self.ptx_buffer, "    @{} ld.global.v{}.u32 {{{}}}, [{}];", valid, n, x_words.join(","), x_addr).unwrap(),
+            }
+            chunks.push((pair_i_start, byte_base, x_words));
+        }
+
+        let pos_f = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    cvt.rn.f32.s32 {}, {};", pos_f, pos_i).unwrap();
+
+        for (pair_i_start, byte_base, x_words) in chunks {
             let x_vals = self.emit_unpack_f16_pairs(&x_words);
 
             let mut out_vals = Vec::with_capacity(2 * chunk_pairs as usize);
@@ -14320,11 +14409,14 @@ declare it as a Q format.\n{}",
             let out_words = self.emit_pack_f16_pairs(&out_vals);
             let out_addr = self.alloc_reg64();
             writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", out_addr, out_g, byte_base).unwrap();
-            self.emit_vec_store_u32(&out_addr, &out_words);
+            match out_words.len() {
+                1 => writeln!(&mut self.ptx_buffer, "    @{} st.global.u32 [{}], {};", valid, out_addr, out_words[0]).unwrap(),
+                n => writeln!(&mut self.ptx_buffer, "    @{} st.global.v{}.u32 [{}], {{{}}};", valid, n, out_addr, out_words.join(",")).unwrap(),
+            }
         }
 
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
-        WARP
+        threads
     }
 
     /// Default warps per CTA for `emit_paged_decode_attention_kernel`, used
