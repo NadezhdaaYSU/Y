@@ -1,0 +1,7 @@
+1: QUIET 20:02:22 mean 4.2%
+2: NEVER QUIET
+2 (retry after the user closed their processes):
+2 (retry): stopped before it started; the final kernels gained the nounroll pragma, so runs 3 and 4 time three columns
+2: 
+3: CONTENDED 23:07:21 mean 52.2% games: AppId=250900 isaac-ng.exe 
+4: CONTENDED 23:07:39 mean 27.2% games: AppId=250900 isaac-ng.exe 

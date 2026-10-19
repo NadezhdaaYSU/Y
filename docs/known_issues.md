@@ -150,6 +150,17 @@ source; each entry there now carries its status. What is still open:
 - Exact GEMM: no hybrid M-then-K split for short-M, short-K shapes (archive
   1515); about 30% of its ISA ceiling against OpenBLAS's ~63%, and nothing stops
   a caller asking for 32 threads on a 16-core part (archive 1566).
+- A `/` or `%` by a literal in a kernel's own source (`a / 8` on `U32`)
+  still reaches `ptxas` as a division by a register holding the literal
+  (`mov.u32 %r13, 8; div.u32 %r15, %r10, %r13`). The pass that rewrites the
+  emitter's own divisions by constants (2026-10-19) sees immediates only,
+  so `ptxas` still divides these at run time with a reciprocal sequence.
+  Performance, not correctness (`docs/benchmarks/const_div_2026-10-19/`).
+- `ptxas` puts three dead `@!PT LDS RZ, [RZ]` before a `cp.async` that
+  follows a `bar.sync`, and after nothing else probed. The F16 GEMM's K loop
+  issues the next tile's copies after its barrier every K-tile: at 512^3 that
+  is 48 dead loads a warp, 7.9% of the 311K instructions it executes
+  (`docs/benchmarks/const_div_2026-10-19/probes/`).
 - The validator and proof-scope items in archive entries 587-2049 are research
   queue, not wrong answers: 923 of the 925 emitted `mma.sync` are floating point
   and carry no proof; the f16 GEMMs carry no exactness argument; validation is

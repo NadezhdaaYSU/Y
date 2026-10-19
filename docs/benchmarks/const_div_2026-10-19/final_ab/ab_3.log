@@ -1,0 +1,56 @@
+           256 Y {'base': '32x64 2x2', 'final': '32x64 2x2', 'unrolled': '32x64 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2490-2490 MHz
+      final     min       2.8 median       2.8 us  0.361x Triton
+      unrolled  min       2.9 median       2.9 us  0.371x Triton
+      base      min       2.9 median       2.9 us  0.374x Triton
+      cuBLAS    min       3.9 median       4.0 us  0.506x Triton
+      Triton    min       7.8 median       9.7 us  1.000x Triton
+           512 Y {'base': '64x64 4x2', 'final': '64x64 4x2', 'unrolled': '64x64 4x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2490-2760 MHz
+      cuBLAS    min       5.9 median       6.0 us  0.752x Triton
+      final     min       6.7 median       6.7 us  0.858x Triton
+      unrolled  min       6.8 median       6.8 us  0.870x Triton
+      base      min       6.8 median       6.9 us  0.878x Triton
+      Triton    min       7.8 median       9.8 us  1.000x Triton
+          1024 Y {'base': '64x128 2x2', 'final': '64x128 2x2', 'unrolled': '64x128 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 64, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2760 MHz
+      cuBLAS    min      28.8 median      30.6 us  0.934x Triton
+      unrolled  min      29.1 median      29.3 us  0.945x Triton
+      final     min      29.1 median      30.7 us  0.946x Triton
+      base      min      29.3 median      30.9 us  0.953x Triton
+      Triton    min      30.8 median      33.0 us  1.000x Triton
+          2048 Y {'base': '128x128 2x2', 'final': '128x128 2x2', 'unrolled': '128x128 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2760-2760 MHz
+      cuBLAS    min     204.4 median     207.7 us  0.986x Triton
+      final     min     206.7 median     216.5 us  0.998x Triton
+      unrolled  min     206.8 median     217.0 us  0.998x Triton
+      Triton    min     207.2 median     224.8 us  1.000x Triton
+      base      min     207.5 median     214.7 us  1.001x Triton
+          4096 Y {'base': '128x128 2x2', 'final': '128x128 2x2', 'unrolled': '128x128 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2655-2760 MHz
+      cuBLAS    min    1547.3 median    1605.1 us  0.966x Triton
+      final     min    1577.5 median    1598.5 us  0.985x Triton
+      unrolled  min    1579.0 median    1599.4 us  0.986x Triton
+      base      min    1583.1 median    1604.1 us  0.988x Triton
+      Triton    min    1602.0 median    1623.9 us  1.000x Triton
+          8192 Y {'base': '128x128 2x2', 'final': '128x128 2x2', 'unrolled': '128x128 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2745-2745 MHz
+      unrolled  min   12749.8 median   12927.0 us  0.896x Triton
+      final     min   12776.4 median   13013.0 us  0.897x Triton
+      base      min   12791.8 median   12965.1 us  0.899x Triton
+      cuBLAS    min   12906.5 median   13185.0 us  0.907x Triton
+      Triton    min   14236.7 median   14643.2 us  1.000x Triton
+   1x4096x4096 Y {'base': '32x64 2x2', 'final': '32x64 2x2', 'unrolled': '32x64 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'cuBLAS': True} | Triton None | SM 2745-2745 MHz
+      final     min      19.9 median      21.3 us
+      unrolled  min      19.9 median      20.4 us
+      base      min      20.2 median      21.0 us
+      cuBLAS    min      27.0 median      40.9 us
+   4x4096x4096 Y {'base': '32x64 2x2', 'final': '32x64 2x2', 'unrolled': '32x64 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'cuBLAS': True} | Triton None | SM 2745-2760 MHz
+      final     min      23.6 median      25.1 us
+      unrolled  min      23.7 median      25.3 us
+      base      min      23.7 median      24.4 us
+      cuBLAS    min      54.0 median      57.3 us
+   8x4096x4096 Y {'base': '32x64 2x2', 'final': '32x64 2x2', 'unrolled': '32x64 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'cuBLAS': True} | Triton None | SM 2580-2580 MHz
+      final     min      23.7 median      24.2 us
+      unrolled  min      23.8 median      24.0 us
+      base      min      23.9 median      25.3 us
+      cuBLAS    min      50.7 median      53.2 us
+  32x4096x4096 Y {'base': '32x64 2x2', 'final': '32x64 2x2', 'unrolled': '32x64 2x2'} | exact {'base': True, 'final': True, 'unrolled': True, 'cuBLAS': True} | Triton None | SM 2490-2760 MHz
+      cuBLAS    min      23.7 median      24.4 us
+      final     min      30.6 median      33.3 us
+      base      min      30.7 median      32.5 us
+      unrolled  min      30.7 median      33.3 us

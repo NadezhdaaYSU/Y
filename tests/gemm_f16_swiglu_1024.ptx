@@ -53,8 +53,8 @@
     mul.lo.u32 %r15, %r13, 128;
     mov.u32 %r16, %tid.x;
     shr.u32 %r17, %r16, 5;
-    rem.u32 %r18, %r17, 4;
-    div.u32 %r19, %r17, 4;
+    and.b32 %r18, %r17, 3;
+    shr.u32 %r19, %r17, 2;
     mad.lo.u32 %r20, %r18, 32, %r14;
     mad.lo.u32 %r21, %r19, 32, %r15;
     mul.lo.u32 %r22, %r18, 32;
@@ -136,8 +136,8 @@
     add.u32 %r34, %r30, 0;
     // [Y ASYNC TILE LOAD] SWPX0 | 512 chunks of 16B over 512 threads
     mov.u32 %r35, %tid.x;
-    div.u32 %r36, %r35, 4;
-    rem.u32 %r37, %r35, 4;
+    shr.u32 %r36, %r35, 2;
+    and.b32 %r37, %r35, 3;
     mul.lo.u32 %r38, %r37, 8;
     add.u32 %r39, %r14, %r36;
     add.u32 %r40, %r31, %r38;
@@ -155,8 +155,8 @@
     cp.async.cg.shared.global [%r46], [%rd9], 16, %r43;
     // [Y ASYNC TILE LOAD] SWPG0 | 512 chunks of 16B over 512 threads
     mov.u32 %r47, %tid.x;
-    div.u32 %r48, %r47, 16;
-    rem.u32 %r49, %r47, 16;
+    shr.u32 %r48, %r47, 4;
+    and.b32 %r49, %r47, 15;
     mul.lo.u32 %r50, %r49, 8;
     add.u32 %r51, %r31, %r48;
     add.u32 %r52, %r15, %r50;
@@ -174,8 +174,8 @@
     cp.async.cg.shared.global [%r58], [%rd11], 16, %r55;
     // [Y ASYNC TILE LOAD] SWPU0 | 512 chunks of 16B over 512 threads
     mov.u32 %r59, %tid.x;
-    div.u32 %r60, %r59, 16;
-    rem.u32 %r61, %r59, 16;
+    shr.u32 %r60, %r59, 4;
+    and.b32 %r61, %r59, 15;
     mul.lo.u32 %r62, %r61, 8;
     add.u32 %r63, %r31, %r60;
     add.u32 %r64, %r15, %r62;
@@ -198,8 +198,8 @@
     add.u32 %r74, %r30, 8704;
     // [Y ASYNC TILE LOAD] SWPX1 | 512 chunks of 16B over 512 threads
     mov.u32 %r75, %tid.x;
-    div.u32 %r76, %r75, 4;
-    rem.u32 %r77, %r75, 4;
+    shr.u32 %r76, %r75, 2;
+    and.b32 %r77, %r75, 3;
     mul.lo.u32 %r78, %r77, 8;
     add.u32 %r79, %r14, %r76;
     add.u32 %r80, %r71, %r78;
@@ -217,8 +217,8 @@
     cp.async.cg.shared.global [%r86], [%rd15], 16, %r83;
     // [Y ASYNC TILE LOAD] SWPG1 | 512 chunks of 16B over 512 threads
     mov.u32 %r87, %tid.x;
-    div.u32 %r88, %r87, 16;
-    rem.u32 %r89, %r87, 16;
+    shr.u32 %r88, %r87, 4;
+    and.b32 %r89, %r87, 15;
     mul.lo.u32 %r90, %r89, 8;
     add.u32 %r91, %r71, %r88;
     add.u32 %r92, %r15, %r90;
@@ -236,8 +236,8 @@
     cp.async.cg.shared.global [%r98], [%rd17], 16, %r95;
     // [Y ASYNC TILE LOAD] SWPU1 | 512 chunks of 16B over 512 threads
     mov.u32 %r99, %tid.x;
-    div.u32 %r100, %r99, 16;
-    rem.u32 %r101, %r99, 16;
+    shr.u32 %r100, %r99, 4;
+    and.b32 %r101, %r99, 15;
     mul.lo.u32 %r102, %r101, 8;
     add.u32 %r103, %r71, %r100;
     add.u32 %r104, %r15, %r102;
@@ -260,9 +260,15 @@
     $SWIGLU_K_LOOP_0:
     setp.ge.u32 %p18, %r111, 32;
     @%p18 bra $SWIGLU_K_DONE_1;
-    rem.u32 %r112, %r111, 3;
+    mul.hi.u32 %r112, %r111, 2863311531;
+    shr.u32 %r112, %r112, 1;
+    mul.lo.u32 %r112, %r112, 3;
+    sub.u32 %r112, %r111, %r112;
     add.u32 %r113, %r111, 2;
-    rem.u32 %r114, %r113, 3;
+    mul.hi.u32 %r114, %r113, 2863311531;
+    shr.u32 %r114, %r114, 1;
+    mul.lo.u32 %r114, %r114, 3;
+    sub.u32 %r114, %r113, %r114;
     setp.lt.u32 %p19, %r113, 32;
     mul.lo.u32 %r115, %r113, 32;
     mad.lo.u32 %r116, %r114, 10240, %r28;
@@ -270,8 +276,8 @@
     mad.lo.u32 %r118, %r114, 8704, %r30;
     // [Y ASYNC TILE LOAD] SWX | 512 chunks of 16B over 512 threads
     mov.u32 %r119, %tid.x;
-    div.u32 %r120, %r119, 4;
-    rem.u32 %r121, %r119, 4;
+    shr.u32 %r120, %r119, 2;
+    and.b32 %r121, %r119, 3;
     mul.lo.u32 %r122, %r121, 8;
     add.u32 %r123, %r14, %r120;
     add.u32 %r124, %r115, %r122;
@@ -290,8 +296,8 @@
     cp.async.cg.shared.global [%r130], [%rd21], 16, %r127;
     // [Y ASYNC TILE LOAD] SWG | 512 chunks of 16B over 512 threads
     mov.u32 %r131, %tid.x;
-    div.u32 %r132, %r131, 16;
-    rem.u32 %r133, %r131, 16;
+    shr.u32 %r132, %r131, 4;
+    and.b32 %r133, %r131, 15;
     mul.lo.u32 %r134, %r133, 8;
     add.u32 %r135, %r115, %r132;
     add.u32 %r136, %r15, %r134;
@@ -310,8 +316,8 @@
     cp.async.cg.shared.global [%r142], [%rd23], 16, %r139;
     // [Y ASYNC TILE LOAD] SWU | 512 chunks of 16B over 512 threads
     mov.u32 %r143, %tid.x;
-    div.u32 %r144, %r143, 16;
-    rem.u32 %r145, %r143, 16;
+    shr.u32 %r144, %r143, 4;
+    and.b32 %r145, %r143, 15;
     mul.lo.u32 %r146, %r145, 8;
     add.u32 %r147, %r115, %r144;
     add.u32 %r148, %r15, %r146;
@@ -520,8 +526,8 @@
     $EPI_SWIGLU_2:
     setp.ge.u32 %p33, %r341, 4096;
     @%p33 bra $EPI_SWIGLU_DONE_3;
-    div.u32 %r342, %r341, 32;
-    rem.u32 %r343, %r341, 32;
+    shr.u32 %r342, %r341, 5;
+    and.b32 %r343, %r341, 31;
     add.u32 %r344, %r14, %r342;
     add.u32 %r345, %r340, %r343;
     setp.lt.u32 %p34, %r344, 1024;
@@ -583,8 +589,8 @@
     $EPI_SWIGLU_4:
     setp.ge.u32 %p38, %r372, 4096;
     @%p38 bra $EPI_SWIGLU_DONE_5;
-    div.u32 %r373, %r372, 32;
-    rem.u32 %r374, %r372, 32;
+    shr.u32 %r373, %r372, 5;
+    and.b32 %r374, %r372, 31;
     add.u32 %r375, %r14, %r373;
     add.u32 %r376, %r371, %r374;
     setp.lt.u32 %p39, %r375, 1024;
@@ -646,8 +652,8 @@
     $EPI_SWIGLU_6:
     setp.ge.u32 %p43, %r403, 4096;
     @%p43 bra $EPI_SWIGLU_DONE_7;
-    div.u32 %r404, %r403, 32;
-    rem.u32 %r405, %r403, 32;
+    shr.u32 %r404, %r403, 5;
+    and.b32 %r405, %r403, 31;
     add.u32 %r406, %r14, %r404;
     add.u32 %r407, %r402, %r405;
     setp.lt.u32 %p44, %r406, 1024;
@@ -709,8 +715,8 @@
     $EPI_SWIGLU_8:
     setp.ge.u32 %p48, %r434, 4096;
     @%p48 bra $EPI_SWIGLU_DONE_9;
-    div.u32 %r435, %r434, 32;
-    rem.u32 %r436, %r434, 32;
+    shr.u32 %r435, %r434, 5;
+    and.b32 %r436, %r434, 31;
     add.u32 %r437, %r14, %r435;
     add.u32 %r438, %r433, %r436;
     setp.lt.u32 %p49, %r437, 1024;

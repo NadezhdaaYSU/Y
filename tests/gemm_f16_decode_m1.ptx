@@ -50,8 +50,8 @@
     mul.lo.u32 %r15, %r13, 64;
     mov.u32 %r16, %tid.x;
     shr.u32 %r17, %r16, 5;
-    rem.u32 %r18, %r17, 2;
-    div.u32 %r19, %r17, 2;
+    and.b32 %r18, %r17, 1;
+    shr.u32 %r19, %r17, 1;
     mul.lo.u32 %r20, %r18, 16;
     mul.lo.u32 %r21, %r19, 32;
     and.b32 %r22, %r16, 31;
@@ -81,8 +81,8 @@
     add.u32 %r30, %r27, 0;
     // [Y ASYNC TILE LOAD] PA0 | 256 chunks of 16B over 128 threads
     mov.u32 %r31, %tid.x;
-    div.u32 %r32, %r31, 8;
-    rem.u32 %r33, %r31, 8;
+    shr.u32 %r32, %r31, 3;
+    and.b32 %r33, %r31, 7;
     mul.lo.u32 %r34, %r33, 8;
     add.u32 %r35, %r14, %r32;
     add.u32 %r36, %r28, %r34;
@@ -100,8 +100,8 @@
     cp.async.cg.shared.global [%r42], [%rd7], 16, %r39;
     mov.u32 %r43, %tid.x;
     add.u32 %r43, %r43, 128;
-    div.u32 %r44, %r43, 8;
-    rem.u32 %r45, %r43, 8;
+    shr.u32 %r44, %r43, 3;
+    and.b32 %r45, %r43, 7;
     mul.lo.u32 %r46, %r45, 8;
     add.u32 %r47, %r14, %r44;
     add.u32 %r48, %r28, %r46;
@@ -119,8 +119,8 @@
     cp.async.cg.shared.global [%r54], [%rd9], 16, %r51;
     // [Y ASYNC TILE LOAD] PB0 | 512 chunks of 16B over 128 threads
     mov.u32 %r55, %tid.x;
-    div.u32 %r56, %r55, 8;
-    rem.u32 %r57, %r55, 8;
+    shr.u32 %r56, %r55, 3;
+    and.b32 %r57, %r55, 7;
     mul.lo.u32 %r58, %r57, 8;
     add.u32 %r59, %r28, %r56;
     add.u32 %r60, %r15, %r58;
@@ -138,8 +138,8 @@
     cp.async.cg.shared.global [%r66], [%rd11], 16, %r63;
     mov.u32 %r67, %tid.x;
     add.u32 %r67, %r67, 128;
-    div.u32 %r68, %r67, 8;
-    rem.u32 %r69, %r67, 8;
+    shr.u32 %r68, %r67, 3;
+    and.b32 %r69, %r67, 7;
     mul.lo.u32 %r70, %r69, 8;
     add.u32 %r71, %r28, %r68;
     add.u32 %r72, %r15, %r70;
@@ -157,8 +157,8 @@
     cp.async.cg.shared.global [%r78], [%rd13], 16, %r75;
     mov.u32 %r79, %tid.x;
     add.u32 %r79, %r79, 256;
-    div.u32 %r80, %r79, 8;
-    rem.u32 %r81, %r79, 8;
+    shr.u32 %r80, %r79, 3;
+    and.b32 %r81, %r79, 7;
     mul.lo.u32 %r82, %r81, 8;
     add.u32 %r83, %r28, %r80;
     add.u32 %r84, %r15, %r82;
@@ -176,8 +176,8 @@
     cp.async.cg.shared.global [%r90], [%rd15], 16, %r87;
     mov.u32 %r91, %tid.x;
     add.u32 %r91, %r91, 384;
-    div.u32 %r92, %r91, 8;
-    rem.u32 %r93, %r91, 8;
+    shr.u32 %r92, %r91, 3;
+    and.b32 %r93, %r91, 7;
     mul.lo.u32 %r94, %r93, 8;
     add.u32 %r95, %r28, %r92;
     add.u32 %r96, %r15, %r94;
@@ -199,8 +199,8 @@
     add.u32 %r105, %r27, 9216;
     // [Y ASYNC TILE LOAD] PA1 | 256 chunks of 16B over 128 threads
     mov.u32 %r106, %tid.x;
-    div.u32 %r107, %r106, 8;
-    rem.u32 %r108, %r106, 8;
+    shr.u32 %r107, %r106, 3;
+    and.b32 %r108, %r106, 7;
     mul.lo.u32 %r109, %r108, 8;
     add.u32 %r110, %r14, %r107;
     add.u32 %r111, %r103, %r109;
@@ -218,8 +218,8 @@
     cp.async.cg.shared.global [%r117], [%rd19], 16, %r114;
     mov.u32 %r118, %tid.x;
     add.u32 %r118, %r118, 128;
-    div.u32 %r119, %r118, 8;
-    rem.u32 %r120, %r118, 8;
+    shr.u32 %r119, %r118, 3;
+    and.b32 %r120, %r118, 7;
     mul.lo.u32 %r121, %r120, 8;
     add.u32 %r122, %r14, %r119;
     add.u32 %r123, %r103, %r121;
@@ -237,8 +237,8 @@
     cp.async.cg.shared.global [%r129], [%rd21], 16, %r126;
     // [Y ASYNC TILE LOAD] PB1 | 512 chunks of 16B over 128 threads
     mov.u32 %r130, %tid.x;
-    div.u32 %r131, %r130, 8;
-    rem.u32 %r132, %r130, 8;
+    shr.u32 %r131, %r130, 3;
+    and.b32 %r132, %r130, 7;
     mul.lo.u32 %r133, %r132, 8;
     add.u32 %r134, %r103, %r131;
     add.u32 %r135, %r15, %r133;
@@ -256,8 +256,8 @@
     cp.async.cg.shared.global [%r141], [%rd23], 16, %r138;
     mov.u32 %r142, %tid.x;
     add.u32 %r142, %r142, 128;
-    div.u32 %r143, %r142, 8;
-    rem.u32 %r144, %r142, 8;
+    shr.u32 %r143, %r142, 3;
+    and.b32 %r144, %r142, 7;
     mul.lo.u32 %r145, %r144, 8;
     add.u32 %r146, %r103, %r143;
     add.u32 %r147, %r15, %r145;
@@ -275,8 +275,8 @@
     cp.async.cg.shared.global [%r153], [%rd25], 16, %r150;
     mov.u32 %r154, %tid.x;
     add.u32 %r154, %r154, 256;
-    div.u32 %r155, %r154, 8;
-    rem.u32 %r156, %r154, 8;
+    shr.u32 %r155, %r154, 3;
+    and.b32 %r156, %r154, 7;
     mul.lo.u32 %r157, %r156, 8;
     add.u32 %r158, %r103, %r155;
     add.u32 %r159, %r15, %r157;
@@ -294,8 +294,8 @@
     cp.async.cg.shared.global [%r165], [%rd27], 16, %r162;
     mov.u32 %r166, %tid.x;
     add.u32 %r166, %r166, 384;
-    div.u32 %r167, %r166, 8;
-    rem.u32 %r168, %r166, 8;
+    shr.u32 %r167, %r166, 3;
+    and.b32 %r168, %r166, 7;
     mul.lo.u32 %r169, %r168, 8;
     add.u32 %r170, %r103, %r167;
     add.u32 %r171, %r15, %r169;
@@ -339,17 +339,23 @@
     $GEMM_K_LOOP_0:
     setp.ge.u32 %p36, %r220, 64;
     @%p36 bra $GEMM_K_DONE_1;
-    rem.u32 %r221, %r220, 3;
+    mul.hi.u32 %r221, %r220, 2863311531;
+    shr.u32 %r221, %r221, 1;
+    mul.lo.u32 %r221, %r221, 3;
+    sub.u32 %r221, %r220, %r221;
     add.u32 %r222, %r220, 2;
-    rem.u32 %r223, %r222, 3;
+    mul.hi.u32 %r223, %r222, 2863311531;
+    shr.u32 %r223, %r223, 1;
+    mul.lo.u32 %r223, %r223, 3;
+    sub.u32 %r223, %r222, %r223;
     setp.lt.u32 %p37, %r222, 64;
     mul.lo.u32 %r224, %r222, 64;
     mad.lo.u32 %r225, %r223, 4608, %r26;
     mad.lo.u32 %r226, %r223, 9216, %r27;
     // [Y ASYNC TILE LOAD] A | 256 chunks of 16B over 128 threads
     mov.u32 %r227, %tid.x;
-    div.u32 %r228, %r227, 8;
-    rem.u32 %r229, %r227, 8;
+    shr.u32 %r228, %r227, 3;
+    and.b32 %r229, %r227, 7;
     mul.lo.u32 %r230, %r229, 8;
     add.u32 %r231, %r14, %r228;
     add.u32 %r232, %r224, %r230;
@@ -368,8 +374,8 @@
     cp.async.cg.shared.global [%r238], [%rd31], 16, %r235;
     mov.u32 %r239, %tid.x;
     add.u32 %r239, %r239, 128;
-    div.u32 %r240, %r239, 8;
-    rem.u32 %r241, %r239, 8;
+    shr.u32 %r240, %r239, 3;
+    and.b32 %r241, %r239, 7;
     mul.lo.u32 %r242, %r241, 8;
     add.u32 %r243, %r14, %r240;
     add.u32 %r244, %r224, %r242;
@@ -388,8 +394,8 @@
     cp.async.cg.shared.global [%r250], [%rd33], 16, %r247;
     // [Y ASYNC TILE LOAD] B | 512 chunks of 16B over 128 threads
     mov.u32 %r251, %tid.x;
-    div.u32 %r252, %r251, 8;
-    rem.u32 %r253, %r251, 8;
+    shr.u32 %r252, %r251, 3;
+    and.b32 %r253, %r251, 7;
     mul.lo.u32 %r254, %r253, 8;
     add.u32 %r255, %r224, %r252;
     add.u32 %r256, %r15, %r254;
@@ -408,8 +414,8 @@
     cp.async.cg.shared.global [%r262], [%rd35], 16, %r259;
     mov.u32 %r263, %tid.x;
     add.u32 %r263, %r263, 128;
-    div.u32 %r264, %r263, 8;
-    rem.u32 %r265, %r263, 8;
+    shr.u32 %r264, %r263, 3;
+    and.b32 %r265, %r263, 7;
     mul.lo.u32 %r266, %r265, 8;
     add.u32 %r267, %r224, %r264;
     add.u32 %r268, %r15, %r266;
@@ -428,8 +434,8 @@
     cp.async.cg.shared.global [%r274], [%rd37], 16, %r271;
     mov.u32 %r275, %tid.x;
     add.u32 %r275, %r275, 256;
-    div.u32 %r276, %r275, 8;
-    rem.u32 %r277, %r275, 8;
+    shr.u32 %r276, %r275, 3;
+    and.b32 %r277, %r275, 7;
     mul.lo.u32 %r278, %r277, 8;
     add.u32 %r279, %r224, %r276;
     add.u32 %r280, %r15, %r278;
@@ -448,8 +454,8 @@
     cp.async.cg.shared.global [%r286], [%rd39], 16, %r283;
     mov.u32 %r287, %tid.x;
     add.u32 %r287, %r287, 384;
-    div.u32 %r288, %r287, 8;
-    rem.u32 %r289, %r287, 8;
+    shr.u32 %r288, %r287, 3;
+    and.b32 %r289, %r287, 7;
     mul.lo.u32 %r290, %r289, 8;
     add.u32 %r291, %r224, %r288;
     add.u32 %r292, %r15, %r290;
@@ -547,7 +553,10 @@
     cp.async.wait_group 1;
     bar.sync 0;
     add.u32 %r355, %r220, 1;
-    rem.u32 %r356, %r355, 3;
+    mul.hi.u32 %r356, %r355, 2863311531;
+    shr.u32 %r356, %r356, 1;
+    mul.lo.u32 %r356, %r356, 3;
+    sub.u32 %r356, %r355, %r356;
     mad.lo.u32 %r357, %r356, 4608, %r26;
     mad.lo.u32 %r358, %r356, 9216, %r27;
     add.u32 %r359, %r21, 0;
@@ -596,10 +605,11 @@
     add.u32 %r386, %r15, 0;
     mov.u32 %r387, %tid.x;
     $EPI_PLAIN_2:
+    .pragma "nounroll";
     setp.ge.u32 %p63, %r387, 256;
     @%p63 bra $EPI_PLAIN_DONE_3;
-    div.u32 %r388, %r387, 8;
-    rem.u32 %r389, %r387, 8;
+    shr.u32 %r388, %r387, 3;
+    and.b32 %r389, %r387, 7;
     mul.lo.u32 %r390, %r389, 4;
     add.u32 %r391, %r14, %r388;
     add.u32 %r392, %r386, %r390;
@@ -634,10 +644,11 @@
     add.u32 %r406, %r15, 32;
     mov.u32 %r407, %tid.x;
     $EPI_PLAIN_4:
+    .pragma "nounroll";
     setp.ge.u32 %p68, %r407, 256;
     @%p68 bra $EPI_PLAIN_DONE_5;
-    div.u32 %r408, %r407, 8;
-    rem.u32 %r409, %r407, 8;
+    shr.u32 %r408, %r407, 3;
+    and.b32 %r409, %r407, 7;
     mul.lo.u32 %r410, %r409, 4;
     add.u32 %r411, %r14, %r408;
     add.u32 %r412, %r406, %r410;

@@ -92,6 +92,20 @@ def gpu_has_tensor_cores():
 
 
 @unittest.skipUnless(gpu_has_tensor_cores(), "needs an sm_89 or later GPU")
+def remainder_of(reg, c, text):
+    """Whether `text` computes `reg % c` in a form the emitter writes: `rem.u32`,
+    or, since the module pass reduces divisions by a constant (2026-10-19),
+    `and.b32` with `c - 1` for a power of two and otherwise `mul.hi.u32` by the
+    multiplier, `mul.lo.u32` by `c` and the `sub.u32` from `reg`."""
+    if re.search(rf"rem\.u32 %r\d+, {reg}, {c};", text):
+        return True
+    if c & (c - 1) == 0 and re.search(rf"and\.b32 %r\d+, {reg}, {c - 1};", text):
+        return True
+    q = re.search(rf"mul\.hi\.u32 (%r\d+), {reg}, \d+;", text)
+    return bool(q and re.search(rf"mul\.lo\.u32 {q.group(1)}, {q.group(1)}, {c};", text)
+                and re.search(rf"sub\.u32 {q.group(1)}, {reg}, {q.group(1)};", text))
+
+
 class F16GemmIsExact(unittest.TestCase):
     def run_shape(self, m, n, k, tile, extra_ctas=0):
         a, b = operands(m, n, k, m * 7 + n * 3 + k)
@@ -210,7 +224,7 @@ class F16GemmIsExact(unittest.TestCase):
                 self.assertEqual(sum("ldmatrix" in l for l in before), (ck // 16 - 1) * frags, tile)
                 k_iter = re.match(r"\s*setp\.ge\.u32 %p\d+, (%r\d+),", body[0]).group(1)
                 nxt = re.search(rf"add\.u32 (%r\d+), {k_iter}, 1;", "\n".join(after))
-                self.assertTrue(nxt and re.search(rf"rem\.u32 %r\d+, {nxt.group(1)}, {stages};", "\n".join(after)),
+                self.assertTrue(nxt and remainder_of(nxt.group(1), stages, "\n".join(after)),
                                 f"{tile}: the fragments after the barrier are not addressed from k_iter + 1")
 
     def test_every_tile_rounds_alike_and_close(self):
