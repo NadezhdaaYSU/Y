@@ -966,11 +966,8 @@ SGLang actually use), same math and same convention — not against eager PyTorc
 |---|---|---|
 | Fused Add+RMSNorm (hidden=4096) | 122 / 519 / 1038 (4 / 17 / 34 MB) | **1.42x / 1.16–1.18x / 1.14–1.15x** |
 | Fused Add+RMSNorm (hidden=4096) | 4089 (134 MB, from DRAM) | tie |
-| Fused RoPE (head_dim=128) | 128 | 1.85x |
-| Fused RoPE (head_dim=128) | 1024 | 1.92x |
-| Fused RoPE (head_dim=128) | 8192 | tie |
-
-RoPE wins in 8 of 9 (head_dim, rows) combinations across head_dim 64/128/256.
+| Fused RoPE (head_dim=64/128/256), the same work | 2 / 8 / 17 / 34 MB | **1.20–1.36x / 1.09–1.11x / 1.05–1.06x / 1.02–1.04x** |
+| Fused RoPE (head_dim=64/128/256), the same work | about 100 MB (from DRAM) | tie |
 
 The RMSNorm rows are from 2026-10-19 (`docs/benchmarks/rmsnorm_residual_2026-10-19/`,
 two runs, FlashInfer's time over Y's, every column checked against float64).
@@ -982,6 +979,21 @@ at 896 and up to 4% behind at 16384. Until then the kernel looped over its group
 through shared memory and ran one warp a row at hidden sizes such as 896:
 it took 1.08–1.10x Triton's time at 17–34 MB of hidden 4096, and from
 hidden 12288 up `ptxas` refused it.
+
+The RoPE rows are from 2026-10-19 too (`docs/benchmarks/rope_2026-10-19/`,
+two runs, CUDA-graph replays). FlashInfer's `apply_rope_pos_ids` rotates q
+and k, and is given the two halves of the rows Y rotates. Against a Triton
+kernel doing the same arithmetic, Y is 1.54–1.84x faster inside the L2 when
+Triton uses `tl.sin`/`tl.cos` (libdevice's precise functions), and 1.15–1.64x
+when it uses `fast_sinf`/`fast_cosf`, which lower to the `sin.approx` Y uses.
+From DRAM all three tie. Until then a CTA was one 32-thread row, at half
+occupancy and bound by how fast CTAs launch. Inside the L2 it took 1.47–2.49x
+FlashInfer's time at head_dim 128 and 2.49–4.95x at 64. The RoPE kernel now
+takes a fourth parameter, `Rows`, and puts 8 rows in a 256-thread CTA (16 at
+head_dim 64). This table said 1.85x and 1.92x faster, at 128 and 1024 rows
+of head_dim 128. Those rows timed Python launches of a 66 KB and a 528 KB
+problem, which the launch costs decide, and FlashInfer rotated q and k where
+Y rotated one tensor.
 
 ### Paged decode attention vs FlashInfer
 
@@ -1135,6 +1147,7 @@ different baseline.
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
 | Square F16 GEMM, 512³ | cuBLAS | 0.87–0.88x |
 | Decode-shaped F16 GEMM, M=32, N=K=4096, B resident in L2 | cuBLAS | 0.75–0.77x |
+| RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
@@ -1159,6 +1172,13 @@ Y's time, and both move 575–618 GB/s of the card's 672. With one B, whose
 33.5 MB fits in the 48 MB L2, Y takes 0.44–0.76x cuBLAS's time at M = 1, 4
 and 8 and 1.32–1.34x at M = 32, where every one of Y's 64 CTAs reads all of
 A; the best of eight tiles there (32x128x64 on 2x4 warps) takes 1.24–1.26x.
+
+RoPE in place touches half the bytes of RoPE out of place, so the rows that
+are 100 MB out of place are about 50 MB in place, the L2's own size
+(`docs/benchmarks/rope_2026-10-19/`). There FlashInfer's in-place kernel
+took 0.85–0.95x Y's time at head_dim 64 and 256 in both runs, and at 128
+0.88x in one run and 1.05x in the other. Inside the L2, in place, Y is
+1.02–1.34x faster; out of place at 100 MB the two tie.
 
 ### Memory bandwidth
 

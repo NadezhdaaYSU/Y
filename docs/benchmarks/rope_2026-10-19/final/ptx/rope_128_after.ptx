@@ -1,0 +1,106 @@
+.version 7.8
+.target sm_89
+.address_size 64
+
+.visible .entry rope_128(
+    .param .u64 X_0,
+    .param .u64 Positions_1,
+    .param .u64 Out_2,
+    .param .b32 Rows_3
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 88
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 128 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 33.33% (2 active blocks per SM)
+.maxnreg 128
+{
+    .reg .b32 %r<27>;
+    .reg .f32 %f<27>;
+    .reg .b64 %rd<17>;
+    .reg .pred %p<4>;
+
+    ld.param.u64 %rd0, [X_0];
+    ld.param.u64 %rd1, [Positions_1];
+    ld.param.u64 %rd2, [Out_2];
+    ld.param.u32 %r0, [Rows_3];
+    // ========================================================
+    // [Y FUSED ROPE] head_dim=128 | 256 threads a CTA: 8 rows of 32 lanes (grid >= ceil(Rows / 8)) | interleaved pairs, base=10000 | 2-pair vectorized blocks
+    // ========================================================
+    cvta.to.global.u64 %rd3, %rd0;
+    cvta.to.global.u64 %rd4, %rd1;
+    cvta.to.global.u64 %rd5, %rd2;
+    mov.u32 %r1, %ntid.x;
+    setp.ne.u32 %p0, %r1, 256;
+    @%p0 trap;
+    cvt.s64.s32 %rd6, %r0;
+    setp.lt.s64 %p1, %rd6, 0;
+    @%p1 trap;
+    mov.u32 %r2, %nctaid.x;
+    mul.wide.u32 %rd7, %r2, 8;
+    setp.lt.s64 %p2, %rd7, %rd6;
+    @%p2 trap;
+    mov.u32 %r3, %ctaid.x;
+    mov.u32 %r4, %tid.x;
+    and.b32 %r5, %r4, 31;
+    shr.u32 %r6, %r4, 5;
+    cvt.u64.u32 %rd8, %r6;
+    mad.wide.u32 %rd9, %r3, 8, %rd8;
+    setp.lt.s64 %p3, %rd9, %rd6;
+    cvt.u32.u64 %r7, %rd9;
+    mul.wide.u32 %rd10, %r7, 4;
+    add.s64 %rd11, %rd4, %rd10;
+    mov.u32 %r8, 0;
+    @%p3 ld.global.u32 %r8, [%rd11];
+    mul.wide.u32 %rd12, %r7, 256;
+    mul.lo.u32 %r9, %r5, 2;
+    add.u32 %r10, %r9, 0;
+    mul.wide.u32 %rd13, %r10, 4;
+    add.s64 %rd14, %rd12, %rd13;
+    add.s64 %rd15, %rd3, %rd14;
+    mov.u32 %r11, 0;
+    mov.u32 %r12, 0;
+    @%p3 ld.global.v2.u32 {%r11,%r12}, [%rd15];
+    cvt.rn.f32.s32 %f0, %r8;
+    cvt.f32.f16 %f1, %r11;
+    shr.b32 %r13, %r11, 16;
+    cvt.f32.f16 %f2, %r13;
+    cvt.f32.f16 %f3, %r12;
+    shr.b32 %r14, %r12, 16;
+    cvt.f32.f16 %f4, %r14;
+    add.u32 %r15, %r10, 0;
+    cvt.rn.f32.u32 %f5, %r15;
+    mul.f32 %f6, %f5, 0fBE549A78;
+    ex2.approx.f32 %f7, %f6;
+    mul.f32 %f8, %f0, %f7;
+    sin.approx.f32 %f9, %f8;
+    cos.approx.f32 %f10, %f8;
+    mul.f32 %f11, %f2, %f9;
+    neg.f32 %f12, %f11;
+    fma.rn.f32 %f13, %f1, %f10, %f12;
+    mul.f32 %f14, %f2, %f10;
+    fma.rn.f32 %f15, %f1, %f9, %f14;
+    add.u32 %r16, %r10, 1;
+    cvt.rn.f32.u32 %f16, %r16;
+    mul.f32 %f17, %f16, 0fBE549A78;
+    ex2.approx.f32 %f18, %f17;
+    mul.f32 %f19, %f0, %f18;
+    sin.approx.f32 %f20, %f19;
+    cos.approx.f32 %f21, %f19;
+    mul.f32 %f22, %f4, %f20;
+    neg.f32 %f23, %f22;
+    fma.rn.f32 %f24, %f3, %f21, %f23;
+    mul.f32 %f25, %f4, %f21;
+    fma.rn.f32 %f26, %f3, %f20, %f25;
+    cvt.rn.f16.f32 %r17, %f13;
+    and.b32 %r18, %r17, 0xFFFF;
+    cvt.rn.f16.f32 %r19, %f15;
+    shl.b32 %r20, %r19, 16;
+    or.b32 %r21, %r18, %r20;
+    cvt.rn.f16.f32 %r22, %f24;
+    and.b32 %r23, %r22, 0xFFFF;
+    cvt.rn.f16.f32 %r24, %f26;
+    shl.b32 %r25, %r24, 16;
+    or.b32 %r26, %r23, %r25;
+    add.s64 %rd16, %rd5, %rd14;
+    @%p3 st.global.v2.u32 [%rd16], {%r21,%r26};
+    // ========================================================
+}

@@ -1,0 +1,2 @@
+rope_96: 1000 rows; elements written a row: min 64 max 64 of 96; columns written in every row: [0, 63] (64 columns)
+rope_32: 1000 rows; elements written a row: min 0 max 0 of 32; columns written in every row: [] (0 columns)

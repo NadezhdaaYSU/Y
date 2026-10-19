@@ -16,6 +16,11 @@ Timing is the median of 5 independent process launches per row count (range show
 
 ## Fused RoPE (head_dim=128, interleaved-pairs convention)
 
+> **2026-10-19:** these RoPE figures are of the kernel of the time, one
+> 32-thread CTA a row. Its replacement takes a fourth parameter, `Rows`, puts
+> 8 rows in a 256-thread CTA (16 at head_dim 64), and computes the same bits:
+> `docs/benchmarks/rope_2026-10-19/`.
+
 Rotates each token's query/key vector by a position-dependent angle computed entirely on-device (`ex2.approx.f32`/`sin.approx.f32`/`cos.approx.f32`, no precomputed cos/sin table input). Eager baseline builds the same table PyTorch-side every call (the realistic unfused cost) and applies the same interleaved-pairs rotation.
 
 | Rows | Eager PyTorch us (median [range]) | Y Fused us (median [range]) | Y vs Eager | Correct (max abs diff) |

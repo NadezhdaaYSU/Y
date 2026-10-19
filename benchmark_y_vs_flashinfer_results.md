@@ -14,6 +14,16 @@ Timing is the median of 5 independent process launches per row count (range show
 
 ## Fused RoPE (head_dim=128, interleaved)
 
+> **Superseded for RoPE (2026-10-19).** These RoPE rows compared unequal
+> work: `apply_rope_pos_ids` was given X as both q and k and rotated both,
+> where Y rotated X once. They also timed back-to-back Python launches of
+> problems of 66 KB to 4 MB, which the launch costs decide. Measured with the
+> same work and CUDA-graph replays, the RoPE kernel of that time took
+> 1.47-2.49x FlashInfer's time at head_dim 128 inside the L2 (2.49-4.95x at
+> head_dim 64), and the kernel that replaced it is 1.02-1.36x faster than
+> FlashInfer there: `docs/benchmarks/rope_2026-10-19/`. The scripts now give
+> both sides the same rows and launch the four-parameter kernel.
+
 | Rows | FlashInfer us (median [range]) | Y Fused us (median [range]) | Y vs FlashInfer | Correct |
 |---|---|---|---|---|
 | 128 | 10.00 [8.61, 20.16] | 5.42 [1.86, 7.79] | **1.85x** | OK |

@@ -144,7 +144,7 @@ on the axis that is not the one being sold.
 | Exact VNNI micro-kernel | `tests/probes/vnni_kernels.c` | **real, measured, exact-verified** — but a C probe, not a Y kernel |
 | Integer datapath on GPU | `ptx_emitter.rs` | **real for 32/64-bit**: typed ld/st, typed strides, signed vs unsigned, `mul_wide_u32` |
 | Device differential gate | `tests/ptx_integer_datapath.rs` | **real** — 16 ops over 4096 full-range `u32` pairs on device vs plain Rust, mutation-verified |
-| Attention / RMSNorm / RoPE kernels | `ptx_emitter.rs` | **real**, competitive (RoPE 1.92x FlashInfer) |
+| Attention / RMSNorm / RoPE kernels | `ptx_emitter.rs` | **real**, competitive (RoPE 1.02–1.36x FlashInfer inside the L2, a tie from DRAM: `docs/benchmarks/rope_2026-10-19/`; the 1.92x once here timed launches, on half FlashInfer's work) |
 
 ## 4. What does not exist — the actual work
 

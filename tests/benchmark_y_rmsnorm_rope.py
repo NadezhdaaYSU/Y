@@ -58,6 +58,15 @@ def build():
 
 
 
+def rope_launch(ptx_path):
+    """(threads, rows a CTA) that `rope_<hd>`'s PTX header states: the grid is
+    ceil(rows / rows a CTA) CTAs, and the row count is the fourth argument."""
+    import re
+    m = re.search(r"\[Y FUSED ROPE\].*?\| (\d+) threads a CTA: (\d+) rows", open(ptx_path).read())
+    if m is None:
+        raise RuntimeError("%s has no [Y FUSED ROPE] header" % ptx_path)
+    return int(m.group(1)), int(m.group(2))
+
 def rmsnorm_threads(ptx_path):
     """The threads a row `rmsnorm_residual_<d>`'s PTX header states."""
     import re
@@ -149,6 +158,7 @@ def run_once_rope(rows):
     import torch
     import cupy as cp
     import math
+    import numpy as np
 
     device = torch.device("cuda:0")
     torch.manual_seed(0)
@@ -161,15 +171,17 @@ def run_once_rope(rows):
     mod = cp.RawModule(path=os.path.join(REPO_ROOT, "tests/rope_128.ptx"))
     fn = mod.get_function("rope_128")
 
-    grid, threads = (rows, 1), (32, 1, 1)
+    n_threads, per_cta = rope_launch(os.path.join(REPO_ROOT, "tests/rope_128.ptx"))
+    grid, threads = (-(-rows // per_cta), 1), (n_threads, 1, 1)
+    args = (X_cp, Pos_cp, Out_cp, np.int32(rows))
 
     for _ in range(10):
-        fn(grid, threads, (X_cp, Pos_cp, Out_cp))
+        fn(grid, threads, args)
     cp.cuda.Device(0).synchronize()
     y_start, y_end = cp.cuda.Event(), cp.cuda.Event()
     y_start.record()
     for _ in range(ITERS):
-        fn(grid, threads, (X_cp, Pos_cp, Out_cp))
+        fn(grid, threads, args)
     y_end.record()
     y_end.synchronize()
     y_us = (cp.cuda.get_elapsed_time(y_start, y_end) / ITERS) * 1000.0

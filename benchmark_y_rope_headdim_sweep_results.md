@@ -1,5 +1,15 @@
 # RoPE head_dim sweep: Y vs FlashInfer, more repeats to resolve prior inconclusive calls
 
+> **Superseded for RoPE (2026-10-19).** These RoPE rows compared unequal
+> work: `apply_rope_pos_ids` was given X as both q and k and rotated both,
+> where Y rotated X once. They also timed back-to-back Python launches of
+> problems of 33 KB to 8.4 MB, which the launch costs decide. Measured with the
+> same work and CUDA-graph replays, the RoPE kernel of that time took
+> 1.47-2.49x FlashInfer's time at head_dim 128 inside the L2 (2.49-4.95x at
+> head_dim 64), and the kernel that replaced it is 1.02-1.36x faster than
+> FlashInfer there: `docs/benchmarks/rope_2026-10-19/`. The scripts now give
+> both sides the same rows and launch the four-parameter kernel.
+
 Follow-up to `benchmark_y_vs_flashinfer_results.md`'s RoPE section - 10 repeats/row (not 5) across head_dim in {64, 128, 256}, testing whether the head_dim=128 win generalizes or was specific to that shape. Same math, same convention, same reference formula as the main script.
 
 ## head_dim=64
