@@ -1183,6 +1183,141 @@ fn ptx_string(path: &std::path::Path) -> String {
     s
 }
 
+/// The multiplier and shift that divide every `u32` by `c` with one
+/// `mul.hi.u32` and one `shr.u32`: `n / c == (m * n) >> (32 + l)` for all
+/// `n < 2^32`. `None` where no 32-bit multiplier exists (7 is one) or `c` is
+/// 0 or 1.
+///
+/// Granlund and Montgomery (1994), Theorem 4.2, with N = 32: if
+/// `2^(N+l) <= m*c <= 2^(N+l) + 2^l`, then `floor(n/c) == floor(m*n / 2^(N+l))`
+/// for `0 <= n < 2^N`. `m = ceil(2^(32+l) / c)` gives the lower bound, and the
+/// upper one is checked here, for the smallest `l` whose `m` fits in 32 bits.
+pub fn udiv32_magic(c: u32) -> Option<(u32, u32)> {
+    if c < 2 {
+        return None;
+    }
+    for l in 0..32u32 {
+        let p = 1u128 << (32 + l);
+        let m = p.div_ceil(c as u128);
+        if m >= 1u128 << 32 {
+            // m grows with l, so no larger l fits either.
+            return None;
+        }
+        if m * c as u128 - p <= 1u128 << l {
+            return Some((m as u32, l));
+        }
+    }
+    None
+}
+
+/// Rewrites every unsigned `div` and `rem` by an immediate in `ptx` into the
+/// shifts, masks and multiplies they equal.
+///
+/// `ptxas` does not: `div.u32 d, a, 4` and `rem.u32 d, a, 4` each became a
+/// reciprocal division (`I2F.U32.RP`, `MUFU.RCP`, `F2I`, two `IMAD.HI` and
+/// two correction steps), and it expands them after constant propagation, so
+/// even a dividend known at compile time - the stage index `(k + 3) % 4` of a
+/// fully unrolled K loop - was divided at run time. nvcc never shows this,
+/// because NVVM reduces such divisions before writing PTX; this emitter writes
+/// them directly, most by a constant: 27 committed kernels, all GEMMs, held 8
+/// to 57 each (`docs/benchmarks/const_div_2026-10-19/`).
+///
+/// Exact for every input:
+/// - a power of two: `div` is `shr`, `rem` is `and` with `c - 1` (u32 and u64);
+/// - 1: `div` is a `mov`, `rem` is 0;
+/// - another u32 divisor with a multiplier (`udiv32_magic`): `div` is
+///   `mul.hi.u32` and `shr.u32`; `rem` is that quotient times `c` taken from
+///   the dividend, and is left alone where the destination is the dividend,
+///   which the sequence would overwrite before its last use.
+///
+/// Anything else - a register divisor, a signed division (which rounds toward
+/// zero, so a shift is not it), 0, a u64 divisor that is not a power of two -
+/// is left exactly as it was. A predicated instruction keeps its guard on
+/// every instruction it becomes.
+pub fn strength_reduce_constant_division(ptx: &str) -> String {
+    let mut out = String::with_capacity(ptx.len());
+    for line in ptx.split_inclusive('\n') {
+        match reduce_constant_division_line(line.trim_end_matches('\n')) {
+            Some(lines) => {
+                for l in lines {
+                    out.push_str(&l);
+                    out.push('\n');
+                }
+                if !line.ends_with('\n') {
+                    out.pop();
+                }
+            }
+            None => out.push_str(line),
+        }
+    }
+    out
+}
+
+fn reduce_constant_division_line(line: &str) -> Option<Vec<String>> {
+    let body = line.trim_start();
+    let indent = &line[..line.len() - body.len()];
+    let (guard, rest) = match body.strip_prefix('@') {
+        Some(_) => {
+            let sp = body.find(char::is_whitespace)?;
+            (format!("{} ", &body[..sp]), body[sp..].trim_start())
+        }
+        None => (String::new(), body),
+    };
+    let (op, operands) = rest.split_once(char::is_whitespace)?;
+    let (is_div, wide) = match op {
+        "div.u32" => (true, false),
+        "rem.u32" => (false, false),
+        "div.u64" => (true, true),
+        "rem.u64" => (false, true),
+        _ => return None,
+    };
+    let operands = operands.trim().strip_suffix(';')?;
+    let parts: Vec<&str> = operands.split(',').map(str::trim).collect();
+    let [d, n, c] = parts.as_slice() else { return None };
+    let is_reg = |s: &str| s.starts_with('%') && s[1..].chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_');
+    if !is_reg(d) || !is_reg(n) || c.is_empty() || !c.chars().all(|ch| ch.is_ascii_digit()) {
+        return None;
+    }
+    let c: u64 = c.parse().ok()?;
+    if c == 0 || (!wide && c > u32::MAX as u64) {
+        return None;
+    }
+    let (bits, ty) = if wide { ("b64", "u64") } else { ("b32", "u32") };
+    let emit = |instrs: Vec<String>| -> Option<Vec<String>> {
+        Some(instrs.into_iter().map(|i| format!("{indent}{guard}{i}")).collect())
+    };
+    if c == 1 {
+        return emit(vec![if is_div {
+            format!("mov.{bits} {d}, {n};")
+        } else {
+            format!("mov.{bits} {d}, 0;")
+        }]);
+    }
+    if c.is_power_of_two() {
+        return emit(vec![if is_div {
+            format!("shr.{ty} {d}, {n}, {};", c.trailing_zeros())
+        } else {
+            format!("and.{bits} {d}, {n}, {};", c - 1)
+        }]);
+    }
+    if wide {
+        return None;
+    }
+    let (m, l) = udiv32_magic(c as u32)?;
+    let mut seq = vec![format!("mul.hi.u32 {d}, {n}, {m};")];
+    if l > 0 {
+        seq.push(format!("shr.u32 {d}, {d}, {l};"));
+    }
+    if !is_div {
+        if d == n {
+            return None;
+        }
+        seq.push(format!("mul.lo.u32 {d}, {d}, {c};"));
+        seq.push(format!("sub.u32 {d}, {n}, {d};"));
+    }
+    emit(seq)
+}
+
 /// Split-K ("flash decoding") configuration for
 /// `emit_paged_decode_attention_kernel`.
 ///
@@ -3434,6 +3569,9 @@ or `shared_alloc_u32` for a shared-memory array.",
             );
         }
         self.finalize_ptx_version();
+        // Last, over the whole module, so every emitter site and every entry
+        // point (the split-K reduction included) gets it alike.
+        self.ptx_buffer = strength_reduce_constant_division(&self.ptx_buffer);
         self.ptx_buffer.clone()
     }
 
@@ -12921,6 +13059,12 @@ declare it as a Q format.\n{}",
         let loop_start = self.alloc_label("EPI_PLAIN");
         let loop_end = self.alloc_label("EPI_PLAIN_DONE");
         writeln!(&mut self.ptx_buffer, "    {}:", loop_start).unwrap();
+        // Kept rolled. Once this body stopped dividing by `cols_per_chunk`
+        // (`strength_reduce_constant_division`), `ptxas -O3` unrolled the loop
+        // four times, which took ten GEMM kernels out of the validator's
+        // loop census (`tools/ptxas_tval/unroll.py`: MATCHED to UNROLLED) and
+        // grew their SASS (`gemm_f16_4096`: 832 to 1024 lines; 760 rolled).
+        writeln!(&mut self.ptx_buffer, "    .pragma \"nounroll\";").unwrap();
         let p_done = self.alloc_pred();
         writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p_done, idx, total_chunks).unwrap();
         writeln!(&mut self.ptx_buffer, "    @{} bra {};", p_done, loop_end).unwrap();

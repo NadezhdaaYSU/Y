@@ -40,11 +40,11 @@
     mov.u32 %r2, %ctaid.x;
     mov.u32 %r3, %ctaid.y;
     mad.lo.u32 %r4, %r3, 4, %r2;
-    div.u32 %r5, %r4, 32;
+    shr.u32 %r5, %r4, 5;
     mul.lo.u32 %r6, %r5, 8;
     sub.u32 %r7, 4, %r6;
     min.u32 %r8, %r7, 8;
-    rem.u32 %r9, %r4, 32;
+    and.b32 %r9, %r4, 31;
     rem.u32 %r10, %r9, %r8;
     add.u32 %r11, %r6, %r10;
     div.u32 %r12, %r9, %r8;
@@ -55,8 +55,8 @@
     shr.u32 %r17, %r16, 2;
     and.b32 %r18, %r16, 3;
     shr.u32 %r19, %r15, 5;
-    rem.u32 %r20, %r19, 2;
-    div.u32 %r21, %r19, 2;
+    and.b32 %r20, %r19, 1;
+    shr.u32 %r21, %r19, 1;
     mul.lo.u32 %r22, %r20, 32;
     mul.lo.u32 %r23, %r21, 32;
     and.b32 %r24, %r16, 7;
@@ -348,7 +348,7 @@
     @%p0 bra $FP8_GEMM_KA_DONE_gemm_fp8_256_1;
     add.u32 %r179, %r178, 2;
     setp.lt.u32 %p1, %r179, 8;
-    rem.u32 %r180, %r178, 2;
+    and.b32 %r180, %r178, 1;
     @!%p1 bra.uni $FP8_GEMM_KA_NOCOPY_gemm_fp8_256_2;
     mul.lo.u32 %r181, %r179, 32;
     mad.lo.u32 %r182, %r180, 8192, %r34;
@@ -455,7 +455,7 @@
     bar.sync 0;
     add.u32 %r239, %r178, 1;
     setp.lt.u32 %p2, %r239, 8;
-    rem.u32 %r240, %r239, 2;
+    and.b32 %r240, %r239, 1;
     mad.lo.u32 %r241, %r240, 8192, %r34;
     mad.lo.u32 %r242, %r240, 8192, %r35;
     xor.b32 %r243, %r218, 1;
@@ -653,8 +653,8 @@
     mul.f32 %f229, %f35, %f197;
     st.shared.v2.f32 [%r317+7008], {%f228, %f229};
     bar.sync 0;
-    rem.u32 %r318, %r15, 16;
-    div.u32 %r319, %r15, 16;
+    and.b32 %r318, %r15, 15;
+    shr.u32 %r319, %r15, 4;
     mul.lo.u32 %r320, %r319, 72;
     mad.lo.u32 %r320, %r318, 4, %r320;
     mad.lo.u32 %r321, %r320, 4, %r0;

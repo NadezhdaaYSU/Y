@@ -1,0 +1,2 @@
+ab 1 exit 0
+ab 2 exit 0

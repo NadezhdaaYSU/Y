@@ -929,6 +929,18 @@ tried, and from 256 to 4096 it is also cuBLAS's. At 8192 it is not, and cuBLAS
 is the closer to float64: on same-sign inputs Y's results are on average
 1.0e-4 below it and cuBLAS's 3.2e-5 (see known issues).
 
+On 2026-10-19 the emitter stopped asking `ptxas` to divide by constants
+(`docs/benchmarks/const_div_2026-10-19/`). `ptxas` turns a `div.u32` or
+`rem.u32` by an immediate, even 4, into a reciprocal division, and does so
+after constant propagation. So the fully unrolled 512 K loop computed its
+stage index `(k + 3) % 4` at run time every K-tile, and the 27 committed GEMM
+kernels held 8 to 57 such divisions each. They are now shifts, masks and
+multiply-high sequences, exact for every input; the 512 kernel executes 311K
+warp instructions where it executed 450K. Against the parent's kernels it is
+0.1–3.7% faster at every square size and decode shape in every run, by
+1.8–2.9% at 512 and 1.1–2.0% at M = 1. That is one run on a quiet GPU and
+two with a game running; the record says which is which. The table above predates it.
+
 This table read 0.84–0.94x above 256 when it was measured on 2026-08-09, by
 a harness that commit does not record. On 2026-10-17 the K loop
 stopped recomputing every `cp.async` chunk's address and bounds at each
@@ -1145,7 +1157,7 @@ different baseline.
 | workload | baseline | result |
 |---|---|---|
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
-| Square F16 GEMM, 512³ | cuBLAS | 0.87–0.88x |
+| Square F16 GEMM, 512³ | cuBLAS | 0.88–0.89x |
 | Decode-shaped F16 GEMM, M=32, N=K=4096, B resident in L2 | cuBLAS | 0.75–0.77x |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 
@@ -1155,14 +1167,19 @@ shapes it is behind only at batch 32 / ctx 1024, by 2–5% of CUPTI device time
 in both runs, about the size of FlashInfer's own run-to-run variation
 (`docs/benchmarks/paged_attention_2026-10-18/`). At 512³ cuBLAS runs the same
 64x64 tile on the same 64-CTA grid as Y, on 4 warps with a 64-deep K step and
-5 stages, and executes 343K warp instructions to Y's 444K. Of nine tiles
-around Y's, cuBLAS's shape among them, Y's tuned tile was the fastest in both
-runs (`docs/benchmarks/f16_square_2026-10-18/512/`). Split by region, Y's
-extra stall samples are in the K loop: 107 at its barrier and 106 on long
-scoreboards, against cuBLAS's 26 and 29. Moving the barrier to between a
-K-tile's last two steps left 512³ level, and tiles of half the size (two
-CTAs to an SM) took 1.23–1.47x its time, of a quarter 1.59–1.78x
-(`docs/benchmarks/f16_xbar_2026-10-18/`).
+5 stages, and executes 343K warp instructions. Of nine tiles around Y's,
+cuBLAS's shape among them, Y's tuned tile was the fastest in both runs
+(`docs/benchmarks/f16_square_2026-10-18/512/`). Y's extra stall samples were
+in the K loop: 107 at its barrier and 106 on long scoreboards, against
+cuBLAS's 26 and 29. Moving the barrier to between a K-tile's last two steps
+left 512³ level, and tiles of half the size (two CTAs to an SM) took
+1.23–1.47x its time, of a quarter 1.59–1.78x
+(`docs/benchmarks/f16_xbar_2026-10-18/`). Y executed 444–450K instructions
+until 2026-10-19, when it stopped dividing by constants. It executes 311K now,
+fewer than cuBLAS, and is still 0.88–0.89x cuBLAS. What is left in its K
+loop is three dead loads `ptxas` places after each barrier, 7.9% of the
+instructions it executes, and 0.70 `ldmatrix` a HMMA on its 4x2 warps against cuBLAS's
+0.50 on 2x2 (`docs/benchmarks/const_div_2026-10-19/`).
 
 The decode shapes are M of 1 to 32 rows against a 4096 x 4096 B
 (`docs/benchmarks/decode_dram_2026-10-18/`). With B read from DRAM, as in a
@@ -2164,13 +2181,15 @@ all. Counted as **instructions**, not as lines that mention one:
 ```
 kernel                lines  mma.sync  cp.async  ldmatrix  bar.sync
 int8_gemm.ptx           134         1         0         0         0
-gemm_f16_4096.ptx       672        64        20        16         6
+gemm_f16_4096.ptx       674        64        20        16         6
 ```
 
 The f16 row read `964 / 64 / 21 / 24 / 7` until 2026-10-17, when that
 kernel's K loop began computing its copy addresses once and loading B with one
 `ldmatrix.x4.trans` per 16 columns
-(`docs/benchmarks/f16_gemm_loop_2026-10-17/`).
+(`docs/benchmarks/f16_gemm_loop_2026-10-17/`). It read 672 lines until
+2026-10-19, when the epilogue's two copy loops were marked
+`.pragma "nounroll"` (`docs/benchmarks/const_div_2026-10-19/`).
 
 > **Those figures read `89 lines with 2 mma … against 964 / 65 / 22 / 24 / 7`
 > until 2026-09-08, and the correction above had already been written.** The

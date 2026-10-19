@@ -1,0 +1,7 @@
+nothing: 0 dummy @!PT LDS
+wait: 0 dummy @!PT LDS
+bar: 3 dummy @!PT LDS
+waitbar: 3 dummy @!PT LDS
+wait1: 0 dummy @!PT LDS
+lds: 0 dummy @!PT LDS
+ldmatrix: 0 dummy @!PT LDS

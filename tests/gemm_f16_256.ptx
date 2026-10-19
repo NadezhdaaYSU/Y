@@ -50,8 +50,8 @@
     mul.lo.u32 %r15, %r13, 64;
     mov.u32 %r16, %tid.x;
     shr.u32 %r17, %r16, 5;
-    rem.u32 %r18, %r17, 2;
-    div.u32 %r19, %r17, 2;
+    and.b32 %r18, %r17, 1;
+    shr.u32 %r19, %r17, 1;
     mul.lo.u32 %r20, %r18, 16;
     mul.lo.u32 %r21, %r19, 32;
     and.b32 %r22, %r16, 31;
@@ -77,8 +77,8 @@
     mov.u32 %r26, smem_pipeline_gemm_f16_256;
     add.u32 %r27, %r26, 10240;
     mov.u32 %r28, %tid.x;
-    div.u32 %r29, %r28, 4;
-    rem.u32 %r30, %r28, 4;
+    shr.u32 %r29, %r28, 2;
+    and.b32 %r30, %r28, 3;
     mul.lo.u32 %r31, %r30, 8;
     add.u32 %r32, %r14, %r29;
     mad.lo.u32 %r33, %r32, 256, %r31;
@@ -87,8 +87,8 @@
     mad.lo.u32 %r34, %r29, 40, %r31;
     shl.b32 %r35, %r34, 1;
     mov.u32 %r36, %tid.x;
-    div.u32 %r37, %r36, 8;
-    rem.u32 %r38, %r36, 8;
+    shr.u32 %r37, %r36, 3;
+    and.b32 %r38, %r36, 7;
     mul.lo.u32 %r39, %r38, 8;
     add.u32 %r40, %r15, %r39;
     mad.lo.u32 %r41, %r37, 256, %r40;
@@ -178,9 +178,9 @@
     $GEMM_K_LOOP_0:
     setp.ge.u32 %p3, %r102, 8;
     @%p3 bra $GEMM_K_DONE_1;
-    rem.u32 %r103, %r102, 4;
+    and.b32 %r103, %r102, 3;
     add.u32 %r104, %r102, 3;
-    rem.u32 %r105, %r104, 4;
+    and.b32 %r105, %r104, 3;
     setp.lt.u32 %p4, %r104, 8;
     mul.lo.u32 %r106, %r104, 32;
     mad.lo.u32 %r107, %r105, 2560, %r26;
@@ -231,7 +231,7 @@
     cp.async.wait_group 2;
     bar.sync 0;
     add.u32 %r132, %r102, 1;
-    rem.u32 %r133, %r132, 4;
+    and.b32 %r133, %r132, 3;
     mad.lo.u32 %r134, %r133, 2560, %r26;
     mad.lo.u32 %r135, %r133, 4608, %r27;
     add.u32 %r136, %r21, 0;
@@ -280,10 +280,11 @@
     add.u32 %r163, %r15, 0;
     mov.u32 %r164, %tid.x;
     $EPI_PLAIN_2:
+    .pragma "nounroll";
     setp.ge.u32 %p7, %r164, 256;
     @%p7 bra $EPI_PLAIN_DONE_3;
-    div.u32 %r165, %r164, 8;
-    rem.u32 %r166, %r164, 8;
+    shr.u32 %r165, %r164, 3;
+    and.b32 %r166, %r164, 7;
     mul.lo.u32 %r167, %r166, 4;
     add.u32 %r168, %r14, %r165;
     add.u32 %r169, %r163, %r167;
@@ -318,10 +319,11 @@
     add.u32 %r183, %r15, 32;
     mov.u32 %r184, %tid.x;
     $EPI_PLAIN_4:
+    .pragma "nounroll";
     setp.ge.u32 %p12, %r184, 256;
     @%p12 bra $EPI_PLAIN_DONE_5;
-    div.u32 %r185, %r184, 8;
-    rem.u32 %r186, %r184, 8;
+    shr.u32 %r185, %r184, 3;
+    and.b32 %r186, %r184, 7;
     mul.lo.u32 %r187, %r186, 4;
     add.u32 %r188, %r14, %r185;
     add.u32 %r189, %r183, %r187;

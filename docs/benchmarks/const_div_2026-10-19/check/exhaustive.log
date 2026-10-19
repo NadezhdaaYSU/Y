@@ -1,0 +1,4 @@
+c=3: m=2863311531 l=1: all 2^32 dividends exact (11 s)
+c=5: m=3435973837 l=2: all 2^32 dividends exact (11 s)
+c=6: m=2863311531 l=2: all 2^32 dividends exact (10 s)
+c=24: m=2863311531 l=4: all 2^32 dividends exact (10 s)

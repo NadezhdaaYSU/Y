@@ -53,8 +53,8 @@
     mul.lo.u32 %r15, %r13, 128;
     mov.u32 %r16, %tid.x;
     shr.u32 %r17, %r16, 5;
-    rem.u32 %r18, %r17, 2;
-    div.u32 %r19, %r17, 2;
+    and.b32 %r18, %r17, 1;
+    shr.u32 %r19, %r17, 1;
     mul.lo.u32 %r20, %r18, 32;
     mul.lo.u32 %r21, %r19, 64;
     and.b32 %r22, %r16, 31;
@@ -128,8 +128,8 @@
     mov.u32 %r26, smem_pipeline_gemm_f16_bias_relu_1024;
     add.u32 %r27, %r26, 15360;
     mov.u32 %r28, %tid.x;
-    div.u32 %r29, %r28, 4;
-    rem.u32 %r30, %r28, 4;
+    shr.u32 %r29, %r28, 2;
+    and.b32 %r30, %r28, 3;
     mul.lo.u32 %r31, %r30, 8;
     add.u32 %r32, %r14, %r29;
     mad.lo.u32 %r33, %r32, 1024, %r31;
@@ -138,8 +138,8 @@
     mad.lo.u32 %r34, %r29, 40, %r31;
     shl.b32 %r35, %r34, 1;
     mov.u32 %r36, %tid.x;
-    div.u32 %r37, %r36, 16;
-    rem.u32 %r38, %r36, 16;
+    shr.u32 %r37, %r36, 4;
+    and.b32 %r38, %r36, 15;
     mul.lo.u32 %r39, %r38, 8;
     add.u32 %r40, %r15, %r39;
     mad.lo.u32 %r41, %r37, 1024, %r40;
@@ -239,9 +239,15 @@
     $GEMM_K_LOOP_0:
     setp.ge.u32 %p3, %r139, 32;
     @%p3 bra $GEMM_K_DONE_1;
-    rem.u32 %r140, %r139, 3;
+    mul.hi.u32 %r140, %r139, 2863311531;
+    shr.u32 %r140, %r140, 1;
+    mul.lo.u32 %r140, %r140, 3;
+    sub.u32 %r140, %r139, %r140;
     add.u32 %r141, %r139, 2;
-    rem.u32 %r142, %r141, 3;
+    mul.hi.u32 %r142, %r141, 2863311531;
+    shr.u32 %r142, %r142, 1;
+    mul.lo.u32 %r142, %r142, 3;
+    sub.u32 %r142, %r141, %r142;
     setp.lt.u32 %p4, %r141, 32;
     mul.lo.u32 %r143, %r141, 32;
     mad.lo.u32 %r144, %r142, 5120, %r26;
@@ -328,7 +334,10 @@
     cp.async.wait_group 1;
     bar.sync 0;
     add.u32 %r187, %r139, 1;
-    rem.u32 %r188, %r187, 3;
+    mul.hi.u32 %r188, %r187, 2863311531;
+    shr.u32 %r188, %r188, 1;
+    mul.lo.u32 %r188, %r188, 3;
+    sub.u32 %r188, %r187, %r188;
     mad.lo.u32 %r189, %r188, 5120, %r26;
     mad.lo.u32 %r190, %r188, 8704, %r27;
     add.u32 %r191, %r21, 0;
@@ -442,8 +451,8 @@
     $EPI_BIAS_RELU_2:
     setp.ge.u32 %p7, %r261, 1024;
     @%p7 bra $EPI_BIAS_RELU_DONE_3;
-    div.u32 %r262, %r261, 16;
-    rem.u32 %r263, %r261, 16;
+    shr.u32 %r262, %r261, 4;
+    and.b32 %r263, %r261, 15;
     mul.lo.u32 %r264, %r263, 4;
     add.u32 %r265, %r14, %r262;
     add.u32 %r266, %r260, %r264;
@@ -521,8 +530,8 @@
     $EPI_BIAS_RELU_4:
     setp.ge.u32 %p12, %r305, 1024;
     @%p12 bra $EPI_BIAS_RELU_DONE_5;
-    div.u32 %r306, %r305, 16;
-    rem.u32 %r307, %r305, 16;
+    shr.u32 %r306, %r305, 4;
+    and.b32 %r307, %r305, 15;
     mul.lo.u32 %r308, %r307, 4;
     add.u32 %r309, %r14, %r306;
     add.u32 %r310, %r304, %r308;
