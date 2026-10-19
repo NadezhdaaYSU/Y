@@ -1,0 +1,48 @@
+== rmsnorm_residual_4096 rows 128  4 MB  all checked  calls 770  SM 2505-2505 MHz
+   Y              min      3.43 median      3.73 us   1223.9 GB/s  1.000x the fastest
+   Triton         min      5.38 median      5.68 us    780.5 GB/s  1.568x the fastest
+   PyTorch        min     38.43 median     39.44 us    109.4 GB/s  11.192x the fastest
+== rmsnorm_residual_4096 rows 512  17 MB  all checked  calls 340  SM 2505-2760 MHz
+   Triton         min      8.24 median      8.89 us   2037.0 GB/s  1.000x the fastest
+   Y              min      9.02 median     10.03 us   1861.5 GB/s  1.094x the fastest
+   PyTorch        min     85.30 median     88.79 us    196.8 GB/s  10.352x the fastest
+== rmsnorm_residual_4096 rows 1024  34 MB  all checked  calls 190  SM 2730-2760 MHz
+   Triton         min     13.96 median     14.79 us   2403.5 GB/s  1.000x the fastest
+   Y              min     15.10 median     16.56 us   2223.3 GB/s  1.081x the fastest
+   PyTorch        min    241.72 median    248.42 us    138.8 GB/s  17.310x the fastest
+== rmsnorm_residual_4096 rows 1536  50 MB  all checked  calls 115  SM 2490-2760 MHz
+   Y              min     25.35 median     26.14 us   1985.7 GB/s  1.000x the fastest
+   Triton         min     25.86 median     27.00 us   1946.8 GB/s  1.020x the fastest
+   PyTorch        min    459.88 median    469.77 us    109.5 GB/s  18.141x the fastest
+== rmsnorm_residual_4096 rows 3072  101 MB  all checked  calls 18  SM 2760-2760 MHz
+   Triton         min    165.15 median    169.46 us    609.6 GB/s  1.000x the fastest
+   Y              min    166.06 median    183.30 us    606.2 GB/s  1.006x the fastest
+   PyTorch        min   1354.31 median   1396.12 us     74.3 GB/s  8.201x the fastest
+== rmsnorm_residual_4096 rows 8192  268 MB  all checked  calls 6  SM 2505-2760 MHz
+   Triton         min    441.34 median    499.03 us    608.2 GB/s  1.000x the fastest
+   Y              min    443.22 median    497.66 us    605.7 GB/s  1.004x the fastest
+   PyTorch        min   3868.84 median   3965.49 us     69.4 GB/s  8.766x the fastest
+== rope_128 rows 4096  2 MB  all checked  calls 791  SM 2505-2760 MHz
+   Y              min      3.34 median      3.61 us    633.3 GB/s  1.000x the fastest
+   Triton         min      5.57 median      5.94 us    379.8 GB/s  1.668x the fastest
+   PyTorch        min     48.46 median     49.19 us     43.6 GB/s  14.519x the fastest
+== rope_128 rows 32768  17 MB  all checked  calls 163  SM 2670-2760 MHz
+   Triton         min     16.21 median     17.57 us   1042.8 GB/s  1.000x the fastest
+   Y              min     16.66 median     17.86 us   1014.9 GB/s  1.028x the fastest
+   PyTorch        min    280.19 median    287.04 us     60.3 GB/s  17.280x the fastest
+== rope_128 rows 65536  34 MB  all checked  calls 89  SM 2490-2760 MHz
+   Triton         min     30.24 median     32.83 us   1118.4 GB/s  1.000x the fastest
+   Y              min     32.08 median     35.05 us   1054.2 GB/s  1.061x the fastest
+   PyTorch        min   1112.74 median   1128.45 us     30.4 GB/s  36.801x the fastest
+== rope_128 rows 98304  51 MB  all checked  calls 61  SM 2505-2760 MHz
+   Triton         min     46.40 median     51.60 us   1093.2 GB/s  1.000x the fastest
+   Y              min     55.85 median     59.71 us    908.2 GB/s  1.204x the fastest
+   PyTorch        min   1914.36 median   1929.75 us     26.5 GB/s  41.259x the fastest
+== rope_128 rows 196608  101 MB  all checked  calls 18  SM 2760-2760 MHz
+   Y              min    166.17 median    181.25 us    610.5 GB/s  1.000x the fastest
+   Triton         min    168.28 median    174.08 us    602.9 GB/s  1.013x the fastest
+   PyTorch        min   4022.67 median   4049.52 us     25.2 GB/s  24.208x the fastest
+== rope_128 rows 524288  271 MB  all checked  calls 6  SM 2760-2760 MHz
+   Y              min    444.42 median    488.45 us    608.7 GB/s  1.000x the fastest
+   Triton         min    445.95 median    498.18 us    606.6 GB/s  1.003x the fastest
+   PyTorch        min  10757.46 median  10869.32 us     25.1 GB/s  24.206x the fastest

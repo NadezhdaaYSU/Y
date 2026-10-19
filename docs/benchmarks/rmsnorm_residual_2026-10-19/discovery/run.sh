@@ -1,0 +1,10 @@
+#!/bin/bash
+# run.sh <tag>: one probe_nr.py run with the compiler of d02cff0 (the main checkout's committed PTX).
+SP=/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad
+N=$SP/nr
+M="/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y"
+cd $N || exit 9
+{ date; nvidia-smi --query-gpu=name,driver_version,utilization.gpu,clocks.sm --format=csv,noheader; "$SP/games.sh"; echo; } > $N/env_$1.txt
+Y_LIB_PATH=$SP/xbar/target/release/liby.so PYTHONPATH=$SP/xbar/python python3 $N/probe_nr.py "$M/python/examples" $SP/f16sq "$M/tests" > $N/nr_$1.log 2>&1
+echo "nr $1 exit $?" >> $N/summary.txt
+{ date; nvidia-smi --query-gpu=utilization.gpu,clocks.sm --format=csv,noheader; "$SP/games.sh"; echo; } >> $N/env_$1.txt

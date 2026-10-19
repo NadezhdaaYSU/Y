@@ -1,0 +1,11 @@
+CONTROL: exit 0; OK; failing: 
+M1_no_tail_predicate: exit 1; FAILED (failures=12); failing:  12 test_every_shape_is_exact_where_it_must_be_and_close_elsewhere;
+M2_tail_not_zeroed: exit 1; FAILED (failures=12); failing:  12 test_every_shape_is_exact_where_it_must_be_and_close_elsewhere;
+M3_weight_offset_by_row: exit 1; FAILED (failures=21); failing:  1 test_a_launch_with_another_block_size_traps; 20 test_every_shape_is_exact_where_it_must_be_and_close_elsewhere;
+M4_newres_from_x: exit 1; FAILED (failures=30); failing:  30 test_every_shape_is_exact_where_it_must_be_and_close_elsewhere;
+M5_guard_wrong_size: exit 1; FAILED (failures=1, errors=4); failing:  1 test_a_launch_with_another_block_size_traps; 4 test_every_shape_is_exact_where_it_must_be_and_close_elsewhere;
+M6_no_guard: exit 1; FAILED (failures=1); failing:  1 test_a_launch_with_another_block_size_traps;
+M7_old_warp_rule: exit 1; FAILED (failures=5); failing:  1 test_a_launch_with_another_block_size_traps; 1 test_every_shape_is_exact_where_it_must_be_and_close_elsewhere; 3 test_the_rows_are_unrolled_with_every_load_first;
+M8_loop_no_newres: exit 1; FAILED (failures=3); failing:  3 test_every_shape_is_exact_where_it_must_be_and_close_elsewhere;
+M9_no_refusal: exit 1; FAILED (failures=1); failing:  1 test_a_width_not_a_multiple_of_8_is_refused;
+RESTORED, build exit 0

@@ -57,6 +57,15 @@ def build():
         sys.exit(1)
 
 
+
+def rmsnorm_threads(ptx_path):
+    """The threads a row `rmsnorm_residual_<d>`'s PTX header states."""
+    import re
+    m = re.search(r"\[Y FUSED ADD\+RMSNORM\].*?\((\d+) threads\)", open(ptx_path).read())
+    if m is None:
+        raise RuntimeError("%s has no [Y FUSED ADD+RMSNORM] header" % ptx_path)
+    return int(m.group(1))
+
 def compile_once(ysu_name):
     res = subprocess.run([Y_BIN, f"tests/{ysu_name}.ysu", "--emit-ptx"], capture_output=True, text=True, cwd=REPO_ROOT)
     if res.returncode != 0:
@@ -81,10 +90,10 @@ def run_once_rmsnorm(rows):
     mod = cp.RawModule(path=os.path.join(REPO_ROOT, "tests/rmsnorm_residual_4096.ptx"))
     fn = mod.get_function("rmsnorm_residual_4096")
 
-    # 256 threads/row (8 warps), not 32 - must match
-    # emit_rmsnorm_residual_kernel's own num_warps for HIDDEN_DIM=4096 (see
-    # benchmark_y_vs_flashinfer.py's copy of this comment for the formula).
-    grid, threads = (rows, 1), (256, 1, 1)
+    # The block size the kernel's PTX header states (the kernel traps on any
+    # other): see benchmark_y_vs_flashinfer.py's rmsnorm_threads.
+    threads = (rmsnorm_threads(os.path.join(REPO_ROOT, "tests/rmsnorm_residual_4096.ptx")), 1, 1)
+    grid = (rows, 1)
 
     for _ in range(10):
         fn(grid, threads, (X_cp, Res_cp, W_cp, Out_cp, NewRes_cp))

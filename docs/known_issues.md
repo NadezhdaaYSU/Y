@@ -190,12 +190,28 @@ source; each entry there now carries its status. What is still open:
   `gemm_f16_1024`, `gemm_f16_bias_relu_1024` and the four decode kernels as
   `LDGSTS.E.BYPASS.LTC128B.128`, so the validator documentation's opcode
   list for all 23 F16 GEMMs and its `gemm_f16_1024` row, which name
-  `LDGSTS.E.BYPASS.128`, hold for 17 of them.
+  `LDGSTS.E.BYPASS.128`, hold for 17 of them. The fused RMSNorm's unrolled groups
+  (2026-10-19) take `rmsnorm_residual_4096` out of the loop census, and
+  docgate reports 18. Three figures newly disagree: "48 kernels / 0
+  validated" (47 measured), the loop census's bucket of 1 for "PTX loop
+  cross-thread effect: st.shared.v4.f32" (measured by no kernel now), and
+  liftgap's "SEQUENTIAL depth 1" (25 published, 24 measured). The unroll
+  census's "no loop" figure (21 published) now matches. The figures that
+  already disagreed move by one or two: nestval answers 29, the
+  multi-back-edge kernels are 28 of 47, liftgap 28 kernels / 95 levels, and
+  the unroll census 25 `MATCHED`. **docgate's own control fails too:**
+  `perturbed_unroll('rmsnorm_residual_4096')` doubles that kernel's SASS loop
+  body and expects `UNROLLED`, and the kernel has no loop left to double, so
+  the control reads `None`. It needs another subject in
+  `tools/ptxas_tval/docgate.py`; `naive_gemm_f32`, `gemm_f16_4096` and
+  `gemm_f16_decode_m4` each read `UNROLLED` under the same perturbation
+  (checked 2026-10-19 by calling `perturbed_unroll` on the rebuilt corpus).
 
 ## Fixed
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| `rmsnorm_residual_<d>` could not be built from hidden 12288 up, and wrote part of a row at a width not a multiple of 8 | It staged h through `d * 4` bytes of static shared memory, which `ptxas` refuses above 48 KB ("uses too much shared data"), and moved whole 16-byte groups of 8 f16 with no check of the width, so hidden 100 compiled and left the last 4 elements of every row unwritten. h now stays in registers (no shared memory but the 8-to-32-float cross-warp sum), a width that is not a multiple of 8 is refused, and a launch with another block size than the PTX header states traps; the warp count changed with it, from 8 to 16 at 4096 (`docs/benchmarks/rmsnorm_residual_2026-10-19/`). `python/y_lang/tests/test_rmsnorm_residual.py` (hidden 256-65536, the trap in a child process, the refusal); each of nine mutants fails it. |
 | Y's FP8 GEMM summed in the tensor core's accumulator | The `@tile` FP8 GEMM chained every `mma.sync.m16n8k32` of its K loop in the mma's own accumulator, which on an RTX 4070 Ti SUPER adds an mma's products at about 11 bits, truncating: on positive inputs at K = 4096 the median relative error was 6.6% (`torch._scaled_mm`: 5.7e-4). Every FP8 test and benchmark used small integers, whose partial sums are exact, so none could see it. Each mma now starts from zero and is added into the accumulator with `add.rn.f32`: 6.5e-5, at no measured cost (`docs/benchmarks/fp8_e4m3_2026-10-18/`). The new e4m3-input GEMM does the same. `test_partial_sums_are_added_in_float32` in `test_fp8_gemm.py` and `test_fp8_e4m3.py`; each fails on the chained form (7.1e-2). |
 | The CLI reported an F16 tile for every `@tile` kernel | It asked `Autotuner::autotune` for an F16 tile for the int8 and FP8 GEMMs too, which choose their own tiles, printed it as theirs, and under `--autotune` measured F16 candidates for them. It reports F16 kernels only now. `the_cli_reports_an_autotuned_tile_for_f16_only` (`tests/ptx_e4m3.rs`). |
 | Y's F16 tile GEMMs could not run from Python; a missing kernel name ran `main` | `TorchKernel.launch` passed no dynamic shared memory, so every kernel staging through `.extern .shared` died with an illegal address; it now passes what the kernel's PTX states and raises the function's limit above 48 KB. The CPU interpreter still gave that array 0 bytes, under `Y_INTERPRETER=1` and in `debug_interpret`, so such a kernel stopped at its first store there, reported out of bounds; `CPUInterpreter.run` now takes the size from the PTX as well (`DynamicSharedMemory` in `test_interpreter.py`). A kernel name the module lacked fell back to an entry named `main`; it is refused. The launch path also went from 6.6 to 2.9 us of CPU time per call (Triton 5.7, PyTorch 2.0; `docs/benchmarks/launch_2026-10-12/`). `python/y_lang/tests/test_launch.py` (F16 GEMMs below and above 48 KB exact against float64, the current and an explicit stream on a non-blocking stream, the interpreter switch); each of seven mutants fails it. |

@@ -1,0 +1,157 @@
+== d=896 rows 558  4 MB  all checked; threads {'Y before': 32, 'Y after': 128}; Out bits before == after: False  calls 894  SM 2505-2505 MHz
+   Y after    min      2.88 median      2.88 us   1390.3 GB/s  1.000x the fastest
+   Y before   min      3.59 median      3.59 us   1115.8 GB/s  1.246x the fastest
+   FlashInfer min      4.31 median      4.34 us    927.4 GB/s  1.499x the fastest
+   Triton     min      5.82 median      5.86 us    688.0 GB/s  2.021x the fastest
+== d=896 rows 2372  17 MB  all checked; threads {'Y before': 32, 'Y after': 128}; Out bits before == after: False  calls 357  SM 2505-2505 MHz
+   Triton     min      7.35 median      7.54 us   2313.9 GB/s  1.000x the fastest
+   Y after    min      7.50 median      7.69 us   2267.9 GB/s  1.020x the fastest
+   FlashInfer min      8.30 median      8.53 us   2048.5 GB/s  1.130x the fastest
+   Y before   min      9.11 median      9.21 us   1866.0 GB/s  1.240x the fastest
+== d=896 rows 4743  34 MB  all checked; threads {'Y before': 32, 'Y after': 128}; Out bits before == after: False  calls 202  SM 2775-2775 MHz
+   Triton     min     13.12 median     13.17 us   2590.6 GB/s  1.000x the fastest
+   Y after    min     13.35 median     13.39 us   2547.3 GB/s  1.017x the fastest
+   FlashInfer min     14.35 median     14.53 us   2369.9 GB/s  1.093x the fastest
+   Y before   min     15.45 median     15.51 us   2200.4 GB/s  1.177x the fastest
+== d=896 rows 18694  134 MB  all checked; threads {'Y before': 32, 'Y after': 128}; Out bits before == after: False  calls 13  SM 2490-2490 MHz
+   FlashInfer min    217.19 median    217.40 us    617.0 GB/s  1.000x the fastest
+   Triton     min    218.18 median    218.66 us    614.2 GB/s  1.005x the fastest
+   Y after    min    218.25 median    218.82 us    614.0 GB/s  1.005x the fastest
+   Y before   min    219.45 median    220.08 us    610.6 GB/s  1.010x the fastest
+== d=2048 rows 244  4 MB  all checked; threads {'Y before': 256, 'Y after': 256}; Out bits before == after: True  calls 887  SM 2490-2655 MHz
+   Y after    min      2.91 median      2.92 us   1375.0 GB/s  1.000x the fastest
+   Y before   min      3.16 median      3.17 us   1266.5 GB/s  1.086x the fastest
+   FlashInfer min      4.33 median      4.38 us    925.1 GB/s  1.486x the fastest
+   Triton     min      5.85 median      5.88 us    683.8 GB/s  2.011x the fastest
+== d=2048 rows 1038  17 MB  all checked; threads {'Y before': 256, 'Y after': 256}; Out bits before == after: True  calls 352  SM 2655-2760 MHz
+   Triton     min      7.56 median      7.62 us   2250.5 GB/s  1.000x the fastest
+   Y after    min      7.60 median      7.62 us   2238.7 GB/s  1.005x the fastest
+   Y before   min      8.04 median      8.06 us   2115.7 GB/s  1.064x the fastest
+   FlashInfer min      8.87 median      8.90 us   1917.2 GB/s  1.174x the fastest
+== d=2048 rows 2075  34 MB  all checked; threads {'Y before': 256, 'Y after': 256}; Out bits before == after: True  calls 202  SM 2760-2760 MHz
+   Triton     min     13.39 median     13.41 us   2539.8 GB/s  1.000x the fastest
+   Y after    min     13.40 median     13.42 us   2536.7 GB/s  1.001x the fastest
+   Y before   min     13.87 median     13.90 us   2450.6 GB/s  1.036x the fastest
+   FlashInfer min     14.85 median     14.90 us   2289.7 GB/s  1.109x the fastest
+== d=2048 rows 8179  134 MB  all checked; threads {'Y before': 256, 'Y after': 256}; Out bits before == after: True  calls 13  SM 2490-2490 MHz
+   Y before   min    217.40 median    217.80 us    616.4 GB/s  1.000x the fastest
+   Y after    min    217.72 median    219.37 us    615.5 GB/s  1.001x the fastest
+   FlashInfer min    218.52 median    218.67 us    613.2 GB/s  1.005x the fastest
+   Triton     min    218.57 median    219.14 us    613.1 GB/s  1.005x the fastest
+== d=3072 rows 163  4 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 887  SM 2475-2475 MHz
+   Y after    min      3.04 median      3.05 us   1321.4 GB/s  1.000x the fastest
+   Y before   min      3.49 median      3.50 us   1148.1 GB/s  1.151x the fastest
+   FlashInfer min      4.31 median      4.36 us    930.2 GB/s  1.421x the fastest
+   Triton     min      5.86 median      5.88 us    684.8 GB/s  1.930x the fastest
+== d=3072 rows 692  17 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 352  SM 2475-2595 MHz
+   Y after    min      7.67 median      7.70 us   2217.7 GB/s  1.000x the fastest
+   Triton     min      8.01 median      8.04 us   2122.7 GB/s  1.045x the fastest
+   FlashInfer min      8.77 median      8.79 us   1940.3 GB/s  1.143x the fastest
+   Y before   min      9.43 median      9.45 us   1803.9 GB/s  1.229x the fastest
+== d=3072 rows 1383  34 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 200  SM 2595-2760 MHz
+   Y after    min     13.46 median     13.52 us   2524.9 GB/s  1.000x the fastest
+   Triton     min     13.79 median     13.87 us   2464.6 GB/s  1.024x the fastest
+   FlashInfer min     15.22 median     15.25 us   2234.1 GB/s  1.130x the fastest
+   Y before   min     16.22 median     16.26 us   2095.8 GB/s  1.205x the fastest
+== d=3072 rows 5452  134 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 13  SM 2760-2760 MHz
+   FlashInfer min    218.17 median    218.35 us    614.2 GB/s  1.000x the fastest
+   Triton     min    218.19 median    218.67 us    614.1 GB/s  1.000x the fastest
+   Y after    min    218.27 median    218.56 us    613.9 GB/s  1.000x the fastest
+   Y before   min    218.66 median    219.35 us    612.8 GB/s  1.002x the fastest
+== d=4096 rows 122  4 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 865  SM 2775-2775 MHz
+   Y after    min      3.03 median      3.03 us   1323.4 GB/s  1.000x the fastest
+   Y before   min      3.42 median      3.43 us   1169.6 GB/s  1.131x the fastest
+   FlashInfer min      4.32 median      4.35 us    927.3 GB/s  1.427x the fastest
+   Triton     min      5.82 median      5.86 us    688.8 GB/s  1.921x the fastest
+== d=4096 rows 519  17 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 348  SM 2715-2715 MHz
+   Y after    min      7.68 median      7.69 us   2215.5 GB/s  1.000x the fastest
+   Triton     min      8.18 median      8.21 us   2079.4 GB/s  1.065x the fastest
+   Y before   min      8.97 median      8.99 us   1895.9 GB/s  1.169x the fastest
+   FlashInfer min      9.06 median      9.09 us   1878.0 GB/s  1.180x the fastest
+== d=4096 rows 1038  34 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 200  SM 2715-2760 MHz
+   Y after    min     13.57 median     13.62 us   2507.2 GB/s  1.000x the fastest
+   Triton     min     14.15 median     14.19 us   2404.1 GB/s  1.043x the fastest
+   FlashInfer min     15.55 median     15.65 us   2187.2 GB/s  1.146x the fastest
+   Y before   min     15.70 median     15.75 us   2167.3 GB/s  1.157x the fastest
+== d=4096 rows 4089  134 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 13  SM 2760-2760 MHz
+   Triton     min    217.64 median    219.14 us    615.7 GB/s  1.000x the fastest
+   Y after    min    218.06 median    218.73 us    614.5 GB/s  1.002x the fastest
+   Y before   min    218.27 median    218.58 us    613.9 GB/s  1.003x the fastest
+   FlashInfer min    218.35 median    218.66 us    613.7 GB/s  1.003x the fastest
+== d=5120 rows 98  4 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 861  SM 2760-2775 MHz
+   Y after    min      2.98 median      3.00 us   1349.2 GB/s  1.000x the fastest
+   Y before   min      3.94 median      3.94 us   1022.0 GB/s  1.320x the fastest
+   FlashInfer min      4.32 median      4.37 us    931.9 GB/s  1.448x the fastest
+   Triton     min      5.85 median      5.86 us    688.0 GB/s  1.961x the fastest
+== d=5120 rows 415  17 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 352  SM 2775-2775 MHz
+   Y after    min      7.61 median      7.63 us   2234.7 GB/s  1.000x the fastest
+   FlashInfer min      8.99 median      9.01 us   1891.1 GB/s  1.182x the fastest
+   Triton     min      9.06 median      9.11 us   1876.5 GB/s  1.191x the fastest
+   Y before   min      9.72 median      9.73 us   1750.2 GB/s  1.277x the fastest
+== d=5120 rows 830  34 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 200  SM 2460-2460 MHz
+   Y after    min     13.51 median     13.54 us   2518.0 GB/s  1.000x the fastest
+   Triton     min     14.78 median     14.84 us   2300.6 GB/s  1.095x the fastest
+   FlashInfer min     15.53 median     15.59 us   2189.2 GB/s  1.150x the fastest
+   Y before   min     16.94 median     17.00 us   2007.9 GB/s  1.254x the fastest
+== d=5120 rows 3271  134 MB  all checked; threads {'Y before': 128, 'Y after': 512}; Out bits before == after: False  calls 13  SM 2460-2760 MHz
+   Y after    min    217.17 median    218.80 us    617.0 GB/s  1.000x the fastest
+   FlashInfer min    217.48 median    217.64 us    616.1 GB/s  1.001x the fastest
+   Y before   min    218.35 median    219.77 us    613.7 GB/s  1.005x the fastest
+   Triton     min    218.35 median    219.06 us    613.7 GB/s  1.005x the fastest
+== d=8192 rows 61  4 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 861  SM 2760-2760 MHz
+   Y after    min      3.03 median      3.03 us   1326.8 GB/s  1.000x the fastest
+   Y before   min      3.73 median      3.74 us   1075.9 GB/s  1.233x the fastest
+   FlashInfer min      4.33 median      4.38 us    926.2 GB/s  1.433x the fastest
+   Triton     min      5.85 median      5.86 us    685.7 GB/s  1.935x the fastest
+== d=8192 rows 259  17 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 333  SM 2760-2760 MHz
+   Y after    min      8.06 median      8.12 us   2108.8 GB/s  1.000x the fastest
+   Triton     min      8.83 median      9.08 us   1923.8 GB/s  1.096x the fastest
+   FlashInfer min      9.31 median      9.46 us   1824.2 GB/s  1.156x the fastest
+   Y before   min     10.50 median     10.60 us   1617.9 GB/s  1.303x the fastest
+== d=8192 rows 519  34 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 197  SM 2760-2760 MHz
+   Y after    min     13.89 median     14.13 us   2450.1 GB/s  1.000x the fastest
+   Triton     min     14.86 median     15.98 us   2289.9 GB/s  1.070x the fastest
+   FlashInfer min     16.09 median     16.38 us   2114.6 GB/s  1.159x the fastest
+   Y before   min     16.71 median     17.11 us   2036.3 GB/s  1.203x the fastest
+== d=8192 rows 2045  134 MB  all checked; threads {'Y before': 256, 'Y after': 512}; Out bits before == after: False  calls 13  SM 2505-2505 MHz
+   Triton     min    217.40 median    233.55 us    616.5 GB/s  1.000x the fastest
+   Y after    min    217.95 median    234.81 us    615.0 GB/s  1.003x the fastest
+   Y before   min    218.03 median    220.23 us    614.8 GB/s  1.003x the fastest
+   FlashInfer min    218.45 median    231.99 us    613.6 GB/s  1.005x the fastest
+== d=12032 rows 42  4 MB  all checked; threads {'Y before': 32, 'Y after': 1024}; Out bits before == after: False  calls 778  SM 2535-2535 MHz
+   Y after    min      3.36 median      3.37 us   1209.7 GB/s  1.000x the fastest
+   FlashInfer min      4.33 median      4.46 us    938.9 GB/s  1.288x the fastest
+   Triton     min      5.54 median      5.88 us    733.6 GB/s  1.649x the fastest
+   Y before   min     16.42 median     17.34 us    247.6 GB/s  4.886x the fastest
+== d=12032 rows 177  17 MB  all checked; threads {'Y before': 32, 'Y after': 1024}; Out bits before == after: False  calls 302  SM 2760-2760 MHz
+   Y after    min      8.81 median      8.86 us   1936.9 GB/s  1.000x the fastest
+   Triton     min      9.04 median      9.20 us   1888.1 GB/s  1.026x the fastest
+   FlashInfer min     10.58 median     10.74 us   1612.7 GB/s  1.201x the fastest
+   Y before   min     32.91 median     33.55 us    518.5 GB/s  3.736x the fastest
+== d=12032 rows 353  34 MB  all checked; threads {'Y before': 32, 'Y after': 1024}; Out bits before == after: False  calls 186  SM 2760-2760 MHz
+   Y after    min     14.62 median     14.84 us   2326.5 GB/s  1.000x the fastest
+   Triton     min     15.96 median     16.20 us   2130.5 GB/s  1.092x the fastest
+   FlashInfer min     17.34 median     18.98 us   1961.3 GB/s  1.186x the fastest
+   Y before   min     48.12 median     50.33 us    706.6 GB/s  3.293x the fastest
+== d=12032 rows 1392  134 MB  all checked; threads {'Y before': 32, 'Y after': 1024}; Out bits before == after: False  calls 13  SM 2760-2760 MHz
+   Y after    min    217.56 median    221.18 us    616.0 GB/s  1.000x the fastest
+   Triton     min    217.80 median    222.68 us    615.3 GB/s  1.001x the fastest
+   FlashInfer min    219.53 median    223.06 us    610.5 GB/s  1.009x the fastest
+   Y before   min    310.04 median    313.27 us    432.2 GB/s  1.425x the fastest
+   r16384_before.ptx does not load: CUDA Error cuModuleLoadData failed with error code 218
+== d=16384 rows 31  4 MB  all checked; threads {'Y after': 1024}; Out bits before == after: False  calls 770  SM 2775-2775 MHz
+   Y after    min      3.35 median      3.38 us   1222.2 GB/s  1.000x the fastest
+   FlashInfer min      4.35 median      4.46 us    942.2 GB/s  1.297x the fastest
+   Triton     min      5.26 median      5.88 us    778.0 GB/s  1.571x the fastest
+== d=16384 rows 130  17 MB  all checked; threads {'Y after': 1024}; Out bits before == after: False  calls 295  SM 2520-2520 MHz
+   Triton     min      9.00 median      9.84 us   1897.5 GB/s  1.000x the fastest
+   Y after    min      9.39 median     10.09 us   1819.0 GB/s  1.043x the fastest
+   FlashInfer min      9.43 median      9.87 us   1810.2 GB/s  1.048x the fastest
+== d=16384 rows 259  34 MB  all checked; threads {'Y after': 1024}; Out bits before == after: False  calls 168  SM 2520-2520 MHz
+   Triton     min     16.13 median     17.03 us   2106.1 GB/s  1.000x the fastest
+   Y after    min     16.16 median     16.42 us   2103.0 GB/s  1.001x the fastest
+   FlashInfer min     16.74 median     17.44 us   2030.2 GB/s  1.037x the fastest
+== d=16384 rows 1022  134 MB  all checked; threads {'Y after': 1024}; Out bits before == after: False  calls 13  SM 2760-2760 MHz
+   Triton     min    217.72 median    224.49 us    615.4 GB/s  1.000x the fastest
+   Y after    min    218.03 median    239.54 us    614.5 GB/s  1.001x the fastest
+   FlashInfer min    219.44 median    222.83 us    610.6 GB/s  1.008x the fastest

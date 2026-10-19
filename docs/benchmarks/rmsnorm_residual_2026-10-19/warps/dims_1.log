@@ -1,0 +1,126 @@
+QUIET 17:30:38 mean 3.4%
+== d=896 rows 558  4 MB  checked (before == after bit for bit)  calls 759  SM 2535-2535 MHz
+   Y after   min      3.41 median      3.46 us   1173.3 GB/s  1.000x the fastest
+   Y before  min      3.57 median      3.74 us   1119.8 GB/s  1.048x the fastest
+   Triton    min      5.71 median      5.74 us    701.3 GB/s  1.673x the fastest
+== d=896 rows 2372  17 MB  checked (before == after bit for bit)  calls 348  SM 2535-2535 MHz
+   Triton    min      7.31 median      7.42 us   2327.3 GB/s  1.000x the fastest
+   Y after   min      8.79 median      8.81 us   1934.7 GB/s  1.203x the fastest
+   Y before  min      9.04 median      9.06 us   1880.5 GB/s  1.238x the fastest
+== d=896 rows 4743  34 MB  checked (before == after bit for bit)  calls 202  SM 2535-2760 MHz
+   Triton    min     13.08 median     13.11 us   2598.6 GB/s  1.000x the fastest
+   Y after   min     14.76 median     14.78 us   2304.0 GB/s  1.128x the fastest
+   Y before  min     15.47 median     15.49 us   2198.3 GB/s  1.182x the fastest
+== d=896 rows 18694  134 MB  checked (before == after bit for bit)  calls 13  SM 2760-2760 MHz
+   Y after   min    218.03 median    218.74 us    614.6 GB/s  1.000x the fastest
+   Triton    min    218.19 median    220.08 us    614.1 GB/s  1.001x the fastest
+   Y before  min    220.00 median    220.64 us    609.1 GB/s  1.009x the fastest
+== d=2048 rows 244  4 MB  checked (before == after bit for bit)  calls 905  SM 2505-2505 MHz
+   Y after   min      2.88 median      2.90 us   1389.8 GB/s  1.000x the fastest
+   Y before  min      3.19 median      3.20 us   1253.4 GB/s  1.109x the fastest
+   Triton    min      5.70 median      5.72 us    701.5 GB/s  1.981x the fastest
+== d=2048 rows 1038  17 MB  checked (before == after bit for bit)  calls 357  SM 2505-2760 MHz
+   Triton    min      7.52 median      7.57 us   2262.7 GB/s  1.000x the fastest
+   Y after   min      7.61 median      7.66 us   2235.4 GB/s  1.012x the fastest
+   Y before  min      8.01 median      8.07 us   2123.3 GB/s  1.066x the fastest
+== d=2048 rows 2075  34 MB  checked (before == after bit for bit)  calls 204  SM 2760-2760 MHz
+   Triton    min     13.33 median     13.63 us   2551.3 GB/s  1.000x the fastest
+   Y after   min     13.37 median     13.68 us   2543.6 GB/s  1.003x the fastest
+   Y before  min     13.85 median     14.17 us   2455.1 GB/s  1.039x the fastest
+== d=2048 rows 8179  134 MB  checked (before == after bit for bit)  calls 13  SM 2655-2760 MHz
+   Y after   min    218.03 median    218.19 us    614.6 GB/s  1.000x the fastest
+   Y before  min    218.05 median    219.37 us    614.6 GB/s  1.000x the fastest
+   Triton    min    218.93 median    219.53 us    612.1 GB/s  1.004x the fastest
+== d=3072 rows 163  4 MB  checked (before == after bit for bit)  calls 837  SM 2655-2655 MHz
+   Y after   min      3.07 median      3.08 us   1307.2 GB/s  1.000x the fastest
+   Y before  min      3.47 median      3.47 us   1157.2 GB/s  1.130x the fastest
+   Triton    min      5.84 median      5.85 us    687.5 GB/s  1.901x the fastest
+== d=3072 rows 692  17 MB  checked (before == after bit for bit)  calls 325  SM 2775-2775 MHz
+   Triton    min      7.93 median      8.11 us   2146.7 GB/s  1.000x the fastest
+   Y after   min      8.29 median      8.49 us   2053.4 GB/s  1.045x the fastest
+   Y before  min      9.35 median      9.58 us   1818.6 GB/s  1.180x the fastest
+== d=3072 rows 1383  34 MB  checked (before == after bit for bit)  calls 193  SM 2655-2775 MHz
+   Triton    min     13.65 median     14.14 us   2490.8 GB/s  1.000x the fastest
+   Y after   min     14.04 median     14.55 us   2420.6 GB/s  1.029x the fastest
+   Y before  min     15.95 median     16.54 us   2130.8 GB/s  1.169x the fastest
+== d=3072 rows 5452  134 MB  checked (before == after bit for bit)  calls 13  SM 2655-2655 MHz
+   Y after   min    217.85 median    218.98 us    615.1 GB/s  1.000x the fastest
+   Triton    min    218.51 median    219.84 us    613.2 GB/s  1.003x the fastest
+   Y before  min    219.04 median    220.23 us    611.7 GB/s  1.005x the fastest
+== d=4096 rows 122  4 MB  checked (before == after bit for bit)  calls 854  SM 2505-2505 MHz
+   Y after   min      3.05 median      3.09 us   1313.6 GB/s  1.000x the fastest
+   Y before  min      3.42 median      3.46 us   1171.2 GB/s  1.122x the fastest
+   Triton    min      5.84 median      5.85 us    686.4 GB/s  1.914x the fastest
+== d=4096 rows 519  17 MB  checked (before == after bit for bit)  calls 334  SM 2505-2775 MHz
+   Y after   min      8.02 median      8.31 us   2121.7 GB/s  1.000x the fastest
+   Triton    min      8.19 median      8.51 us   2076.3 GB/s  1.022x the fastest
+   Y before  min      8.94 median      9.25 us   1903.9 GB/s  1.114x the fastest
+== d=4096 rows 1038  34 MB  checked (before == after bit for bit)  calls 197  SM 2775-2775 MHz
+   Y after   min     13.73 median     14.51 us   2477.6 GB/s  1.000x the fastest
+   Triton    min     14.00 median     14.80 us   2429.5 GB/s  1.020x the fastest
+   Y before  min     15.56 median     16.45 us   2186.1 GB/s  1.133x the fastest
+== d=4096 rows 4089  134 MB  checked (before == after bit for bit)  calls 13  SM 2490-2490 MHz
+   Y after   min    217.63 median    218.55 us    615.7 GB/s  1.000x the fastest
+   Y before  min    218.51 median    219.34 us    613.2 GB/s  1.004x the fastest
+   Triton    min    218.66 median    220.63 us    612.8 GB/s  1.005x the fastest
+== d=5120 rows 98  4 MB  checked (before == after bit for bit)  calls 815  SM 2490-2775 MHz
+   Y after   min      3.14 median      3.16 us   1280.3 GB/s  1.000x the fastest
+   Y before  min      3.83 median      3.83 us   1051.5 GB/s  1.218x the fastest
+   Triton    min      5.84 median      5.85 us    689.3 GB/s  1.857x the fastest
+== d=5120 rows 415  17 MB  checked (before == after bit for bit)  calls 321  SM 2775-2775 MHz
+   Y after   min      8.39 median      8.44 us   2028.1 GB/s  1.000x the fastest
+   Triton    min      9.13 median      9.16 us   1863.0 GB/s  1.089x the fastest
+   Y before  min      9.81 median      9.87 us   1733.9 GB/s  1.170x the fastest
+== d=5120 rows 830  34 MB  checked (before == after bit for bit)  calls 192  SM 2490-2775 MHz
+   Y after   min     14.17 median     14.24 us   2399.8 GB/s  1.000x the fastest
+   Triton    min     14.70 median     14.79 us   2312.8 GB/s  1.038x the fastest
+   Y before  min     16.70 median     16.78 us   2036.5 GB/s  1.178x the fastest
+== d=5120 rows 3271  134 MB  checked (before == after bit for bit)  calls 13  SM 2490-2490 MHz
+   Y after   min    217.80 median    218.43 us    615.2 GB/s  1.000x the fastest
+   Triton    min    218.75 median    219.38 us    612.5 GB/s  1.004x the fastest
+   Y before  min    219.33 median    219.61 us    610.9 GB/s  1.007x the fastest
+== d=8192 rows 61  4 MB  checked (before == after bit for bit)  calls 813  SM 2775-2775 MHz
+   Y after   min      3.25 median      3.26 us   1235.3 GB/s  1.000x the fastest
+   Y before  min      3.70 median      3.71 us   1085.8 GB/s  1.138x the fastest
+   Triton    min      5.70 median      5.86 us    704.8 GB/s  1.753x the fastest
+== d=8192 rows 259  17 MB  checked (before == after bit for bit)  calls 310  SM 2520-2775 MHz
+   Y after   min      8.67 median      8.72 us   1959.7 GB/s  1.000x the fastest
+   Triton    min      8.70 median      8.72 us   1952.0 GB/s  1.004x the fastest
+   Y before  min     10.33 median     10.36 us   1644.6 GB/s  1.192x the fastest
+== d=8192 rows 519  34 MB  checked (before == after bit for bit)  calls 185  SM 2520-2520 MHz
+   Y after   min     14.62 median     14.73 us   2328.0 GB/s  1.000x the fastest
+   Triton    min     14.71 median     14.86 us   2313.4 GB/s  1.006x the fastest
+   Y before  min     16.57 median     16.74 us   2053.5 GB/s  1.134x the fastest
+== d=8192 rows 2045  134 MB  checked (before == after bit for bit)  calls 13  SM 2475-2475 MHz
+   Y after   min    218.11 median    218.64 us    614.5 GB/s  1.000x the fastest
+   Triton    min    218.95 median    220.16 us    612.2 GB/s  1.004x the fastest
+   Y before  min    219.29 median    220.49 us    611.2 GB/s  1.005x the fastest
+== d=12032 rows 42  4 MB  checked (before == after bit for bit)  calls 479  SM 2610-2610 MHz
+   Triton    min      5.46 median      5.81 us    744.9 GB/s  1.000x the fastest
+   Y before  min     16.33 median     16.41 us    249.0 GB/s  2.991x the fastest
+   Y after   min     17.44 median     17.45 us    233.2 GB/s  3.193x the fastest
+== d=12032 rows 177  17 MB  checked (before == after bit for bit)  calls 290  SM 2610-2655 MHz
+   Triton    min      8.93 median      8.95 us   1911.3 GB/s  1.000x the fastest
+   Y after   min     19.28 median     19.43 us    885.1 GB/s  2.159x the fastest
+   Y before  min     31.43 median     32.00 us    542.9 GB/s  3.520x the fastest
+== d=12032 rows 353  34 MB  checked (before == after bit for bit)  calls 169  SM 2655-2760 MHz
+   Triton    min     15.81 median     15.90 us   2151.1 GB/s  1.000x the fastest
+   Y after   min     21.06 median     21.09 us   1614.9 GB/s  1.332x the fastest
+   Y before  min     47.82 median     47.93 us    711.0 GB/s  3.025x the fastest
+== d=12032 rows 1392  134 MB  checked (before == after bit for bit)  calls 13  SM 2760-2775 MHz
+   Triton    min    217.88 median    218.98 us    615.1 GB/s  1.000x the fastest
+   Y before  min    310.08 median    311.61 us    432.2 GB/s  1.423x the fastest
+   Y after   min    330.75 median    331.54 us    405.2 GB/s  1.518x the fastest
+   d=16384: parent kernel does not load (RuntimeError)
+== d=16384 rows 31  4 MB  checked  calls 671  SM 2775-2775 MHz
+   Y after   min      3.86 median      3.88 us   1060.0 GB/s  1.000x the fastest
+   Triton    min      5.77 median      5.81 us    710.4 GB/s  1.492x the fastest
+== d=16384 rows 130  17 MB  checked  calls 287  SM 2490-2490 MHz
+   Triton    min      9.00 median      9.82 us   1896.5 GB/s  1.000x the fastest
+   Y after   min     10.17 median     11.12 us   1678.3 GB/s  1.130x the fastest
+== d=16384 rows 259  34 MB  checked  calls 166  SM 2490-2490 MHz
+   Triton    min     16.11 median     16.16 us   2109.7 GB/s  1.000x the fastest
+   Y after   min     18.07 median     18.14 us   1880.7 GB/s  1.122x the fastest
+== d=16384 rows 1022  134 MB  checked  calls 13  SM 2475-2475 MHz
+   Y after   min    218.20 median    218.72 us    614.1 GB/s  1.000x the fastest
+   Triton    min    218.81 median    219.92 us    612.3 GB/s  1.003x the fastest

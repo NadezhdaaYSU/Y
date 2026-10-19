@@ -49,6 +49,15 @@ def build():
         sys.exit(1)
 
 
+
+def rmsnorm_threads(ptx_path):
+    """The threads a row `rmsnorm_residual_<d>`'s PTX header states."""
+    import re
+    m = re.search(r"\[Y FUSED ADD\+RMSNORM\].*?\((\d+) threads\)", open(ptx_path).read())
+    if m is None:
+        raise RuntimeError("%s has no [Y FUSED ADD+RMSNORM] header" % ptx_path)
+    return int(m.group(1))
+
 def compile_once(ysu_name):
     res = subprocess.run([Y_BIN, f"tests/{ysu_name}.ysu", "--emit-ptx"], capture_output=True, text=True, cwd=REPO_ROOT)
     if res.returncode != 0:
@@ -74,13 +83,11 @@ def run_once_rmsnorm(rows):
     mod = cp.RawModule(path=os.path.join(REPO_ROOT, "tests/rmsnorm_residual_4096.ptx"))
     fn = mod.get_function("rmsnorm_residual_4096")
 
-    # 256 threads/row (8 warps), not 32: emit_rmsnorm_residual_kernel picks
-    # num_warps = largest of {8,4,2,1} dividing (hidden_dim/8)/32 evenly - 8
-    # at HIDDEN_DIM=4096 (512 vector-groups, 512%256==0). Must match the
-    # kernel's own real thread count or it silently only executes on a
-    # fraction of its threads (wrong, not a crash) - see
-    # emit_rmsnorm_residual_kernel's doc comment.
-    grid, threads = (rows, 1), (256, 1, 1)
+    # The block size is the emitter's choice (512 threads at 4096 since
+    # 2026-10-19), stated in the kernel's PTX header; the kernel traps on any
+    # other.
+    threads = (rmsnorm_threads(os.path.join(REPO_ROOT, "tests/rmsnorm_residual_4096.ptx")), 1, 1)
+    grid = (rows, 1)
 
     # ---- Y: warmup + timed average ----
     for _ in range(10):

@@ -964,12 +964,24 @@ SGLang actually use), same math and same convention — not against eager PyTorc
 
 | kernel | rows | result |
 |---|---|---|
-| Fused Add+RMSNorm (hidden=4096) | 128 / 1024 / 8192 | parity at every size |
+| Fused Add+RMSNorm (hidden=4096) | 122 / 519 / 1038 (4 / 17 / 34 MB) | **1.42x / 1.16–1.18x / 1.14–1.15x** |
+| Fused Add+RMSNorm (hidden=4096) | 4089 (134 MB, from DRAM) | tie |
 | Fused RoPE (head_dim=128) | 128 | 1.85x |
 | Fused RoPE (head_dim=128) | 1024 | 1.92x |
 | Fused RoPE (head_dim=128) | 8192 | tie |
 
 RoPE wins in 8 of 9 (head_dim, rows) combinations across head_dim 64/128/256.
+
+The RMSNorm rows are from 2026-10-19 (`docs/benchmarks/rmsnorm_residual_2026-10-19/`,
+two runs, FlashInfer's time over Y's, every column checked against float64).
+At hidden 896–12032 Y is 1.07–1.20x FlashInfer at 17 and 34 MB and
+1.28–1.50x at 4 MB. At 16384 it is 0.99–1.05x at 17 and 34 MB, and from
+DRAM the two tie at every size. Against a Triton kernel doing the same arithmetic it is
+1.01–1.21x from 3072 to 12032 inside the L2, level at 2048, 1–2% behind
+at 896 and up to 4% behind at 16384. Until then the kernel looped over its groups, staged h
+through shared memory and ran one warp a row at hidden sizes such as 896:
+it took 1.08–1.10x Triton's time at 17–34 MB of hidden 4096, and from
+hidden 12288 up `ptxas` refused it.
 
 ### Paged decode attention vs FlashInfer
 

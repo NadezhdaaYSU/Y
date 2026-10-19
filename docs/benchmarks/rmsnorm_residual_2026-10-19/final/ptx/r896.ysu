@@ -1,0 +1,5 @@
+kernel rmsnorm_residual_896(X: GlobalMemory<F16>, Residual: GlobalMemory<F16>, Weight: GlobalMemory<F16>, Out: GlobalMemory<F16>, NewResidual: GlobalMemory<F16>) {
+}
+
+fn main() {
+}

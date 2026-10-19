@@ -1,0 +1,251 @@
+.version 7.8
+.target sm_89
+.address_size 64
+
+.visible .entry rmsnorm_residual_12032(
+    .param .u64 X_0,
+    .param .u64 Residual_1,
+    .param .u64 Weight_2,
+    .param .u64 Out_3,
+    .param .u64 NewResidual_4
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 224
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 255 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 16.67% (4 active blocks per SM)
+.maxnreg 255
+{
+    .reg .b32 %r<93>;
+    .reg .f32 %f<89>;
+    .reg .b64 %rd<21>;
+    .reg .pred %p<3>;
+
+    ld.param.u64 %rd0, [X_0];
+    ld.param.u64 %rd1, [Residual_1];
+    ld.param.u64 %rd2, [Weight_2];
+    ld.param.u64 %rd3, [Out_3];
+    ld.param.u64 %rd4, [NewResidual_4];
+    // ========================================================
+    // [Y FUSED ADD+RMSNORM] hidden_dim=12032 | 2 warps (64 threads) per row | 8-wide vectorized f16 | h in registers
+    // ========================================================
+    .shared .align 4 .b8 smem_reduce[8];
+    mov.u32 %r0, smem_reduce;
+    cvta.to.global.u64 %rd5, %rd0;
+    cvta.to.global.u64 %rd6, %rd1;
+    cvta.to.global.u64 %rd7, %rd2;
+    cvta.to.global.u64 %rd8, %rd3;
+    cvta.to.global.u64 %rd9, %rd4;
+    mov.u32 %r1, %ctaid.x;
+    mov.u32 %r2, %tid.x;
+    mul.lo.u32 %r3, %r1, 12032;
+    mov.f32 %f0, 0f00000000;
+    mov.u32 %r4, %r2;
+    $RMSNORM_SUMSQ_0:
+    setp.ge.u32 %p0, %r4, 1504;
+    @%p0 bra $RMSNORM_SUMSQ_DONE_1;
+    mad.lo.u32 %r5, %r4, 8, %r3;
+    mul.wide.u32 %rd10, %r5, 2;
+    mul.wide.u32 %rd11, %r4, 16;
+    add.s64 %rd12, %rd5, %rd10;
+    ld.global.v4.u32 {%r6,%r7,%r8,%r9}, [%rd12];
+    add.s64 %rd13, %rd6, %rd10;
+    ld.global.v4.u32 {%r10,%r11,%r12,%r13}, [%rd13];
+    cvt.f32.f16 %f1, %r6;
+    shr.b32 %r14, %r6, 16;
+    cvt.f32.f16 %f2, %r14;
+    cvt.f32.f16 %f3, %r7;
+    shr.b32 %r15, %r7, 16;
+    cvt.f32.f16 %f4, %r15;
+    cvt.f32.f16 %f5, %r8;
+    shr.b32 %r16, %r8, 16;
+    cvt.f32.f16 %f6, %r16;
+    cvt.f32.f16 %f7, %r9;
+    shr.b32 %r17, %r9, 16;
+    cvt.f32.f16 %f8, %r17;
+    cvt.f32.f16 %f9, %r10;
+    shr.b32 %r18, %r10, 16;
+    cvt.f32.f16 %f10, %r18;
+    cvt.f32.f16 %f11, %r11;
+    shr.b32 %r19, %r11, 16;
+    cvt.f32.f16 %f12, %r19;
+    cvt.f32.f16 %f13, %r12;
+    shr.b32 %r20, %r12, 16;
+    cvt.f32.f16 %f14, %r20;
+    cvt.f32.f16 %f15, %r13;
+    shr.b32 %r21, %r13, 16;
+    cvt.f32.f16 %f16, %r21;
+    add.f32 %f17, %f1, %f9;
+    fma.rn.f32 %f0, %f17, %f17, %f0;
+    add.f32 %f18, %f2, %f10;
+    fma.rn.f32 %f0, %f18, %f18, %f0;
+    add.f32 %f19, %f3, %f11;
+    fma.rn.f32 %f0, %f19, %f19, %f0;
+    add.f32 %f20, %f4, %f12;
+    fma.rn.f32 %f0, %f20, %f20, %f0;
+    add.f32 %f21, %f5, %f13;
+    fma.rn.f32 %f0, %f21, %f21, %f0;
+    add.f32 %f22, %f6, %f14;
+    fma.rn.f32 %f0, %f22, %f22, %f0;
+    add.f32 %f23, %f7, %f15;
+    fma.rn.f32 %f0, %f23, %f23, %f0;
+    add.f32 %f24, %f8, %f16;
+    fma.rn.f32 %f0, %f24, %f24, %f0;
+    cvt.rn.f16.f32 %r22, %f17;
+    and.b32 %r23, %r22, 0xFFFF;
+    cvt.rn.f16.f32 %r24, %f18;
+    shl.b32 %r25, %r24, 16;
+    or.b32 %r26, %r23, %r25;
+    cvt.rn.f16.f32 %r27, %f19;
+    and.b32 %r28, %r27, 0xFFFF;
+    cvt.rn.f16.f32 %r29, %f20;
+    shl.b32 %r30, %r29, 16;
+    or.b32 %r31, %r28, %r30;
+    cvt.rn.f16.f32 %r32, %f21;
+    and.b32 %r33, %r32, 0xFFFF;
+    cvt.rn.f16.f32 %r34, %f22;
+    shl.b32 %r35, %r34, 16;
+    or.b32 %r36, %r33, %r35;
+    cvt.rn.f16.f32 %r37, %f23;
+    and.b32 %r38, %r37, 0xFFFF;
+    cvt.rn.f16.f32 %r39, %f24;
+    shl.b32 %r40, %r39, 16;
+    or.b32 %r41, %r38, %r40;
+    add.s64 %rd14, %rd9, %rd10;
+    st.global.v4.u32 [%rd14], {%r26,%r31,%r36,%r41};
+    add.u32 %r4, %r4, 64;
+    bra $RMSNORM_SUMSQ_0;
+    $RMSNORM_SUMSQ_DONE_1:
+    // [WARP-LEVEL SHUFFLE REDUCTION SUM - shfl.sync.bfly.b32]
+    shfl.sync.bfly.b32 %f25, %f0, 16, 0x1f, 0xffffffff;
+    add.f32 %f26, %f0, %f25;
+    shfl.sync.bfly.b32 %f27, %f26, 8, 0x1f, 0xffffffff;
+    add.f32 %f28, %f26, %f27;
+    shfl.sync.bfly.b32 %f29, %f28, 4, 0x1f, 0xffffffff;
+    add.f32 %f30, %f28, %f29;
+    shfl.sync.bfly.b32 %f31, %f30, 2, 0x1f, 0xffffffff;
+    add.f32 %f32, %f30, %f31;
+    shfl.sync.bfly.b32 %f33, %f32, 1, 0x1f, 0xffffffff;
+    add.f32 %f34, %f32, %f33;
+    shr.u32 %r42, %r2, 5;
+    and.b32 %r43, %r2, 31;
+    setp.eq.u32 %p1, %r43, 0;
+    mul.lo.u32 %r44, %r42, 4;
+    add.u32 %r45, %r0, %r44;
+    @%p1 st.shared.f32 [%r45], %f34;
+    bar.sync 0;
+    mov.f32 %f35, 0f00000000;
+    add.u32 %r46, %r0, 0;
+    ld.shared.f32 %f36, [%r46];
+    add.f32 %f35, %f35, %f36;
+    add.u32 %r47, %r0, 4;
+    ld.shared.f32 %f37, [%r47];
+    add.f32 %f35, %f35, %f37;
+    fma.rn.f32 %f38, %f35, 0f38AE4C41, 0f3727C5AC;
+    rsqrt.approx.f32 %f39, %f38;
+    mov.u32 %r4, %r2;
+    $RMSNORM_WRITE_2:
+    setp.ge.u32 %p2, %r4, 1504;
+    @%p2 bra $RMSNORM_WRITE_DONE_3;
+    mad.lo.u32 %r48, %r4, 8, %r3;
+    mul.wide.u32 %rd15, %r48, 2;
+    mul.wide.u32 %rd16, %r4, 16;
+    add.s64 %rd17, %rd5, %rd15;
+    ld.global.v4.u32 {%r49,%r50,%r51,%r52}, [%rd17];
+    add.s64 %rd18, %rd6, %rd15;
+    ld.global.v4.u32 {%r53,%r54,%r55,%r56}, [%rd18];
+    add.s64 %rd19, %rd7, %rd16;
+    ld.global.v4.u32 {%r57,%r58,%r59,%r60}, [%rd19];
+    cvt.f32.f16 %f41, %r49;
+    shr.b32 %r61, %r49, 16;
+    cvt.f32.f16 %f42, %r61;
+    cvt.f32.f16 %f43, %r50;
+    shr.b32 %r62, %r50, 16;
+    cvt.f32.f16 %f44, %r62;
+    cvt.f32.f16 %f45, %r51;
+    shr.b32 %r63, %r51, 16;
+    cvt.f32.f16 %f46, %r63;
+    cvt.f32.f16 %f47, %r52;
+    shr.b32 %r64, %r52, 16;
+    cvt.f32.f16 %f48, %r64;
+    cvt.f32.f16 %f49, %r53;
+    shr.b32 %r65, %r53, 16;
+    cvt.f32.f16 %f50, %r65;
+    cvt.f32.f16 %f51, %r54;
+    shr.b32 %r66, %r54, 16;
+    cvt.f32.f16 %f52, %r66;
+    cvt.f32.f16 %f53, %r55;
+    shr.b32 %r67, %r55, 16;
+    cvt.f32.f16 %f54, %r67;
+    cvt.f32.f16 %f55, %r56;
+    shr.b32 %r68, %r56, 16;
+    cvt.f32.f16 %f56, %r68;
+    add.f32 %f57, %f41, %f49;
+    fma.rn.f32 %f40, %f57, %f57, %f40;
+    add.f32 %f58, %f42, %f50;
+    fma.rn.f32 %f40, %f58, %f58, %f40;
+    add.f32 %f59, %f43, %f51;
+    fma.rn.f32 %f40, %f59, %f59, %f40;
+    add.f32 %f60, %f44, %f52;
+    fma.rn.f32 %f40, %f60, %f60, %f40;
+    add.f32 %f61, %f45, %f53;
+    fma.rn.f32 %f40, %f61, %f61, %f40;
+    add.f32 %f62, %f46, %f54;
+    fma.rn.f32 %f40, %f62, %f62, %f40;
+    add.f32 %f63, %f47, %f55;
+    fma.rn.f32 %f40, %f63, %f63, %f40;
+    add.f32 %f64, %f48, %f56;
+    fma.rn.f32 %f40, %f64, %f64, %f40;
+    cvt.f32.f16 %f65, %r57;
+    shr.b32 %r69, %r57, 16;
+    cvt.f32.f16 %f66, %r69;
+    cvt.f32.f16 %f67, %r58;
+    shr.b32 %r70, %r58, 16;
+    cvt.f32.f16 %f68, %r70;
+    cvt.f32.f16 %f69, %r59;
+    shr.b32 %r71, %r59, 16;
+    cvt.f32.f16 %f70, %r71;
+    cvt.f32.f16 %f71, %r60;
+    shr.b32 %r72, %r60, 16;
+    cvt.f32.f16 %f72, %r72;
+    mul.f32 %f73, %f57, %f39;
+    mul.f32 %f74, %f73, %f65;
+    mul.f32 %f75, %f58, %f39;
+    mul.f32 %f76, %f75, %f66;
+    mul.f32 %f77, %f59, %f39;
+    mul.f32 %f78, %f77, %f67;
+    mul.f32 %f79, %f60, %f39;
+    mul.f32 %f80, %f79, %f68;
+    mul.f32 %f81, %f61, %f39;
+    mul.f32 %f82, %f81, %f69;
+    mul.f32 %f83, %f62, %f39;
+    mul.f32 %f84, %f83, %f70;
+    mul.f32 %f85, %f63, %f39;
+    mul.f32 %f86, %f85, %f71;
+    mul.f32 %f87, %f64, %f39;
+    mul.f32 %f88, %f87, %f72;
+    cvt.rn.f16.f32 %r73, %f74;
+    and.b32 %r74, %r73, 0xFFFF;
+    cvt.rn.f16.f32 %r75, %f76;
+    shl.b32 %r76, %r75, 16;
+    or.b32 %r77, %r74, %r76;
+    cvt.rn.f16.f32 %r78, %f78;
+    and.b32 %r79, %r78, 0xFFFF;
+    cvt.rn.f16.f32 %r80, %f80;
+    shl.b32 %r81, %r80, 16;
+    or.b32 %r82, %r79, %r81;
+    cvt.rn.f16.f32 %r83, %f82;
+    and.b32 %r84, %r83, 0xFFFF;
+    cvt.rn.f16.f32 %r85, %f84;
+    shl.b32 %r86, %r85, 16;
+    or.b32 %r87, %r84, %r86;
+    cvt.rn.f16.f32 %r88, %f86;
+    and.b32 %r89, %r88, 0xFFFF;
+    cvt.rn.f16.f32 %r90, %f88;
+    shl.b32 %r91, %r90, 16;
+    or.b32 %r92, %r89, %r91;
+    add.s64 %rd20, %rd8, %rd15;
+    st.global.v4.u32 [%rd20], {%r77,%r82,%r87,%r92};
+    add.u32 %r4, %r4, 64;
+    bra $RMSNORM_WRITE_2;
+    $RMSNORM_WRITE_DONE_3:
+    // ========================================================
+}

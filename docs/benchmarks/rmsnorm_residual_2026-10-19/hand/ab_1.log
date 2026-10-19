@@ -1,0 +1,20 @@
+== rmsnorm_residual_4096 rows 128  4 MB  all checked  calls 887  SM 2640-2640 MHz
+   v1:new_4096.ptx min      2.99 median      2.99 us   1407.0 GB/s  1.000x the fastest
+   v2:reg_4096.ptx min      2.99 median      3.00 us   1406.1 GB/s  1.001x the fastest
+   committed      min      3.45 median      3.46 us   1218.3 GB/s  1.155x the fastest
+   Triton         min      5.69 median      5.78 us    738.4 GB/s  1.906x the fastest
+== rmsnorm_residual_4096 rows 512  17 MB  all checked  calls 348  SM 2640-2640 MHz
+   v1:new_4096.ptx min      7.80 median      7.87 us   2151.8 GB/s  1.000x the fastest
+   v2:reg_4096.ptx min      7.94 median      7.97 us   2115.1 GB/s  1.017x the fastest
+   Triton         min      8.05 median      8.18 us   2085.1 GB/s  1.032x the fastest
+   committed      min      8.69 median      8.72 us   1930.6 GB/s  1.115x the fastest
+== rmsnorm_residual_4096 rows 1024  34 MB  all checked  calls 204  SM 2520-2520 MHz
+   v1:new_4096.ptx min     13.49 median     13.63 us   2488.4 GB/s  1.000x the fastest
+   v2:reg_4096.ptx min     13.64 median     13.83 us   2460.5 GB/s  1.011x the fastest
+   Triton         min     13.83 median     14.15 us   2427.0 GB/s  1.025x the fastest
+   committed      min     15.03 median     15.06 us   2232.5 GB/s  1.115x the fastest
+== rmsnorm_residual_4096 rows 3072  101 MB  all checked  calls 18  SM 2520-2700 MHz
+   v2:reg_4096.ptx min    163.04 median    165.98 us    617.5 GB/s  1.000x the fastest
+   Triton         min    164.18 median    167.54 us    613.2 GB/s  1.007x the fastest
+   v1:new_4096.ptx min    164.85 median    166.11 us    610.7 GB/s  1.011x the fastest
+   committed      min    166.16 median    166.95 us    605.9 GB/s  1.019x the fastest
