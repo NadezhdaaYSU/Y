@@ -3776,8 +3776,27 @@ or `shared_alloc_u32` for a shared-memory array.",
         // normal generic per-statement lowering (see `tile_gemm_operands`).
         // Captures the real launch block size for the `.maxnreg` computation
         // below - see that computation's doc comment for why this matters.
-        let tile_gemm_threads_per_cta = if let Some((m, n, k, a_ptr, b_ptr, c_ptr, bias_ptr)) = self.tile_gemm_operands(kernel) {
-            Some(self.emit_tensor_core_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, bias_ptr.as_deref(), hw_profile, &kernel.name))
+        // A `_splitk<S>` name is the split-K F16 GEMM's and nothing else's:
+        // one that is malformed or on another shape is refused, not lowered
+        // as the shape its parameters happen to match (the 4-parameter
+        // split shape's types are the bias shape's).
+        if kernel.tile.is_some() {
+            match Self::gemm_split_k(&kernel.name) {
+                Some(Err(why)) => self.emit_errors.push(format!("[PTX] {}", why)),
+                Some(Ok(_)) if self.tile_gemm_operands(kernel).is_none() => self.emit_errors.push(format!(
+                    "[PTX] split-K GEMM `{}` must take exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>)",
+                    kernel.name
+                )),
+                _ => {}
+            }
+        }
+        let tile_gemm_threads_per_cta = if let Some((m, n, k, a_ptr, b_ptr, c_ptr, bias_ptr, split)) = self.tile_gemm_operands(kernel) {
+            if let Some(s) = split {
+                if Self::gemm_split_k_shape(m, n, k, s).is_ok() {
+                    self.emit_gemm_split_reduce_entry(m, n, s, kernel, &kernel.name);
+                }
+            }
+            Some(self.emit_tensor_core_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, bias_ptr.as_deref(), split, hw_profile, &kernel.name))
         } else if let Some((m, n, k, a, b, sa, sb, bi, c)) =
             self.tile_gemm_int8_scaled_operands(kernel)
         {
@@ -7821,8 +7840,23 @@ declare it as a Q format.\n{}",
     /// tests do exactly that. `None` means "fall back to the normal generic
     /// per-statement lowering" - never a panic, and never a best-effort
     /// guess at a kernel this codegen isn't sure matches its assumptions.
-    fn tile_gemm_operands(&self, kernel: &KernelDecl) -> Option<(u32, u32, u32, String, String, String, Option<String>)> {
+    ///
+    /// A kernel named `<name>_splitk<S>` (see `gemm_split_k`) with the 4
+    /// params (A, B: `GlobalMemory<F16>`, C, Partial: `GlobalMemory<F32>`)
+    /// is the split-K GEMM instead: the last element is `Some(S)`, `c_reg`
+    /// is Partial's register (what the main entry writes) and `bias_reg` is
+    /// `None`.
+    #[allow(clippy::type_complexity)]
+    fn tile_gemm_operands(&self, kernel: &KernelDecl) -> Option<(u32, u32, u32, String, String, String, Option<String>, Option<u32>)> {
         let tile = kernel.tile.as_ref()?;
+        let split = match Self::gemm_split_k(&kernel.name) {
+            None => None,
+            Some(Ok(s)) => Some(s),
+            Some(Err(_)) => return None,
+        };
+        if split.is_some() && kernel.params.len() != 4 {
+            return None;
+        }
 
         fn as_positive_u32(e: &Expr) -> Option<u32> {
             match e {
@@ -7848,26 +7882,70 @@ declare it as a Q format.\n{}",
         // specifically, so this is not an arbitrary choice mirrored from
         // type_checker for its own sake - the codegen below is only correct
         // for exactly this shape).
-        let has_bias = kernel.params.len() == 4;
+        let has_bias = kernel.params.len() == 4 && split.is_none();
         if (kernel.params.len() != 3 && kernel.params.len() != 4)
             || !is_global_memory_of(&kernel.params[0].ty, "F16")
             || !is_global_memory_of(&kernel.params[1].ty, "F16")
             || !is_global_memory_of(&kernel.params[2].ty, "F32")
-            || (has_bias && !is_global_memory_of(&kernel.params[3].ty, "F32"))
+            || (kernel.params.len() == 4 && !is_global_memory_of(&kernel.params[3].ty, "F32"))
         {
             return None;
         }
 
         let a_reg = self.variables.get(&kernel.params[0].name)?.clone();
         let b_reg = self.variables.get(&kernel.params[1].name)?.clone();
-        let c_idx = if has_bias { 3 } else { 2 };
+        let c_idx = if kernel.params.len() == 4 { 3 } else { 2 };
         let c_reg = self.variables.get(&kernel.params[c_idx].name)?.clone();
         let bias_reg = if has_bias {
             Some(self.variables.get(&kernel.params[2].name)?.clone())
         } else {
             None
         };
-        Some((m, n, k, a_reg, b_reg, c_reg, bias_reg))
+        Some((m, n, k, a_reg, b_reg, c_reg, bias_reg, split))
+    }
+
+    /// The split count of a split-K F16 GEMM: an `@tile(M, N, K)` kernel
+    /// named `<name>_splitk<S>`, `S` from 1 to 64 without leading zeros.
+    /// `None` when the name's last `_` component does not start with
+    /// `splitk`; `Some(Err)` when it does but is not such a suffix.
+    ///
+    /// The shape splits K into `S` equal parts in `%ctaid.z`, each written
+    /// as an M x N float32 partial to its slot of `Partial` (`S * M * N`
+    /// floats), and a second entry, `<name>_reduce`, sums the slots in
+    /// order into C: a fixed order, no atomics, so the result does not
+    /// depend on which CTAs ran first. Every split accumulates each mma in
+    /// float32 unless `Y_F16_ACCUMULATE=mma` (see `f16_accumulates_in_f32`).
+    /// `type_checker::verify_tile_gemm_kernel` applies this same function.
+    pub fn gemm_split_k(name: &str) -> Option<Result<u32, String>> {
+        let (_, last) = name.rsplit_once('_')?;
+        let digits = last.strip_prefix("splitk")?;
+        let well_formed = !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) && !digits.starts_with('0');
+        match digits.parse::<u32>() {
+            Ok(s) if well_formed && s <= 64 => Some(Ok(s)),
+            _ => Some(Err(format!(
+                "`{}` ends in `_{}`, but a split-K GEMM's name must end in `_splitk<S>` with S from 1 to 64",
+                name, last
+            ))),
+        }
+    }
+
+    /// Whether an `m x n x k` F16 GEMM can be split `s` ways: each split
+    /// equally deep, a whole number of A's 8-element `cp.async` chunks, and
+    /// whole float4s for `<name>_reduce`.
+    pub fn gemm_split_k_shape(m: u32, n: u32, k: u32, s: u32) -> Result<(), String> {
+        if s == 0 || s > 64 {
+            return Err(format!("split count {} is not from 1 to 64", s));
+        }
+        if k % s != 0 || (k / s) % 8 != 0 {
+            return Err(format!("K = {} does not split into {} parts that are each a multiple of 8", k, s));
+        }
+        if n % 4 != 0 {
+            return Err(format!("N = {} is not a multiple of 4 (the reduction sums float4s)", n));
+        }
+        if (s as u64) * (m as u64) * (n as u64) > u32::MAX as u64 {
+            return Err(format!("the {} x {} x {} float32 workspace has more than 2^32 elements", s, m, n));
+        }
+        Ok(())
     }
 
     /// Returns `(m, n, k, a_reg, b_reg, scale_a_reg, scale_b_reg, c_reg)` if
@@ -12215,11 +12293,12 @@ declare it as a Q format.\n{}",
     /// 1.02-1.06x at 512 x 512 x 4096-65536 (1.10-1.12x at K = 1024), and
     /// 0.95-0.98x at M = 1, 4 and 8 and 1.004x at 32 (N = K = 4096), where
     /// the mmas, no longer chained through their accumulator, overlap. So it
-    /// is the default for `m <= 32`. `Y_F16_ACCUMULATE=f32` or `=mma` selects
-    /// either for every shape; any other value is an error.
-    pub fn f16_accumulates_in_f32(m: u32) -> bool {
+    /// is the default for `m <= 32` and for every split of a split-K GEMM
+    /// (`split_k`, see `gemm_split_k`). `Y_F16_ACCUMULATE=f32` or `=mma`
+    /// selects either for every shape; any other value is an error.
+    pub fn f16_accumulates_in_f32(m: u32, split_k: bool) -> bool {
         match std::env::var("Y_F16_ACCUMULATE").as_deref() {
-            Err(_) => m <= 32,
+            Err(_) => m <= 32 || split_k,
             Ok("f32") => true,
             Ok("mma") => false,
             Ok(other) => panic!("Y_F16_ACCUMULATE must be `f32` or `mma`, not {other:?}"),
@@ -12228,8 +12307,8 @@ declare it as a Q format.\n{}",
 
     /// The zero register `emit_f16_mma` starts each mma from, emitted, when an
     /// F16 GEMM of `m` rows accumulates in float32; `None` otherwise.
-    fn emit_f16_mma_zero(&mut self, m: u32) -> Option<String> {
-        if !Self::f16_accumulates_in_f32(m) {
+    fn emit_f16_mma_zero(&mut self, m: u32, split_k: bool) -> Option<String> {
+        if !Self::f16_accumulates_in_f32(m, split_k) {
             return None;
         }
         let z = self.alloc_regf32();
@@ -12470,10 +12549,27 @@ declare it as a Q format.\n{}",
         b_ptr: &str,
         c_ptr: &str,
         bias_ptr: Option<&str>,
+        split: Option<u32>,
         hw_profile: &HardwareProfile,
         kernel_name: &str,
     ) -> u32 {
-        let config = Autotuner::autotune(m, n, k, hw_profile, Precision::F16);
+        // ---- split K (see `gemm_split_k`): from here on `k` is one split's
+        // depth, the extent of the K loop, and `lda` A's row length. A
+        // single split is the whole K. ----
+        let lda = k;
+        if let Some(s) = split {
+            if let Err(why) = Self::gemm_split_k_shape(m, n, k, s) {
+                self.emit_errors.push(format!("F16 tensor-core GEMM `{}`: {}", kernel_name, why));
+                return 0;
+            }
+        }
+        let k = k / split.unwrap_or(1);
+        // A split kernel has its own measurements, keyed by the whole K and
+        // the split count (`Autotuner::autotune_split`).
+        let config = match split {
+            Some(s) => Autotuner::autotune_split(m, n, lda, s, hw_profile, Precision::F16),
+            None => Autotuner::autotune(m, n, k, hw_profile, Precision::F16),
+        };
         let cta_m = config.cta_m;
         let cta_n = config.cta_n;
         let cta_k = config.cta_k;
@@ -12589,6 +12685,13 @@ declare it as a Q format.\n{}",
 
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
         writeln!(&mut self.ptx_buffer, "    // [Y TENSOR CORE GEMM] M={} N={} K={} | CTA {}x{}x{} | {}x{} warps | wmma.sync.m16n16k16.f16->f32", m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n).unwrap();
+        if let Some(s) = split {
+            writeln!(
+                &mut self.ptx_buffer,
+                "    // [Y SPLIT-K GEMM] K={} in {} splits of K={} | grid ({}, {}, {}) writes Partial[z] (M x N f32 each); then {}_reduce, grid ({}, 1, 1) x 256 threads, sums them into C",
+                lda, s, k, n.div_ceil(cta_n), m.div_ceil(cta_m), s, kernel_name, (m * n / 4).div_ceil(256)
+            ).unwrap();
+        }
         if effective_stages >= 2 {
             writeln!(&mut self.ptx_buffer, "    // Autotuner selected {} pipeline stages ({} used after k_tiles/smem clamping); cp.async multi-stage pipelined. Dynamic shared memory required: {} bytes.", config.num_stages, effective_stages, total_dyn_smem_bytes).unwrap();
         } else {
@@ -12614,6 +12717,21 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", r, p).unwrap();
             r
         });
+        // ---- split K: split `z = %ctaid.z` reads A's columns and B's rows
+        // [z*k, (z+1)*k) and writes its partial to slot z (`c_ptr` is the
+        // workspace in this shape). Moving the three bases leaves every
+        // loader's bounds relative to the split. ----
+        if split.is_some() {
+            let z = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.z;", z).unwrap();
+            let z64 = self.alloc_reg64();
+            writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", z64, z).unwrap();
+            for (g, bytes) in [(&a_g, 2 * k as u64), (&b_g, 2 * k as u64 * n as u64), (&c_g, 4 * m as u64 * n as u64)] {
+                let off = self.alloc_reg64();
+                writeln!(&mut self.ptx_buffer, "    mul.lo.u64 {}, {}, {};", off, z64, bytes).unwrap();
+                writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", g, g, off).unwrap();
+            }
+        }
 
 
         // ---- grid position: L2-locality grid swizzle ----
@@ -12677,7 +12795,7 @@ declare it as a Q format.\n{}",
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
         let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
-        self.f16_mma_zero = self.emit_f16_mma_zero(m);
+        self.f16_mma_zero = self.emit_f16_mma_zero(m, split.is_some());
 
         // ---- accumulator fragments acc[i][j]: 8 f32 regs each, zeroed ----
         let mut acc: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -12758,7 +12876,7 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0, k_iter, cta_k).unwrap();
 
             self.emit_gemm_tile_load(
-                "A", &a_g, &cta_m_start, &k0, k, m, k, cta_m, cta_k, &smem_a_base, smem_a, threads_per_cta,
+                "A", &a_g, &cta_m_start, &k0, lda, m, k, cta_m, cta_k, &smem_a_base, smem_a, threads_per_cta,
             );
             self.emit_gemm_tile_load(
                 "B", &b_g, &k0, &cta_n_start, n, k, n, cta_k, cta_n, &smem_b_base, smem_b, threads_per_cta,
@@ -12806,11 +12924,11 @@ declare it as a Q format.\n{}",
             // - still loads zeros and stores nothing, as the per-chunk checks
             // made it do. ----
             let hoisted = if m % cta_m == 0 && n % cta_n == 0 && k % cta_k == 0
-                && Self::hoisted_tile_load_shape(k, cta_m, cta_k, smem_a, threads_per_cta).is_some()
+                && Self::hoisted_tile_load_shape(lda, cta_m, cta_k, smem_a, threads_per_cta).is_some()
                 && Self::hoisted_tile_load_shape(n, cta_k, cta_n, smem_b, threads_per_cta).is_some()
             {
                 let a = self.emit_gemm_tile_load_async_setup(
-                    &a_g, Some(&cta_m_start), None, k, cta_m, cta_k, smem_a, threads_per_cta, 2,
+                    &a_g, Some(&cta_m_start), None, lda, cta_m, cta_k, smem_a, threads_per_cta, 2,
                 ).expect("shape checked above");
                 let b = self.emit_gemm_tile_load_async_setup(
                     &b_g, None, Some(&cta_n_start), n, cta_k, cta_n, smem_b, threads_per_cta, 2 * n,
@@ -12854,7 +12972,7 @@ declare it as a Q format.\n{}",
                     self.emit_gemm_tile_load_async_hoisted(&format!("PB{}", s), b, &k0_s, &b_stage_base, rsize_cta);
                 } else {
                     self.emit_gemm_tile_load_async(
-                        &format!("PA{}", s), &a_g, &cta_m_start, &k0_s, k, m, k, cta_m, cta_k, &a_stage_base, smem_a, threads_per_cta, None,
+                        &format!("PA{}", s), &a_g, &cta_m_start, &k0_s, lda, m, k, cta_m, cta_k, &a_stage_base, smem_a, threads_per_cta, None,
                     );
                     self.emit_gemm_tile_load_async(
                         &format!("PB{}", s), &b_g, &k0_s, &cta_n_start, n, k, n, cta_k, cta_n, &b_stage_base, smem_b, threads_per_cta, None,
@@ -12985,7 +13103,7 @@ declare it as a Q format.\n{}",
                 }
             } else {
                 self.emit_gemm_tile_load_async(
-                    "A", &a_g, &cta_m_start, &k0_next, k, m, k, cta_m, cta_k, &a_write_base, smem_a, threads_per_cta, Some(&p_tile_valid),
+                    "A", &a_g, &cta_m_start, &k0_next, lda, m, k, cta_m, cta_k, &a_write_base, smem_a, threads_per_cta, Some(&p_tile_valid),
                 );
                 self.emit_gemm_tile_load_async(
                     "B", &b_g, &k0_next, &cta_n_start, n, k, n, cta_k, cta_n, &b_write_base, smem_b, threads_per_cta, Some(&p_tile_valid),
@@ -13660,7 +13778,7 @@ declare it as a Q format.\n{}",
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
         let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
-        self.f16_mma_zero = self.emit_f16_mma_zero(m);
+        self.f16_mma_zero = self.emit_f16_mma_zero(m, false);
 
         let mut acc_gate: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
         let mut acc_up: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -16028,6 +16146,132 @@ declare it as a Q format.\n{}",
         out
     }
 
+
+    /// Emits `<kernel_name>_reduce`, the second entry point of the split-K
+    /// F16 GEMM (see `gemm_split_k`): `C = ((P[0] + P[1]) + P[2]) + ... +
+    /// P[splits-1]`, each `+` an `add.rn.f32`, in that order for every
+    /// element, with no atomics - so C's bits do not depend on which CTAs of
+    /// either entry ran first.
+    ///
+    /// **Launch contract**: grid `(ceil(m*n/4 / 256), 1, 1)`, block
+    /// `(256, 1, 1)`; thread `t` of the grid sums float4 `t` of every slot.
+    /// It takes the main entry's four parameters (it reads Partial and
+    /// writes C) so a host launches both with one argument tuple, the main
+    /// entry first, on one stream.
+    ///
+    /// Emitted into `pending_module_items` with its own register numbering,
+    /// as `emit_attention_split_reduce_entry` is.
+    fn emit_gemm_split_reduce_entry(&mut self, m: u32, n: u32, splits: u32, kernel: &KernelDecl, kernel_name: &str) {
+        let saved = (
+            std::mem::take(&mut self.ptx_buffer),
+            self.reg_u32_count,
+            self.reg_f32_count,
+            self.reg_u64_count,
+            self.reg_pred_count,
+            self.reg_b16_count,
+        );
+        self.reg_u32_count = 0;
+        self.reg_f32_count = 0;
+        self.reg_u64_count = 0;
+        self.reg_pred_count = 0;
+        self.reg_b16_count = 0;
+
+        let mut ptrs = Vec::with_capacity(kernel.params.len());
+        for (i, param) in kernel.params.iter().enumerate() {
+            let r = self.alloc_reg64();
+            writeln!(&mut self.ptx_buffer, "    ld.param.u64 {}, [{}_{}];", r, param.name, i).unwrap();
+            ptrs.push(r);
+        }
+        writeln!(
+            &mut self.ptx_buffer,
+            "    // [Y SPLIT-K GEMM REDUCE] M={} N={} | {} splits, summed in order",
+            m, n, splits
+        )
+        .unwrap();
+
+        let quads = m * n / 4;
+        let tid = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
+        let cta = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", cta).unwrap();
+        let q = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, 256, {};", q, cta, tid).unwrap();
+        let p_out = self.alloc_pred();
+        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p_out, q, quads).unwrap();
+        writeln!(&mut self.ptx_buffer, "    @{} bra GEMMRED_END;", p_out).unwrap();
+        let qb = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    mul.wide.u32 {}, {}, 16;", qb, q).unwrap();
+        let mut addr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", addr, ptrs[3]).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", addr, addr, qb).unwrap();
+        let c_addr = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", c_addr, ptrs[2]).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", c_addr, c_addr, qb).unwrap();
+
+        // Up to eight slots' loads are issued before their adds, so they are
+        // in flight together; the adds stay in slot order.
+        let slot_bytes = 4 * m as u64 * n as u64;
+        let mut total: Option<Vec<String>> = None;
+        for z0 in (0..splits).step_by(8) {
+            let mut group = Vec::new();
+            for z in z0..splits.min(z0 + 8) {
+                if z > 0 {
+                    let next = self.alloc_reg64();
+                    writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", next, addr, slot_bytes).unwrap();
+                    addr = next;
+                }
+                group.push(self.emit_vec_load_f32(&addr, 0, 4));
+            }
+            for vals in group {
+                total = Some(match total {
+                    None => vals,
+                    Some(t) => t
+                        .iter()
+                        .zip(&vals)
+                        .map(|(a, b)| {
+                            let s = self.alloc_regf32();
+                            writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", s, a, b).unwrap();
+                            s
+                        })
+                        .collect(),
+                });
+            }
+        }
+        let total = total.expect("at least one split");
+        writeln!(&mut self.ptx_buffer, "    st.global.v4.f32 [{}], {{{}}};", c_addr, total.join(",")).unwrap();
+        writeln!(&mut self.ptx_buffer, "GEMMRED_END:").unwrap();
+
+        let body = std::mem::replace(&mut self.ptx_buffer, saved.0);
+        let mut entry = String::new();
+        writeln!(&mut entry, ".visible .entry {}_reduce(", kernel_name).unwrap();
+        for (i, param) in kernel.params.iter().enumerate() {
+            let ptx_type = self.param_slot(&kernel.name, param);
+            write!(&mut entry, "    {} {}_{}", ptx_type, param.name, i).unwrap();
+            if i + 1 < kernel.params.len() {
+                writeln!(&mut entry, ",").unwrap();
+            } else {
+                writeln!(&mut entry).unwrap();
+            }
+        }
+        writeln!(&mut entry, ")").unwrap();
+        writeln!(&mut entry, "{{").unwrap();
+        writeln!(&mut entry, "    .reg .b32 %r<{}>;", self.reg_u32_count.max(1)).unwrap();
+        writeln!(&mut entry, "    .reg .f32 %f<{}>;", self.reg_f32_count.max(1)).unwrap();
+        writeln!(&mut entry, "    .reg .b64 %rd<{}>;", self.reg_u64_count.max(1)).unwrap();
+        writeln!(&mut entry, "    .reg .pred %p<{}>;", self.reg_pred_count.max(1)).unwrap();
+        if let Some(li) = &self.line_info {
+            writeln!(&mut entry, "    .loc {} {} {}", li.file, kernel.span.line, kernel.span.col).unwrap();
+        }
+        entry.push_str(&body);
+        writeln!(&mut entry, "}}").unwrap();
+        self.pending_module_items.push(entry);
+
+        self.reg_u32_count = saved.1;
+        self.reg_f32_count = saved.2;
+        self.reg_u64_count = saved.3;
+        self.reg_pred_count = saved.4;
+        self.reg_b16_count = saved.5;
+    }
 
     /// Emits `<kernel_name>_reduce`, the second entry point of the split-K
     /// attention shape: it combines the `splits` partial softmax states one

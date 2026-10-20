@@ -1609,6 +1609,43 @@ not know its length",
                         )
             )
         }
+        // A `_splitk<S>` name selects the split-K F16 GEMM, (A, B:
+        // GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), whose types are
+        // the bias shape's: `PtxEmitter::gemm_split_k` and
+        // `gemm_split_k_shape` decide it in codegen and decide it here, so the
+        // two cannot disagree. A malformed suffix or another shape under such
+        // a name is refused rather than compiled as what its types match.
+        if let Some(split) = crate::ptx_emitter::PtxEmitter::gemm_split_k(&kernel.name) {
+            let shape_ok = kernel.params.len() == 4
+                && is_global_memory_of(&kernel.params[0].ty, "F16")
+                && is_global_memory_of(&kernel.params[1].ty, "F16")
+                && is_global_memory_of(&kernel.params[2].ty, "F32")
+                && is_global_memory_of(&kernel.params[3].ty, "F32");
+            let dims = (
+                as_positive_i64(&tile.block_m).and_then(|v| u32::try_from(v).ok()),
+                as_positive_i64(&tile.block_n).and_then(|v| u32::try_from(v).ok()),
+                tile.block_k.as_deref().and_then(as_positive_i64).and_then(|v| u32::try_from(v).ok()),
+            );
+            let why = match split {
+                Err(why) => Some(why),
+                Ok(_) if !shape_ok => Some(format!(
+                    "a split-K GEMM (`_splitk<S>`) takes exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>); found {} parameter(s)",
+                    kernel.params.len()
+                )),
+                Ok(s) => match dims {
+                    (Some(m), Some(n), Some(k)) => crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s).err(),
+                    _ => Some("M, N and K must be positive integer literals below 2^32".into()),
+                },
+            };
+            if let Some(why) = why {
+                self.errors.push(format!(
+                    "Line {}: Kernel-level @tile(M, N, K) on `{}`: {}",
+                    tile.span.line, kernel.name, why
+                ));
+            }
+            return;
+        }
+
         // A 5-parameter shape (A, B: GlobalMemory<F32>, scale_a, scale_b:
         // F32 scalar, C: GlobalMemory<F32>) is accepted separately from the
         // 3/4-param F16 shapes below: A/B are quantized to e4m3 on the fly
@@ -1720,6 +1757,7 @@ not know its length",
                 "Line {}: Kernel-level @tile(M, N, K) on `{}` accepts these shapes, and codegen binds them POSITIONALLY:\n\
                  \x20 3  (A, B: GlobalMemory<F16>, C: GlobalMemory<F32>)                                  plain GEMM\n\
                  \x20 4  (A, B: GlobalMemory<F16>, Bias, C: GlobalMemory<F32>)                            fused GEMM+Bias+ReLU\n\
+                 \x20 4  (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), named <name>_splitk<S> split-K GEMM\n\
                  \x20 4  (X, W_gate, W_up: GlobalMemory<F16>, Out: GlobalMemory<F32>)                     fused Linear+SwiGLU\n\
                  \x20 3  (A, B: GlobalMemory<I8>, C: GlobalMemory<I32>)                                   int8 Tensor Core GEMM\n\
                  \x20 5  (A, B: GlobalMemory<F32>, scale_a, scale_b: F32, C: GlobalMemory<F32>)           fused FP8 (e4m3) GEMM\n\

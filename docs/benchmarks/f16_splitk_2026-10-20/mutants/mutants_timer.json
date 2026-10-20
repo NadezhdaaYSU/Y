@@ -1,0 +1,12 @@
+[
+ {
+  "mutant": "sequence timer launches only the first step",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.75s"
+  ]
+ },
+ {
+  "restore_build": 0
+ }
+]

@@ -1035,13 +1035,16 @@ about 1.2e-5 per 1024 of K. cuBLAS is more accurate where it does something
 else, on every distribution and all three metrics:
 
 - **512 x 512 x K ≥ 4096:** 2–8x more accurate, and up to 70x on the paired
-  inputs at K = 65536. At K = 16384 and 65536 cuBLAS splits K (a
+  inputs at K = 65536. At K = 16384 and 65536 cuBLAS splits K in 8 (a
   `splitKreduce` kernel follows), and the float32 reduction bounds each
   tensor-core chain.
 - **8192³:** about 3x more accurate.
 
-At 512 x 512 x 4096 and 8192³ cuBLAS runs one kernel whose bits differ from
-a chained sum; how it orders the sum was not established.
+At 512 x 512 x 4096 cuBLAS runs one kernel whose bits are those of two
+chained halves of K added in float32, and at 16384 and 65536 eight chained
+splits added in order: Y's split-K kernel chained (below, with
+`Y_F16_ACCUMULATE=mma`) gives cuBLAS's bits there on all nine distributions.
+How cuBLAS orders the sum at 8192³ was not established.
 
 **Since 2026-10-20 a GEMM of at most 32 rows starts each mma from zero and
 adds its result in float32** (`add.rn.f32`), as the FP8 GEMM does
@@ -1086,6 +1089,29 @@ N(0, 1). rel_F still reaches:
 - 8.7e-2 for Y's default chain at 512 x 512 x 65536.
 
 R rounded to float32 has a rel_F of at most 2.6e-8.
+
+**Since 2026-10-20 a kernel named `<name>_splitk<S>` splits K in S**
+(`docs/benchmarks/f16_splitk_2026-10-20/`): each split adds its mmas in
+float32 into an M x N float32 partial, and a second entry, `<name>_reduce`,
+adds the S partials in order with `add.rn.f32`, without atomics, so C's bits
+do not depend on which CTAs finish first. At 512 x 512 x K, on a contended
+GPU, against cuBLAS:
+
+- **K = 4096 and 16384: faster, and lower in rel_F, max_abs and max_norm on
+  all nine distributions.** At 4096 the unsplit float32 kernel is 1.05x
+  cuBLAS's speed and split 2 is 1.02–1.03x; at 16384 split 4 is
+  1.008–1.009x, with cuBLAS's rel_F 11x Y's on mixed signs, 164–166x on same
+  signs and 1.5–5.7x under cancellation.
+- **K = 65536: more accurate, not faster.** Split 4 in float32 runs at
+  0.98–0.99x cuBLAS's speed (cuBLAS's rel_F 22–23x, 388–404x and 1.5–12x
+  Y's). Split 4 chained is 1.01–1.04x, and half as accurate as cuBLAS.
+- **Not on every output:** under cancellation (the paired inputs), 25–36% of
+  split 4's outputs are farther from R than cuBLAS's; on mixed signs,
+  2.4–4.8%.
+- **Each mma's truncation bias stays** at −7.0e-8 to −7.8e-8 (mean_norm, same
+  sign) whatever S is, so on same-sign inputs at K = 65536 SGEMM's rel_F is
+  below split 4's (1.52e-7 against 2.62e-7); split 16's, 1.18e-7, is below
+  SGEMM's, and split 16 runs at 0.92–0.93x cuBLAS's speed.
 
 ### Fused GEMM + bias + ReLU vs cuDNN
 

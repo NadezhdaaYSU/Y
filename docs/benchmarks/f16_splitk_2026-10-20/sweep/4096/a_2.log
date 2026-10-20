@@ -1,0 +1,21 @@
+512x512x4096 exact True graph True | during 100, 2760, 90.57 .. 86, 2775, 163.87
+  auto_s0_default              min    27.54 med    27.64 us  cuBLAS/this 1.096  64x64 2x2 S=1 
+  64_64_32_4_2_4_s2_mma        min    28.12 med    28.18 us  cuBLAS/this 1.074  64x64 4x2 S=2 
+  128_64_32_2_2_4_s2_mma       min    28.16 med    28.20 us  cuBLAS/this 1.072  128x64 2x2 S=2 
+  auto_s0_f32                  min    28.41 med    28.73 us  cuBLAS/this 1.063  64x64 2x2 S=1 f32
+  64_64_32_4_2_4_s2_f32        min    28.85 med    28.90 us  cuBLAS/this 1.046  64x64 4x2 S=2 f32
+  128_64_32_2_2_4_s2_f32       min    29.92 med    30.02 us  cuBLAS/this 1.009  128x64 2x2 S=2 f32
+  128_64_32_4_2_4_s2_f32       min    30.02 med    30.41 us  cuBLAS/this 1.005  128x64 4x2 S=2 f32
+  cuBLAS                       min    30.19 med    30.27 us  cuBLAS/this 1.000   S= 
+  128_128_32_4_2_3_s4_mma      min    30.27 med    30.31 us  cuBLAS/this 0.997  128x128 4x2 S=4 
+  64_128_32_4_2_4_s4_f32       min    30.31 med    30.35 us  cuBLAS/this 0.996  64x128 4x2 S=4 f32
+  128_64_32_4_2_4_s4_f32       min    30.94 med    30.99 us  cuBLAS/this 0.976  128x64 4x2 S=4 f32
+  128_128_32_4_2_3_s4_f32      min    31.06 med    31.13 us  cuBLAS/this 0.972  128x128 4x2 S=4 f32
+  128_128_32_4_2_4_s4_f32      min    31.54 med    31.59 us  cuBLAS/this 0.957  128x128 4x2 S=4 f32
+  128_128_64_4_2_3_s4_f32      min    34.69 med    34.75 us  cuBLAS/this 0.870  128x128 4x2 S=4 f32
+  128_128_32_4_2_3_s8_mma      min    35.02 med    35.08 us  cuBLAS/this 0.862  128x128 4x2 S=8 
+  128_128_32_4_2_3_s8_f32      min    35.88 med    35.96 us  cuBLAS/this 0.841  128x128 4x2 S=8 f32
+  128_128_64_2_2_3_s8_mma      min    36.23 med    36.33 us  cuBLAS/this 0.833  128x128 2x2 S=8 
+  128_128_32_4_2_3_s2_mma      min    51.93 med    52.16 us  cuBLAS/this 0.581  128x128 4x2 S=2 
+  128_128_32_4_2_3_s2_f32      min    53.96 med    54.04 us  cuBLAS/this 0.559  128x128 4x2 S=2 f32
+exit 0
