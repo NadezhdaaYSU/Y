@@ -1,0 +1,5 @@
+killed: no zero-scale mask (AssertionError: ('max_norm', nan, 9.5367431640625e-07))
+killed: zero-scale count inverted (AssertionError)
+killed: ties counted as better (AssertionError: {'better': 0.25, 'equal': 0.25, 'worse': 0.75, 'bitwise': 0.25})
+killed: zeros counted as subnormal (AssertionError: {'frac_zero': 0.2, 'frac_subnormal': 0.6, 'max_abs': 1.0, 'min_abs_nonzero': 5.96046)
+SURVIVED: control, not checked: small's scale (acc_1.json records each input's max_abs)

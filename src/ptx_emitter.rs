@@ -12205,8 +12205,12 @@ declare it as a Q format.\n{}",
     /// The tensor core adds into its accumulator with less than float32
     /// rounding: chained over K, same-sign results sit below float64 by about
     /// 1.2e-5 per 1024 of K, as cuBLAS's and Triton's do wherever they chain
-    /// the whole K. Added in float32 per mma, the error is about 7.7e-8 at any
-    /// K (docs/benchmarks/f16_accumulate_2026-10-20/). The kernels then take
+    /// the whole K. Added in float32 per mma, that bias is about -7.7e-8 at
+    /// any K (each mma still truncates its 16 products), though the error's
+    /// spread still grows with K as a float32 sum's does; it is not more
+    /// accurate than cuBLAS on every input or every output (M = 1 against its
+    /// GEMV, long-K cancellation against its split K):
+    /// docs/benchmarks/f16_accuracy_2026-10-20/. The kernels then take
     /// 1.03-1.09x the time on the square shapes from 256^3 to 8192^3,
     /// 1.02-1.06x at 512 x 512 x 4096-65536 (1.10-1.12x at K = 1024), and
     /// 0.95-0.98x at M = 1, 4 and 8 and 1.004x at 32 (N = K = 4096), where
