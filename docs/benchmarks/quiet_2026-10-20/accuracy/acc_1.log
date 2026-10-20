@@ -1,0 +1,84 @@
+USDT:2026-10-20 12:59:35 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:35 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+           256 normal    32x64x32 | 2x2 warps | Y mean e +1.05e-10 mean|e| 3.42e-08 max|e| 3.48e-07 rounded 0.043 ulps 20.43 =cuBLAS 1.000 | cuBLAS mean e +1.05e-10 mean|e| 3.42e-08 max|e| 3.48e-07 rounded 0.043 ulps 20.43 =cuBLAS 1.000 | Triton mean e +1.05e-10 mean|e| 3.42e-08 max|e| 3.48e-07 rounded 0.043 ulps 20.43 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_nn_align8>(cutl']
+USDT:2026-10-20 12:59:35 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:35 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+           256 same_sign 32x64x32 | 2x2 warps | Y mean e -2.63e-06 mean|e| 2.63e-06 max|e| 3.61e-06 rounded 0.000 ulps 28.01 =cuBLAS 1.000 | cuBLAS mean e -2.63e-06 mean|e| 2.63e-06 max|e| 3.61e-06 rounded 0.000 ulps 28.01 =cuBLAS 1.000 | Triton mean e -2.63e-06 mean|e| 2.63e-06 max|e| 3.61e-06 rounded 0.000 ulps 28.01 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_nn_align8>(cutl']
+USDT:2026-10-20 12:59:36 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:36 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+           512 normal    64x64x32 | 4x2 warps | Y mean e -3.18e-11 mean|e| 4.63e-08 max|e| 5.55e-07 rounded 0.020 ulps 47.26 =cuBLAS 1.000 | cuBLAS mean e -3.18e-11 mean|e| 4.63e-08 max|e| 5.55e-07 rounded 0.020 ulps 47.26 =cuBLAS 1.000 | Triton mean e -3.18e-11 mean|e| 4.63e-08 max|e| 5.55e-07 rounded 0.020 ulps 47.26 =cuBLAS 1.000 | ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+USDT:2026-10-20 12:59:36 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:36 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+           512 same_sign 64x64x32 | 4x2 warps | Y mean e -5.71e-06 mean|e| 5.71e-06 max|e| 7.25e-06 rounded 0.000 ulps 60.98 =cuBLAS 1.000 | cuBLAS mean e -5.71e-06 mean|e| 5.71e-06 max|e| 7.25e-06 rounded 0.000 ulps 60.98 =cuBLAS 1.000 | Triton mean e -5.71e-06 mean|e| 5.71e-06 max|e| 7.25e-06 rounded 0.000 ulps 60.98 =cuBLAS 1.000 | ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          1024 normal    64x128x32 | 2x2 warps | Y mean e -3.84e-11 mean|e| 6.41e-08 max|e| 6.48e-07 rounded 0.009 ulps 3595.78 =cuBLAS 1.000 | cuBLAS mean e -3.84e-11 mean|e| 6.41e-08 max|e| 6.48e-07 rounded 0.009 ulps 3595.78 =cuBLAS 1.000 | Triton mean e -3.84e-11 mean|e| 6.41e-08 max|e| 6.48e-07 rounded 0.009 ulps 3595.78 =cuBLAS 1.000 | ['ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn']
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          1024 same_sign 64x128x32 | 2x2 warps | Y mean e -1.20e-05 mean|e| 1.20e-05 max|e| 1.41e-05 rounded 0.000 ulps 128.29 =cuBLAS 1.000 | cuBLAS mean e -1.20e-05 mean|e| 1.20e-05 max|e| 1.41e-05 rounded 0.000 ulps 128.29 =cuBLAS 1.000 | Triton mean e -1.20e-05 mean|e| 1.20e-05 max|e| 1.41e-05 rounded 0.000 ulps 128.29 =cuBLAS 1.000 | ['ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn']
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          2048 normal    128x128x32 | 2x2 warps | Y mean e +1.29e-10 mean|e| 8.97e-08 max|e| 9.98e-07 rounded 0.004 ulps 1503.99 =cuBLAS 1.000 | cuBLAS mean e +1.29e-10 mean|e| 8.97e-08 max|e| 9.98e-07 rounded 0.004 ulps 1503.99 =cuBLAS 1.000 | Triton mean e +1.29e-10 mean|e| 8.97e-08 max|e| 9.98e-07 rounded 0.004 ulps 1503.99 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_nn_align8>(cutlass_8']
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:37 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          2048 same_sign 128x128x32 | 2x2 warps | Y mean e -2.47e-05 mean|e| 2.47e-05 max|e| 2.78e-05 rounded 0.000 ulps 264.16 =cuBLAS 1.000 | cuBLAS mean e -2.47e-05 mean|e| 2.47e-05 max|e| 2.78e-05 rounded 0.000 ulps 264.16 =cuBLAS 1.000 | Triton mean e -2.47e-05 mean|e| 2.47e-05 max|e| 2.78e-05 rounded 0.000 ulps 264.16 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_256x128_32x3_nn_align8>(cutlass_8']
+USDT:2026-10-20 12:59:39 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:39 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          4096 normal    128x128x32 | 2x2 warps | Y mean e -4.84e-11 mean|e| 1.26e-07 max|e| 1.20e-06 rounded 0.002 ulps 1824.51 =cuBLAS 1.000 | cuBLAS mean e -4.84e-11 mean|e| 1.26e-07 max|e| 1.20e-06 rounded 0.002 ulps 1824.51 =cuBLAS 1.000 | Triton mean e -4.84e-11 mean|e| 1.26e-07 max|e| 1.20e-06 rounded 0.002 ulps 1824.51 =cuBLAS 1.000 | ['ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn']
+USDT:2026-10-20 12:59:39 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:39 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          4096 same_sign 128x128x32 | 2x2 warps | Y mean e -5.03e-05 mean|e| 5.03e-05 max|e| 5.51e-05 rounded 0.000 ulps 537.38 =cuBLAS 1.000 | cuBLAS mean e -5.03e-05 mean|e| 5.03e-05 max|e| 5.51e-05 rounded 0.000 ulps 537.38 =cuBLAS 1.000 | Triton mean e -5.03e-05 mean|e| 5.03e-05 max|e| 5.51e-05 rounded 0.000 ulps 537.38 =cuBLAS 1.000 | ['ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn']
+USDT:2026-10-20 12:59:44 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:44 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          8192 normal    128x128x32 | 2x2 warps | Y mean e -1.10e-11 mean|e| 1.78e-07 max|e| 1.57e-06 rounded 0.001 ulps 4142.37 =cuBLAS 0.002 | cuBLAS mean e -8.91e-12 mean|e| 6.09e-08 max|e| 4.88e-07 rounded 0.003 ulps 1633.65 =cuBLAS 1.000 | Triton mean e -1.10e-11 mean|e| 1.78e-07 max|e| 1.57e-06 rounded 0.001 ulps 4142.37 =cuBLAS 0.002 | ['Memset (Device)', 'ampere_s16816gemm_fp16_256x128_ldg8_stages_32x3_nn']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+          8192 same_sign 128x128x32 | 2x2 warps | Y mean e -1.02e-04 mean|e| 1.02e-04 max|e| 1.08e-04 rounded 0.000 ulps 1084.29 =cuBLAS 0.000 | cuBLAS mean e -3.18e-05 mean|e| 3.18e-05 max|e| 3.39e-05 rounded 0.000 ulps 339.14 =cuBLAS 1.000 | Triton mean e -1.02e-04 mean|e| 1.02e-04 max|e| 1.08e-04 rounded 0.000 ulps 1084.29 =cuBLAS 0.000 | ['Memset (Device)', 'ampere_s16816gemm_fp16_256x128_ldg8_stages_32x3_nn']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+   1x4096x4096 normal    32x64x64 | 2x2 warps | Y mean e +3.38e-10 mean|e| 1.22e-07 max|e| 6.41e-07 rounded 0.003 ulps 192.12 =cuBLAS 0.003 | cuBLAS mean e -2.39e-10 mean|e| 1.05e-08 max|e| 6.65e-08 rounded 0.048 ulps 40.22 =cuBLAS 1.000 | ['std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, __half, float, floa']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+   1x4096x4096 same_sign 32x64x64 | 2x2 warps | Y mean e -4.96e-05 mean|e| 4.96e-05 max|e| 5.25e-05 rounded 0.000 ulps 527.56 =cuBLAS 0.000 | cuBLAS mean e +1.44e-09 mean|e| 1.98e-07 max|e| 7.94e-07 rounded 0.144 ulps 2.10 =cuBLAS 1.000 | ['std::enable_if<!(false), void>::type internal::gemvx::kernel<int, int, __half, float, floa']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+   4x4096x4096 normal    32x64x64 | 2x2 warps | Y mean e +1.08e-09 mean|e| 1.27e-07 max|e| 7.83e-07 rounded 0.003 ulps 331.43 =cuBLAS 1.000 | cuBLAS mean e +1.08e-09 mean|e| 1.27e-07 max|e| 7.83e-07 rounded 0.003 ulps 331.43 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_32x6_nn_align2>(cutlass_80']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+   4x4096x4096 same_sign 32x64x64 | 2x2 warps | Y mean e -5.02e-05 mean|e| 5.02e-05 max|e| 5.37e-05 rounded 0.000 ulps 534.89 =cuBLAS 1.000 | cuBLAS mean e -5.02e-05 mean|e| 5.02e-05 max|e| 5.37e-05 rounded 0.000 ulps 534.89 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x64_32x6_nn_align2>(cutlass_80']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+   8x4096x4096 normal    32x64x64 | 2x2 warps | Y mean e +7.38e-10 mean|e| 1.26e-07 max|e| 8.01e-07 rounded 0.002 ulps 361.80 =cuBLAS 1.000 | cuBLAS mean e +7.38e-10 mean|e| 1.26e-07 max|e| 8.01e-07 rounded 0.002 ulps 361.80 =cuBLAS 1.000 | ['ampere_s16816gemm_fp16_128x64_ldg8_stages_64x3_nn']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+   8x4096x4096 same_sign 32x64x64 | 2x2 warps | Y mean e -5.03e-05 mean|e| 5.03e-05 max|e| 5.37e-05 rounded 0.000 ulps 538.23 =cuBLAS 1.000 | cuBLAS mean e -5.03e-05 mean|e| 5.03e-05 max|e| 5.37e-05 rounded 0.000 ulps 538.23 =cuBLAS 1.000 | ['ampere_s16816gemm_fp16_128x64_ldg8_stages_64x3_nn']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  32x4096x4096 normal    32x64x64 | 2x2 warps | Y mean e -5.03e-10 mean|e| 1.26e-07 max|e| 8.31e-07 rounded 0.002 ulps 296.00 =cuBLAS 1.000 | cuBLAS mean e -5.03e-10 mean|e| 1.26e-07 max|e| 8.31e-07 rounded 0.002 ulps 296.00 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_nn_align8>(cutl']
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:48 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  32x4096x4096 same_sign 32x64x64 | 2x2 warps | Y mean e -5.02e-05 mean|e| 5.02e-05 max|e| 5.44e-05 rounded 0.000 ulps 536.77 =cuBLAS 1.000 | cuBLAS mean e -5.02e-05 mean|e| 5.02e-05 max|e| 5.44e-05 rounded 0.000 ulps 536.77 =cuBLAS 1.000 | ['void cutlass::Kernel2<cutlass_80_wmma_tensorop_s161616gemm_f16_32x32_128x2_nn_align8>(cutl']
+USDT:2026-10-20 12:59:49 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:49 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  512x512x1024 normal    64x64x32 | 4x2 warps | Y mean e +2.98e-10 mean|e| 6.41e-08 max|e| 5.55e-07 rounded 0.009 ulps 156.51 =cuBLAS 1.000 | cuBLAS mean e +2.98e-10 mean|e| 6.41e-08 max|e| 5.55e-07 rounded 0.009 ulps 156.51 =cuBLAS 1.000 | Triton mean e +2.98e-10 mean|e| 6.41e-08 max|e| 5.55e-07 rounded 0.009 ulps 156.51 =cuBLAS 1.000 | ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+USDT:2026-10-20 12:59:49 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:49 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  512x512x1024 same_sign 64x64x32 | 4x2 warps | Y mean e -1.20e-05 mean|e| 1.20e-05 max|e| 1.41e-05 rounded 0.000 ulps 128.09 =cuBLAS 1.000 | cuBLAS mean e -1.20e-05 mean|e| 1.20e-05 max|e| 1.41e-05 rounded 0.000 ulps 128.09 =cuBLAS 1.000 | Triton mean e -1.20e-05 mean|e| 1.20e-05 max|e| 1.41e-05 rounded 0.000 ulps 128.09 =cuBLAS 1.000 | ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+USDT:2026-10-20 12:59:50 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:50 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  512x512x4096 normal    64x64x32 | 2x2 warps | Y mean e +9.77e-11 mean|e| 1.26e-07 max|e| 9.32e-07 rounded 0.002 ulps 369.56 =cuBLAS 0.008 | cuBLAS mean e -1.55e-11 mean|e| 6.45e-08 max|e| 4.67e-07 rounded 0.004 ulps 173.24 =cuBLAS 1.000 | Triton mean e +9.77e-11 mean|e| 1.26e-07 max|e| 9.32e-07 rounded 0.002 ulps 369.56 =cuBLAS 0.008 | ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+USDT:2026-10-20 12:59:50 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:50 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  512x512x4096 same_sign 64x64x32 | 2x2 warps | Y mean e -5.02e-05 mean|e| 5.02e-05 max|e| 5.40e-05 rounded 0.000 ulps 536.29 =cuBLAS 0.000 | cuBLAS mean e -2.47e-05 mean|e| 2.47e-05 max|e| 2.68e-05 rounded 0.000 ulps 263.68 =cuBLAS 1.000 | Triton mean e -5.02e-05 mean|e| 5.02e-05 max|e| 5.40e-05 rounded 0.000 ulps 536.29 =cuBLAS 0.000 | ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+USDT:2026-10-20 12:59:51 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:51 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ 512x512x16384 normal    64x64x32 | 2x2 warps | Y mean e +1.17e-09 mean|e| 2.51e-07 max|e| 1.71e-06 rounded 0.001 ulps 15915.18 =cuBLAS 0.001 | cuBLAS mean e +1.04e-10 mean|e| 3.29e-08 max|e| 2.05e-07 rounded 0.004 ulps 14722.76 =cuBLAS 1.000 | Triton mean e +1.17e-09 mean|e| 2.51e-07 max|e| 1.71e-06 rounded 0.001 ulps 15915.18 =cuBLAS 0.001 | ['void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, ', 'void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8>(cutlass_8']
+USDT:2026-10-20 12:59:51 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:51 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ 512x512x16384 same_sign 64x64x32 | 2x2 warps | Y mean e -2.04e-04 mean|e| 2.04e-04 max|e| 2.13e-04 rounded 0.000 ulps 2177.19 =cuBLAS 0.000 | cuBLAS mean e -2.47e-05 mean|e| 2.47e-05 max|e| 2.57e-05 rounded 0.000 ulps 263.83 =cuBLAS 1.000 | Triton mean e -2.04e-04 mean|e| 2.04e-04 max|e| 2.13e-04 rounded 0.000 ulps 2177.19 =cuBLAS 0.000 | ['void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, ', 'void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8>(cutlass_8']
+USDT:2026-10-20 12:59:52 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:52 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ 512x512x65536 normal    64x64x32 | 2x2 warps | Y mean e -1.59e-09 mean|e| 4.98e-07 max|e| 3.66e-06 rounded 0.000 ulps 57832.59 =cuBLAS 0.000 | cuBLAS mean e -2.84e-10 mean|e| 6.39e-08 max|e| 4.36e-07 rounded 0.001 ulps 8198.17 =cuBLAS 1.000 | Triton mean e -1.59e-09 mean|e| 4.98e-07 max|e| 3.66e-06 rounded 0.000 ulps 57832.59 =cuBLAS 0.000 | ['ampere_s16816gemm_fp16_128x128_ldg8_stages_64x3_nn', 'void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, ']
+USDT:2026-10-20 12:59:52 56535:56535 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 12:59:52 56535:56535 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ 512x512x65536 same_sign 64x64x32 | 2x2 warps | Y mean e -8.19e-04 mean|e| 8.19e-04 max|e| 8.38e-04 rounded 0.000 ulps 8747.23 =cuBLAS 0.000 | cuBLAS mean e -1.01e-04 mean|e| 1.01e-04 max|e| 1.03e-04 rounded 0.000 ulps 1084.24 =cuBLAS 1.000 | Triton mean e -8.19e-04 mean|e| 8.19e-04 max|e| 8.38e-04 rounded 0.000 ulps 8747.23 =cuBLAS 0.000 | ['ampere_s16816gemm_fp16_128x128_ldg8_stages_64x3_nn', 'void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, ']

@@ -119,6 +119,51 @@ fn the_default_layout_is_the_swizzled_one() {
     assert!(smem(&default) < smem(&off), "{} vs {} bytes", smem(&default), smem(&off));
 }
 
+/// `Autotuner::score_candidate` ranks tiles by the stages they will get, so
+/// its count must be the emitter's. Under the pinned profile's 48 KB a
+/// 64x64x32 tile asking for 6 stages gets 5 swizzled and 4 padded, and a K
+/// that is not a multiple of the tile's depth rounds its K-tiles up. The
+/// compiler inherits this process's environment, so both see the same layout.
+#[test]
+fn the_scorer_counts_the_stages_the_emitter_uses() {
+    use y::autotuner::{AutotuneCandidate, Autotuner};
+    let dir = pinned::pinned_scratch("smem_swizzle_stages", pinned::SM_PINNED);
+    let profile = y::sentinel::HardwareProfile { sm_count: 66, max_smem_per_sm_bytes: 49152, ..Default::default() };
+    // (m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n, stages)
+    let cases: [(u32, u32, u32, u32, u32, u32, u32, u32, u32); 5] = [
+        (256, 256, 512, 64, 64, 32, 4, 2, 6),
+        (256, 256, 1024, 128, 128, 32, 2, 2, 4),
+        (256, 512, 2048, 64, 128, 32, 2, 2, 4),
+        (32, 4096, 4096, 32, 64, 64, 2, 2, 4),
+        (64, 64, 80, 64, 64, 32, 4, 2, 6),
+    ];
+    let mut differ_from_padded = false;
+    for (i, &(m, n, k, cm, cn, ck, wm, wn, st)) in cases.iter().enumerate() {
+        let src = dir.join(format!("g{i}.ysu"));
+        std::fs::write(&src, format!("@tile({m}, {n}, {k})\nkernel gemm_f16_stages_{i}(A: GlobalMemory<F16>, B: GlobalMemory<F16>, C: GlobalMemory<F32>) {{\n}}\n\nfn main() {{\n}}\n")).unwrap();
+        let out = Command::new(env!("CARGO_BIN_EXE_Y"))
+            .arg(&src)
+            .arg("--emit-ptx")
+            .env("Y_CTA_OVERRIDE", format!("{cm},{cn},{ck},{wm},{wn},{st}"))
+            .current_dir(&dir)
+            .output()
+            .expect("run Y");
+        assert!(out.status.success(), "case {i}: {}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        let ptx = std::fs::read_to_string(src.with_extension("ptx")).expect("no .ptx");
+        let used = number_after(&ptx, &format!("Autotuner selected {st} pipeline stages ("));
+        let smem = number_after(&ptx, "Dynamic shared memory required: ");
+        let cand = AutotuneCandidate { cta_m: cm, cta_n: cn, cta_k: ck, warps_m: wm, warps_n: wn, num_stages: st, num_warps: wm * wn };
+        let (per_stage, stages) = Autotuner::pipeline_footprint(&cand, k, &profile);
+        assert_eq!(stages, used, "case {i}: the scorer counts {stages} stages, the emitter used {used}");
+        assert!(smem >= stages * per_stage, "case {i}: {stages} stages of {per_stage} bytes do not fit the {smem} the kernel asks for");
+        // The padded layout's count, as the scorer used to take it.
+        let padded_stage = cm * (ck + 8) * 2 + ck * (cn + 8) * 2;
+        differ_from_padded |= (45056 / padded_stage).max(1).min(st).min(k.div_ceil(ck)) != stages;
+    }
+    let swizzled = std::env::var("Y_SMEM_SWIZZLE").map_or(true, |v| v != "0") && std::env::var("Y_SMEM_PAD").is_err();
+    assert_eq!(differ_from_padded, swizzled, "the cases do not separate the two layouts' stage counts");
+}
+
 /// A GEMM compiled at a pinned tile, and the path through the emitter that
 /// tile takes (a line of the emitted module that only that path writes, and
 /// one it must not).

@@ -1,0 +1,9 @@
+          1024 Y {'128_128_32_2_2_3': '128x128 2x2', '128_64_32_2_2_3': '128x64 2x2', '64_128_32_2_2_3': '64x128 2x2', '64_128_32_2_2_4': '64x128 2x2', '64_128_64_2_2_3': '64x128 2x2', '64_64_32_4_2_4': '64x64 4x2'} | exact {'128_128_32_2_2_3': True, '128_64_32_2_2_3': True, '64_128_32_2_2_3': True, '64_128_32_2_2_4': True, '64_128_64_2_2_3': True, '64_64_32_4_2_4': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2490-2760 MHz
+      64_128_32_2_2_4 min      27.4 median      27.4 us  0.904x Triton
+      64_128_32_2_2_3 min      27.4 median      27.6 us  0.905x Triton
+      64_64_32_4_2_4 min      27.6 median      27.7 us  0.913x Triton
+      128_64_32_2_2_3 min      28.5 median      29.3 us  0.941x Triton
+      cuBLAS    min      28.8 median      29.0 us  0.952x Triton
+      128_128_32_2_2_3 min      29.1 median      29.1 us  0.962x Triton
+      Triton    min      30.3 median      30.3 us  1.000x Triton
+      64_128_64_2_2_3 min      30.4 median      30.6 us  1.005x Triton

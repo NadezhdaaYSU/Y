@@ -1,0 +1,9 @@
+1024 run 1 exit 0
+2048 run 1 exit 0
+4096 run 1 exit 0
+8192 run 1 exit 0
+1024 run 2 exit 0
+2048 run 2 exit 0
+4096 run 2 exit 0
+8192 run 2 exit 0
+DONE

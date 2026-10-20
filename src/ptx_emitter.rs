@@ -11533,10 +11533,11 @@ declare it as a Q format.\n{}",
     }
 
     /// The A (`cta_k` columns) and B (`cta_n` columns) tile layouts of
-    /// `emit_tensor_core_gemm_kernel`: swizzled where both tiles' rows allow
-    /// it, padded by 8 elements otherwise. `Y_SMEM_SWIZZLE=0` selects the
-    /// padded layout, and `Y_SMEM_PAD` sets its pad (and selects it), to A/B
-    /// the two. `Autotuner::score_candidate` sizes its stages with it.
+    /// `emit_tensor_core_gemm_kernel` and `emit_gemm_swiglu_kernel`: swizzled
+    /// where both tiles' rows allow it, padded by 8 elements otherwise.
+    /// `Y_SMEM_SWIZZLE=0` selects the padded layout, and `Y_SMEM_PAD` sets its
+    /// pad (and selects it), to A/B the two. `Autotuner::score_candidate`
+    /// sizes its stages with it.
     pub fn gemm_smem_tiles(cta_k: u32, cta_n: u32) -> (SmemTile, SmemTile) {
         let pad: Option<u32> = std::env::var("Y_SMEM_PAD").ok().and_then(|v| v.parse().ok());
         let swizzle = pad.is_none() && std::env::var("Y_SMEM_SWIZZLE").map_or(true, |v| v != "0");
@@ -13501,7 +13502,8 @@ declare it as a Q format.\n{}",
         assert_eq!(n % cta_n, 0, "@tile N={} must be a multiple of the fused SwiGLU kernel's fixed cta_n={}; this kernel has no N-tail path and would silently drop the remainder", n, cta_n);
         assert_eq!(k % cta_k, 0, "@tile K={} must be a multiple of the fused SwiGLU kernel's fixed cta_k={}; this kernel has no K-tail path and would silently drop the remainder", k, cta_k);
 
-        let (smem_a, smem_b) = (SmemTile::padded(cta_k, 8), SmemTile::padded(cta_n, 8));
+        // The plain GEMM's layouts (`gemm_smem_tiles`); W_gate and W_up share B's.
+        let (smem_a, smem_b) = Self::gemm_smem_tiles(cta_k, cta_n);
         let smem_a_stride = smem_a.stride;
         let smem_b_stride = smem_b.stride;
         let k_tiles = k / cta_k;
@@ -17493,8 +17495,7 @@ mod tests {
     /// issues, for every CTA shape `Autotuner::generate_candidates` can
     /// select in the m/n > 512 regime this codegen targets plus one
     /// smaller shape, and asserts the `+8`-element padding (no swizzle; the
-    /// SwiGLU kernel's layout, and the F16 GEMM's under `Y_SMEM_SWIZZLE=0`)
-    /// stays bank-conflict-free. If this ever fails, it means
+    /// F16 GEMMs' layout under `Y_SMEM_SWIZZLE=0`) stays bank-conflict-free. If this ever fails, it means
     /// either the padding constant or `emit_gemm_compute_block`'s address
     /// formula changed in a way that reopens the ncu-measured bank-conflict
     /// regression this rewrite fixed - see project scratchpad's

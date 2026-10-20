@@ -1,0 +1,8 @@
+1024 run 1: 13:00:44 mean 1.0% games: 
+2048 run 1: 13:00:48 mean 21.2% games: 
+4096 run 1: 13:00:53 mean 12.6% games: 
+8192 run 1: 13:00:58 mean 1.1% games: 
+1024 run 2: 13:01:09 mean 2.0% games: 
+2048 run 2: 13:01:13 mean 1.0% games: 
+4096 run 2: 13:01:17 mean 30.7% games: 
+8192 run 2: 13:01:22 mean 2.0% games: 

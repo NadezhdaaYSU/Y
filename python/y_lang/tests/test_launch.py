@@ -102,8 +102,10 @@ class LaunchesWhatThePtxNeeds(WithLauncher, unittest.TestCase):
         self.assertLessEqual(self.run_gemm(1024, "64,128,32,2,2,2"), 48 * 1024)
 
     def test_one_needing_more_than_48_kb_opts_in(self):
-        # 64x64x64 on 4x2 warps, 3 stages: 55,296 bytes.
-        self.assertGreater(self.run_gemm(512, "64,64,64,4,2,3"), 48 * 1024)
+        # 64x64x64 on 4x2 warps, 4 stages of swizzled 16 KB tiles: 65,536
+        # bytes. (Three stages were 55,296 bytes of padded tiles, and are
+        # exactly 48 KB swizzled, which needs no opt-in.)
+        self.assertGreater(self.run_gemm(512, "64,64,64,4,2,4"), 48 * 1024)
 
 
 class LaunchesWhatThePtxNeedsThroughCtypes(LaunchesWhatThePtxNeeds):

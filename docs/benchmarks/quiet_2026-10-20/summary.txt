@@ -1,0 +1,9 @@
+acc_1 exit 0
+ksweep_1 exit 0
+bias_1 exit 0
+cold_1 exit 0
+ksweep_2 exit 0
+bias_2 exit 0
+cold_2 exit 0
+ab_3 exit 0
+DONE

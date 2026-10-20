@@ -1,0 +1,6 @@
+ptxas info    : 0 bytes gmem
+ptxas info    : Compiling entry function 'gemm_f16_2048' for 'sm_89'
+ptxas info    : Function properties for gemm_f16_2048
+    0 bytes stack frame, 0 bytes spill stores, 0 bytes spill loads
+ptxas info    : Used 203 registers, used 1 barriers, 376 bytes cmem[0]
+ptxas info    : Compile time = 23.110 ms

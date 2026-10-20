@@ -47,7 +47,13 @@ source; each entry there now carries its status. What is still open:
   3.2e-5 below, and at 256 x 256 x 4096 1.3e-5 at most, so on some shapes it
   sums differently. The FP8 GEMM had the same property and since 2026-10-18 adds each
   mma's result in float32. Exactness tests on small integers cannot see it
-  (`docs/benchmarks/f16_xbar_2026-10-18/precision/`).
+  (`docs/benchmarks/f16_xbar_2026-10-18/precision/`). Measured again on
+  2026-10-20 (`docs/benchmarks/quiet_2026-10-20/accuracy/`): Y and Triton give
+  cuBLAS's bits from 256^3 to 4096^3 and at M = 4 to 32, N = K = 4096; cuBLAS
+  is closer at 8192^3 (3.2e-5 below against Y's 1.0e-4), at M = 1 (a GEMV
+  kernel, 1.4e-9) and at long K, where it splits K: at 512 x 512 x K Y is
+  5.0e-5, 2.0e-4 and 8.2e-4 below at K = 4096, 16384 and 65536, cuBLAS
+  2.5e-5, 2.5e-5 and 1.0e-4.
 
 ### Python packaging
 
@@ -163,16 +169,19 @@ source; each entry there now carries its status. What is still open:
   (`docs/benchmarks/const_div_2026-10-19/probes/`). Every form of the copy
   probed gets them, from `ptxas` 12.8 and 13.4, on sm_80 to sm_89
   (`docs/benchmarks/smem_swizzle_2026-10-20/probes_dead_lds/`).
-- The F16 GEMM's A and B tiles are swizzled since 2026-10-20 because the
-  padded rows made every `cp.async` copy read 1.5 times the L2 sectors it
-  needs (`docs/benchmarks/smem_swizzle_2026-10-20/`). The SwiGLU kernel and
-  the FP8 and int8 GEMMs have their own copy code and layouts; whether
-  theirs cost the same was not measured. The profile's tiles were tuned
-  with the padded layout and not re-tuned.
-- `Autotuner::score_candidate` is documented as a byte-for-byte match of
-  `emit_tensor_core_gemm_kernel`'s stage accounting and now sizes stages
-  with `PtxEmitter::gemm_smem_tiles`, but no test holds its stage count to
-  the emitter's.
+- The F16 GEMM's and the fused SwiGLU kernel's A and B tiles are swizzled
+  since 2026-10-20 because the padded rows made every `cp.async` copy read
+  1.5 times the L2 sectors it needs (`docs/benchmarks/smem_swizzle_2026-10-20/`).
+  The FP8 and int8 GEMMs have their own copy code and layouts; whether
+  theirs cost the same was not measured.
+- The profile's tiles were tuned with the padded layout. Measured with the
+  swizzle, three stages instead of two at 128x128x32 are 1.6% faster at
+  2048^3 and 0.7-0.8% at 4096^3, and 4x2 warps with three stages 1.3-1.5%
+  at 8192^3 (`docs/benchmarks/quiet_2026-10-20/retune/`); the tiles were not
+  changed.
+- The fused SwiGLU kernel's tile is fixed at 128x128: at 512^3 that is 16
+  CTAs for 66 SMs, and it takes 2.1x the time of Y's unfused path
+  (`docs/benchmarks/quiet_2026-10-20/swiglu/`).
 - The validator and proof-scope items in archive entries 587-2049 are research
   queue, not wrong answers: 923 of the 925 emitted `mma.sync` are floating point
   and carry no proof; the f16 GEMMs carry no exactness argument; validation is
