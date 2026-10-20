@@ -13465,7 +13465,7 @@ declare it as a Q format.\n{}",
     ///
     /// Scope, stated plainly (disclosed simplifications relative to
     /// `emit_tensor_core_gemm_kernel`, not oversights):
-    /// - **Fixed, hardcoded CTA tile (128x128x32, 4x4 warps)** rather than
+    /// - **Fixed CTA tile (64x64x32, 4x2 warps)** rather than
     ///   `Autotuner::autotune`. Two independent accumulator sets (gate, up)
     ///   already double live accumulator registers per thread versus the
     ///   plain GEMM at the same CTA tile (`num_i * num_j * 8` f32 regs,
@@ -13476,10 +13476,14 @@ declare it as a Q format.\n{}",
     ///   autotuner has no notion of a kernel needing 2x the accumulator
     ///   budget (it scores one GEMM's occupancy), so trusting it here would
     ///   silently pick register-infeasible tiles at exactly the sizes this
-    ///   pitch cares about. A fixed tile with `per_warp_m=per_warp_n=32`
-    ///   (`num_i=num_j=2` => 32 accumulator regs/array, 64 total)
-    ///   sidesteps that risk while still covering a 128x128 output region
-    ///   per CTA (4x4=16 warps). `cta_k` is 32, not the 64 an earlier
+    ///   pitch cares about. The tile was 128x128 on 4x4 warps
+    ///   (`per_warp_m=per_warp_n=32`, 64 accumulator registers); with the
+    ///   tiles swizzled, 64x64 on 4x2 warps (16x32 a warp, 32 accumulator
+    ///   registers, 103 in all) was the fastest of six tiles at 512^3 and
+    ///   2048^3 (2.92x and 1.03x the old one), level at 1024^3, and 1.03x at
+    ///   4096^3, within 0.8% of 64x64 on 2x2 warps there
+    ///   (docs/benchmarks/swiglu_tile_2026-10-20/): at 512^3 the old tile made
+    ///   16 CTAs for 66 SMs. `cta_k` is 32, not the 64 an earlier
     ///   version of this kernel used: a *third* smem-resident stream
     ///   (`W_up`, on top of `X`/`W_gate`) means the K-loop's real per-stage
     ///   footprint (`stage_a_bytes + 2*stage_b_bytes`) is 1.5x a plain
@@ -13530,7 +13534,7 @@ declare it as a Q format.\n{}",
         // 255 cap before a single address register. Any override is checked
         // against that below rather than trusted.
         let (cta_m, cta_n, cta_k, warps_m, warps_n) = Self::swiglu_tile_override()
-            .unwrap_or((128, 128, 32, 4, 4));
+            .unwrap_or((64, 64, 32, 4, 2));
         let threads_per_cta = warps_m * warps_n * 32;
 
         let per_warp_m = cta_m / warps_m;

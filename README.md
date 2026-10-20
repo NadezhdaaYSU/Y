@@ -1017,11 +1017,12 @@ after measuring it the other way: **fusions that only remove work win; mainloop
 fusions that add accumulator pressure force a worse tile and win less.** Fused
 SwiGLU's two FP32 accumulator arrays cost 8 registers each per tile element, so a
 128x128 tile over 2x2 warps would need 256 registers/thread against ptxas's 255
-cap, pinning it to the 4x4 split that measures 52.5 against 75.8 TFLOPS in the
-plain GEMM. With swizzled shared memory it is 1.07–1.11x Y's own unfused path
-(two Y GEMMs, then SiLU times up in PyTorch) and 1.04–1.14x PyTorch's from 1024
-to 4096, and 0.47x and 0.50x at 512, where its fixed 128x128 tile makes 16 CTAs
-for 66 SMs (`docs/benchmarks/quiet_2026-10-20/swiglu/`). It read 1.00x against
+cap. It ran 128x128 on 4x4 warps; since 2026-10-20 it runs 64x64 on 4x2 warps,
+the fastest of six tiles swept, or within 0.8% of it, from 512 to 4096
+(`docs/benchmarks/swiglu_tile_2026-10-20/`). With that and swizzled shared
+memory it is 1.10–1.37x Y's own unfused path (two Y GEMMs, then SiLU times up
+in PyTorch) and 1.07–1.45x PyTorch's from 512 to 4096. The 128x128 tile took
+2.9x the time at 512, where it made 16 CTAs for 66 SMs. It read 1.00x against
 the unfused path before.
 
 ### RMSNorm and RoPE vs FlashInfer

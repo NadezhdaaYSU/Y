@@ -183,9 +183,6 @@ source; each entry there now carries its status. What is still open:
   2048^3 and 0.7-0.8% at 4096^3, and 4x2 warps with three stages 1.3-1.5%
   at 8192^3 (`docs/benchmarks/quiet_2026-10-20/retune/`); the tiles were not
   changed.
-- The fused SwiGLU kernel's tile is fixed at 128x128: at 512^3 that is 16
-  CTAs for 66 SMs, and it takes 2.1x the time of Y's unfused path
-  (`docs/benchmarks/quiet_2026-10-20/swiglu/`).
 - The validator and proof-scope items in archive entries 587-2049 are research
   queue, not wrong answers: 923 of the 925 emitted `mma.sync` are floating point
   and carry no proof; the f16 GEMMs carry no exactness argument; validation is
@@ -200,8 +197,9 @@ source; each entry there now carries its status. What is still open:
   documentation and the README that disagree with its measurement (checked
   2026-10-17 at `ff3526f`): the loop census's buckets and its
   `loopval`/`nestval` split; the multi-back-edge kernels (33 of 48 published,
-  29 measured) and liftgap's levels (115 published, 95 measured, 97 since
-  `tensor_core_gemm_f16_rect`'s re-measured tile added two loop levels); the
+  29 measured) and liftgap's levels (115 published; 95 measured on 5e391da,
+  and 87 since the fused SwiGLU kernel's 64x64 tile took two loop levels from
+  each of its four kernels, 2026-10-20); the
   unroll
   census (24 `MATCHED` and 18 `REFUSED` published, 27 and 15 measured); and the
   `-O1` and `-O3` frontier censuses, stamped on an older tree
