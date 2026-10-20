@@ -1,0 +1,681 @@
+--- a/src/ptx_emitter.rs	2026-10-20 19:40:11.611711050 +0300
++++ b/src/ptx_emitter.rs	2026-10-20 19:40:11.611711050 +0300
+@@ -1187,6 +1187,9 @@
+     /// While an F16 GEMM whose mmas add into float32 is being emitted, the
+     /// register holding 0.0 they start from (`emit_f16_mma`).
+     f16_mma_zero: Option<String>,
++    /// Set by `emit_tensor_core_gemm_kernel` for a split-K GEMM: what its
++    /// `_reduce` entry sums, which depends on the tile it chose.
++    gemm_reduce_plan: Option<GemmReducePlan>,
+     /// CTAs per SM a tile GEMM's registers must leave room for, when it asks
+     /// for more than one (`emit_kernel` tightens `.maxnreg` to match).
+     tile_gemm_ctas_per_sm: Option<u32>,
+@@ -1392,6 +1395,97 @@
+     emit(seq)
+ }
+ 
++/// How a split-K F16 GEMM divides K; see `PtxEmitter::gemm_split_k`.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum GemmSplit {
++    /// `_splitk<S>`: `%ctaid.z` takes one of S equal K ranges of a tile.
++    Even(u32),
++    /// `_streamk<P>`: P CTAs in `%ctaid.x`, each an equal share of every
++    /// tile's K-steps in turn (`StreamKSchedule`).
++    Stream(u32),
++}
++
++/// A stream-K GEMM's division of work. K is cut into `kblocks` equal
++/// blocks, and unit `v = kb * tiles + t` is output tile t's K-block kb, of
++/// `iters` K-steps; the units are numbered K-block first, `v * iters +
++/// kstep`, and CTA `c` of `ctas` takes the steps `[begin(c), begin(c + 1))`,
++/// `begin(c) = floor(c * total / ctas)`. Its run within one unit is one
++/// piece of that unit; a unit's pieces belong to consecutive CTAs, the first
++/// being `owner(v * iters)`, and piece `c - owner(v * iters)` of unit
++/// `(kb, t)` is written to workspace slot `kb * max_pieces + c -
++/// owner(v * iters)`. Numbering K-blocks first keeps the CTAs that share an
++/// operand within one block's width of each other in K, so the operands they
++/// share are still in L2; numbered tile by tile (one block), CTAs reading
++/// the same A rows sat all along K and 512 x 512 x 65536 read 294 MB from
++/// DRAM where 128 MB is the minimum. Every quantity the kernels compute from
++/// this is below 2^32 (`new` checks), so they use u32 arithmetic.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct StreamKSchedule {
++    pub ctas: u32,
++    pub tiles_m: u32,
++    pub tiles_n: u32,
++    pub kblocks: u32,
++    pub iters: u32,
++    pub total: u32,
++    /// The most pieces any unit has.
++    pub max_pieces: u32,
++}
++
++impl StreamKSchedule {
++    #[allow(clippy::too_many_arguments)]
++    pub fn new(m: u32, n: u32, k: u32, cta_m: u32, cta_n: u32, cta_k: u32, ctas: u32, kblocks: u32) -> Result<Self, String> {
++        if m % cta_m != 0 || n % cta_n != 0 || k % cta_k != 0 {
++            return Err(format!(
++                "stream K needs whole tiles: {} x {} x {} is not a multiple of the {} x {} x {} tile",
++                m, n, k, cta_m, cta_n, cta_k
++            ));
++        }
++        if kblocks == 0 || (k / cta_k) % kblocks != 0 {
++            return Err(format!("{} K-steps of {} do not cut into {} equal blocks", k / cta_k, cta_k, kblocks));
++        }
++        let (tiles_m, tiles_n, iters) = (m / cta_m, n / cta_n, k / cta_k / kblocks);
++        let total = tiles_m as u64 * tiles_n as u64 * kblocks as u64 * iters as u64;
++        if ctas == 0 || total * (ctas as u64 + 1) >= 1 << 32 {
++            return Err(format!("{} CTAs over {} K-steps overflow the schedule's 32-bit arithmetic", ctas, total));
++        }
++        let mut s = StreamKSchedule { ctas, tiles_m, tiles_n, kblocks, iters, total: total as u32, max_pieces: 0 };
++        s.max_pieces = (0..tiles_m * tiles_n * kblocks).map(|v| s.pieces(v)).max().unwrap_or(1);
++        Ok(s)
++    }
++
++    /// The workspace's M x N slots.
++    pub fn slots(&self) -> u32 {
++        self.kblocks * self.max_pieces
++    }
++
++    /// The first K-step of CTA `c`.
++    pub fn begin(&self, c: u32) -> u32 {
++        (c as u64 * self.total as u64 / self.ctas as u64) as u32
++    }
++
++    /// The CTA whose steps include step `x`: the largest `c` with
++    /// `begin(c) <= x`, which is `ceil((x + 1) * ctas / total) - 1`.
++    pub fn owner(&self, x: u32) -> u32 {
++        (((x as u64 + 1) * self.ctas as u64 + self.total as u64 - 1) / self.total as u64 - 1) as u32
++    }
++
++    /// How many CTAs share unit `v`.
++    pub fn pieces(&self, v: u32) -> u32 {
++        self.owner(v * self.iters + self.iters - 1) - self.owner(v * self.iters) + 1
++    }
++}
++
++/// What a split-K GEMM's `_reduce` entry sums: `slots` M x N planes, every
++/// one for an even split, or under stream K, for each K-block kb, the first
++/// `pieces(kb * tiles + t)` of that block's `max_pieces`.
++#[derive(Clone, Copy, Debug)]
++struct GemmReducePlan {
++    m: u32,
++    n: u32,
++    slots: u32,
++    stream: Option<(StreamKSchedule, u32, u32)>,
++}
++
+ /// Split-K ("flash decoding") configuration for
+ /// `emit_paged_decode_attention_kernel`.
+ ///
+@@ -1507,6 +1601,7 @@
+             line_info: None,
+             pending_extern_decls: Vec::new(),
+             f16_mma_zero: None,
++            gemm_reduce_plan: None,
+             tile_gemm_ctas_per_sm: None,
+             pending_module_items: Vec::new(),
+             shared_arrays: Vec::new(),
+@@ -3776,7 +3871,7 @@
+         // normal generic per-statement lowering (see `tile_gemm_operands`).
+         // Captures the real launch block size for the `.maxnreg` computation
+         // below - see that computation's doc comment for why this matters.
+-        // A `_splitk<S>` name is the split-K F16 GEMM's and nothing else's:
++        // A `_splitk<S>` or `_streamk<P>` name is the split-K F16 GEMM's and nothing else's:
+         // one that is malformed or on another shape is refused, not lowered
+         // as the shape its parameters happen to match (the 4-parameter
+         // split shape's types are the bias shape's).
+@@ -3791,12 +3886,12 @@
+             }
+         }
+         let tile_gemm_threads_per_cta = if let Some((m, n, k, a_ptr, b_ptr, c_ptr, bias_ptr, split)) = self.tile_gemm_operands(kernel) {
+-            if let Some(s) = split {
+-                if Self::gemm_split_k_shape(m, n, k, s).is_ok() {
+-                    self.emit_gemm_split_reduce_entry(m, n, s, kernel, &kernel.name);
+-                }
++            self.gemm_reduce_plan = None;
++            let threads = self.emit_tensor_core_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, bias_ptr.as_deref(), split, hw_profile, &kernel.name);
++            if let Some(plan) = self.gemm_reduce_plan.take() {
++                self.emit_gemm_split_reduce_entry(&plan, kernel, &kernel.name);
+             }
+-            Some(self.emit_tensor_core_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, bias_ptr.as_deref(), split, hw_profile, &kernel.name))
++            Some(threads)
+         } else if let Some((m, n, k, a, b, sa, sb, bi, c)) =
+             self.tile_gemm_int8_scaled_operands(kernel)
+         {
+@@ -7847,7 +7942,7 @@
+     /// is Partial's register (what the main entry writes) and `bias_reg` is
+     /// `None`.
+     #[allow(clippy::type_complexity)]
+-    fn tile_gemm_operands(&self, kernel: &KernelDecl) -> Option<(u32, u32, u32, String, String, String, Option<String>, Option<u32>)> {
++    fn tile_gemm_operands(&self, kernel: &KernelDecl) -> Option<(u32, u32, u32, String, String, String, Option<String>, Option<GemmSplit>)> {
+         let tile = kernel.tile.as_ref()?;
+         let split = match Self::gemm_split_k(&kernel.name) {
+             None => None,
+@@ -7904,44 +7999,60 @@
+         Some((m, n, k, a_reg, b_reg, c_reg, bias_reg, split))
+     }
+ 
+-    /// The split count of a split-K F16 GEMM: an `@tile(M, N, K)` kernel
+-    /// named `<name>_splitk<S>`, `S` from 1 to 64 without leading zeros.
+-    /// `None` when the name's last `_` component does not start with
+-    /// `splitk`; `Some(Err)` when it does but is not such a suffix.
++    /// How a split-K F16 GEMM divides K, from its name: an `@tile(M, N, K)`
++    /// kernel named `<name>_splitk<S>` (S from 1 to 64) or `<name>_streamk<P>`
++    /// (P from 1 to 4096), without leading zeros. `None` when the name's last
++    /// `_` component starts with neither; `Some(Err)` when it does but is not
++    /// such a suffix.
+     ///
+-    /// The shape splits K into `S` equal parts in `%ctaid.z`, each written
++    /// `_splitk<S>` splits K into S equal parts in `%ctaid.z`, each written
+     /// as an M x N float32 partial to its slot of `Partial` (`S * M * N`
+-    /// floats), and a second entry, `<name>_reduce`, sums the slots in
+-    /// order into C: a fixed order, no atomics, so the result does not
+-    /// depend on which CTAs ran first. Every split accumulates each mma in
+-    /// float32 unless `Y_F16_ACCUMULATE=mma` (see `f16_accumulates_in_f32`).
++    /// floats). `_streamk<P>` runs P CTAs in `%ctaid.x` that share all the
++    /// tiles' K-steps equally (`StreamKSchedule`), so no SM idles for want of
++    /// a tile; each piece of a tile goes to its slot. A second entry,
++    /// `<name>_reduce`, sums each output's slots in order into C: a fixed
++    /// order, no atomics, so the result does not depend on which CTAs ran
++    /// first. Every split accumulates each mma in float32 unless
++    /// `Y_F16_ACCUMULATE=mma` (see `f16_accumulates_in_f32`). The PTX
++    /// header states the grids and the workspace size.
+     /// `type_checker::verify_tile_gemm_kernel` applies this same function.
+-    pub fn gemm_split_k(name: &str) -> Option<Result<u32, String>> {
++    pub fn gemm_split_k(name: &str) -> Option<Result<GemmSplit, String>> {
+         let (_, last) = name.rsplit_once('_')?;
+-        let digits = last.strip_prefix("splitk")?;
++        let (digits, max, make): (&str, u32, fn(u32) -> GemmSplit) = if let Some(d) = last.strip_prefix("splitk") {
++            (d, 64, GemmSplit::Even)
++        } else {
++            (last.strip_prefix("streamk")?, 4096, GemmSplit::Stream)
++        };
+         let well_formed = !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) && !digits.starts_with('0');
+         match digits.parse::<u32>() {
+-            Ok(s) if well_formed && s <= 64 => Some(Ok(s)),
++            Ok(s) if well_formed && s <= max => Some(Ok(make(s))),
+             _ => Some(Err(format!(
+-                "`{}` ends in `_{}`, but a split-K GEMM's name must end in `_splitk<S>` with S from 1 to 64",
++                "`{}` ends in `_{}`, but a split-K GEMM's name must end in `_splitk<S>` with S from 1 to 64 \
++                 or `_streamk<P>` with P from 1 to 4096",
+                 name, last
+             ))),
+         }
+     }
+ 
+-    /// Whether an `m x n x k` F16 GEMM can be split `s` ways: each split
+-    /// equally deep, a whole number of A's 8-element `cp.async` chunks, and
+-    /// whole float4s for `<name>_reduce`.
+-    pub fn gemm_split_k_shape(m: u32, n: u32, k: u32, s: u32) -> Result<(), String> {
++    /// Whether an `m x n x k` F16 GEMM can be split as `split` says: an even
++    /// split's parts equally deep and each a whole number of A's 8-element
++    /// `cp.async` chunks, and whole float4s for `<name>_reduce`. What stream
++    /// K needs of the tile is checked once the tile is chosen
++    /// (`StreamKSchedule::new`).
++    pub fn gemm_split_k_shape(m: u32, n: u32, k: u32, split: GemmSplit) -> Result<(), String> {
++        if n % 4 != 0 {
++            return Err(format!("N = {} is not a multiple of 4 (the reduction sums float4s)", n));
++        }
++        let s = match split {
++            GemmSplit::Stream(_) => return if k % 8 == 0 { Ok(()) } else { Err(format!("K = {} is not a multiple of 8", k)) },
++            GemmSplit::Even(s) => s,
++        };
+         if s == 0 || s > 64 {
+             return Err(format!("split count {} is not from 1 to 64", s));
+         }
+         if k % s != 0 || (k / s) % 8 != 0 {
+             return Err(format!("K = {} does not split into {} parts that are each a multiple of 8", k, s));
+         }
+-        if n % 4 != 0 {
+-            return Err(format!("N = {} is not a multiple of 4 (the reduction sums float4s)", n));
+-        }
+         if (s as u64) * (m as u64) * (n as u64) > u32::MAX as u64 {
+             return Err(format!("the {} x {} x {} float32 workspace has more than 2^32 elements", s, m, n));
+         }
+@@ -12549,13 +12660,13 @@
+         b_ptr: &str,
+         c_ptr: &str,
+         bias_ptr: Option<&str>,
+-        split: Option<u32>,
++        split: Option<GemmSplit>,
+         hw_profile: &HardwareProfile,
+         kernel_name: &str,
+     ) -> u32 {
+-        // ---- split K (see `gemm_split_k`): from here on `k` is one split's
+-        // depth, the extent of the K loop, and `lda` A's row length. A
+-        // single split is the whole K. ----
++        // ---- split K (see `gemm_split_k`): from here on `k` is one even
++        // split's depth, the extent of the K loop, and `lda` A's row length.
++        // Unsplit and under stream K it is the whole K. ----
+         let lda = k;
+         if let Some(s) = split {
+             if let Err(why) = Self::gemm_split_k_shape(m, n, k, s) {
+@@ -12563,7 +12674,10 @@
+                 return 0;
+             }
+         }
+-        let k = k / split.unwrap_or(1);
++        let k = match split {
++            Some(GemmSplit::Even(s)) => k / s,
++            _ => k,
++        };
+         let config = Autotuner::autotune(m, n, k, hw_profile, Precision::F16);
+         let cta_m = config.cta_m;
+         let cta_n = config.cta_n;
+@@ -12680,12 +12794,56 @@
+ 
+         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
+         writeln!(&mut self.ptx_buffer, "    // [Y TENSOR CORE GEMM] M={} N={} K={} | CTA {}x{}x{} | {}x{} warps | wmma.sync.m16n16k16.f16->f32", m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n).unwrap();
+-        if let Some(s) = split {
+-            writeln!(
+-                &mut self.ptx_buffer,
+-                "    // [Y SPLIT-K GEMM] K={} in {} splits of K={} | grid ({}, {}, {}) writes Partial[z] (M x N f32 each); then {}_reduce, grid ({}, 1, 1) x 256 threads, sums them into C",
+-                lda, s, k, n.div_ceil(cta_n), m.div_ceil(cta_m), s, kernel_name, (m * n / 4).div_ceil(256)
+-            ).unwrap();
++        // ---- stream K: the schedule, which needs whole tiles and the
++        // hoisted pipelined path below; anything else is refused. ----
++        let stream = match split {
++            Some(GemmSplit::Stream(p)) => {
++                // `Y_STREAMK_KBLOCKS` overrides the K-block count, for measuring.
++                let kblocks = match std::env::var("Y_STREAMK_KBLOCKS") {
++                    Ok(v) => v.parse::<u32>().unwrap_or_else(|_| panic!("Y_STREAMK_KBLOCKS must be a positive integer, not {:?}", v)),
++                    Err(_) => 1,
++                };
++                let sched = StreamKSchedule::new(m, n, k, cta_m, cta_n, cta_k, p, kblocks).and_then(|s| {
++                    if effective_stages < 2 {
++                        Err(format!("stream K needs a pipelined tile; {} x {} x {} stages only {}", cta_m, cta_n, cta_k, effective_stages))
++                    } else if Self::hoisted_tile_load_shape(lda, cta_m, cta_k, smem_a, threads_per_cta).is_none()
++                        || Self::hoisted_tile_load_shape(n, cta_k, cta_n, smem_b, threads_per_cta).is_none()
++                    {
++                        Err(format!("stream K needs hoisted tile loads, which the {} x {} x {} tile does not split into", cta_m, cta_n, cta_k))
++                    } else if (s.slots() as u64) * (m as u64) * (n as u64) > u32::MAX as u64 {
++                        Err(format!("the {} x {} x {} float32 workspace has more than 2^32 elements", s.slots(), m, n))
++                    } else {
++                        Ok(s)
++                    }
++                });
++                match sched {
++                    Ok(s) => Some(s),
++                    Err(why) => {
++                        self.emit_errors.push(format!("F16 tensor-core GEMM `{}`: {}", kernel_name, why));
++                        return 0;
++                    }
++                }
++            }
++            _ => None,
++        };
++        match (split, stream) {
++            (Some(GemmSplit::Even(s)), _) => {
++                writeln!(
++                    &mut self.ptx_buffer,
++                    "    // [Y SPLIT-K GEMM] K={} in {} splits of K={} | grid ({}, {}, {}) writes Partial[z] (M x N f32 each); then {}_reduce, grid ({}, 1, 1) x 256 threads, sums them into C",
++                    lda, s, k, n.div_ceil(cta_n), m.div_ceil(cta_m), s, kernel_name, (m * n / 4).div_ceil(256)
++                ).unwrap();
++                self.gemm_reduce_plan = Some(GemmReducePlan { m, n, slots: s, stream: None });
++            }
++            (_, Some(s)) => {
++                writeln!(
++                    &mut self.ptx_buffer,
++                    "    // [Y STREAM-K GEMM] {} tiles x {} K-blocks x {} K-steps over {} CTAs | grid ({}, 1, 1) writes each unit's pieces to Partial[0..{}] (M x N f32 each); then {}_reduce, grid ({}, 1, 1) x 256 threads, sums them into C",
++                    s.tiles_m * s.tiles_n, s.kblocks, s.iters, s.ctas, s.ctas, s.slots(), kernel_name, (m * n / 4).div_ceil(256)
++                ).unwrap();
++                self.gemm_reduce_plan = Some(GemmReducePlan { m, n, slots: s.slots(), stream: Some((s, cta_m, cta_n)) });
++            }
++            _ => {}
+         }
+         if effective_stages >= 2 {
+             writeln!(&mut self.ptx_buffer, "    // Autotuner selected {} pipeline stages ({} used after k_tiles/smem clamping); cp.async multi-stage pipelined. Dynamic shared memory required: {} bytes.", config.num_stages, effective_stages, total_dyn_smem_bytes).unwrap();
+@@ -12716,7 +12874,7 @@
+         // [z*k, (z+1)*k) and writes its partial to slot z (`c_ptr` is the
+         // workspace in this shape). Moving the three bases leaves every
+         // loader's bounds relative to the split. ----
+-        if split.is_some() {
++        if let Some(GemmSplit::Even(_)) = split {
+             let z = self.alloc_reg32();
+             writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.z;", z).unwrap();
+             let z64 = self.alloc_reg64();
+@@ -12738,11 +12896,15 @@
+         // Correct for grids whose dimensions aren't an exact multiple of
+         // the group size (the common case) - see
+         // test_grid_swizzle_uneven_grid_is_bijection.
+-        let (bid_m, bid_n) = self.emit_grid_swizzle_code(GEMM_SWIZZLE_GROUP_SIZE);
++        // Under stream K the tile changes with each piece: both are set at
++        // the top of the segment loop below.
+         let cta_m_start = self.alloc_reg32();
+-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_m_start, bid_m, cta_m).unwrap();
+         let cta_n_start = self.alloc_reg32();
+-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_n_start, bid_n, cta_n).unwrap();
++        if stream.is_none() {
++            let (bid_m, bid_n) = self.emit_grid_swizzle_code(GEMM_SWIZZLE_GROUP_SIZE);
++            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_m_start, bid_m, cta_m).unwrap();
++            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_n_start, bid_n, cta_n).unwrap();
++        }
+ 
+         // ---- warp/lane decomposition ----
+         let tid = self.alloc_reg32();
+@@ -12792,6 +12954,91 @@
+         let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
+         self.f16_mma_zero = self.emit_f16_mma_zero(m, split.is_some());
+ 
++        // ---- stream K: CTA c runs its K-steps [g, g_end) one piece - its
++        // run within one tile - per trip of this loop, which encloses
++        // everything from the zeroed accumulators to the epilogue. A piece
++        // of tile t starting at step kb of its `iters` reads A's columns and
++        // B's rows from kb * cta_k and writes slot c - owner(t * iters). ----
++        let seg = stream.map(|s| {
++            let c = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", c).unwrap();
++            let t0 = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", t0, c, s.total).unwrap();
++            let g = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", g, t0, s.ctas).unwrap();
++            let t1 = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", t1, c, s.total, s.total).unwrap();
++            let g_end = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", g_end, t1, s.ctas).unwrap();
++            let top = self.alloc_label("STREAMK_PIECE");
++            let done = self.alloc_label("STREAMK_DONE");
++            writeln!(&mut self.ptx_buffer, "    {}:", top).unwrap();
++            let p_done = self.alloc_pred();
++            writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p_done, g, g_end).unwrap();
++            writeln!(&mut self.ptx_buffer, "    @{} bra {};", p_done, done).unwrap();
++            // unit v = g / iters, its step st = g % iters; tile t = v % tiles,
++            // K-block kb = v / tiles.
++            let v = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", v, g, s.iters).unwrap();
++            let st = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", st, g, s.iters).unwrap();
++            let left_unit = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    sub.u32 {}, {}, {};", left_unit, s.iters, st).unwrap();
++            let left_cta = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    sub.u32 {}, {}, {};", left_cta, g_end, g).unwrap();
++            let len = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    min.u32 {}, {}, {};", len, left_unit, left_cta).unwrap();
++            let tiles = s.tiles_m * s.tiles_n;
++            let t = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", t, v, tiles).unwrap();
++            let kblk = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", kblk, v, tiles).unwrap();
++            let tm = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", tm, t, s.tiles_n).unwrap();
++            let tn = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", tn, t, s.tiles_n).unwrap();
++            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_m_start, tm, cta_m).unwrap();
++            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", cta_n_start, tn, cta_n).unwrap();
++            // owner(v * iters) + 1 = ((v * iters + 1) * ctas + total - 1) / total;
++            // slot = kb * max_pieces + c - owner(v * iters)
++            let x = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", x, v, s.iters * s.ctas).unwrap();
++            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", x, x, s.ctas + s.total - 1).unwrap();
++            let first1 = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", first1, x, s.total).unwrap();
++            let slot = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", slot, kblk, s.max_pieces, c).unwrap();
++            writeln!(&mut self.ptx_buffer, "    sub.u32 {}, {}, {};", slot, slot, first1).unwrap();
++            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", slot, slot).unwrap();
++            // A's column and B's row: (kb * iters + st) * cta_k
++            let kstep = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", kstep, kblk, s.iters, st).unwrap();
++            let kcol = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", kcol, kstep, cta_k).unwrap();
++            let mut base = |src: &str, idx: &str, bytes: u64| {
++                let i64r = self.alloc_reg64();
++                writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", i64r, idx).unwrap();
++                let off = self.alloc_reg64();
++                writeln!(&mut self.ptx_buffer, "    mul.lo.u64 {}, {}, {};", off, i64r, bytes).unwrap();
++                let r = self.alloc_reg64();
++                writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", r, src, off).unwrap();
++                r
++            };
++            let a = base(&a_g, &kcol, 2);
++            let b = base(&b_g, &kcol, 2 * n as u64);
++            let cc = base(&c_g, &slot, 4 * m as u64 * n as u64);
++            (g, len, top, done, a, b, cc)
++        });
++        let (a_base, b_base, c_out) = match &seg {
++            Some((_, _, _, _, a, b, c)) => (a.clone(), b.clone(), c.clone()),
++            None => (a_g.clone(), b_g.clone(), c_g.clone()),
++        };
++        // The K loop's trip count: one piece's under stream K.
++        let k_tiles_op = match &seg {
++            Some((_, len, ..)) => len.clone(),
++            None => k_tiles.to_string(),
++        };
++
+         // ---- accumulator fragments acc[i][j]: 8 f32 regs each, zeroed ----
+         let mut acc: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
+         for _ in 0..num_i {
+@@ -12923,10 +13170,10 @@
+                 && Self::hoisted_tile_load_shape(n, cta_k, cta_n, smem_b, threads_per_cta).is_some()
+             {
+                 let a = self.emit_gemm_tile_load_async_setup(
+-                    &a_g, Some(&cta_m_start), None, lda, cta_m, cta_k, smem_a, threads_per_cta, 2,
++                    &a_base, Some(&cta_m_start), None, lda, cta_m, cta_k, smem_a, threads_per_cta, 2,
+                 ).expect("shape checked above");
+                 let b = self.emit_gemm_tile_load_async_setup(
+-                    &b_g, None, Some(&cta_n_start), n, cta_k, cta_n, smem_b, threads_per_cta, 2 * n,
++                    &b_base, None, Some(&cta_n_start), n, cta_k, cta_n, smem_b, threads_per_cta, 2 * n,
+                 ).expect("shape checked above");
+                 let p_m = self.alloc_pred();
+                 writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_m, cta_m_start, m).unwrap();
+@@ -12962,9 +13209,22 @@
+                 let b_stage_base = self.alloc_reg32();
+                 writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", b_stage_base, smem_b_region_base, s * stage_b_bytes).unwrap();
+ 
+-                if let Some((a, b, _, rsize_cta)) = &hoisted {
+-                    self.emit_gemm_tile_load_async_hoisted(&format!("PA{}", s), a, &k0_s, &a_stage_base, rsize_cta);
+-                    self.emit_gemm_tile_load_async_hoisted(&format!("PB{}", s), b, &k0_s, &b_stage_base, rsize_cta);
++                if let Some((a, b, p_cta, rsize_cta)) = &hoisted {
++                    // A stream-K piece can be shorter than the prologue: its
++                    // stages past the piece's end load zeros, which no MMA reads.
++                    let rsize = match &seg {
++                        Some((_, len, ..)) => {
++                            let p = self.alloc_pred();
++                            writeln!(&mut self.ptx_buffer, "    setp.gt.u32 {}, {}, {};", p, len, s).unwrap();
++                            writeln!(&mut self.ptx_buffer, "    and.pred {}, {}, {};", p, p, p_cta).unwrap();
++                            let r = self.alloc_reg32();
++                            writeln!(&mut self.ptx_buffer, "    selp.u32 {}, 16, 0, {};", r, p).unwrap();
++                            r
++                        }
++                        None => rsize_cta.clone(),
++                    };
++                    self.emit_gemm_tile_load_async_hoisted(&format!("PA{}", s), a, &k0_s, &a_stage_base, &rsize);
++                    self.emit_gemm_tile_load_async_hoisted(&format!("PB{}", s), b, &k0_s, &b_stage_base, &rsize);
+                 } else {
+                     self.emit_gemm_tile_load_async(
+                         &format!("PA{}", s), &a_g, &cta_m_start, &k0_s, lda, m, k, cta_m, cta_k, &a_stage_base, smem_a, threads_per_cta, None,
+@@ -13016,7 +13276,7 @@
+             let loop_end = self.alloc_label("GEMM_K_DONE");
+             writeln!(&mut self.ptx_buffer, "    {}:", loop_start).unwrap();
+             let exit_pred = self.alloc_pred();
+-            writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", exit_pred, k_iter, k_tiles).unwrap();
++            writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", exit_pred, k_iter, k_tiles_op).unwrap();
+             writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
+ 
+             // Where the copies are spread between the MMAs, the wait for
+@@ -13057,7 +13317,7 @@
+             let write_stage = self.alloc_reg32();
+             writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", write_stage, next_tile, n_stages).unwrap();
+             let p_tile_valid = self.alloc_pred();
+-            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_tile_valid, next_tile, k_tiles).unwrap();
++            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p_tile_valid, next_tile, k_tiles_op).unwrap();
+             let k0_next = self.alloc_reg32();
+             writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0_next, next_tile, cta_k).unwrap();
+ 
+@@ -13228,18 +13488,24 @@
+             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", cta_n_start_slot, cta_n_start, n_slot * per_warp_n).unwrap();
+             if let Some(ref bias_g) = bias_g {
+                 self.emit_gemm_bias_relu_epilogue(
+-                    &smem_c_base, smem_c_stride, &cta_m_start, &cta_n_start_slot, cta_m, per_warp_n, m, n, &c_g, bias_g, threads_per_cta,
++                    &smem_c_base, smem_c_stride, &cta_m_start, &cta_n_start_slot, cta_m, per_warp_n, m, n, &c_out, bias_g, threads_per_cta,
+                 );
+             } else {
+                 self.emit_gemm_plain_epilogue(
+-                    &smem_c_base, smem_c_stride, &cta_m_start, &cta_n_start_slot, cta_m, per_warp_n, m, n, &c_g, threads_per_cta,
++                    &smem_c_base, smem_c_stride, &cta_m_start, &cta_n_start_slot, cta_m, per_warp_n, m, n, &c_out, threads_per_cta,
+                 );
+             }
+             // Next slot's wmma.store reuses this same scratch buffer -
+             // must not begin until every thread is done reading this
+-            // slot's data out of it.
++            // slot's data out of it. (Under stream K, so does the next
++            // piece's prologue.)
+             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
+         }
++        if let Some((g, len, top, done, ..)) = &seg {
++            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", g, g, len).unwrap();
++            writeln!(&mut self.ptx_buffer, "    bra {};", top).unwrap();
++            writeln!(&mut self.ptx_buffer, "    {}:", done).unwrap();
++        }
+         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
+         threads_per_cta
+     }
+@@ -16144,9 +16410,12 @@
+ 
+     /// Emits `<kernel_name>_reduce`, the second entry point of the split-K
+     /// F16 GEMM (see `gemm_split_k`): `C = ((P[0] + P[1]) + P[2]) + ... +
+-    /// P[splits-1]`, each `+` an `add.rn.f32`, in that order for every
+-    /// element, with no atomics - so C's bits do not depend on which CTAs of
+-    /// either entry ran first.
++    /// P[n-1]`, each `+` an `add.rn.f32`, in that order for every element,
++    /// with no atomics - so C's bits do not depend on which CTAs of either
++    /// entry ran first. `n` is the split count for an even split; under
++    /// stream K it is the element's tile's piece count,
++    /// `StreamKSchedule::pieces`, and the slots past it are not read into
++    /// the sum.
+     ///
+     /// **Launch contract**: grid `(ceil(m*n/4 / 256), 1, 1)`, block
+     /// `(256, 1, 1)`; thread `t` of the grid sums float4 `t` of every slot.
+@@ -16156,7 +16425,8 @@
+     ///
+     /// Emitted into `pending_module_items` with its own register numbering,
+     /// as `emit_attention_split_reduce_entry` is.
+-    fn emit_gemm_split_reduce_entry(&mut self, m: u32, n: u32, splits: u32, kernel: &KernelDecl, kernel_name: &str) {
++    fn emit_gemm_split_reduce_entry(&mut self, plan: &GemmReducePlan, kernel: &KernelDecl, kernel_name: &str) {
++        let (m, n, splits) = (plan.m, plan.n, plan.slots);
+         let saved = (
+             std::mem::take(&mut self.ptx_buffer),
+             self.reg_u32_count,
+@@ -16179,8 +16449,8 @@
+         }
+         writeln!(
+             &mut self.ptx_buffer,
+-            "    // [Y SPLIT-K GEMM REDUCE] M={} N={} | {} splits, summed in order",
+-            m, n, splits
++            "    // [Y SPLIT-K GEMM REDUCE] M={} N={} | {} {}, summed in order",
++            m, n, splits, if plan.stream.is_some() { "slots, a tile's pieces" } else { "splits" }
+         )
+         .unwrap();
+ 
+@@ -16203,6 +16473,49 @@
+         writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", c_addr, ptrs[2]).unwrap();
+         writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", c_addr, c_addr, qb).unwrap();
+ 
++        // Under stream K: this float4's tile t (a tile is whole float4s
++        // wide), and for each K-block kb the piece count of unit v = kb *
++        // tiles + t, owner(v * iters + iters - 1) - owner(v * iters) + 1, from
++        // owner(x) + 1 = ((x + 1) * ctas + total - 1) / total. Slot kb *
++        // max_pieces + j is read and added only if j < that count.
++        let guards: Option<Vec<Option<String>>> = plan.stream.map(|(s, cta_m, cta_n)| {
++            let e = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    shl.b32 {}, {}, 2;", e, q).unwrap();
++            let row = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", row, e, n).unwrap();
++            let col = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", col, e, n).unwrap();
++            let tm = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", tm, row, cta_m).unwrap();
++            let tn = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", tn, col, cta_n).unwrap();
++            let t = self.alloc_reg32();
++            writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", t, tm, s.tiles_n, tn).unwrap();
++            let tiles = s.tiles_m * s.tiles_n;
++            let mut guards = Vec::with_capacity(s.slots() as usize);
++            for kblk in 0..s.kblocks {
++                let x = self.alloc_reg32();
++                writeln!(&mut self.ptx_buffer, "    mad.lo.u32 {}, {}, {}, {};", x, t, s.iters * s.ctas, kblk * tiles * s.iters * s.ctas).unwrap();
++                let lo = self.alloc_reg32();
++                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", lo, x, s.ctas + s.total - 1).unwrap();
++                writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", lo, lo, s.total).unwrap();
++                let hi = self.alloc_reg32();
++                writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", hi, x, s.iters * s.ctas + s.total - 1).unwrap();
++                writeln!(&mut self.ptx_buffer, "    div.u32 {}, {}, {};", hi, hi, s.total).unwrap();
++                let cnt = self.alloc_reg32();
++                writeln!(&mut self.ptx_buffer, "    sub.u32 {}, {}, {};", cnt, hi, lo).unwrap();
++                for j in 0..s.max_pieces {
++                    // piece j exists iff j < cnt + 1, i.e. cnt >= j; piece 0 always does
++                    guards.push((j > 0).then(|| {
++                        let p = self.alloc_pred();
++                        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", p, cnt, j).unwrap();
++                        format!("@{} ", p)
++                    }));
++                }
++            }
++            guards
++        });
++
+         // Up to eight slots' loads are issued before their adds, so they are
+         // in flight together; the adds stay in slot order.
+         let slot_bytes = 4 * m as u64 * n as u64;
+@@ -16215,18 +16528,26 @@
+                     writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", next, addr, slot_bytes).unwrap();
+                     addr = next;
+                 }
+-                group.push(self.emit_vec_load_f32(&addr, 0, 4));
++                let guard = guards.as_ref().and_then(|g| g[z as usize].clone()).unwrap_or_default();
++                let regs: Vec<String> = (0..4).map(|_| self.alloc_regf32()).collect();
++                writeln!(&mut self.ptx_buffer, "    {}ld.global.v4.f32 {{{}}}, [{}];", guard, regs.join(","), addr).unwrap();
++                group.push((guard, regs));
+             }
+-            for vals in group {
++            for (guard, vals) in group {
+                 total = Some(match total {
+                     None => vals,
+                     Some(t) => t
+                         .iter()
+                         .zip(&vals)
+                         .map(|(a, b)| {
+-                            let s = self.alloc_regf32();
+-                            writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", s, a, b).unwrap();
+-                            s
++                            if guard.is_empty() {
++                                let s = self.alloc_regf32();
++                                writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", s, a, b).unwrap();
++                                s
++                            } else {
++                                writeln!(&mut self.ptx_buffer, "    {}add.rn.f32 {}, {}, {};", guard, a, a, b).unwrap();
++                                a.clone()
++                            }
+                         })
+                         .collect(),
+                 });
+--- a/src/type_checker.rs	2026-10-20 19:40:11.611711050 +0300
++++ b/src/type_checker.rs	2026-10-20 19:40:11.611711050 +0300
+@@ -1609,7 +1609,7 @@
+                         )
+             )
+         }
+-        // A `_splitk<S>` name selects the split-K F16 GEMM, (A, B:
++        // A `_splitk<S>` or `_streamk<P>` name selects the split-K F16 GEMM, (A, B:
+         // GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), whose types are
+         // the bias shape's: `PtxEmitter::gemm_split_k` and
+         // `gemm_split_k_shape` decide it in codegen and decide it here, so the
+@@ -1629,7 +1629,7 @@
+             let why = match split {
+                 Err(why) => Some(why),
+                 Ok(_) if !shape_ok => Some(format!(
+-                    "a split-K GEMM (`_splitk<S>`) takes exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>); found {} parameter(s)",
++                    "a split-K GEMM (`_splitk<S>` or `_streamk<P>`) takes exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>); found {} parameter(s)",
+                     kernel.params.len()
+                 )),
+                 Ok(s) => match dims {
+@@ -1757,7 +1757,7 @@
+                 "Line {}: Kernel-level @tile(M, N, K) on `{}` accepts these shapes, and codegen binds them POSITIONALLY:\n\
+                  \x20 3  (A, B: GlobalMemory<F16>, C: GlobalMemory<F32>)                                  plain GEMM\n\
+                  \x20 4  (A, B: GlobalMemory<F16>, Bias, C: GlobalMemory<F32>)                            fused GEMM+Bias+ReLU\n\
+-                 \x20 4  (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), named <name>_splitk<S> split-K GEMM\n\
++                 \x20 4  (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), named <name>_splitk<S>|_streamk<P>, split-K GEMM\n\
+                  \x20 4  (X, W_gate, W_up: GlobalMemory<F16>, Out: GlobalMemory<F32>)                     fused Linear+SwiGLU\n\
+                  \x20 3  (A, B: GlobalMemory<I8>, C: GlobalMemory<I32>)                                   int8 Tensor Core GEMM\n\
+                  \x20 5  (A, B: GlobalMemory<F32>, scale_a, scale_b: F32, C: GlobalMemory<F32>)           fused FP8 (e4m3) GEMM\n\

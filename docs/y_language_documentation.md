@@ -1021,6 +1021,24 @@ for i in 0..100 {
   still accumulates the first way. Exact small integers, the benchmarks'
   inputs, cannot show the difference
   ([record](benchmarks/fp8_e4m3_2026-10-18/README.md)).
+* **Split K**, with four parameters `(A, B: GlobalMemory<F16>, C, Partial:
+  GlobalMemory<F32>)` and a kernel name ending in `_splitk<S>`, S from 1 to
+  64: K is cut into S equal parts, each a multiple of 8, and N must be a
+  multiple of 4. The main entry runs part `z = %ctaid.z` of every tile and
+  writes its M x N float32 product to `Partial[z]` (`S * M * N` floats); a
+  second entry, `<name>_reduce`, adds `Partial[0] + Partial[1] + ...` into C
+  in that order, each `+` an `add.rn.f32`, with no atomics, so C's bits do not
+  depend on which CTAs ran first. Launch the main entry on grid
+  `(ceil(N / cta_n), ceil(M / cta_m), S)`, then `_reduce` on
+  `ceil(M * N / 4 / 256)` CTAs of 256 threads, both with the same four
+  arguments; the PTX header states both. Every part adds each `mma`'s result
+  in float32 unless `Y_F16_ACCUMULATE=mma`. The tile is measured per split
+  count (`--autotune`; profile entries `AUTOTUNE_F16_SPLITK<S>_...`), among
+  the unsplit shape's candidates and the large-square tiles that fit. A
+  malformed `_splitk` suffix, or one on any other shape, is refused rather
+  than compiled as the shape its parameters match (the four parameters are
+  also the bias form's)
+  ([record](benchmarks/f16_splitk_2026-10-20/README.md)).
 * **On a loop, a statement or a `fn` it is refused.** It used to parse there
   and change nothing: on a `for`, the LLVM and PTX backends wrote it into their
   output as a comment (`[Y TILE OPTIMIZATION] Tiled loop dimensions`, the PTX

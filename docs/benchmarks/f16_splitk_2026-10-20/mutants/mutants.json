@@ -1,0 +1,116 @@
+[
+ {
+  "mutant": "reduce reads a misplaced slot",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test the_tuner_measures_a_split_kernel_with_its_reduction ... FAILED; test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s"
+  ]
+ },
+ {
+  "mutant": "reduce drops the last slot",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test the_tuner_measures_a_split_kernel_with_its_reduction ... FAILED; test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s"
+  ]
+ },
+ {
+  "mutant": "A offset uses the row length",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test the_tuner_measures_a_split_kernel_with_its_reduction ... FAILED; test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s"
+  ]
+ },
+ {
+  "mutant": "B offset forgets N",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test the_tuner_measures_a_split_kernel_with_its_reduction ... FAILED; test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.79s"
+  ]
+ },
+ {
+  "mutant": "every split writes slot 0",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test the_tuner_measures_a_split_kernel_with_its_reduction ... FAILED; test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s"
+  ]
+ },
+ {
+  "mutant": "hoisted A stride is the split depth",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.62s"
+  ]
+ },
+ {
+  "mutant": "per-chunk A stride is the split depth",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.76s"
+  ]
+ },
+ {
+  "mutant": "splits chain by default",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_names_select_the_shape_and_everything_else_is_refused ... FAILED; test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... FAILED; test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.75s"
+  ]
+ },
+ {
+  "mutant": "leading zeros accepted",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_names_select_the_shape_and_everything_else_is_refused ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.57s"
+  ]
+ },
+ {
+  "mutant": "parts need not be multiples of 8",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_names_select_the_shape_and_everything_else_is_refused ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.59s"
+  ]
+ },
+ {
+  "mutant": "type checker skips the parameter check",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test split_k_names_select_the_shape_and_everything_else_is_refused ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.79s"
+  ]
+ },
+ {
+  "mutant": "split tag ignores the split",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test a_split_kernel_takes_its_own_measured_tile ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.69s",
+   "--lib -- split persist_key probe_source: test autotuner::tests::persist_key_separates_shape_precision_and_gpu ... FAILED; test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 261 filtered out; finished in 0.00s"
+  ]
+ },
+ {
+  "mutant": "split candidates are the unsplit ones",
+  "status": "KILLED",
+  "by": [
+   "--lib -- split persist_key probe_source: test autotuner::tests::split_candidates_add_the_large_tiles_that_fit ... FAILED; test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 261 filtered out; finished in 0.00s"
+  ]
+ },
+ {
+  "mutant": "tuner never launches the reduction",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test the_tuner_measures_a_split_kernel_with_its_reduction ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.16s"
+  ]
+ },
+ {
+  "mutant": "emitter tunes the unsplit shape",
+  "status": "KILLED",
+  "by": [
+   "--test ptx_f16_split_k: test a_split_kernel_takes_its_own_measured_tile ... FAILED; test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.70s"
+  ]
+ },
+ {
+  "mutant": "sequence timer launches only the first step",
+  "status": "SURVIVED",
+  "by": []
+ },
+ {
+  "restore_build": 0
+ }
+]

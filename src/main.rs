@@ -2114,15 +2114,24 @@ fn main() {
                         as_u32(&t.block_n),
                         t.block_k.as_deref().and_then(as_u32),
                     ) {
-                        let tuned_config = autotuner::Autotuner::autotune(
+                        // A split-K kernel is tuned as one (its own key and
+                        // candidates); asking for the unsplit shape here
+                        // measured a kernel this source does not contain.
+                        let splits = match ptx_emitter::PtxEmitter::gemm_split_k(&k.name) {
+                            Some(Ok(s)) => s,
+                            _ => 1,
+                        };
+                        let tuned_config = autotuner::Autotuner::autotune_split(
                             m,
                             n,
                             k_dim,
+                            splits,
                             &hw_profile,
                             autotuner::Precision::F16,
                         );
-                        println!("         [JIT Autotuner Result] `{}` (M={}, N={}, K={}): CTA Tile: {}x{}x{}, Warps: {}, Pipeline Stages: {}",
-                            k.name, m, n, k_dim, tuned_config.cta_m, tuned_config.cta_n, tuned_config.cta_k, tuned_config.num_warps, tuned_config.num_stages);
+                        println!("         [JIT Autotuner Result] `{}` (M={}, N={}, K={}{}): CTA Tile: {}x{}x{}, Warps: {}, Pipeline Stages: {}",
+                            k.name, m, n, k_dim, if splits > 1 { format!(", split {} ways", splits) } else { String::new() },
+                            tuned_config.cta_m, tuned_config.cta_n, tuned_config.cta_k, tuned_config.num_warps, tuned_config.num_stages);
                         printed_any_tune = true;
                     }
                 }

@@ -1,0 +1,7 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==WARNING== Note: Running with unmodified GPU clocks. If not controlled otherwise, profiling results may be inconsistent.
+==PROF== Connected to process 19958 (/usr/bin/python3.14)
+==PROF== Profiling "gemm_f16_512x512x65536_splitk4": 0%....50%....100% - 3 passes
+==PROF== Profiling "gemm_f16_512x512x65536_streamk66": 0%....50%....100% - 3 passes
+==PROF== Disconnected from process 19958
+==PROF== Report: /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/8cb989c6-e604-4dd6-849f-ecfdae469440/scratchpad/sk/prof/b4.ncu-repz

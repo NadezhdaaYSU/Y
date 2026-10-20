@@ -171,9 +171,9 @@ impl Precision {
     }
 }
 
-static AUTOTUNE_CACHE: OnceLock<Mutex<HashMap<(u32, u32, u32), AutotuneCandidate>>> = OnceLock::new();
+static AUTOTUNE_CACHE: OnceLock<Mutex<HashMap<(u32, u32, u32, u32), AutotuneCandidate>>> = OnceLock::new();
 
-fn get_cache() -> &'static Mutex<HashMap<(u32, u32, u32), AutotuneCandidate>> {
+fn get_cache() -> &'static Mutex<HashMap<(u32, u32, u32, u32), AutotuneCandidate>> {
     AUTOTUNE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -307,7 +307,8 @@ const PROFILE_PATH: &str = ".ysu_hw_profile";
 /// The GPU is part of the key, not just an implicit property of the file, so
 /// that a profile copied between machines - or a machine with two different
 /// cards - cannot serve one card's tile choice to the other.
-fn persist_key(m: u32, n: u32, k: u32, precision: Precision, hw_profile: &HardwareProfile) -> String {
+/// `tag` is `Precision::tag`, or `split_tag`'s for a split-K GEMM.
+fn persist_key(m: u32, n: u32, k: u32, tag: &str, hw_profile: &HardwareProfile) -> String {
     let gpu: String = hw_profile
         .gpu_name
         .chars()
@@ -315,7 +316,7 @@ fn persist_key(m: u32, n: u32, k: u32, precision: Precision, hw_profile: &Hardwa
         .collect();
     format!(
         "AUTOTUNE_{}_{}x{}x{}_{}",
-        precision.tag(),
+        tag,
         m,
         n,
         k,
@@ -339,14 +340,28 @@ fn parse_persisted_value(value: &str) -> Option<AutotuneCandidate> {
     })
 }
 
+/// The persisted-key namespace of an F16 GEMM split `splits` ways in K:
+/// `F16` unsplit, `F16_SPLITK<S>` otherwise. A split kernel runs `splits`
+/// times the CTAs of the unsplit one, so neither may borrow the other's
+/// tile: 512 x 512 x 65536 in 4 splits measured 0.86-0.93x cuBLAS on the
+/// unsplit kernel's 64x64 tile and 0.98-0.99x on 128x128
+/// (docs/benchmarks/f16_splitk_2026-10-20/).
+fn split_tag(precision: Precision, splits: u32) -> String {
+    if splits > 1 {
+        format!("{}_SPLITK{}", precision.tag(), splits)
+    } else {
+        precision.tag().to_string()
+    }
+}
+
 fn load_persisted(
     m: u32,
     n: u32,
     k: u32,
-    precision: Precision,
+    tag: &str,
     hw_profile: &HardwareProfile,
 ) -> Option<AutotuneCandidate> {
-    let key = persist_key(m, n, k, precision, hw_profile);
+    let key = persist_key(m, n, k, tag, hw_profile);
     let contents = std::fs::read_to_string(PROFILE_PATH).ok()?;
     for line in contents.lines() {
         if let Some((found, value)) = line.split_once('=') {
@@ -384,11 +399,14 @@ fn load_persisted(
 ///   * it is reported distinctly from an exact hit, naming the shape it came
 ///     from, so a surprising tile is traceable to the entry it was borrowed
 ///     from rather than looking like a measurement that never happened.
+/// `k_emit` is the K a borrowed tile must be emittable at: K itself, or a
+/// split-K GEMM's split depth.
 fn load_persisted_nearest(
     m: u32,
     n: u32,
     k: u32,
-    precision: Precision,
+    k_emit: u32,
+    tag: &str,
     hw_profile: &HardwareProfile,
 ) -> Option<(AutotuneCandidate, (u32, u32, u32))> {
     let gpu: String = hw_profile
@@ -397,7 +415,7 @@ fn load_persisted_nearest(
         .filter(|c| c.is_ascii_alphanumeric())
         .collect();
     let gpu = if gpu.is_empty() { "UnknownGPU".to_string() } else { gpu };
-    let prefix = format!("AUTOTUNE_{}_", precision.tag());
+    let prefix = format!("AUTOTUNE_{}_", tag);
     let suffix = format!("_{}", gpu);
 
     let contents = std::fs::read_to_string(PROFILE_PATH).ok()?;
@@ -433,7 +451,7 @@ fn load_persisted_nearest(
             Some(c) => c,
             None => continue,
         };
-        if !crate::empirical_autotune::is_emittable(&cand, k) {
+        if !crate::empirical_autotune::is_emittable(&cand, k_emit) {
             continue;
         }
         if best.as_ref().map_or(true, |(bd, _, _)| d < *bd) {
@@ -448,11 +466,11 @@ fn store_persisted(
     m: u32,
     n: u32,
     k: u32,
-    precision: Precision,
+    tag: &str,
     hw_profile: &HardwareProfile,
     candidate: &AutotuneCandidate,
 ) {
-    let key = persist_key(m, n, k, precision, hw_profile);
+    let key = persist_key(m, n, k, tag, hw_profile);
     let entry = format!(
         "{}={},{},{},{},{},{}",
         key,
@@ -617,6 +635,22 @@ impl Autotuner {
             }
         }
 
+        candidates
+    }
+
+    /// Candidates for an `m x n` GEMM split in K to depth `k_split`: the
+    /// unsplit bucket for `m x n`, plus the large-square bucket's tiles that
+    /// fit in `m x n`. Splitting multiplies the grid, so a tile too big for
+    /// the unsplit grid can be the right one: at 512 x 512 x 65536 in 4
+    /// splits a 128x128 tile (4x2 warps), outside the 512 bucket, measured
+    /// fastest (docs/benchmarks/f16_splitk_2026-10-20/).
+    pub fn generate_split_candidates(m: u32, n: u32, k_split: u32, precision: Precision) -> Vec<AutotuneCandidate> {
+        let mut candidates = Self::generate_candidates(m, n, k_split, precision);
+        for c in Self::generate_candidates(m.max(1024), n.max(1024), k_split, precision) {
+            if c.cta_m <= m && c.cta_n <= n && !candidates.contains(&c) {
+                candidates.push(c);
+            }
+        }
         candidates
     }
 
@@ -901,6 +935,19 @@ impl Autotuner {
     /// anyway means the entries stay correct when that changes, rather than
     /// a future FP8 path silently inheriting F16's tile.
     pub fn autotune(m: u32, n: u32, k: u32, hw_profile: &HardwareProfile, precision: Precision) -> CtaTileConfig {
+        Self::autotune_split(m, n, k, 1, hw_profile, precision)
+    }
+
+    /// `autotune` for an F16 GEMM split `splits` ways in K
+    /// (`PtxEmitter::gemm_split_k`; 1 is unsplit). Measurements are keyed by
+    /// the whole K and the split count (`split_tag`), measure the split
+    /// kernel with its reduction (`tune_gemm_f16_split`), and draw on
+    /// `generate_split_candidates`; borrowing and the analytic model work at
+    /// the split's depth.
+    pub fn autotune_split(m: u32, n: u32, k: u32, splits: u32, hw_profile: &HardwareProfile, precision: Precision) -> CtaTileConfig {
+        let splits = splits.max(1);
+        let k_split = k / splits;
+        let tag = split_tag(precision, splits);
         // (1) Pinned to one candidate by the empirical tuner. Deliberately
         // ahead of everything else, including the cache: this call IS the
         // measurement of that candidate.
@@ -946,14 +993,18 @@ impl Autotuner {
         // kernel once for its own diagnostics before codegen resolves it
         // again - so without this, a measured shape would be measured twice
         // per invocation.
-        let key = (m, n, k);
+        let key = (m, n, k, splits);
         if let Ok(cache) = get_cache().lock() {
             if let Some(cached_candidate) = cache.get(&key) {
                 return cached_candidate.to_cta_tile_config();
             }
         }
 
-        let candidates = Self::generate_candidates(m, n, k, precision);
+        let candidates = if splits > 1 {
+            Self::generate_split_candidates(m, n, k_split, precision)
+        } else {
+            Self::generate_candidates(m, n, k, precision)
+        };
         let mode = tuning_mode();
 
         // (4) A previously persisted measurement for this exact (shape,
@@ -974,11 +1025,11 @@ impl Autotuner {
         // `--no-autotune` (`TuningMode::Analytic`) skips this entirely, for
         // builds that must not depend on what is on this machine's disk.
         if mode.may_use_cache() {
-            if let Some(cached) = load_persisted(m, n, k, precision, hw_profile) {
+            if let Some(cached) = load_persisted(m, n, k, &tag, hw_profile) {
                 println!(
                     "         [Y autotuner] measured tile from {} for M={} N={} K={} ({}): {}x{}x{} {}x{} s{}",
                     PROFILE_PATH,
-                    m, n, k, precision.tag(),
+                    m, n, k, tag,
                     cached.cta_m, cached.cta_n, cached.cta_k,
                     cached.warps_m, cached.warps_n, cached.num_stages
                 );
@@ -991,10 +1042,10 @@ impl Autotuner {
 
         // (5) Fresh measurement on the real device.
         if mode.may_measure() {
-            match crate::empirical_autotune::tune_gemm_f16(m, n, k, hw_profile, &candidates, true) {
+            match crate::empirical_autotune::tune_gemm_f16_split(m, n, k, splits, hw_profile, &candidates, true) {
                 Ok(measured) if !measured.is_empty() => {
                     let best = measured[0].candidate.clone();
-                    store_persisted(m, n, k, precision, hw_profile, &best);
+                    store_persisted(m, n, k, &tag, hw_profile, &best);
                     if let Ok(mut cache) = get_cache().lock() {
                         cache.insert(key, best.clone());
                     }
@@ -1027,13 +1078,13 @@ impl Autotuner {
         // See `load_persisted_nearest` for the bounds that keep this honest.
         if mode.may_use_cache() {
             if let Some((borrowed, (bm, bn, bk))) =
-                load_persisted_nearest(m, n, k, precision, hw_profile)
+                load_persisted_nearest(m, n, k, k_split, &tag, hw_profile)
             {
                 println!(
                     "         [Y autotuner] no measurement for M={} N={} K={} ({}); borrowing the \
                      measured tile from the nearest shape M={} N={} K={}: {}x{}x{} {}x{} s{} \
                      (run with --autotune to measure this shape directly)",
-                    m, n, k, precision.tag(),
+                    m, n, k, tag,
                     bm, bn, bk,
                     borrowed.cta_m, borrowed.cta_n, borrowed.cta_k,
                     borrowed.warps_m, borrowed.warps_n, borrowed.num_stages
@@ -1050,7 +1101,7 @@ impl Autotuner {
         let mut best_score = -1.0;
 
         for cand in &candidates {
-            let score = Self::score_candidate(cand, m, n, k, hw_profile);
+            let score = Self::score_candidate(cand, m, n, k_split, hw_profile);
             if score > best_score {
                 best_score = score;
                 best_candidate = cand.clone();
@@ -1152,6 +1203,23 @@ mod tests {
     }
 
     #[test]
+    fn split_candidates_add_the_large_tiles_that_fit() {
+        let f16 = Precision::F16;
+        let unsplit = Autotuner::generate_candidates(512, 512, 16384, f16);
+        let split = Autotuner::generate_split_candidates(512, 512, 16384, f16);
+        assert!(unsplit.iter().all(|c| split.contains(c)), "the unsplit bucket is kept");
+        let big = |c: &AutotuneCandidate| (c.cta_m, c.cta_n, c.cta_k, c.warps_m, c.warps_n) == (128, 128, 32, 4, 2);
+        assert!(!unsplit.iter().any(big) && split.iter().any(big), "the tile 512 x 512 x 65536 in 4 splits measured fastest");
+        let mut dedup = split.clone();
+        dedup.dedup();
+        assert_eq!(dedup.len(), split.len(), "no candidate twice");
+        // Never a tile larger than the matrix.
+        assert!(Autotuner::generate_split_candidates(512, 128, 4096, f16).iter().all(|c| c.cta_n <= 128));
+        // A large square's own bucket already holds them.
+        assert_eq!(Autotuner::generate_split_candidates(4096, 4096, 1024, f16), Autotuner::generate_candidates(4096, 4096, 1024, f16));
+    }
+
+    #[test]
     fn persist_key_separates_shape_precision_and_gpu() {
         let a = hw_named("NVIDIA GeForce RTX 4070 Ti SUPER");
         let b = hw_named("NVIDIA GeForce RTX 4090");
@@ -1159,24 +1227,37 @@ mod tests {
         // A profile copied between machines must not serve one card's tile
         // choice to a different card.
         assert_ne!(
-            persist_key(4096, 4096, 4096, Precision::F16, &a),
-            persist_key(4096, 4096, 4096, Precision::F16, &b)
+            persist_key(4096, 4096, 4096, Precision::F16.tag(), &a),
+            persist_key(4096, 4096, 4096, Precision::F16.tag(), &b)
         );
         // Precision namespaces are distinct, so a future FP8 path cannot
         // silently inherit F16's measured tile.
         assert_ne!(
-            persist_key(4096, 4096, 4096, Precision::F16, &a),
-            persist_key(4096, 4096, 4096, Precision::Fp8, &a)
+            persist_key(4096, 4096, 4096, Precision::F16.tag(), &a),
+            persist_key(4096, 4096, 4096, Precision::Fp8.tag(), &a)
+        );
+        // So are split counts; an unsplit kernel keeps the key it always had.
+        assert_ne!(
+            persist_key(512, 512, 65536, &split_tag(Precision::F16, 4), &a),
+            persist_key(512, 512, 65536, &split_tag(Precision::F16, 1), &a)
+        );
+        assert_eq!(
+            persist_key(512, 512, 65536, &split_tag(Precision::F16, 1), &a),
+            "AUTOTUNE_F16_512x512x65536_NVIDIAGeForceRTX4070TiSUPER"
+        );
+        assert_eq!(
+            persist_key(512, 512, 65536, &split_tag(Precision::F16, 4), &a),
+            "AUTOTUNE_F16_SPLITK4_512x512x65536_NVIDIAGeForceRTX4070TiSUPER"
         );
         // Shape is part of the key, and non-square shapes stay distinct from
         // their transpose.
         assert_ne!(
-            persist_key(1, 4096, 4096, Precision::F16, &a),
-            persist_key(4096, 4096, 1, Precision::F16, &a)
+            persist_key(1, 4096, 4096, Precision::F16.tag(), &a),
+            persist_key(4096, 4096, 1, Precision::F16.tag(), &a)
         );
         // The key must survive as a `KEY=VALUE` line the sentinel's parser
         // can skip over, so it may not contain '='.
-        assert!(!persist_key(4096, 4096, 4096, Precision::F16, &a).contains('='));
+        assert!(!persist_key(4096, 4096, 4096, Precision::F16.tag(), &a).contains('='));
     }
 
     #[test]

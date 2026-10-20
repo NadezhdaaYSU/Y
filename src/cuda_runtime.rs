@@ -954,6 +954,22 @@ impl CudaContext {
         arg_sets: &[Vec<CUdeviceptr>],
         iters: u32,
     ) -> Result<f64, String> {
+        self.time_launch_sequence(&[(kernel, grid, block, shared_bytes)], arg_sets, iters)
+    }
+
+    /// `time_launches` for a call made of several launches in order, each
+    /// with the same argument set (a split-K GEMM's main and `_reduce`
+    /// entries): microseconds per whole call.
+    #[allow(clippy::type_complexity)]
+    pub fn time_launch_sequence(
+        &self,
+        steps: &[(&KernelModule, (u32, u32, u32), (u32, u32, u32), u32)],
+        arg_sets: &[Vec<CUdeviceptr>],
+        iters: u32,
+    ) -> Result<f64, String> {
+        if steps.is_empty() {
+            return Err("time_launch_sequence called with no launches".to_string());
+        }
         if iters == 0 {
             return Err("time_launches called with iters = 0".to_string());
         }
@@ -970,13 +986,9 @@ impl CudaContext {
                 self.synchronize()?;
                 check((self.drv.cuEventRecord)(ev_start, std::ptr::null_mut()), "cuEventRecord")?;
                 for i in 0..iters {
-                    self.launch(
-                        kernel,
-                        grid,
-                        block,
-                        shared_bytes,
-                        &arg_sets[i as usize % arg_sets.len()],
-                    )?;
+                    for &(kernel, grid, block, shared_bytes) in steps {
+                        self.launch(kernel, grid, block, shared_bytes, &arg_sets[i as usize % arg_sets.len()])?;
+                    }
                 }
                 check((self.drv.cuEventRecord)(ev_end, std::ptr::null_mut()), "cuEventRecord")?;
                 check((self.drv.cuEventSynchronize)(ev_end), "cuEventSynchronize")?;

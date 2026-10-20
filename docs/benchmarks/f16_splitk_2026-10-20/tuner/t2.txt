@@ -1,0 +1,9 @@
+         [Y autotuner] measuring on NVIDIA GeForce RTX 4070 Ti SUPER - M=512 N=512 K=65536 split 4 ways | 2 weight buffer(s), 201.3 MB working set vs 50.3 MB L2 (DRAM-streaming)
+         [Y autotuner] 47 distinct kernels compiled, 47 verified, 0 rejected
+           1. 128x128x32 4x2 s3      424.26 us (median 458.75, worst 491.64)    81.0 TFLOPS
+           2. 64x128x32 2x4 s4       427.09 us (median 464.90, worst 502.19)    80.5 TFLOPS
+           3. 128x128x32 4x2 s4      435.17 us (median 464.02, worst 497.37)    79.0 TFLOPS
+           4. 64x128x64 2x4 s3       443.65 us (median 443.86, worst 484.61)    77.4 TFLOPS
+           5. 64x64x64 4x2 s3        445.44 us (median 446.35, worst 448.46)    77.1 TFLOPS
+           note: #1..#13 are inside this run's own noise floor (+/-34.49 us); selected #13 on warp count then K depth, not on the measured gap
+         [JIT Autotuner Result] `gemm_f16_512x512x65536_splitk4` (M=512, N=512, K=65536, split 4 ways): CTA Tile: 64x64x64, Warps: 4, Pipeline Stages: 3

@@ -1,0 +1,8 @@
+512x512x65536 data=normal exact True graph True | during 91, 2625, 97.32 .. 91, 2610, 163.52
+  s4_mma                       min   388.95 med   409.77 us  cuBLAS/this 1.040  128x128 4x2 S=4 
+  cuBLAS                       min   404.48 med   425.64 us  cuBLAS/this 1.000   = 
+  s4_f32                       min   412.33 med   430.08 us  cuBLAS/this 0.981  128x128 4x2 S=4 f32
+  s8_f32                       min   420.69 med   448.00 us  cuBLAS/this 0.961  128x128 4x2 S=8 f32
+  default                      min   435.37 med   447.32 us  cuBLAS/this 0.929  64x64 2x2 S=1 
+  s16_f32                      min   437.93 med   455.17 us  cuBLAS/this 0.924  128x128 4x2 S=16 f32
+  f32                          min   458.07 med   467.29 us  cuBLAS/this 0.883  64x64 2x2 S=1 f32
