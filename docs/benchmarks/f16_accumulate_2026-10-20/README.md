@@ -46,6 +46,22 @@ smaller on same-sign inputs and 5-25x on N(0, 1) ones everywhere but M = 1,
 where cuBLAS runs a GEMV kernel without tensor cores: +1.4e-9 on same-sign
 inputs there, and float32 accumulation still 2.1x smaller on N(0, 1).
 
+**Correction (2026-10-20, `../f16_accuracy_2026-10-20/`).** The paragraph
+above compares means. On same-sign inputs that is the mean signed error, the
+bias, which stays at about -7.7e-8. The error's spread does grow with K: on
+|N(0, 1)| inputs the relative Frobenius error goes from 1.0e-7 at K = 256 to
+9.9e-7 at 65536.
+
+The later record also measures the relative Frobenius, maximum absolute and
+maximum normalized errors. It covers nine distributions, including two
+cancellation-heavy ones, and compares the kernels output by output. Float32
+accumulation is not more accurate everywhere:
+
+- **M = 1, same-sign inputs:** cuBLAS's GEMV is 5-7% lower in Frobenius error
+  and is the closer one on 47-48% of the outputs.
+- **Paired cancellation at long K:** cuBLAS's split K has the lower maximum
+  error.
+
 ## Speed (`speed/`, `longk/`)
 
 `../f16_square_2026-10-18/bench_ab.py` (`speed/`) and

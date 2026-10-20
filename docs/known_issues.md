@@ -37,27 +37,40 @@ source; each entry there now carries its status. What is still open:
 
 ### Precision
 
-- The F16 GEMM (`@tile`, f16 in, f32 out) chains its whole K loop in the
-  tensor core's accumulator, whose additions lose more than float32
-  rounding: on same-sign inputs (|N(0, 1)| as f16) every result lands below
-  float64, on average by 8.1e-6 at K = 768, 5.0e-5 at 4096^3 and 1.0e-4 at
-  8192^3, where a float32 sum of the exact 16-deep partial products is at
-  most 4.3e-7, 1.2e-6 and 1.7e-6 off. cuBLAS (`torch.mm` with a float32
-  output) gives the same bits from 256^3 to 4096^3; at 8192^3 it is
-  3.2e-5 below, and at 256 x 256 x 4096 1.3e-5 at most, so on some shapes it
-  sums differently. The FP8 GEMM had the same property and since 2026-10-18 adds each
-  mma's result in float32. Exactness tests on small integers cannot see it
-  (`docs/benchmarks/f16_xbar_2026-10-18/precision/`). Measured again on
-  2026-10-20 (`docs/benchmarks/quiet_2026-10-20/accuracy/`): Y and Triton give
-  cuBLAS's bits from 256^3 to 4096^3 and at M = 4 to 32, N = K = 4096; cuBLAS
-  is closer at 8192^3 (3.2e-5 below against Y's 1.0e-4), at M = 1 (a GEMV
-  kernel, 1.4e-9) and at long K, where it splits K: at 512 x 512 x K Y is
-  5.0e-5, 2.0e-4 and 8.2e-4 below at K = 4096, 16384 and 65536, cuBLAS
-  2.5e-5, 2.5e-5 and 1.0e-4. Since then GEMMs of at most 32 rows add each
-  mma's result in float32 (about 7.7e-8 at any K, and no slower there);
-  larger ones still chain the tensor core's accumulator by default, because
-  float32 accumulation takes 1.02-1.12x the time on them, and
-  `Y_F16_ACCUMULATE=f32` selects it (`docs/benchmarks/f16_accumulate_2026-10-20/`).
+- The F16 GEMM (`@tile`, f16 in, f32 out) chains its K loop in the tensor
+  core's accumulator above 32 rows. That accumulator adds with less than
+  float32 rounding, truncating, so same-sign results land below float64 by
+  about 1.2e-5 per 1024 of K. Exactness tests on small integers cannot see it
+  (`docs/benchmarks/f16_xbar_2026-10-18/precision/`).
+
+  Measured on 2026-10-20 over nine input distributions and eleven shapes
+  (`docs/benchmarks/f16_accuracy_2026-10-20/`). The metrics are the relative
+  Frobenius error, the maximum absolute error, and the maximum error over
+  S_ij = sum_k |a_ik| |b_kj|. Where cuBLAS and Triton also chain (256^3 to
+  4096^3, 512 x 512 x 1024), the three give the same bits. Elsewhere cuBLAS is
+  more accurate on every distribution and metric:
+  - 8192^3: about 3x.
+  - 512 x 512 x 4096 to 65536: 2-8x, and up to 70x in relative Frobenius
+    error on the long-K cancellation case. cuBLAS splits K at 16384 and
+    65536.
+
+  Split K would also close a speed gap: cuBLAS takes 400 us at
+  512 x 512 x 65536, Y 420.
+
+  GEMMs of at most 32 rows add each mma's result in float32 instead.
+  `Y_F16_ACCUMULATE=f32` selects that everywhere; on square shapes it takes
+  1.03-1.09x the time.
+  - Against cuBLAS it has the lower Frobenius error in 97 of 99 cases. It is
+    not more accurate everywhere.
+  - At M = 1, cuBLAS's GEMV (float32 FMAs, no tensor cores) is 5-7% lower in
+    Frobenius error on same-sign inputs, and its output is the closer one on
+    47-48% of the outputs.
+  - On the paired cancellation case at K = 16384 and 65536, cuBLAS's split K
+    has the lower maximum normalized error.
+  - Each mma still truncates its 16 products: a bias of -7.0e-8 to -8.0e-8
+    on same-sign inputs at any K, which float32 FMAs (cuBLAS SGEMM) do not
+    have. SGEMM has the lower Frobenius error in 18 of the 22 same-sign
+    cases.
 
 ### Python packaging
 

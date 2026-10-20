@@ -974,37 +974,118 @@ SASS instructions per 16-byte copy.
 
 ### Accuracy against cuBLAS
 
-Each output against float64, scaled by its `sum |a| |b|` (the backward-error
-yardstick; for same-sign inputs it is the relative error), on N(0, 1) inputs and
-on |N(0, 1)| ones, whose sums cannot cancel an error away; f16 in, f32 out
-(`docs/benchmarks/quiet_2026-10-20/accuracy/`, 2026-10-20). Mean |error|, and
-for same-sign inputs the mean signed error:
+Measured on nine input distributions and eleven shapes, f16 in and f32 out,
+with every output compared against float64 (`docs/benchmarks/f16_accuracy_2026-10-20/`,
+2026-10-20). That record gives each input's seed and the SHA-256 of its bytes.
 
-| shape | Y, N(0,1) | cuBLAS, N(0,1) | Y, same sign | cuBLAS, same sign | Y's bits = cuBLAS's, N(0,1) |
+R is the float64 product. It is the exact sum up to float64 rounding, since
+f16 products are exact in float64; it is checked against `math.fsum` on 3,168
+outputs. C is a kernel's output, and
+
+$$S_{ij} = \sum_k |a_{ik}|\,|b_{kj}| \;\ge\; |R_{ij}| .$$
+
+Three metrics:
+
+$$\mathrm{rel}_F = \frac{\|C - R\|_F}{\|R\|_F}, \qquad
+\mathrm{max}_{\mathrm{abs}} = \max_{ij} |C_{ij} - R_{ij}|, \qquad
+\mathrm{max}_{\mathrm{norm}} = \max_{ij} \frac{|C_{ij} - R_{ij}|}{S_{ij}}$$
+
+**References near zero.** No error is divided by |R_ij|:
+
+- **The relative error isn't used.** Under cancellation, a float32 sum can be
+  off by 2^-24 S_ij with every step correctly rounded. |C_ij − R_ij| / |R_ij|
+  then mostly measures how much the sum cancels, κ_ij = S_ij / |R_ij|, rather
+  than the kernel. An output's relative error is at most κ_ij times its
+  normalized error.
+- **When S_ij is zero.** S_ij is zero only when every product is zero, and
+  then R_ij is exactly 0. Those outputs are left out of max_norm and must be
+  exactly 0. None occurred.
+
+**The distributions:**
+
+- **Mixed sign:** N(0, 1); U(−1, 1); mixed exponents ±2^(−10…10), giving
+  products from 2^-20 to 2^22; and N(0, 1) scaled by 2^-12 (up to a fifth of
+  the inputs f16 subnormals) and by 2^7. κ_F = ‖S‖_F / ‖R‖_F is 2.4–192.
+- **Same sign:** |N(0, 1)| and U(0, 1), so κ = 1.
+- **Cancellation-heavy:** rows of A near 1 against centred columns of B
+  (κ_F 1.3e3–2.0e4); and A = [U U] against B = [V; −V + 2^-10 W], whose second
+  half of K cancels the first (κ_F 1.5e4–2.3e5).
+
+The shapes are 256³, 1024³, 4096³, 8192³, M = 1, 8 and 32 with N = K = 4096,
+and 512 x 512 x K for K = 1024–65536. cuBLAS is `torch.mm(a, b,
+out_dtype=torch.float32)`.
+
+The table gives cuBLAS's error over Y's, as rel_F / max_norm: above 1, Y's
+error is the smaller. Each cell is a range over the group's distributions.
+
+| shapes | Y | mixed sign | same sign | cancellation | outputs where Y's error is larger |
 |---|---|---|---|---|---|
-| 256³ – 4096³ | 3.4e-8 – 1.3e-7 | the same | −2.6e-6 – −5.0e-5 | the same | all |
-| 8192³ | 1.8e-7 | 6.1e-8 | −1.0e-4 | −3.2e-5 | 0.2% |
-| M = 1, N = K = 4096 | 5.0e-9 | 1.1e-8 | −7.5e-8 | +1.4e-9 | 4.4% |
-| M = 4 – 32, N = K = 4096 | 5.1e-9 – 5.2e-9 | 1.3e-7 | −7.7e-8 | −5.0e-5 | 0.2% |
-| 512 x 512 x 4096 | 1.3e-7 | 6.4e-8 | −5.0e-5 | −2.5e-5 | 0.8% |
-| 512 x 512 x 16384 | 2.5e-7 | 3.3e-8 | −2.0e-4 | −2.5e-5 | 0.1% |
-| 512 x 512 x 65536 | 5.0e-7 | 6.4e-8 | −8.2e-4 | −1.0e-4 | 0% |
+| 256³, 1024³, 4096³, 512 x 512 x 1024 | default (chain) | same bits | same bits | same bits | 0 |
+| 8192³ | default (chain) | 0.34 / 0.31–0.38 | 0.31–0.37 / 0.32–0.37 | 0.34–0.35 / 0.32–0.36 | 80–100% |
+| 512 x 512 x 4096–65536 | default (chain) | 0.13–0.51 / 0.10–0.53 | 0.12–0.49 / 0.12–0.49 | 0.014–0.55 / 0.024–0.55 | 71–100% |
+| M = 8, 32 | default (float32) | 22–23 / 9.7–15 | 193–204 / 45–50 | 18 / 8.2–12 | 0–2.5% |
+| M = 1 | default (float32) | 1.7–1.9 / 0.71–2.5 | 0.93–0.95 / 0.82–0.93 | 1.9–2.9 / 1.8–2.0 | 21–48% |
+| the 8 shapes above 32 rows | `Y_F16_ACCUMULATE=f32` | 4.7–23 / 2.5–14 | 26–202 / 11–40 | 1.04–18 / 0.83–9.7 | 0–45% |
 
-**From 256³ to 4096³ and at 512 x 512 x 1024, Y gives cuBLAS's output bit for
-bit, and so does Triton.** The tensor core's accumulator loses more than
-float32 rounding: chaining a K loop in it, as all three do there, leaves
-same-sign results below float64 by about 1.2e-5 per 1024 of K. cuBLAS is
-closer where it does something else: at 8192³ another kernel, at M = 1 a GEMV
-kernel without tensor cores, and at long K a split K, whose float32 reduction
-bounds the length of each tensor-core chain (2.5e-5 at K = 4096 and at 16384).
+**Above 32 rows, Y chains its K loop in the tensor core's accumulator, as
+cuBLAS and Triton do.** Where they chain too, the three give the same bits for
+every distribution. The tensor core adds into its accumulator with less than
+float32 rounding, truncating, so same-sign results land below float64 by
+about 1.2e-5 per 1024 of K. cuBLAS is more accurate where it does something
+else, on every distribution and all three metrics:
 
-Since 2026-10-20 a GEMM of at most 32 rows starts each mma from zero and adds
-its result in float32 instead, as the FP8 GEMM does
-(`docs/benchmarks/f16_accumulate_2026-10-20/`): the decode rows above. Its
-same-sign error is then about 7.7e-8 at any K, 34–1290x below cuBLAS's, and it
-is 2–5% faster at M = 1, 4 and 8 and 0.4% slower at 32. `Y_F16_ACCUMULATE=f32`
-does the same for every shape, at 1.03–1.09x the time on the square ones and
-1.02–1.06x at 512 x 512 x 4096–65536; `=mma` keeps the chain everywhere.
+- **512 x 512 x K ≥ 4096:** 2–8x more accurate, and up to 70x on the paired
+  inputs at K = 65536. At K = 16384 and 65536 cuBLAS splits K (a
+  `splitKreduce` kernel follows), and the float32 reduction bounds each
+  tensor-core chain.
+- **8192³:** about 3x more accurate.
+
+At 512 x 512 x 4096 and 8192³ cuBLAS runs one kernel whose bits differ from
+a chained sum; how it orders the sum was not established.
+
+**Since 2026-10-20 a GEMM of at most 32 rows starts each mma from zero and
+adds its result in float32** (`add.rn.f32`), as the FP8 GEMM does
+(`docs/benchmarks/f16_accumulate_2026-10-20/`). It is 2–5% faster at M = 1, 4
+and 8 and 0.4% slower at 32. `Y_F16_ACCUMULATE=f32` does the same for every
+shape, at 1.03–1.09x the time on the square ones and 1.02–1.06x at
+512 x 512 x 4096–65536; `=mma` keeps the chain everywhere.
+
+**Against cuBLAS, float32 accumulation has the lower rel_F in 97 of the 99
+cases and the lower max_abs and max_norm in 94.** It is not more accurate on
+every input or every output:
+
+- **M = 1:** cuBLAS runs a GEMV with float32 FMAs and no tensor cores. On
+  same-sign inputs that GEMV is 5–7% lower in rel_F and 7–18% lower in
+  max_norm, and float32 accumulation is worse on 47–48% of the outputs.
+- **Long-K cancellation:** on the paired inputs at 512 x 512 x 16384–65536,
+  cuBLAS's split K has a lower max_norm (0.83–0.87x), the two are level in
+  rel_F, and float32 accumulation is worse on 45% of the outputs.
+- **Mixed signs elsewhere:** it is worse on 1–10% of the outputs.
+
+**It is not float32 summation either.** Each mma still truncates its 16
+products, a bias of −7.0e-8 to −8.0e-8 on same-sign inputs at any K. Float32
+FMAs on the CUDA cores, the control (SGEMM on the same f16 values, TF32 off),
+have no such bias:
+
+- **Same sign:** SGEMM's rel_F is lower in 18 of 22 cases, at 0.15–0.96x.
+- **Mixed sign:** float32 accumulation is lower in 49 of 55, at 1.03–3.9x.
+
+Its error also grows with K. On |N(0, 1)| inputs rel_F goes from 1.0e-7 at
+K = 256 to 9.9e-7 at 65536; only the bias stays put.
+
+**This replaces the README's earlier "34–1290x below cuBLAS's".** That was the
+ratio of mean signed normalized errors, the bias, on |N(0, 1)| alone. It
+reproduces as 34–1300x at every shape but M = 1. There cuBLAS's bias is 24x
+smaller: +3.4e-9 against −8.0e-8.
+
+**Under heavy cancellation**, no kernel's max_norm exceeds its own maximum on
+N(0, 1). rel_F still reaches:
+
+- 1.2e-3 (about three digits) for float32 accumulation and cuBLAS's split K;
+- 5.4e-3 for cuBLAS's chain at 4096³;
+- 8.7e-2 for Y's default chain at 512 x 512 x 65536.
+
+R rounded to float32 has a rel_F of at most 2.6e-8.
 
 ### Fused GEMM + bias + ReLU vs cuDNN
 

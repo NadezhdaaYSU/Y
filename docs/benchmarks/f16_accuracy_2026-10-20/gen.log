@@ -1,0 +1,19 @@
+gemm_f16_256: no knob == tests/gemm_f16_256.ptx
+gemm_f16_1024: no knob == tests/gemm_f16_1024.ptx
+gemm_f16_4096: no knob == tests/gemm_f16_4096.ptx
+gemm_f16_8192: no knob == tests/gemm_f16_8192.ptx
+gemm_f16_decode_m1: no knob == tests/gemm_f16_decode_m1.ptx
+gemm_f16_decode_m8: no knob == tests/gemm_f16_decode_m8.ptx
+gemm_f16_decode_m32: no knob == tests/gemm_f16_decode_m32.ptx
+gemm_f16_1024.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_256.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_4096.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_512x512x1024.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_512x512x16384.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_512x512x4096.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_512x512x65536.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_8192.ptx: no knob == Y_F16_ACCUMULATE=mma
+gemm_f16_decode_m1.ptx: no knob == Y_F16_ACCUMULATE=f32
+gemm_f16_decode_m32.ptx: no knob == Y_F16_ACCUMULATE=f32
+gemm_f16_decode_m8.ptx: no knob == Y_F16_ACCUMULATE=f32
+ptxas sm_89: all assembled (no output above)
