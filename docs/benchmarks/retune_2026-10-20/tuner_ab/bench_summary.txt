@@ -1,0 +1,9 @@
+hot_1 exit 0
+cold_1 exit 0
+bias_1 exit 0
+dec_1 exit 0
+hot_2 exit 0
+cold_2 exit 0
+bias_2 exit 0
+dec_2 exit 0
+DONE

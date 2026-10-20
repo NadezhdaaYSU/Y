@@ -1,0 +1,59 @@
+           256 Y {'current': '32x64 2x2', 'new': '32x32 2x1'} | exact {'current': True, 'new': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2505-2505 MHz
+      new       min       2.6 median       2.6 us  0.276x Triton
+      current   min       2.7 median       2.7 us  0.284x Triton
+      cuBLAS    min       3.9 median       3.9 us  0.413x Triton
+      Triton    min       9.5 median       9.6 us  1.000x Triton
+           512 Y {'current': '64x64 4x2', 'new': '64x64 4x2'} | exact {'current': True, 'new': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2775-2775 MHz
+      new       min       5.4 median       5.8 us  0.683x Triton
+      current   min       5.4 median       5.9 us  0.689x Triton
+      cuBLAS    min       5.8 median       6.3 us  0.739x Triton
+      Triton    min       7.9 median       9.7 us  1.000x Triton
+          1024 Y {'current': '64x128 2x2', 'new': '64x128 2x2'} | exact {'current': True, 'new': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 64, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2775 MHz
+      new       min      27.3 median      28.2 us  0.888x Triton
+      current   min      27.3 median      27.5 us  0.888x Triton
+      cuBLAS    min      28.7 median      29.8 us  0.933x Triton
+      Triton    min      30.8 median      31.0 us  1.000x Triton
+          2048 Y {'current': '128x128 2x2', 'new': '128x64 2x2'} | exact {'current': True, 'new': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2490-2775 MHz
+      new       min     197.1 median     199.3 us  0.950x Triton
+      current   min     203.6 median     204.3 us  0.981x Triton
+      cuBLAS    min     204.5 median     223.4 us  0.985x Triton
+      Triton    min     207.6 median     216.4 us  1.000x Triton
+          4096 Y {'current': '128x128 2x2', 'new': '128x128 2x2'} | exact {'current': True, 'new': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2490-2775 MHz
+      cuBLAS    min    1541.6 median    1606.6 us  0.971x Triton
+      new       min    1562.1 median    1579.7 us  0.984x Triton
+      current   min    1573.9 median    1594.2 us  0.991x Triton
+      Triton    min    1588.2 median    1659.9 us  1.000x Triton
+          8192 Y {'current': '128x128 2x2', 'new': '128x128 4x2'} | exact {'current': True, 'new': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2775 MHz
+      current   min   12297.7 median   12786.9 us  0.872x Triton
+      new       min   12374.5 median   12685.8 us  0.877x Triton
+      cuBLAS    min   12782.6 median   13043.6 us  0.906x Triton
+      Triton    min   14105.6 median   14472.5 us  1.000x Triton
+         16384 Y {'current': '128x128 2x2', 'new': '128x128 4x2'} | exact {'current': True, 'new': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2760 MHz
+      new       min   98277.1 median   98951.2 us  0.905x Triton
+      cuBLAS    min   99775.7 median  100358.6 us  0.919x Triton
+      current   min  100094.5 median  100523.4 us  0.922x Triton
+      Triton    min  108591.6 median  109690.4 us  1.000x Triton
+   1x4096x4096 Y {'current': '32x64 2x2', 'new': '32x64 2x2'} | exact {'current': True, 'new': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      current   min      17.7 median      18.1 us
+      new       min      17.8 median      18.6 us
+      cuBLAS    min      26.8 median      28.1 us
+   4x4096x4096 Y {'current': '32x64 2x2', 'new': '32x64 2x2'} | exact {'current': True, 'new': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      current   min      17.8 median      18.3 us
+      new       min      17.9 median      18.3 us
+      cuBLAS    min      54.2 median      55.9 us
+   8x4096x4096 Y {'current': '32x64 2x2', 'new': '32x64 2x2'} | exact {'current': True, 'new': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      new       min      17.9 median      18.3 us
+      current   min      18.1 median      18.2 us
+      cuBLAS    min      50.5 median      52.4 us
+  32x4096x4096 Y {'current': '32x64 2x2', 'new': '32x64 2x2'} | exact {'current': True, 'new': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      new       min      21.5 median      22.5 us
+      current   min      21.5 median      21.7 us
+      cuBLAS    min      24.4 median      26.4 us
+  512x1024x256 Y {'current': '64x128 2x4', 'new': '64x64 4x2'} | exact {'current': True, 'new': True, 'cuBLAS': True} | Triton None | SM 2490-2490 MHz
+      new       min       5.7 median       5.9 us
+      current   min       6.1 median       6.2 us
+      cuBLAS    min       7.9 median       8.2 us
+1280x1024x1024 Y {'current': '128x64 2x2', 'new': '64x128 2x2'} | exact {'current': True, 'new': True, 'cuBLAS': True} | Triton None | SM 2490-2745 MHz
+      new       min      39.4 median      39.8 us
+      current   min      42.7 median      45.3 us
+      cuBLAS    min      43.1 median      46.3 us

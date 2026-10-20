@@ -1,0 +1,7 @@
+8x4096x4096: exact {'current': True, 'tuned': True, 'cuBLAS': True} | SM 1560-2760 MHz
+   tuned warm       min   18.080 median   18.528 us   1866.7 GB/s of A, B and C
+   current warm     min   18.304 median   18.541 us   1843.9 GB/s of A, B and C
+   cuBLAS warm      min   50.534 median   53.357 us    667.9 GB/s of A, B and C
+   tuned cold       min   54.827 median   57.862 us    615.6 GB/s of A, B and C
+   current cold     min   55.776 median   58.829 us    605.1 GB/s of A, B and C
+   cuBLAS cold      min   57.850 median   60.454 us    583.4 GB/s of A, B and C

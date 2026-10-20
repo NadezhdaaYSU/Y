@@ -1,0 +1,6 @@
+         16384 Y {'128_128_32_2_2_2': '128x128 2x2', '128_128_32_2_2_3': '128x128 2x2', '128_128_32_4_2_3': '128x128 4x2'} | exact {'128_128_32_2_2_2': True, '128_128_32_2_2_3': True, '128_128_32_4_2_3': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2760 MHz
+      128_128_32_4_2_3 min   97146.9 median   98287.9 us  0.879x Triton
+      cuBLAS    min   98558.5 median  100003.8 us  0.892x Triton
+      128_128_32_2_2_3 min   98703.8 median  100062.2 us  0.893x Triton
+      128_128_32_2_2_2 min   98871.8 median  100454.9 us  0.894x Triton
+      Triton    min  110544.8 median  112170.2 us  1.000x Triton

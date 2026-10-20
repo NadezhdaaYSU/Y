@@ -1,0 +1,7 @@
+==WARNING== Note: Running with uncontrolled GPU caches. Profiling results may be inconsistent.
+==PROF== Connected to process 298513 (/usr/bin/python3.14)
+==PROF== Profiling "gemm_fp8_1024": 0%....50%....100% - 5 passes
+finite True
+finite True
+==PROF== Disconnected from process 298513
+==PROF== Report: /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/fp8sec/fp8_1024.ncu-repz

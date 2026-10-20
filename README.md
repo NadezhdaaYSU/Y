@@ -902,21 +902,31 @@ the 2.61 GHz boost clock is **88.1 TFLOPS**.
 The committed `tests/gemm_f16_<N>.ptx` — the compiler's own output, not a
 hand-written CUDA reference — against cuBLAS (`torch.mm` with a float32
 output, as Y's C is float32) and an autotuned Triton GEMM. Every column is
-checked exact first; interleaved rounds, ranked by minimum; two runs on a
-quiet GPU on 2026-10-20 (`docs/benchmarks/smem_swizzle_2026-10-20/ab/`).
+checked exact first; interleaved rounds, ranked by minimum; two runs on
+2026-10-20 after the tiles were re-tuned (`docs/benchmarks/retune_2026-10-20/`),
+with Discord's GPU process running beside them (10–37% utilisation with none
+of these jobs running).
 
-| M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 |
-|---|---|---|---|---|---|---|
-| **Y vs cuBLAS** | 1.29x / 1.48x | 1.08x / 1.08x | 1.05x / 1.05x | 0.995x / 1.002x | 0.980x / 0.981x | 1.010x / 1.010x |
-| **Y vs Triton** | 3.08x / 3.35x | 1.45x / 1.78x | 1.10x / 1.10x | 1.01x / 1.02x | 1.01x / 1.01x | 1.11x / 1.12x |
-| **Y TFLOPS** | 12.8 / 12.7 | 49.2 / 49.4 | 78.4 / 78.3 | 83.6 / 84.2 | 87.2 / 86.9 | 89.1 / 89.4 |
+| M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 |
+|---|---|---|---|---|---|---|---|
+| **Y vs cuBLAS** | 1.50x / 1.50x | 1.08x / 1.08x | 1.05x / 1.05x | 1.04x / 1.04x | 0.987x / 0.989x | 1.03x / 1.01x | 1.02x / 1.02x |
+| **Y vs Triton** | 3.62x / 3.62x | 1.46x / 1.76x | 1.13x / 1.10x | 1.05x / 1.05x | 1.02x / 1.02x | 1.14x / 1.12x | 1.10x / 1.14x |
+| **Y TFLOPS** | 12.8 / 12.8 | 49.8 / 49.5 | 78.5 / 78.4 | 87.1 / 87.2 | 88.0 / 88.0 | 88.9 / 87.9 | 89.5 / 89.4 |
 
-**Y is ahead of cuBLAS at 256, 512 and 1024, ties it at 2048, is 0.98x at
-4096 and 1.01x at 8192.** Against Triton it is ahead at every size, 1.01–1.02x at 2048
-and 4096 and 1.11–1.12x at 8192, where Triton's autotuner picks a 128x256 tile
-on 8 warps. Triton's 512 minimum and cuBLAS's 256 one moved by 22% and 15%
-between the runs, so those ratios carry little weight. The 8192 TFLOPS were
-measured with the SM at up to 2760 MHz, where the peak is 93.2.
+**Y is ahead of cuBLAS at every size but 4096, where it is 0.99x, and ahead of
+Triton at every size**, 1.02x at 4096 and 1.10–1.14x at 8192 and 16384, where
+Triton's autotuner picks a 128x256 tile on 8 warps. Triton's 512 minimum moved
+by 21% between the runs, so that ratio carries little weight. The 16384 TFLOPS
+were measured with the SM at 2760 MHz, where the peak is 93.2.
+
+Re-tuned on 2026-10-20 with the shared-memory swizzle below, after the
+autotuner (`--autotune-force`, which measures with B streamed from DRAM) and an
+L2-resident sweep disagreed at 1024 and from 4096 up: the tiles are the
+autotuner's where it won in both regimes, the sweep's 3-stage ones at 4096,
+8192 and 16384, and 1024's as it was: 2.8% faster at 256, 3.3% at 2048, 0.8% at
+4096 and 1.8% at 16384, 5–9% on the rectangular and uneven-grid kernels, every
+output the same bits as before. The earlier table, measured on a quiet GPU before the re-tune,
+is in `docs/benchmarks/smem_swizzle_2026-10-20/ab/`.
 
 On 2026-10-18 the tiles with three stages or more (256, 512, 1024 and the
 decode shapes) moved the K loop's wait and barrier to between a K-tile's last
@@ -1001,16 +1011,18 @@ does the same for every shape, at 1.03–1.09x the time on the square ones and
 Precision-matched — the cuDNN baseline is fed the same FP16 operands the Y
 kernel consumes: `F.linear` in FP16 (cuBLASLt with its bias epilogue, FP16 out)
 and then `relu`. Y writes FP32, twice its bytes; against a float32-output
-`torch.addmm` + `relu`, the same bytes as Y, it is 1.91x, 1.36x, 1.13x, 1.21x
-and 1.10x. Every column checked exact, interleaved rounds, minimum, two runs on
-a quiet GPU on 2026-10-20 (`docs/benchmarks/quiet_2026-10-20/bias_relu/`); the
-row read `1.07x | tie | tie | tie | 1.08x` before. (An FP32 `torch.nn.Linear`
+`torch.addmm` + `relu`, the same bytes as Y, it is 1.92–1.94x, 1.35–1.36x,
+1.16–1.17x, 1.22x and 1.11x. Every column checked exact, interleaved rounds,
+minimum, two runs on 2026-10-20 after the re-tune, beside Discord's GPU process
+(`docs/benchmarks/retune_2026-10-20/`); on a quiet GPU before it the row read
+1.45x, 1.12x, 1.01x, 1.03x and 1.03x (`docs/benchmarks/quiet_2026-10-20/bias_relu/`),
+and `1.07x | tie | tie | tie | 1.08x` before the swizzle. (An FP32 `torch.nn.Linear`
 baseline shows 2.9–3.4x, but that conflates "the fused epilogue is good" with
 "FP16 beats FP32".)
 
 | M=N=K | 512 | 1024 | 2048 | 4096 | 8192 |
 |---|---|---|---|---|---|
-| **Y vs cuDNN FP16** | 1.45x | 1.12x | 1.01x | 1.03x | 1.03x |
+| **Y vs cuDNN FP16** | 1.47x | 1.13x | 1.05x | 1.04x | 1.04x |
 
 Epilogue fusion is where fusion pays most. The general rule this established,
 after measuring it the other way: **fusions that only remove work win; mainloop
@@ -1213,7 +1225,7 @@ different baseline.
 | workload | baseline | result |
 |---|---|---|
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
-| Square F16 GEMM, 4096³ | cuBLAS | 0.98x |
+| Square F16 GEMM, 4096³ | cuBLAS | 0.99x |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
@@ -2248,7 +2260,7 @@ all. Counted as **instructions**, not as lines that mention one:
 ```
 kernel                lines  mma.sync  cp.async  ldmatrix  bar.sync
 int8_gemm.ptx           134         1         0         0         0
-gemm_f16_4096.ptx       691        64        20        16         6
+gemm_f16_4096.ptx       784        64        30        24         7
 ```
 
 The f16 row read `964 / 64 / 21 / 24 / 7` until 2026-10-17, when that
@@ -2256,9 +2268,11 @@ kernel's K loop began computing its copy addresses once and loading B with one
 `ldmatrix.x4.trans` per 16 columns
 (`docs/benchmarks/f16_gemm_loop_2026-10-17/`). It read 672 lines until
 2026-10-19, when the epilogue's two copy loops were marked
-`.pragma "nounroll"` (`docs/benchmarks/const_div_2026-10-19/`), and 674 until
+`.pragma "nounroll"` (`docs/benchmarks/const_div_2026-10-19/`), 674 until
 2026-10-20, when its shared-memory tiles were swizzled
-(`docs/benchmarks/smem_swizzle_2026-10-20/`).
+(`docs/benchmarks/smem_swizzle_2026-10-20/`), and `691 / 64 / 20 / 16 / 6`
+until the re-tune that day gave it three stages
+(`docs/benchmarks/retune_2026-10-20/`).
 
 > **Those figures read `89 lines with 2 mma … against 964 / 65 / 22 / 24 / 7`
 > until 2026-09-08, and the correction above had already been written.** The

@@ -1,0 +1,15 @@
+start 14:40:43 5 % games: 
+gemm_f16_256 exit 0 4s: JIT Autotuner Result] `gemm_f16_256` (M=256, N=256, K=256): CTA Tile: 32x32x32, Warps: 2, Pipeline Stages: 4
+gemm_f16_512 exit 0 4s: JIT Autotuner Result] `gemm_f16_512` (M=512, N=512, K=512): CTA Tile: 64x64x32, Warps: 8, Pipeline Stages: 3
+gemm_f16_1024 exit 0 5s: JIT Autotuner Result] `gemm_f16_1024` (M=1024, N=1024, K=1024): CTA Tile: 128x64x32, Warps: 4, Pipeline Stages: 4
+gemm_f16_2048 exit 0 4s: JIT Autotuner Result] `gemm_f16_2048` (M=2048, N=2048, K=2048): CTA Tile: 128x64x32, Warps: 4, Pipeline Stages: 4
+gemm_f16_4096 exit 0 6s: JIT Autotuner Result] `gemm_f16_4096` (M=4096, N=4096, K=4096): CTA Tile: 128x128x32, Warps: 4, Pipeline Stages: 4
+gemm_f16_8192 exit 0 11s: JIT Autotuner Result] `gemm_f16_8192` (M=8192, N=8192, K=8192): CTA Tile: 128x128x32, Warps: 4, Pipeline Stages: 4
+gemm_f16_16384 exit 0 65s: JIT Autotuner Result] `gemm_f16_16384` (M=16384, N=16384, K=16384): CTA Tile: 128x128x32, Warps: 4, Pipeline Stages: 4
+gemm_f16_decode_m1 exit 0 4s: JIT Autotuner Result] `gemm_f16_decode_m1` (M=1, N=4096, K=4096): CTA Tile: 32x64x64, Warps: 4, Pipeline Stages: 3
+gemm_f16_decode_m4 exit 0 4s: JIT Autotuner Result] `gemm_f16_decode_m4` (M=4, N=4096, K=4096): CTA Tile: 32x64x64, Warps: 4, Pipeline Stages: 3
+gemm_f16_decode_m8 exit 0 5s: JIT Autotuner Result] `gemm_f16_decode_m8` (M=8, N=4096, K=4096): CTA Tile: 32x64x64, Warps: 4, Pipeline Stages: 3
+gemm_f16_decode_m32 exit 0 4s: JIT Autotuner Result] `gemm_f16_decode_m32` (M=32, N=4096, K=4096): CTA Tile: 32x64x64, Warps: 4, Pipeline Stages: 3
+tensor_core_gemm_f16_rect exit 0 4s: JIT Autotuner Result] `gemm_f16_rect` (M=512, N=1024, K=256): CTA Tile: 64x64x32, Warps: 8, Pipeline Stages: 4
+gemm_f16_uneven_grid exit 0 5s: JIT Autotuner Result] `gemm_f16_uneven` (M=1280, N=1024, K=1024): CTA Tile: 64x128x32, Warps: 4, Pipeline Stages: 3
+DONE 14:42:48

@@ -1,0 +1,15 @@
+  2048 Y {'current': '128x128 2x2', 'candidate': '128x128 2x2'} | exact {'current': True, 'candidate': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2505-2505 MHz
+      candidate      min    200.93 median    200.98 us
+      current        min    204.33 median    212.01 us
+      linear16+relu  min    207.16 median    208.87 us
+      addmm32+relu   min    229.24 median    239.88 us
+  4096 Y {'current': '128x128 2x2', 'candidate': '128x128 2x2'} | exact {'current': True, 'candidate': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2505-2625 MHz
+      candidate      min   1566.72 median   1579.52 us
+      current        min   1579.52 median   1590.77 us
+      linear16+relu  min   1633.73 median   1647.10 us
+      addmm32+relu   min   1917.57 median   1954.62 us
+  8192 Y {'current': '128x128 2x2', 'candidate': '128x128 4x2'} | exact {'current': True, 'candidate': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2760-2775 MHz
+      candidate      min  12335.26 median  12522.50 us
+      current        min  12452.35 median  12665.34 us
+      linear16+relu  min  12853.70 median  13059.58 us
+      addmm32+relu   min  13683.20 median  13910.06 us
