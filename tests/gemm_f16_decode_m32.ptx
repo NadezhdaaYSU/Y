@@ -8,13 +8,13 @@
     .param .u64 B_1,
     .param .u64 C_2
 )
-    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 333
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 398
     // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 255 (to maximize SM occupancy)
     // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 16.67% (2 active blocks per SM)
 .maxnreg 255
 {
     .reg .b32 %r<245>;
-    .reg .f32 %f<24>;
+    .reg .f32 %f<89>;
     .reg .b64 %rd<32>;
     .reg .pred %p<16>;
 
@@ -79,6 +79,7 @@
     mov.f32 %f13, 0f00000000;
     mov.f32 %f14, 0f00000000;
     mov.f32 %f15, 0f00000000;
+    mov.f32 %f16, 0f00000000;
     mov.u32 %r31, smem_pipeline_gemm_f16_decode_m32;
     add.u32 %r32, %r31, 12288;
     mov.u32 %r33, %tid.x;
@@ -236,10 +237,26 @@
     mad.lo.u32 %r139, %r136, 128, %r138;
     add.u32 %r140, %r119, %r139;
     ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r86,%r87,%r88,%r89}, [%r140];
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r74,%r75,%r76,%r77}, {%r66,%r67}, {%f0,%f1,%f2,%f3};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r74,%r75,%r76,%r77}, {%r68,%r69}, {%f4,%f5,%f6,%f7};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r74,%r75,%r76,%r77}, {%r70,%r71}, {%f8,%f9,%f10,%f11};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r74,%r75,%r76,%r77}, {%r72,%r73}, {%f12,%f13,%f14,%f15};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f17,%f18,%f19,%f20}, {%r74,%r75,%r76,%r77}, {%r66,%r67}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f1, %f1, %f17;
+    add.rn.f32 %f2, %f2, %f18;
+    add.rn.f32 %f3, %f3, %f19;
+    add.rn.f32 %f4, %f4, %f20;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f21,%f22,%f23,%f24}, {%r74,%r75,%r76,%r77}, {%r68,%r69}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f5, %f5, %f21;
+    add.rn.f32 %f6, %f6, %f22;
+    add.rn.f32 %f7, %f7, %f23;
+    add.rn.f32 %f8, %f8, %f24;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f25,%f26,%f27,%f28}, {%r74,%r75,%r76,%r77}, {%r70,%r71}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f9, %f9, %f25;
+    add.rn.f32 %f10, %f10, %f26;
+    add.rn.f32 %f11, %f11, %f27;
+    add.rn.f32 %f12, %f12, %f28;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f29,%f30,%f31,%f32}, {%r74,%r75,%r76,%r77}, {%r72,%r73}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f13, %f13, %f29;
+    add.rn.f32 %f14, %f14, %f30;
+    add.rn.f32 %f15, %f15, %f31;
+    add.rn.f32 %f16, %f16, %f32;
     add.u32 %r141, %r21, 0;
     shr.u32 %r142, %r141, 3;
     xor.b32 %r143, %r142, %r30;
@@ -263,10 +280,26 @@
     mad.lo.u32 %r159, %r156, 128, %r158;
     add.u32 %r160, %r119, %r159;
     ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r74,%r75,%r76,%r77}, [%r160];
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r86,%r87,%r88,%r89}, {%r78,%r79}, {%f0,%f1,%f2,%f3};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r86,%r87,%r88,%r89}, {%r80,%r81}, {%f4,%f5,%f6,%f7};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r86,%r87,%r88,%r89}, {%r82,%r83}, {%f8,%f9,%f10,%f11};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r86,%r87,%r88,%r89}, {%r84,%r85}, {%f12,%f13,%f14,%f15};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f33,%f34,%f35,%f36}, {%r86,%r87,%r88,%r89}, {%r78,%r79}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f1, %f1, %f33;
+    add.rn.f32 %f2, %f2, %f34;
+    add.rn.f32 %f3, %f3, %f35;
+    add.rn.f32 %f4, %f4, %f36;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f37,%f38,%f39,%f40}, {%r86,%r87,%r88,%r89}, {%r80,%r81}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f5, %f5, %f37;
+    add.rn.f32 %f6, %f6, %f38;
+    add.rn.f32 %f7, %f7, %f39;
+    add.rn.f32 %f8, %f8, %f40;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f41,%f42,%f43,%f44}, {%r86,%r87,%r88,%r89}, {%r82,%r83}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f9, %f9, %f41;
+    add.rn.f32 %f10, %f10, %f42;
+    add.rn.f32 %f11, %f11, %f43;
+    add.rn.f32 %f12, %f12, %f44;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f45,%f46,%f47,%f48}, {%r86,%r87,%r88,%r89}, {%r84,%r85}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f13, %f13, %f45;
+    add.rn.f32 %f14, %f14, %f46;
+    add.rn.f32 %f15, %f15, %f47;
+    add.rn.f32 %f16, %f16, %f48;
     add.u32 %r161, %r21, 0;
     shr.u32 %r162, %r161, 3;
     xor.b32 %r163, %r162, %r30;
@@ -290,10 +323,26 @@
     mad.lo.u32 %r179, %r176, 128, %r178;
     add.u32 %r180, %r119, %r179;
     ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r86,%r87,%r88,%r89}, [%r180];
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r74,%r75,%r76,%r77}, {%r66,%r67}, {%f0,%f1,%f2,%f3};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r74,%r75,%r76,%r77}, {%r68,%r69}, {%f4,%f5,%f6,%f7};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r74,%r75,%r76,%r77}, {%r70,%r71}, {%f8,%f9,%f10,%f11};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r74,%r75,%r76,%r77}, {%r72,%r73}, {%f12,%f13,%f14,%f15};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f49,%f50,%f51,%f52}, {%r74,%r75,%r76,%r77}, {%r66,%r67}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f1, %f1, %f49;
+    add.rn.f32 %f2, %f2, %f50;
+    add.rn.f32 %f3, %f3, %f51;
+    add.rn.f32 %f4, %f4, %f52;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f53,%f54,%f55,%f56}, {%r74,%r75,%r76,%r77}, {%r68,%r69}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f5, %f5, %f53;
+    add.rn.f32 %f6, %f6, %f54;
+    add.rn.f32 %f7, %f7, %f55;
+    add.rn.f32 %f8, %f8, %f56;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f57,%f58,%f59,%f60}, {%r74,%r75,%r76,%r77}, {%r70,%r71}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f9, %f9, %f57;
+    add.rn.f32 %f10, %f10, %f58;
+    add.rn.f32 %f11, %f11, %f59;
+    add.rn.f32 %f12, %f12, %f60;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f61,%f62,%f63,%f64}, {%r74,%r75,%r76,%r77}, {%r72,%r73}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f13, %f13, %f61;
+    add.rn.f32 %f14, %f14, %f62;
+    add.rn.f32 %f15, %f15, %f63;
+    add.rn.f32 %f16, %f16, %f64;
     cp.async.wait_group 1;
     bar.sync 0;
     add.u32 %r181, %r109, 1;
@@ -325,10 +374,26 @@
     mad.lo.u32 %r202, %r200, 128, %r201;
     add.u32 %r203, %r183, %r202;
     ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r74,%r75,%r76,%r77}, [%r203];
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r86,%r87,%r88,%r89}, {%r78,%r79}, {%f0,%f1,%f2,%f3};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r86,%r87,%r88,%r89}, {%r80,%r81}, {%f4,%f5,%f6,%f7};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r86,%r87,%r88,%r89}, {%r82,%r83}, {%f8,%f9,%f10,%f11};
-    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r86,%r87,%r88,%r89}, {%r84,%r85}, {%f12,%f13,%f14,%f15};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f65,%f66,%f67,%f68}, {%r86,%r87,%r88,%r89}, {%r78,%r79}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f1, %f1, %f65;
+    add.rn.f32 %f2, %f2, %f66;
+    add.rn.f32 %f3, %f3, %f67;
+    add.rn.f32 %f4, %f4, %f68;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f69,%f70,%f71,%f72}, {%r86,%r87,%r88,%r89}, {%r80,%r81}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f5, %f5, %f69;
+    add.rn.f32 %f6, %f6, %f70;
+    add.rn.f32 %f7, %f7, %f71;
+    add.rn.f32 %f8, %f8, %f72;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f73,%f74,%f75,%f76}, {%r86,%r87,%r88,%r89}, {%r82,%r83}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f9, %f9, %f73;
+    add.rn.f32 %f10, %f10, %f74;
+    add.rn.f32 %f11, %f11, %f75;
+    add.rn.f32 %f12, %f12, %f76;
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f77,%f78,%f79,%f80}, {%r86,%r87,%r88,%r89}, {%r84,%r85}, {%f0,%f0,%f0,%f0};
+    add.rn.f32 %f13, %f13, %f77;
+    add.rn.f32 %f14, %f14, %f78;
+    add.rn.f32 %f15, %f15, %f79;
+    add.rn.f32 %f16, %f16, %f80;
     add.u32 %r109, %r109, 1;
     bra $GEMM_K_LOOP_0;
     $GEMM_K_DONE_1:
@@ -340,12 +405,12 @@
     mad.lo.u32 %r206, %r205, %r204, 0;
     mul.lo.u32 %r207, %r206, 4;
     add.u32 %r208, %r31, %r207;
-    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r208], {%f0,%f1,%f2,%f3,%f4,%f5,%f6,%f7}, %r204;
+    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r208], {%f1,%f2,%f3,%f4,%f5,%f6,%f7,%f8}, %r204;
     add.u32 %r209, %r20, 0;
     mad.lo.u32 %r210, %r209, %r204, 16;
     mul.lo.u32 %r211, %r210, 4;
     add.u32 %r212, %r31, %r211;
-    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r212], {%f8,%f9,%f10,%f11,%f12,%f13,%f14,%f15}, %r204;
+    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r212], {%f9,%f10,%f11,%f12,%f13,%f14,%f15,%f16}, %r204;
     bar.sync 0;
     add.u32 %r213, %r15, 0;
     mov.u32 %r214, %tid.x;
@@ -365,11 +430,11 @@
     mad.lo.u32 %r221, %r215, 36, %r217;
     mul.lo.u32 %r222, %r221, 4;
     add.u32 %r223, %r31, %r222;
-    @%p10 ld.shared.v4.f32 {%f16,%f17,%f18,%f19}, [%r223];
+    @%p10 ld.shared.v4.f32 {%f81,%f82,%f83,%f84}, [%r223];
     mad.lo.u32 %r224, %r218, 4096, %r219;
     mul.wide.u32 %rd28, %r224, 4;
     add.s64 %rd29, %rd5, %rd28;
-    @%p10 st.global.v4.f32 [%rd29], {%f16,%f17,%f18,%f19};
+    @%p10 st.global.v4.f32 [%rd29], {%f81,%f82,%f83,%f84};
     add.u32 %r214, %r214, 128;
     bra $EPI_PLAIN_2;
     $EPI_PLAIN_DONE_3:
@@ -379,12 +444,12 @@
     mad.lo.u32 %r226, %r225, %r204, 0;
     mul.lo.u32 %r227, %r226, 4;
     add.u32 %r228, %r31, %r227;
-    @%p11 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r228], {%f0,%f1,%f2,%f3,%f4,%f5,%f6,%f7}, %r204;
+    @%p11 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r228], {%f1,%f2,%f3,%f4,%f5,%f6,%f7,%f8}, %r204;
     add.u32 %r229, %r20, 0;
     mad.lo.u32 %r230, %r229, %r204, 16;
     mul.lo.u32 %r231, %r230, 4;
     add.u32 %r232, %r31, %r231;
-    @%p11 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r232], {%f8,%f9,%f10,%f11,%f12,%f13,%f14,%f15}, %r204;
+    @%p11 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r232], {%f9,%f10,%f11,%f12,%f13,%f14,%f15,%f16}, %r204;
     bar.sync 0;
     add.u32 %r233, %r15, 32;
     mov.u32 %r234, %tid.x;
@@ -404,11 +469,11 @@
     mad.lo.u32 %r241, %r235, 36, %r237;
     mul.lo.u32 %r242, %r241, 4;
     add.u32 %r243, %r31, %r242;
-    @%p15 ld.shared.v4.f32 {%f20,%f21,%f22,%f23}, [%r243];
+    @%p15 ld.shared.v4.f32 {%f85,%f86,%f87,%f88}, [%r243];
     mad.lo.u32 %r244, %r238, 4096, %r239;
     mul.wide.u32 %rd30, %r244, 4;
     add.s64 %rd31, %rd5, %rd30;
-    @%p15 st.global.v4.f32 [%rd31], {%f20,%f21,%f22,%f23};
+    @%p15 st.global.v4.f32 [%rd31], {%f85,%f86,%f87,%f88};
     add.u32 %r234, %r234, 128;
     bra $EPI_PLAIN_4;
     $EPI_PLAIN_DONE_5:

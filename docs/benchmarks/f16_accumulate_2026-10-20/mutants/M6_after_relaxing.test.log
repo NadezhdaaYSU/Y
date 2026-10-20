@@ -1,0 +1,24 @@
+   Compiling Y-compiler v1.0.0 (/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/xbar)
+   Compiling y-gpu v0.1.0 (/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/xbar/crates/y-gpu)
+    Finished `release` profile [optimized] target(s) in 8.65s
+     Running tests/ptx_f16_accumulate.rs (target/release/deps/ptx_f16_accumulate-80f04cf54c0d237f)
+
+running 2 tests
+test the_default_follows_the_row_count_and_the_knob_overrides_it ... ok
+test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED
+
+failures:
+
+---- float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu stdout ----
+
+thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (124466) panicked at tests/ptx_f16_accumulate.rs:169:9:
+8x256x4096: float32 accumulation is off by -5.719803175457883e-6 on average
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+error: test failed, to rerun pass `--test ptx_f16_accumulate`

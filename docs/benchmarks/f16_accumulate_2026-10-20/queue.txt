@@ -1,0 +1,5 @@
+acc_f32: 13:39:09 mean 3.5% games: 
+ab_1: 13:39:30 mean 1.0% games: 
+ab_2: 13:39:45 mean 11.3% games: 
+longk_1: 13:41:25 21 % games: 
+longk_2: 13:41:29 1 % games: 

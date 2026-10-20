@@ -1,0 +1,46 @@
+           256 Y {'mma': '32x64 2x2', 'f32': '32x64 2x2'} | exact {'mma': True, 'f32': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2490-2490 MHz
+      mma       min       2.6 median       2.7 us  0.336x Triton
+      f32       min       2.7 median       2.7 us  0.347x Triton
+      cuBLAS    min       3.1 median       3.9 us  0.401x Triton
+      Triton    min       7.8 median       9.5 us  1.000x Triton
+           512 Y {'mma': '64x64 4x2', 'f32': '64x64 4x2'} | exact {'mma': True, 'f32': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 64, BK: 64, num_warps: 4, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2760 MHz
+      mma       min       5.4 median       5.5 us  0.573x Triton
+      cuBLAS    min       5.9 median       6.0 us  0.620x Triton
+      f32       min       5.9 median       6.0 us  0.624x Triton
+      Triton    min       9.4 median       9.5 us  1.000x Triton
+          1024 Y {'mma': '64x128 2x2', 'f32': '64x128 2x2'} | exact {'mma': True, 'f32': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 64, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2745-2760 MHz
+      mma       min      27.5 median      27.7 us  0.906x Triton
+      f32       min      28.9 median      29.1 us  0.951x Triton
+      cuBLAS    min      28.9 median      29.2 us  0.953x Triton
+      Triton    min      30.3 median      30.5 us  1.000x Triton
+          2048 Y {'mma': '128x128 2x2', 'f32': '128x128 2x2'} | exact {'mma': True, 'f32': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2445-2760 MHz
+      mma       min     204.0 median     205.7 us  0.983x Triton
+      cuBLAS    min     204.3 median     205.8 us  0.984x Triton
+      Triton    min     207.5 median     209.1 us  1.000x Triton
+      f32       min     216.5 median     216.7 us  1.043x Triton
+          4096 Y {'mma': '128x128 2x2', 'f32': '128x128 2x2'} | exact {'mma': True, 'f32': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 128, BK: 32, num_warps: 4, num_ctas: 1, num_stages: 4, maxnreg: None | SM 2625-2760 MHz
+      cuBLAS    min    1546.8 median    1550.2 us  0.972x Triton
+      mma       min    1577.0 median    1592.8 us  0.991x Triton
+      Triton    min    1590.8 median    1597.7 us  1.000x Triton
+      f32       min    1661.9 median    1663.0 us  1.045x Triton
+          8192 Y {'mma': '128x128 2x2', 'f32': '128x128 2x2'} | exact {'mma': True, 'f32': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2745-2760 MHz
+      mma       min   12366.3 median   12552.0 us  0.877x Triton
+      cuBLAS    min   12639.2 median   12719.6 us  0.896x Triton
+      f32       min   13182.0 median   13369.8 us  0.935x Triton
+      Triton    min   14102.0 median   14364.1 us  1.000x Triton
+   1x4096x4096 Y {'mma': '32x64 2x2', 'f32': '32x64 2x2'} | exact {'mma': True, 'f32': True, 'cuBLAS': True} | Triton None | SM 2745-2745 MHz
+      f32       min      17.7 median      18.2 us
+      mma       min      18.2 median      18.4 us
+      cuBLAS    min      26.8 median      27.1 us
+   4x4096x4096 Y {'mma': '32x64 2x2', 'f32': '32x64 2x2'} | exact {'mma': True, 'f32': True, 'cuBLAS': True} | Triton None | SM 2460-2460 MHz
+      f32       min      17.7 median      18.2 us
+      mma       min      18.2 median      18.4 us
+      cuBLAS    min      53.9 median      55.6 us
+   8x4096x4096 Y {'mma': '32x64 2x2', 'f32': '32x64 2x2'} | exact {'mma': True, 'f32': True, 'cuBLAS': True} | Triton None | SM 2475-2475 MHz
+      f32       min      18.1 median      18.1 us
+      mma       min      19.0 median      19.3 us
+      cuBLAS    min      50.5 median      52.1 us
+  32x4096x4096 Y {'mma': '32x64 2x2', 'f32': '32x64 2x2'} | exact {'mma': True, 'f32': True, 'cuBLAS': True} | Triton None | SM 2475-2670 MHz
+      mma       min      21.2 median      21.7 us
+      f32       min      21.2 median      21.5 us
+      cuBLAS    min      23.8 median      24.0 us

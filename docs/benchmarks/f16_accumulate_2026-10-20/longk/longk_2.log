@@ -1,0 +1,24 @@
+USDT:2026-10-20 13:41:30 120550:120550 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:41:30 120550:120550 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 1024 exact True graph True SM 2505-2505 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      mma                min     8.05 median     8.54 us  cuBLAS/this 1.092
+      cuBLAS             min     8.79 median     9.14 us  cuBLAS/this 1.000
+      f32                min     8.85 median     9.42 us  cuBLAS/this 0.994
+USDT:2026-10-20 13:41:31 120550:120550 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:41:31 120550:120550 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 4096 exact True graph True SM 2505-2505 MHz | cuBLAS ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+      mma                min    27.86 median    28.10 us  cuBLAS/this 1.067
+      f32                min    28.67 median    28.88 us  cuBLAS/this 1.037
+      cuBLAS             min    29.72 median    29.96 us  cuBLAS/this 1.000
+USDT:2026-10-20 13:41:31 120550:120550 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:41:31 120550:120550 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=16384 exact True graph True SM 2475-2475 MHz | cuBLAS ['void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, float, float, true, false, false, false>(cublasLt::cublasSplitKParams<float>, float const*, float const*, float*, float*, float const*, float const*, float const*, float const*, float*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)', 'void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8>(cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8::Params)']
+      mma                min   105.03 median   106.47 us  cuBLAS/this 1.014
+      cuBLAS             min   106.52 median   106.97 us  cuBLAS/this 1.000
+      f32                min   108.71 median   110.99 us  cuBLAS/this 0.980
+USDT:2026-10-20 13:41:32 120550:120550 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:41:32 120550:120550 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=65536 exact True graph True SM 2730-2760 MHz | cuBLAS ['ampere_s16816gemm_fp16_128x128_ldg8_stages_64x3_nn', 'void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, float, float, true, false, false, false>(cublasLt::cublasSplitKParams<float>, float const*, float const*, float*, float*, float const*, float const*, float const*, float const*, float*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)']
+      cuBLAS             min   404.63 median   415.01 us  cuBLAS/this 1.000
+      mma                min   418.73 median   432.99 us  cuBLAS/this 0.966
+      f32                min   443.87 median   453.59 us  cuBLAS/this 0.912
