@@ -1,0 +1,4 @@
+bias 1: 14:07:13 mean 24.1% games: 
+16384 1: 14:07:20 mean 29.7% games: 
+bias 2: 14:08:04 mean 1.0% games: 
+16384 2: 14:08:11 mean 7.5% games: 

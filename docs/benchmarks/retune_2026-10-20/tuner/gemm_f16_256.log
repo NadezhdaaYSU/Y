@@ -1,0 +1,390 @@
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+[1;36m[*][0m Reading source: gemm_f16_256.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 41 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting NVIDIA PTX Assembly with Triton-Level Optimization Passes...
+      -> Pass 1: Multi-Stage Asynchronous Software Pipelining Pass (cp.async multi-buffering)
+      -> Pass 2: Automated Grid Block Swizzling Pass (grouped-raster L2 locality, group size 8)
+      -> Pass 3: JIT Dynamic Autotuning Pass (CTA tile / num_warps / num_stages search) [measuring on-device, ignoring any cached result]
+      -> Pass 4: Automated Shared Memory Layout Permutation Pass (0-bank conflict XOR swizzling)
+         [Y autotuner] measuring on NVIDIA GeForce RTX 4070 Ti SUPER - M=256 N=256 K=256 | 8 weight buffer(s), 1.2 MB working set vs 50.3 MB L2 (L2-resident)
+         [Y autotuner] 21 distinct kernels compiled, 21 verified, 0 rejected
+           1. 32x32x32 2x1 s4          2.55 us (median 2.55, worst 2.63)    13.2 TFLOPS   <- selected
+           2. 32x64x32 2x2 s4          2.63 us (median 2.64, worst 2.71)    12.7 TFLOPS
+           3. 32x32x32 2x1 s3          2.64 us (median 2.64, worst 2.64)    12.7 TFLOPS
+           4. 32x64x64 2x2 s3          2.67 us (median 2.68, worst 2.69)    12.6 TFLOPS
+           5. 32x64x32 2x2 s3          2.74 us (median 2.74, worst 2.81)    12.2 TFLOPS
+         [JIT Autotuner Result] `gemm_f16_256` (M=256, N=256, K=256): CTA Tile: 32x32x32, Warps: 2, Pipeline Stages: 4
+      -> PTX target: sm_89
+      -> Written to: gemm_f16_256.ptx
+======= GENERATED PTX BLOB =======
+.version 7.8
+.target sm_89
+.address_size 64
+
+.extern .shared .align 16 .b8 smem_pipeline_gemm_f16_256[];
+.visible .entry gemm_f16_256(
+    .param .u64 A_0,
+    .param .u64 B_1,
+    .param .u64 C_2
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 286
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 255 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 16.67% (4 active blocks per SM)
+.maxnreg 255
+{
+    .reg .b32 %r<194>;
+    .reg .f32 %f<20>;
+    .reg .b64 %rd<36>;
+    .reg .pred %p<11>;
+
+    ld.param.u64 %rd0, [A_0];
+    ld.param.u64 %rd1, [B_1];
+    ld.param.u64 %rd2, [C_2];
+    // ========================================================
+    // [Y TENSOR CORE GEMM] M=256 N=256 K=256 | CTA 32x32x32 | 2x1 warps | wmma.sync.m16n16k16.f16->f32
+    // Autotuner selected 4 pipeline stages (4 used after k_tiles/smem clamping); cp.async multi-stage pipelined. Dynamic shared memory required: 16384 bytes.
+    // ========================================================
+    cvta.to.global.u64 %rd3, %rd0;
+    cvta.to.global.u64 %rd4, %rd1;
+    cvta.to.global.u64 %rd5, %rd2;
+    // ========================================================
+    // [AUTOMATED GRID BLOCK SWIZZLING PASS - GROUPED RASTER L2 LOCALITY]
+    // Group size: 8 tiles (Maximizes L2 Cache hit rate)
+    // ========================================================
+    mov.u32 %r0, %ctaid.x;
+    mov.u32 %r1, %ctaid.y;
+    mov.u32 %r2, %nctaid.x;
+    mov.u32 %r3, %nctaid.y;
+    mad.lo.u32 %r4, %r1, %r2, %r0;
+    mul.lo.u32 %r5, %r2, 8;
+    div.u32 %r6, %r4, %r5;
+    rem.u32 %r7, %r4, %r5;
+    mul.lo.u32 %r8, %r6, 8;
+    sub.u32 %r9, %r3, %r8;
+    min.u32 %r10, %r9, 8;
+    rem.u32 %r11, %r7, %r10;
+    add.u32 %r12, %r8, %r11;
+    div.u32 %r13, %r7, %r10;
+    mul.lo.u32 %r14, %r12, 32;
+    mul.lo.u32 %r15, %r13, 32;
+    mov.u32 %r16, %tid.x;
+    shr.u32 %r17, %r16, 5;
+    and.b32 %r18, %r17, 1;
+    shr.u32 %r19, %r17, 1;
+    mul.lo.u32 %r20, %r18, 16;
+    mul.lo.u32 %r21, %r19, 32;
+    and.b32 %r22, %r16, 31;
+    and.b32 %r23, %r22, 15;
+    and.b32 %r24, %r22, 16;
+    shr.u32 %r25, %r24, 1;
+    shr.u32 %r26, %r25, 3;
+    shr.u32 %r27, %r23, 1;
+    and.b32 %r28, %r27, 3;
+    xor.b32 %r29, %r26, %r28;
+    shr.u32 %r30, %r23, 1;
+    and.b32 %r31, %r30, 3;
+    xor.b32 %r32, %r26, %r31;
+    mov.f32 %f0, 0f00000000;
+    mov.f32 %f1, 0f00000000;
+    mov.f32 %f2, 0f00000000;
+    mov.f32 %f3, 0f00000000;
+    mov.f32 %f4, 0f00000000;
+    mov.f32 %f5, 0f00000000;
+    mov.f32 %f6, 0f00000000;
+    mov.f32 %f7, 0f00000000;
+    mov.f32 %f8, 0f00000000;
+    mov.f32 %f9, 0f00000000;
+    mov.f32 %f10, 0f00000000;
+    mov.f32 %f11, 0f00000000;
+    mov.f32 %f12, 0f00000000;
+    mov.f32 %f13, 0f00000000;
+    mov.f32 %f14, 0f00000000;
+    mov.f32 %f15, 0f00000000;
+    mov.u32 %r33, smem_pipeline_gemm_f16_256;
+    add.u32 %r34, %r33, 8192;
+    mov.u32 %r35, %tid.x;
+    shr.u32 %r36, %r35, 2;
+    and.b32 %r37, %r35, 3;
+    mul.lo.u32 %r38, %r37, 8;
+    add.u32 %r39, %r14, %r36;
+    mad.lo.u32 %r40, %r39, 256, %r38;
+    mul.wide.u32 %rd6, %r40, 2;
+    add.s64 %rd7, %rd3, %rd6;
+    shr.u32 %r41, %r36, 1;
+    and.b32 %r42, %r41, 3;
+    xor.b32 %r43, %r37, %r42;
+    shl.b32 %r44, %r43, 3;
+    mad.lo.u32 %r45, %r36, 32, %r44;
+    shl.b32 %r46, %r45, 1;
+    mov.u32 %r47, %tid.x;
+    shr.u32 %r48, %r47, 2;
+    and.b32 %r49, %r47, 3;
+    mul.lo.u32 %r50, %r49, 8;
+    add.u32 %r51, %r15, %r50;
+    mad.lo.u32 %r52, %r48, 256, %r51;
+    mul.wide.u32 %rd8, %r52, 2;
+    add.s64 %rd9, %rd4, %rd8;
+    shr.u32 %r53, %r48, 1;
+    and.b32 %r54, %r53, 3;
+    xor.b32 %r55, %r49, %r54;
+    shl.b32 %r56, %r55, 3;
+    mad.lo.u32 %r57, %r48, 32, %r56;
+    shl.b32 %r58, %r57, 1;
+    setp.lt.u32 %p0, %r14, 256;
+    setp.lt.u32 %p1, %r15, 256;
+    and.pred %p2, %p0, %p1;
+    selp.u32 %r59, 16, 0, %p2;
+    mov.u32 %r60, 0;
+    add.u32 %r61, %r33, 0;
+    add.u32 %r62, %r34, 0;
+    // [Y ASYNC TILE LOAD] PA0 | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd11, %r60;
+    shl.b64 %rd10, %rd11, 1;
+    add.s64 %rd12, %rd7, %rd10;
+    add.u32 %r63, %r61, %r46;
+    cp.async.cg.shared.global [%r63], [%rd12], 16, %r59;
+    cp.async.cg.shared.global [%r63+1024], [%rd12+8192], 16, %r59;
+    // [Y ASYNC TILE LOAD] PB0 | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd14, %r60;
+    shl.b64 %rd13, %rd14, 9;
+    add.s64 %rd15, %rd9, %rd13;
+    add.u32 %r64, %r62, %r58;
+    cp.async.cg.shared.global [%r64], [%rd15], 16, %r59;
+    cp.async.cg.shared.global [%r64+1024], [%rd15+8192], 16, %r59;
+    cp.async.commit_group;
+    mov.u32 %r65, 32;
+    add.u32 %r66, %r33, 2048;
+    add.u32 %r67, %r34, 2048;
+    // [Y ASYNC TILE LOAD] PA1 | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd17, %r65;
+    shl.b64 %rd16, %rd17, 1;
+    add.s64 %rd18, %rd7, %rd16;
+    add.u32 %r68, %r66, %r46;
+    cp.async.cg.shared.global [%r68], [%rd18], 16, %r59;
+    cp.async.cg.shared.global [%r68+1024], [%rd18+8192], 16, %r59;
+    // [Y ASYNC TILE LOAD] PB1 | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd20, %r65;
+    shl.b64 %rd19, %rd20, 9;
+    add.s64 %rd21, %rd9, %rd19;
+    add.u32 %r69, %r67, %r58;
+    cp.async.cg.shared.global [%r69], [%rd21], 16, %r59;
+    cp.async.cg.shared.global [%r69+1024], [%rd21+8192], 16, %r59;
+    cp.async.commit_group;
+    mov.u32 %r70, 64;
+    add.u32 %r71, %r33, 4096;
+    add.u32 %r72, %r34, 4096;
+    // [Y ASYNC TILE LOAD] PA2 | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd23, %r70;
+    shl.b64 %rd22, %rd23, 1;
+    add.s64 %rd24, %rd7, %rd22;
+    add.u32 %r73, %r71, %r46;
+    cp.async.cg.shared.global [%r73], [%rd24], 16, %r59;
+    cp.async.cg.shared.global [%r73+1024], [%rd24+8192], 16, %r59;
+    // [Y ASYNC TILE LOAD] PB2 | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd26, %r70;
+    shl.b64 %rd25, %rd26, 9;
+    add.s64 %rd27, %rd9, %rd25;
+    add.u32 %r74, %r72, %r58;
+    cp.async.cg.shared.global [%r74], [%rd27], 16, %r59;
+    cp.async.cg.shared.global [%r74+1024], [%rd27+8192], 16, %r59;
+    cp.async.commit_group;
+    cp.async.wait_group 2;
+    bar.sync 0;
+    add.u32 %r99, %r21, 0;
+    shr.u32 %r100, %r99, 3;
+    xor.b32 %r101, %r100, %r32;
+    shl.b32 %r102, %r101, 4;
+    add.u32 %r103, %r23, 0;
+    mad.lo.u32 %r104, %r103, 64, %r102;
+    add.u32 %r105, %r34, %r104;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r75,%r76,%r77,%r78}, [%r105];
+    add.u32 %r106, %r21, 16;
+    shr.u32 %r107, %r106, 3;
+    xor.b32 %r108, %r107, %r32;
+    shl.b32 %r109, %r108, 4;
+    add.u32 %r110, %r23, 0;
+    mad.lo.u32 %r111, %r110, 64, %r109;
+    add.u32 %r112, %r34, %r111;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r79,%r80,%r81,%r82}, [%r112];
+    add.u32 %r113, %r20, %r23;
+    add.u32 %r114, %r113, 0;
+    shl.b32 %r115, %r29, 4;
+    mad.lo.u32 %r116, %r114, 64, %r115;
+    add.u32 %r117, %r33, %r116;
+    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r83,%r84,%r85,%r86}, [%r117];
+    mov.u32 %r118, 0;
+    $GEMM_K_LOOP_0:
+    setp.ge.u32 %p3, %r118, 8;
+    @%p3 bra $GEMM_K_DONE_1;
+    and.b32 %r119, %r118, 3;
+    add.u32 %r120, %r118, 3;
+    and.b32 %r121, %r120, 3;
+    setp.lt.u32 %p4, %r120, 8;
+    mul.lo.u32 %r122, %r120, 32;
+    mad.lo.u32 %r123, %r121, 2048, %r33;
+    mad.lo.u32 %r124, %r121, 2048, %r34;
+    and.pred %p5, %p4, %p2;
+    selp.u32 %r125, 16, 0, %p5;
+    // [Y ASYNC TILE LOAD] A | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd29, %r122;
+    shl.b64 %rd28, %rd29, 1;
+    add.s64 %rd30, %rd7, %rd28;
+    add.u32 %r126, %r123, %r46;
+    cp.async.cg.shared.global [%r126], [%rd30], 16, %r125;
+    cp.async.cg.shared.global [%r126+1024], [%rd30+8192], 16, %r125;
+    // [Y ASYNC TILE LOAD] B | 128 chunks of 16B over 64 threads, addresses hoisted
+    cvt.u64.u32 %rd32, %r122;
+    shl.b64 %rd31, %rd32, 9;
+    add.s64 %rd33, %rd9, %rd31;
+    add.u32 %r127, %r124, %r58;
+    cp.async.cg.shared.global [%r127], [%rd33], 16, %r125;
+    cp.async.cg.shared.global [%r127+1024], [%rd33+8192], 16, %r125;
+    cp.async.commit_group;
+    mad.lo.u32 %r128, %r119, 2048, %r33;
+    mad.lo.u32 %r129, %r119, 2048, %r34;
+    add.u32 %r130, %r21, 0;
+    shr.u32 %r131, %r130, 3;
+    xor.b32 %r132, %r131, %r32;
+    shl.b32 %r133, %r132, 4;
+    add.u32 %r134, %r23, 16;
+    mad.lo.u32 %r135, %r134, 64, %r133;
+    add.u32 %r136, %r129, %r135;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r87,%r88,%r89,%r90}, [%r136];
+    add.u32 %r137, %r21, 16;
+    shr.u32 %r138, %r137, 3;
+    xor.b32 %r139, %r138, %r32;
+    shl.b32 %r140, %r139, 4;
+    add.u32 %r141, %r23, 16;
+    mad.lo.u32 %r142, %r141, 64, %r140;
+    add.u32 %r143, %r129, %r142;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r91,%r92,%r93,%r94}, [%r143];
+    add.u32 %r144, %r20, %r23;
+    add.u32 %r145, %r144, 0;
+    xor.b32 %r146, %r29, 2;
+    shl.b32 %r147, %r146, 4;
+    mad.lo.u32 %r148, %r145, 64, %r147;
+    add.u32 %r149, %r128, %r148;
+    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r95,%r96,%r97,%r98}, [%r149];
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r83,%r84,%r85,%r86}, {%r75,%r76}, {%f0,%f1,%f2,%f3};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r83,%r84,%r85,%r86}, {%r77,%r78}, {%f4,%f5,%f6,%f7};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r83,%r84,%r85,%r86}, {%r79,%r80}, {%f8,%f9,%f10,%f11};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r83,%r84,%r85,%r86}, {%r81,%r82}, {%f12,%f13,%f14,%f15};
+    cp.async.wait_group 2;
+    bar.sync 0;
+    add.u32 %r150, %r118, 1;
+    and.b32 %r151, %r150, 3;
+    mad.lo.u32 %r152, %r151, 2048, %r33;
+    mad.lo.u32 %r153, %r151, 2048, %r34;
+    add.u32 %r154, %r21, 0;
+    shr.u32 %r155, %r154, 3;
+    xor.b32 %r156, %r155, %r32;
+    shl.b32 %r157, %r156, 4;
+    add.u32 %r158, %r23, 0;
+    mad.lo.u32 %r159, %r158, 64, %r157;
+    add.u32 %r160, %r153, %r159;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r75,%r76,%r77,%r78}, [%r160];
+    add.u32 %r161, %r21, 16;
+    shr.u32 %r162, %r161, 3;
+    xor.b32 %r163, %r162, %r32;
+    shl.b32 %r164, %r163, 4;
+    add.u32 %r165, %r23, 0;
+    mad.lo.u32 %r166, %r165, 64, %r164;
+    add.u32 %r167, %r153, %r166;
+    ldmatrix.sync.aligned.m8n8.x4.trans.shared.b16 {%r79,%r80,%r81,%r82}, [%r167];
+    add.u32 %r168, %r20, %r23;
+    add.u32 %r169, %r168, 0;
+    shl.b32 %r170, %r29, 4;
+    mad.lo.u32 %r171, %r169, 64, %r170;
+    add.u32 %r172, %r152, %r171;
+    ldmatrix.sync.aligned.m8n8.x4.shared.b16 {%r83,%r84,%r85,%r86}, [%r172];
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r95,%r96,%r97,%r98}, {%r87,%r88}, {%f0,%f1,%f2,%f3};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f4,%f5,%f6,%f7}, {%r95,%r96,%r97,%r98}, {%r89,%r90}, {%f4,%f5,%f6,%f7};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f8,%f9,%f10,%f11}, {%r95,%r96,%r97,%r98}, {%r91,%r92}, {%f8,%f9,%f10,%f11};
+    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f12,%f13,%f14,%f15}, {%r95,%r96,%r97,%r98}, {%r93,%r94}, {%f12,%f13,%f14,%f15};
+    add.u32 %r118, %r118, 1;
+    bra $GEMM_K_LOOP_0;
+    $GEMM_K_DONE_1:
+    cp.async.wait_group 0;
+    bar.sync 0;
+    mov.u32 %r173, 36;
+    setp.eq.u32 %p6, %r19, 0;
+    add.u32 %r174, %r20, 0;
+    mad.lo.u32 %r175, %r174, %r173, 0;
+    mul.lo.u32 %r176, %r175, 4;
+    add.u32 %r177, %r33, %r176;
+    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r177], {%f0,%f1,%f2,%f3,%f4,%f5,%f6,%f7}, %r173;
+    add.u32 %r178, %r20, 0;
+    mad.lo.u32 %r179, %r178, %r173, 16;
+    mul.lo.u32 %r180, %r179, 4;
+    add.u32 %r181, %r33, %r180;
+    @%p6 wmma.store.d.sync.aligned.row.m16n16k16.shared.f32 [%r181], {%f8,%f9,%f10,%f11,%f12,%f13,%f14,%f15}, %r173;
+    bar.sync 0;
+    add.u32 %r182, %r15, 0;
+    mov.u32 %r183, %tid.x;
+    $EPI_PLAIN_2:
+    .pragma "nounroll";
+    setp.ge.u32 %p7, %r183, 256;
+    @%p7 bra $EPI_PLAIN_DONE_3;
+    shr.u32 %r184, %r183, 3;
+    and.b32 %r185, %r183, 7;
+    mul.lo.u32 %r186, %r185, 4;
+    add.u32 %r187, %r14, %r184;
+    add.u32 %r188, %r182, %r186;
+    add.u32 %r189, %r188, 4;
+    setp.lt.u32 %p8, %r187, 256;
+    setp.le.u32 %p9, %r189, 256;
+    and.pred %p10, %p8, %p9;
+    mad.lo.u32 %r190, %r184, 36, %r186;
+    mul.lo.u32 %r191, %r190, 4;
+    add.u32 %r192, %r33, %r191;
+    @%p10 ld.shared.v4.f32 {%f16,%f17,%f18,%f19}, [%r192];
+    mad.lo.u32 %r193, %r187, 256, %r188;
+    mul.wide.u32 %rd34, %r193, 4;
+    add.s64 %rd35, %rd5, %rd34;
+    @%p10 st.global.v4.f32 [%rd35], {%f16,%f17,%f18,%f19};
+    add.u32 %r183, %r183, 64;
+    bra $EPI_PLAIN_2;
+    $EPI_PLAIN_DONE_3:
+    bar.sync 0;
+    // ========================================================
+}
+
+==================================
+
+[1;32mCompilation Successful![0m
+

@@ -1,0 +1,25 @@
+   512 Y {'current': '64x64 4x2', 'new': '64x64 4x2'} | exact {'current': True, 'new': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2505-2505 MHz
+      new            min      5.77 median      5.77 us
+      current        min      5.81 median      5.82 us
+      linear16+relu  min      8.48 median      8.50 us
+      addmm32+relu   min     11.07 median     11.29 us
+  1024 Y {'current': '64x128 2x2', 'new': '64x128 2x2'} | exact {'current': True, 'new': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2505-2505 MHz
+      current        min     28.08 median     28.14 us
+      new            min     28.12 median     29.71 us
+      linear16+relu  min     31.87 median     33.79 us
+      addmm32+relu   min     38.14 median     40.29 us
+  2048 Y {'current': '128x128 2x2', 'new': '128x64 2x2'} | exact {'current': True, 'new': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2505-2760 MHz
+      new            min    197.89 median    215.03 us
+      current        min    204.79 median    204.89 us
+      linear16+relu  min    207.30 median    210.27 us
+      addmm32+relu   min    230.71 median    234.14 us
+  4096 Y {'current': '128x128 2x2', 'new': '128x128 2x2'} | exact {'current': True, 'new': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2775-2775 MHz
+      new            min   1567.20 median   1567.90 us
+      current        min   1579.52 median   1583.62 us
+      linear16+relu  min   1633.28 median   1650.14 us
+      addmm32+relu   min   1913.34 median   1934.19 us
+  8192 Y {'current': '128x128 2x2', 'new': '128x128 4x2'} | exact {'current': True, 'new': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2760-2760 MHz
+      new            min  12601.86 median  12788.72 us
+      current        min  12793.34 median  12951.95 us
+      linear16+relu  min  13172.05 median  13377.54 us
+      addmm32+relu   min  13964.50 median  14224.99 us

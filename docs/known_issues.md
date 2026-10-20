@@ -176,13 +176,20 @@ source; each entry there now carries its status. What is still open:
 - The F16 GEMM's and the fused SwiGLU kernel's A and B tiles are swizzled
   since 2026-10-20 because the padded rows made every `cp.async` copy read
   1.5 times the L2 sectors it needs (`docs/benchmarks/smem_swizzle_2026-10-20/`).
-  The FP8 and int8 GEMMs have their own copy code and layouts; whether
-  theirs cost the same was not measured.
-- The profile's tiles were tuned with the padded layout. Measured with the
-  swizzle, three stages instead of two at 128x128x32 are 1.6% faster at
-  2048^3 and 0.7-0.8% at 4096^3, and 4x2 warps with three stages 1.3-1.5%
-  at 8192^3 (`docs/benchmarks/quiet_2026-10-20/retune/`); the tiles were not
-  changed.
+  The FP8 GEMM (f32 inputs) copies raw f32 K-tiles into dense stages, and
+  Nsight Compute puts its copies at the ideal 16 sectors an instruction at
+  1024^3 and 4096^3 (`docs/benchmarks/retune_2026-10-20/fp8_sectors/`); the
+  e4m3-input GEMM was written with a chunk swizzle. The int8 GEMM was not
+  measured.
+- The committed F16 GEMM tiles were re-tuned on 2026-10-20 after the
+  swizzle, but not by the autotuner alone: `--autotune-force`, which times
+  with B streamed from DRAM, picked tiles that were 0.4-0.9% slower than the
+  current ones at 1024^3 and 4096^3 in both regimes, and 4 stages where an
+  L2-resident sweep found 3 faster from 4096^3 up. The profile they are
+  generated from takes the autotuner's tiles where they won in both, the
+  sweep's at 4096^3-16384^3, and 1024^3's as it was
+  (`docs/benchmarks/retune_2026-10-20/`). Those runs shared the GPU with
+  Discord's GPU process; effects under 1% there are within its noise.
 - The validator and proof-scope items in archive entries 587-2049 are research
   queue, not wrong answers: 923 of the 925 emitted `mma.sync` are floating point
   and carry no proof; the f16 GEMMs carry no exactness argument; validation is
@@ -198,8 +205,9 @@ source; each entry there now carries its status. What is still open:
   2026-10-17 at `ff3526f`): the loop census's buckets and its
   `loopval`/`nestval` split; the multi-back-edge kernels (33 of 48 published,
   29 measured) and liftgap's levels (115 published; 95 measured on 5e391da,
-  and 87 since the fused SwiGLU kernel's 64x64 tile took two loop levels from
-  each of its four kernels, 2026-10-20); the
+  87 since the fused SwiGLU kernel's 64x64 tile took two loop levels from
+  each of its four kernels, and 84 since the F16 GEMM tiles were re-tuned,
+  both 2026-10-20); the
   unroll
   census (24 `MATCHED` and 18 `REFUSED` published, 27 and 15 measured); and the
   `-O1` and `-O3` frontier censuses, stamped on an older tree

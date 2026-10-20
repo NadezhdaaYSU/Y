@@ -1,0 +1,8 @@
+hot_1: 14:56:20 mean 1.3% games: 
+cold_1: 14:56:36 mean 33.4% games: 
+bias_1: 14:56:55 mean 6.6% games: 
+dec_1: 14:57:04 mean 3.0% games: 
+hot_2: 14:57:07 mean 17.2% games: 
+cold_2: 14:57:23 mean 3.8% games: 
+bias_2: 14:57:42 mean 15.4% games: 
+dec_2: 14:57:50 mean 21.6% games: 

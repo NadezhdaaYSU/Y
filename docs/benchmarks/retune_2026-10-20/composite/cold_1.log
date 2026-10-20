@@ -1,0 +1,16 @@
+1024: 72 B copies, exact {'current': True, 'new': True, 'cuBLAS': True} | SM 2475-2475 MHz
+   new        min      27.50 median      27.70 us
+   current    min      27.50 median      27.68 us
+   cuBLAS     min      28.86 median      29.09 us
+2048: 18 B copies, exact {'current': True, 'new': True, 'cuBLAS': True} | SM 2475-2760 MHz
+   new        min     197.71 median     198.88 us
+   current    min     204.43 median     216.06 us
+   cuBLAS     min     204.59 median     215.01 us
+4096: 5 B copies, exact {'current': True, 'new': True, 'cuBLAS': True} | SM 2760-2775 MHz
+   cuBLAS     min    1546.61 median    1631.76 us
+   new        min    1564.67 median    1649.05 us
+   current    min    1576.76 median    1643.72 us
+8192: 2 B copies, exact {'current': True, 'new': True, 'cuBLAS': True} | SM 2520-2760 MHz
+   current    min   12304.90 median   12695.04 us
+   new        min   12344.27 median   12387.81 us
+   cuBLAS     min   12623.36 median   12848.13 us

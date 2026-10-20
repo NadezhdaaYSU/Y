@@ -1,0 +1,7 @@
+8x4096x4096: exact {'current': True, 'new': True, 'cuBLAS': True} | SM 2490-2490 MHz
+   new warm         min   18.028 median   18.432 us   1872.2 GB/s of A, B and C
+   current warm     min   18.074 median   18.301 us   1867.4 GB/s of A, B and C
+   cuBLAS warm      min   50.477 median   50.502 us    668.6 GB/s of A, B and C
+   new cold         min   54.842 median   57.232 us    615.4 GB/s of A, B and C
+   current cold     min   55.708 median   56.283 us    605.9 GB/s of A, B and C
+   cuBLAS cold      min   57.299 median   57.727 us    589.0 GB/s of A, B and C
