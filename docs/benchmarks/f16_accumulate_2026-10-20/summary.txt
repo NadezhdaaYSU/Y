@@ -1,0 +1,6 @@
+acc_f32 exit 0
+ab_1 exit 0
+ab_2 exit 0
+DONE
+longk_1 exit 0
+longk_2 exit 0

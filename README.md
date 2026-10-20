@@ -974,19 +974,27 @@ for same-sign inputs the mean signed error:
 |---|---|---|---|---|---|
 | 256³ – 4096³ | 3.4e-8 – 1.3e-7 | the same | −2.6e-6 – −5.0e-5 | the same | all |
 | 8192³ | 1.8e-7 | 6.1e-8 | −1.0e-4 | −3.2e-5 | 0.2% |
-| M = 1, N = K = 4096 | 1.2e-7 | 1.1e-8 | −5.0e-5 | +1.4e-9 | 0.3% |
-| M = 4 – 32, N = K = 4096 | 1.3e-7 | the same | −5.0e-5 | the same | all |
+| M = 1, N = K = 4096 | 5.0e-9 | 1.1e-8 | −7.5e-8 | +1.4e-9 | 4.4% |
+| M = 4 – 32, N = K = 4096 | 5.1e-9 – 5.2e-9 | 1.3e-7 | −7.7e-8 | −5.0e-5 | 0.2% |
 | 512 x 512 x 4096 | 1.3e-7 | 6.4e-8 | −5.0e-5 | −2.5e-5 | 0.8% |
 | 512 x 512 x 16384 | 2.5e-7 | 3.3e-8 | −2.0e-4 | −2.5e-5 | 0.1% |
 | 512 x 512 x 65536 | 5.0e-7 | 6.4e-8 | −8.2e-4 | −1.0e-4 | 0% |
 
-**From 256³ to 4096³, at M = 4 to 32 and at 512 x 512 x 1024, Y gives
-cuBLAS's output bit for bit, and so does Triton.** The tensor core's accumulator loses
-more than float32 rounding: same-sign results sit below float64 by about 1.2e-5
-per 1024 of K. cuBLAS is closer where it does something else: at 8192³ another
-kernel, at M = 1 a GEMV kernel without tensor cores, and at long K a split K,
-whose float32 reduction bounds the length of each tensor-core chain (2.5e-5 at
-K = 4096 and at 16384).
+**From 256³ to 4096³ and at 512 x 512 x 1024, Y gives cuBLAS's output bit for
+bit, and so does Triton.** The tensor core's accumulator loses more than
+float32 rounding: chaining a K loop in it, as all three do there, leaves
+same-sign results below float64 by about 1.2e-5 per 1024 of K. cuBLAS is
+closer where it does something else: at 8192³ another kernel, at M = 1 a GEMV
+kernel without tensor cores, and at long K a split K, whose float32 reduction
+bounds the length of each tensor-core chain (2.5e-5 at K = 4096 and at 16384).
+
+Since 2026-10-20 a GEMM of at most 32 rows starts each mma from zero and adds
+its result in float32 instead, as the FP8 GEMM does
+(`docs/benchmarks/f16_accumulate_2026-10-20/`): the decode rows above. Its
+same-sign error is then about 7.7e-8 at any K, 34–1290x below cuBLAS's, and it
+is 2–5% faster at M = 1, 4 and 8 and 0.4% slower at 32. `Y_F16_ACCUMULATE=f32`
+does the same for every shape, at 1.03–1.09x the time on the square ones and
+1.02–1.06x at 512 x 512 x 4096–65536; `=mma` keeps the chain everywhere.
 
 ### Fused GEMM + bias + ReLU vs cuDNN
 
@@ -1244,7 +1252,9 @@ and 8 and 1.32–1.34x at M = 32, where every one of Y's 64 CTAs reads all of
 A. Since the shared-memory rows are swizzled Y takes 0.87–0.88x cuBLAS's time
 at M = 32 with B in the L2 (1.26–1.29x before, in the same two runs of
 another harness, `docs/benchmarks/smem_swizzle_2026-10-20/ab/`) and 0.34–0.68x
-at M = 1, 4 and 8; the DRAM case was not measured again.
+at M = 1, 4 and 8; from DRAM the three tie at every M again, 54.7–57.4 us
+(`docs/benchmarks/quiet_2026-10-20/decode_dram/`). Accumulating in float32
+since then (see the accuracy section) made M = 1, 4 and 8 2–5% faster still.
 
 RoPE in place touches half the bytes of RoPE out of place, so the rows that
 are 100 MB out of place are about 50 MB in place, the L2's own size

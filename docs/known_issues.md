@@ -53,7 +53,11 @@ source; each entry there now carries its status. What is still open:
   is closer at 8192^3 (3.2e-5 below against Y's 1.0e-4), at M = 1 (a GEMV
   kernel, 1.4e-9) and at long K, where it splits K: at 512 x 512 x K Y is
   5.0e-5, 2.0e-4 and 8.2e-4 below at K = 4096, 16384 and 65536, cuBLAS
-  2.5e-5, 2.5e-5 and 1.0e-4.
+  2.5e-5, 2.5e-5 and 1.0e-4. Since then GEMMs of at most 32 rows add each
+  mma's result in float32 (about 7.7e-8 at any K, and no slower there);
+  larger ones still chain the tensor core's accumulator by default, because
+  float32 accumulation takes 1.02-1.12x the time on them, and
+  `Y_F16_ACCUMULATE=f32` selects it (`docs/benchmarks/f16_accumulate_2026-10-20/`).
 
 ### Python packaging
 

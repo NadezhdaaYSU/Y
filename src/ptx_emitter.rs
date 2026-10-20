@@ -1184,6 +1184,9 @@ pub struct PtxEmitter {
     /// kernel's `.visible .entry` line - i.e. still module scope, and still
     /// textually before its only use.
     pending_extern_decls: Vec<String>,
+    /// While an F16 GEMM whose mmas add into float32 is being emitted, the
+    /// register holding 0.0 they start from (`emit_f16_mma`).
+    f16_mma_zero: Option<String>,
     /// CTAs per SM a tile GEMM's registers must leave room for, when it asks
     /// for more than one (`emit_kernel` tightens `.maxnreg` to match).
     tile_gemm_ctas_per_sm: Option<u32>,
@@ -1503,6 +1506,7 @@ impl PtxEmitter {
             target_assumed: decided.assumed,
             line_info: None,
             pending_extern_decls: Vec::new(),
+            f16_mma_zero: None,
             tile_gemm_ctas_per_sm: None,
             pending_module_items: Vec::new(),
             shared_arrays: Vec::new(),
@@ -12168,6 +12172,67 @@ declare it as a Q format.\n{}",
         }
     }
 
+    /// One `mma.sync.m16n8k16` of f16 fragments `a`, `b` into the four f32
+    /// accumulator registers `d`: in the tensor core's accumulator
+    /// (`d = a * b + d`) or, while `f16_mma_zero` holds a zero register, from
+    /// zero and then folded into `d` with four `add.rn.f32`, as the FP8 GEMM
+    /// does (`emit_fp8_mma_into`) - see `f16_accumulates_in_f32`.
+    fn emit_f16_mma(&mut self, d: &[String], a: &[String], b: &[String]) {
+        let Some(z) = self.f16_mma_zero.clone() else {
+            let d = d.join(",");
+            writeln!(
+                &mut self.ptx_buffer,
+                "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
+                d, a.join(","), b.join(","), d
+            ).unwrap();
+            return;
+        };
+        let t: Vec<String> = (0..4).map(|_| self.alloc_regf32()).collect();
+        writeln!(
+            &mut self.ptx_buffer,
+            "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{z},{z},{z},{z}}};",
+            t.join(","), a.join(","), b.join(",")
+        ).unwrap();
+        for (r, tr) in d.iter().zip(&t) {
+            writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", r, r, tr).unwrap();
+        }
+    }
+
+    /// Whether an F16 GEMM of `m` rows adds each mma's result into its
+    /// accumulators in float32 rather than chaining the K loop in the tensor
+    /// core's accumulator.
+    ///
+    /// The tensor core adds into its accumulator with less than float32
+    /// rounding: chained over K, same-sign results sit below float64 by about
+    /// 1.2e-5 per 1024 of K, as cuBLAS's and Triton's do wherever they chain
+    /// the whole K. Added in float32 per mma, the error is about 7.7e-8 at any
+    /// K (docs/benchmarks/f16_accumulate_2026-10-20/). The kernels then take
+    /// 1.03-1.09x the time on the square shapes from 256^3 to 8192^3,
+    /// 1.02-1.06x at 512 x 512 x 4096-65536 (1.10-1.12x at K = 1024), and
+    /// 0.95-0.98x at M = 1, 4 and 8 and 1.004x at 32 (N = K = 4096), where
+    /// the mmas, no longer chained through their accumulator, overlap. So it
+    /// is the default for `m <= 32`. `Y_F16_ACCUMULATE=f32` or `=mma` selects
+    /// either for every shape; any other value is an error.
+    pub fn f16_accumulates_in_f32(m: u32) -> bool {
+        match std::env::var("Y_F16_ACCUMULATE").as_deref() {
+            Err(_) => m <= 32,
+            Ok("f32") => true,
+            Ok("mma") => false,
+            Ok(other) => panic!("Y_F16_ACCUMULATE must be `f32` or `mma`, not {other:?}"),
+        }
+    }
+
+    /// The zero register `emit_f16_mma` starts each mma from, emitted, when an
+    /// F16 GEMM of `m` rows accumulates in float32; `None` otherwise.
+    fn emit_f16_mma_zero(&mut self, m: u32) -> Option<String> {
+        if !Self::f16_accumulates_in_f32(m) {
+            return None;
+        }
+        let z = self.alloc_regf32();
+        writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", z).unwrap();
+        Some(z)
+    }
+
     /// The MMAs of one 16-deep K step on fragments `emit_gemm_fragment_loads`
     /// loaded, in `emit_gemm_compute_block_interleaved`'s order, with an equal
     /// share of `interleave` after each i's group.
@@ -12178,12 +12243,7 @@ declare it as a Q format.\n{}",
             for (j, b_frag) in b.iter().enumerate() {
                 for half in 0..2usize {
                     let lo = 4 * half;
-                    let d = acc[i][j][lo..lo + 4].join(",");
-                    writeln!(
-                        &mut self.ptx_buffer,
-                        "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
-                        d, a_frag.join(","), b_frag[2 * half..2 * half + 2].join(","), d
-                    ).unwrap();
+                    self.emit_f16_mma(&acc[i][j][lo..lo + 4], a_frag, &b_frag[2 * half..2 * half + 2]);
                 }
             }
             for line in pending.by_ref().take(per_group) {
@@ -12273,12 +12333,7 @@ declare it as a Q format.\n{}",
                 for j in 0..num_j {
                     for half in 0..2usize {
                         let lo = 4 * half;
-                        let d = acc[i as usize][j as usize][lo..lo + 4].join(",");
-                        writeln!(
-                            &mut self.ptx_buffer,
-                            "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
-                            d, a_frag.join(","), b_frags[j as usize][half].join(","), d
-                        ).unwrap();
+                        self.emit_f16_mma(&acc[i as usize][j as usize][lo..lo + 4], &a_frag, &b_frags[j as usize][half]);
                     }
                 }
                 if kk_step == 0 {
@@ -12618,6 +12673,7 @@ declare it as a Q format.\n{}",
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
         let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
+        self.f16_mma_zero = self.emit_f16_mma_zero(m);
 
         // ---- accumulator fragments acc[i][j]: 8 f32 regs each, zeroed ----
         let mut acc: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -13017,6 +13073,7 @@ declare it as a Q format.\n{}",
         // shape needed the same smem staging the Bias+ReLU shape already
         // had, to fix the M<16 all-zero-output bug - see
         // benchmark_y_decode_gemm_results.md. ----
+        self.f16_mma_zero = None;
         let smem_c_base = smem_pipeline_base_for_epilogue;
         let stride_c_smem_reg = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", stride_c_smem_reg, smem_c_stride).unwrap();
@@ -13595,6 +13652,7 @@ declare it as a Q format.\n{}",
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
         let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
+        self.f16_mma_zero = self.emit_f16_mma_zero(m);
 
         let mut acc_gate: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
         let mut acc_up: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -13791,6 +13849,7 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
         }
 
+        self.f16_mma_zero = None;
         // ---- Epilogue: SiLU(gate) * up, banded by warp-column - same
         // rationale as emit_gemm_bias_relu_epilogue (see its doc comment) ----
         let smem_gate_base = base.clone();
