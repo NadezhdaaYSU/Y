@@ -1,0 +1,36 @@
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=  256 exact True graph True SM 2490-2490 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      swizzled           min     3.76 median     3.99 us  cuBLAS/this 1.155
+      cuBLAS             min     4.34 median     4.56 us  cuBLAS/this 1.000
+      padded             min     4.35 median     4.59 us  cuBLAS/this 0.998
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K=  512 exact True graph True SM 2490-2490 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      swizzled           min     5.52 median     5.55 us  cuBLAS/this 1.059
+      cuBLAS             min     5.85 median     6.11 us  cuBLAS/this 1.000
+      padded             min     6.81 median     6.95 us  cuBLAS/this 0.859
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 1024 exact True graph True SM 2490-2490 MHz | cuBLAS ['ampere_s16816gemm_fp16_64x64_ldg8_stages_64x5_nn']
+      swizzled           min     8.71 median     9.10 us  cuBLAS/this 1.062
+      cuBLAS             min     9.25 median     9.44 us  cuBLAS/this 1.000
+      padded             min    11.30 median    11.35 us  cuBLAS/this 0.819
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:00:13 56921:56921 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 2048 exact True graph True SM 2490-2490 MHz | cuBLAS ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+      swizzled           min    14.40 median    14.73 us  cuBLAS/this 1.262
+      cuBLAS             min    18.17 median    18.30 us  cuBLAS/this 1.000
+      padded             min    19.84 median    19.87 us  cuBLAS/this 0.916
+USDT:2026-10-20 13:00:14 56921:56921 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:00:14 56921:56921 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 4096 exact True graph True SM 2490-2490 MHz | cuBLAS ['Memset (Device)', 'ampere_s16816gemm_fp16_128x64_ldg8_stages_64x4_nn']
+      swizzled           min    26.38 median    27.29 us  cuBLAS/this 1.132
+      cuBLAS             min    29.85 median    30.53 us  cuBLAS/this 1.000
+      padded             min    37.35 median    37.99 us  cuBLAS/this 0.799
+USDT:2026-10-20 13:00:14 56921:56921 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-20 13:00:14 56921:56921 SyncActivityProfilerHandler.cpp:59] profiler_stop
+K= 8192 exact True graph True SM 2760-2760 MHz | cuBLAS ['void cublasLt::splitKreduce_kernel<32, 16, int, float, float, float, float, false, float, float, float, true, false, false, false>(cublasLt::cublasSplitKParams<float>, float const*, float const*, float*, float*, float const*, float const*, float const*, float const*, float*, void*, long, float*, int*, float*, float*, float const*, float const*, float const*, float const*, float const*)', 'void cutlass::Kernel2<cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8>(cutlass_80_tensorop_s16816gemm_f16_128x128_32x4_nn_align8::Params)']
+      swizzled           min    51.36 median    51.58 us  cuBLAS/this 1.072
+      cuBLAS             min    55.07 median    55.52 us  cuBLAS/this 1.000
+      padded             min    73.00 median    73.35 us  cuBLAS/this 0.754

@@ -647,6 +647,21 @@ impl Autotuner {
     /// gap: a candidate whose real smem footprint can't sustain the pipeline
     /// depth it asked for now scores accordingly, instead of scoring as if
     /// it got what it asked for.
+    /// The bytes one pipeline stage of `candidate` takes in shared memory, and
+    /// the stages `emit_tensor_core_gemm_kernel` actually uses at depth `k`:
+    /// the emitter's own derivation (`PtxEmitter::gemm_smem_tiles` layouts,
+    /// the `max_smem_per_sm_bytes - 4096` ceiling, the `ceil(k / cta_k)`
+    /// K-tile clamp), so the score never rewards a depth the codegen cannot
+    /// deliver. `tests/ptx_smem_swizzle.rs` holds the two to each other.
+    pub fn pipeline_footprint(candidate: &AutotuneCandidate, k: u32, hw_profile: &HardwareProfile) -> (u32, u32) {
+        let (smem_a, smem_b) = crate::ptx_emitter::PtxEmitter::gemm_smem_tiles(candidate.cta_k, candidate.cta_n);
+        let per_stage_bytes = candidate.cta_m * smem_a.stride * 2 + candidate.cta_k * smem_b.stride * 2;
+        let max_smem_per_sm = if hw_profile.max_smem_per_sm_bytes > 0 { hw_profile.max_smem_per_sm_bytes } else { 49152 };
+        let max_stages_by_smem = (max_smem_per_sm.saturating_sub(4096) / per_stage_bytes.max(1)).max(1);
+        let k_tiles = if candidate.cta_k > 0 { k.div_ceil(candidate.cta_k).max(1) } else { 1 };
+        (per_stage_bytes, candidate.num_stages.min(k_tiles).min(max_stages_by_smem).max(1))
+    }
+
     pub fn score_candidate(candidate: &AutotuneCandidate, m: u32, n: u32, k: u32, hw_profile: &HardwareProfile) -> f64 {
         let num_tiles_m = (m + candidate.cta_m - 1) / candidate.cta_m;
         let num_tiles_n = (n + candidate.cta_n - 1) / candidate.cta_n;
@@ -666,28 +681,15 @@ impl Autotuner {
             (full_waves as f64 * num_sms as f64 + remainder as f64) / ((full_waves + 1) as f64 * num_sms as f64)
         };
 
-        // Real per-stage shared-memory footprint: F16 operands, 2 bytes/elem
-        // always, in the row layout `emit_tensor_core_gemm_kernel` actually
-        // uses (`PtxEmitter::gemm_smem_tiles`: packed and swizzled, or padded
-        // by 8 elements) - see this function's doc comment for why matching
-        // exactly (not approximating) matters here.
-        let (smem_a, smem_b) = crate::ptx_emitter::PtxEmitter::gemm_smem_tiles(candidate.cta_k, candidate.cta_n);
-        let smem_a_stride = smem_a.stride as f64;
-        let smem_b_stride = smem_b.stride as f64;
-        let stage_a_bytes = candidate.cta_m as f64 * smem_a_stride * 2.0;
-        let stage_b_bytes = candidate.cta_k as f64 * smem_b_stride * 2.0;
-        let per_stage_bytes = stage_a_bytes + stage_b_bytes;
+        // Real per-stage shared-memory footprint and achievable pipeline
+        // depth - see `pipeline_footprint` and this function's doc comment
+        // for why matching the emitter exactly (not approximating) matters.
+        let (per_stage, stages) = Self::pipeline_footprint(candidate, k, hw_profile);
+        let per_stage_bytes = per_stage as f64;
         let total_load_bytes = per_stage_bytes; // one stage's worth of A+B, unpadded-equivalent for compute_intensity below
-
-        // Achievable pipeline depth: mirrors emit_tensor_core_gemm_kernel's
-        // own `effective_stages` derivation (same safety margin, same
-        // k_tiles clamp) so this scorer never rewards a stage count the
-        // real codegen can't deliver.
+        let achievable_stages = stages as f64;
         let max_smem_per_sm = if hw_profile.max_smem_per_sm_bytes > 0 { hw_profile.max_smem_per_sm_bytes as f64 } else { 49152.0 };
         let safe_smem_ceiling = (max_smem_per_sm - 4096.0).max(0.0);
-        let max_stages_by_smem = if per_stage_bytes > 0.0 { (safe_smem_ceiling / per_stage_bytes).floor().max(1.0) } else { candidate.num_stages as f64 };
-        let k_tiles = if candidate.cta_k > 0 { ((k / candidate.cta_k).max(1)) as f64 } else { 1.0 };
-        let achievable_stages = (candidate.num_stages as f64).min(k_tiles).min(max_stages_by_smem).max(1.0);
 
         // Total shared memory actually resident per CTA at the achievable
         // depth (in KB), penalized only if it exceeds the same real ceiling

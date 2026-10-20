@@ -1,0 +1,20 @@
+   512 {'padded': '128x128 4x4', 'swizzled': '128x128 4x4', 'Y unfused': '64x64 4x2'} | fused bitwise equal True | max err padded 2.0e-06, swizzled 2.0e-06, Y unfused 2.0e-06, PyTorch 2.0e-06 | SM 2520-2520 MHz
+      Y unfused    min     15.14 median     15.17 us
+      PyTorch      min     16.00 median     16.02 us
+      swizzled     min     32.29 median     32.36 us
+      padded       min     34.03 median     35.17 us
+  1024 {'padded': '128x128 4x4', 'swizzled': '128x128 4x4', 'Y unfused': '64x128 2x2'} | fused bitwise equal True | max err padded 4.4e-06, swizzled 4.4e-06, Y unfused 4.4e-06, PyTorch 4.4e-06 | SM 2520-2760 MHz
+      swizzled     min     59.65 median     60.03 us
+      padded       min     63.58 median     63.91 us
+      Y unfused    min     65.05 median     65.19 us
+      PyTorch      min     67.84 median     68.33 us
+  2048 {'padded': '128x128 4x4', 'swizzled': '128x128 4x4', 'Y unfused': '128x128 2x2'} | fused bitwise equal True | max err padded 1.0e-05, swizzled 1.0e-05, Y unfused 1.0e-05, PyTorch 1.0e-05 | SM 2760-2760 MHz
+      swizzled     min    444.88 median    446.53 us
+      PyTorch      min    463.20 median    463.87 us
+      padded       min    470.95 median    472.59 us
+      Y unfused    min    492.08 median    496.08 us
+  4096 {'padded': '128x128 4x4', 'swizzled': '128x128 4x4', 'Y unfused': '128x128 2x2'} | fused bitwise equal True | max err padded 1.5e-05, swizzled 1.5e-05, Y unfused 1.5e-05, PyTorch 1.5e-05 | SM 2760-2775 MHz
+      swizzled     min   3438.08 median   3465.63 us
+      PyTorch      min   3587.90 median   3702.78 us
+      padded       min   3650.56 median   3679.23 us
+      Y unfused    min   3673.60 median   3688.08 us

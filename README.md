@@ -962,23 +962,59 @@ mainloop work it was 0.61–0.94x: `ptxas` could not unroll the `cp.async`
 staging loops because their trip count depended on `%tid.x`, costing ~22
 SASS instructions per 16-byte copy.
 
+### Accuracy against cuBLAS
+
+Each output against float64, scaled by its `sum |a| |b|` (the backward-error
+yardstick; for same-sign inputs it is the relative error), on N(0, 1) inputs and
+on |N(0, 1)| ones, whose sums cannot cancel an error away; f16 in, f32 out
+(`docs/benchmarks/quiet_2026-10-20/accuracy/`, 2026-10-20). Mean |error|, and
+for same-sign inputs the mean signed error:
+
+| shape | Y, N(0,1) | cuBLAS, N(0,1) | Y, same sign | cuBLAS, same sign | Y's bits = cuBLAS's, N(0,1) |
+|---|---|---|---|---|---|
+| 256³ – 4096³ | 3.4e-8 – 1.3e-7 | the same | −2.6e-6 – −5.0e-5 | the same | all |
+| 8192³ | 1.8e-7 | 6.1e-8 | −1.0e-4 | −3.2e-5 | 0.2% |
+| M = 1, N = K = 4096 | 1.2e-7 | 1.1e-8 | −5.0e-5 | +1.4e-9 | 0.3% |
+| M = 4 – 32, N = K = 4096 | 1.3e-7 | the same | −5.0e-5 | the same | all |
+| 512 x 512 x 4096 | 1.3e-7 | 6.4e-8 | −5.0e-5 | −2.5e-5 | 0.8% |
+| 512 x 512 x 16384 | 2.5e-7 | 3.3e-8 | −2.0e-4 | −2.5e-5 | 0.1% |
+| 512 x 512 x 65536 | 5.0e-7 | 6.4e-8 | −8.2e-4 | −1.0e-4 | 0% |
+
+**From 256³ to 4096³, at M = 4 to 32 and at 512 x 512 x 1024, Y gives
+cuBLAS's output bit for bit, and so does Triton.** The tensor core's accumulator loses
+more than float32 rounding: same-sign results sit below float64 by about 1.2e-5
+per 1024 of K. cuBLAS is closer where it does something else: at 8192³ another
+kernel, at M = 1 a GEMV kernel without tensor cores, and at long K a split K,
+whose float32 reduction bounds the length of each tensor-core chain (2.5e-5 at
+K = 4096 and at 16384).
+
 ### Fused GEMM + bias + ReLU vs cuDNN
 
 Precision-matched — the cuDNN baseline is fed the same FP16 operands the Y
-kernel consumes. (An FP32 `torch.nn.Linear` baseline shows 2.9–3.4x, but that
-conflates "the fused epilogue is good" with "FP16 beats FP32".)
+kernel consumes: `F.linear` in FP16 (cuBLASLt with its bias epilogue, FP16 out)
+and then `relu`. Y writes FP32, twice its bytes; against a float32-output
+`torch.addmm` + `relu`, the same bytes as Y, it is 1.91x, 1.36x, 1.13x, 1.21x
+and 1.10x. Every column checked exact, interleaved rounds, minimum, two runs on
+a quiet GPU on 2026-10-20 (`docs/benchmarks/quiet_2026-10-20/bias_relu/`); the
+row read `1.07x | tie | tie | tie | 1.08x` before. (An FP32 `torch.nn.Linear`
+baseline shows 2.9–3.4x, but that conflates "the fused epilogue is good" with
+"FP16 beats FP32".)
 
 | M=N=K | 512 | 1024 | 2048 | 4096 | 8192 |
 |---|---|---|---|---|---|
-| **Y vs cuDNN FP16** | 1.07x | tie | tie | tie | 1.08x |
+| **Y vs cuDNN FP16** | 1.45x | 1.12x | 1.01x | 1.03x | 1.03x |
 
-Epilogue fusion is where fusion pays. The general rule this established, after
-measuring it the other way: **fusions that only remove work win; mainloop
-fusions that add accumulator pressure force a worse tile and tend to net zero.**
-Fused SwiGLU measures **1.00x against Y's own unfused two-GEMM path** — its two
-FP32 accumulator arrays cost 8 registers each per tile element, so a 128x128 tile
-over 2x2 warps would need 256 registers/thread against ptxas's 255 cap, pinning
-it to the 4x4 split that measures 52.5 against 75.8 TFLOPS in the plain GEMM.
+Epilogue fusion is where fusion pays most. The general rule this established,
+after measuring it the other way: **fusions that only remove work win; mainloop
+fusions that add accumulator pressure force a worse tile and win less.** Fused
+SwiGLU's two FP32 accumulator arrays cost 8 registers each per tile element, so a
+128x128 tile over 2x2 warps would need 256 registers/thread against ptxas's 255
+cap, pinning it to the 4x4 split that measures 52.5 against 75.8 TFLOPS in the
+plain GEMM. With swizzled shared memory it is 1.07–1.11x Y's own unfused path
+(two Y GEMMs, then SiLU times up in PyTorch) and 1.04–1.14x PyTorch's from 1024
+to 4096, and 0.47x and 0.50x at 512, where its fixed 128x128 tile makes 16 CTAs
+for 66 SMs (`docs/benchmarks/quiet_2026-10-20/swiglu/`). It read 1.00x against
+the unfused path before.
 
 ### RMSNorm and RoPE vs FlashInfer
 

@@ -1,0 +1,28 @@
+1x4096x4096: exact {'base': True, 'swz': True, 'cuBLAS': True} | SM 2490-2775 MHz
+   swz warm         min   18.264 median   18.592 us   1838.5 GB/s of A, B and C
+   base warm        min   19.693 median   19.928 us   1705.2 GB/s of A, B and C
+   cuBLAS warm      min   26.688 median   26.807 us   1258.2 GB/s of A, B and C
+   base cold        min   55.483 median   57.306 us    605.2 GB/s of A, B and C
+   cuBLAS cold      min   55.775 median   55.904 us    602.0 GB/s of A, B and C
+   swz cold         min   56.180 median   56.512 us    597.7 GB/s of A, B and C
+4x4096x4096: exact {'base': True, 'swz': True, 'cuBLAS': True} | SM 2760-2775 MHz
+   swz warm         min   18.151 median   18.504 us   1854.0 GB/s of A, B and C
+   base warm        min   21.604 median   21.901 us   1557.7 GB/s of A, B and C
+   cuBLAS warm      min   54.245 median   55.789 us    620.4 GB/s of A, B and C
+   swz cold         min   54.694 median   56.678 us    615.3 GB/s of A, B and C
+   base cold        min   55.795 median   57.385 us    603.1 GB/s of A, B and C
+   cuBLAS cold      min   56.019 median   56.488 us    600.7 GB/s of A, B and C
+8x4096x4096: exact {'base': True, 'swz': True, 'cuBLAS': True} | SM 2625-2760 MHz
+   swz warm         min   18.969 median   19.187 us   1779.3 GB/s of A, B and C
+   base warm        min   23.379 median   23.577 us   1443.6 GB/s of A, B and C
+   cuBLAS warm      min   50.490 median   50.586 us    668.5 GB/s of A, B and C
+   base cold        min   55.538 median   57.745 us    607.7 GB/s of A, B and C
+   swz cold         min   55.819 median   56.205 us    604.6 GB/s of A, B and C
+   cuBLAS cold      min   57.344 median   59.437 us    588.6 GB/s of A, B and C
+32x4096x4096: exact {'base': True, 'swz': True, 'cuBLAS': True} | SM 2730-2760 MHz
+   swz warm         min   20.538 median   20.790 us   1672.1 GB/s of A, B and C
+   cuBLAS warm      min   23.776 median   23.981 us   1444.3 GB/s of A, B and C
+   base warm        min   30.553 median   30.682 us   1124.0 GB/s of A, B and C
+   swz cold         min   54.816 median   55.034 us    626.5 GB/s of A, B and C
+   cuBLAS cold      min   55.539 median   58.144 us    618.3 GB/s of A, B and C
+   base cold        min   56.416 median   58.144 us    608.7 GB/s of A, B and C
