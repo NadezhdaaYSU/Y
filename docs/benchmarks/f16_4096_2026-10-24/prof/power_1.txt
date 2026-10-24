@@ -1,0 +1,8 @@
+pass 1 int    Y     :   1665.4 us/call, SM clock   2767 MHz (min 2760), power 182.2 W, 58 samples
+pass 1 int    cuBLAS:   1639.8 us/call, SM clock   2760 MHz (min 2760), power 228.9 W, 58 samples
+pass 1 normal Y     :   1701.2 us/call, SM clock   2716 MHz (min 2700), power 273.9 W, 58 samples
+pass 1 normal cuBLAS:   1717.7 us/call, SM clock   2660 MHz (min 2640), power 282.4 W, 58 samples
+pass 2 int    cuBLAS:   1654.1 us/call, SM clock   2745 MHz (min 2745), power 242.8 W, 57 samples
+pass 2 int    Y     :   1674.2 us/call, SM clock   2750 MHz (min 2745), power 222.6 W, 57 samples
+pass 2 normal cuBLAS:   1720.1 us/call, SM clock   2658 MHz (min 2640), power 274.6 W, 58 samples
+pass 2 normal Y     :   1708.7 us/call, SM clock   2712 MHz (min 2700), power 281.9 W, 57 samples

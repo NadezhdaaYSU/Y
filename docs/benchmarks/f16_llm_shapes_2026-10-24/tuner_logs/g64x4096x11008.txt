@@ -1,0 +1,7 @@
+           1. 64x64x64 2x2 s3        151.09 us (median 157.58, worst 163.78)    38.2 TFLOPS   <- selected
+           2. 32x64x32 2x2 s4        151.22 us (median 157.31, worst 165.12)    38.2 TFLOPS
+           3. 32x64x64 2x2 s4        152.01 us (median 158.80, worst 168.01)    38.0 TFLOPS
+           4. 32x64x64 2x2 s2        152.34 us (median 158.67, worst 165.16)    37.9 TFLOPS
+           5. 32x64x64 2x2 s3        152.78 us (median 153.15, worst 154.33)    37.8 TFLOPS
+           note: #1 and #2 are inside this run's own noise floor (+/-6.49 us); #1 also wins the structural tie-break
+         [JIT Autotuner Result] `gemm_f16_64x4096x11008` (M=64, N=4096, K=11008): CTA Tile: 64x64x64, Warps: 4, Pipeline Stages: 3

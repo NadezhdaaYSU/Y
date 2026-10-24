@@ -1,0 +1,120 @@
+  64x4096x4096 Y {'auto': '32x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2775 MHz
+      tuned     min      29.9 median      30.5 us
+      cuBLAS    min      30.0 median      30.4 us
+      auto      min      35.9 median      37.3 us
+ 128x4096x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      auto      min      52.1 median      55.5 us
+      tuned     min      53.8 median      57.5 us
+      cuBLAS    min      55.6 median      58.5 us
+ 256x4096x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      auto      min     100.8 median     110.9 us
+      tuned     min     101.8 median     107.3 us
+      cuBLAS    min     101.9 median     110.3 us
+ 512x4096x4096 Y {'auto': '64x128 2x4', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      auto      min     197.0 median     217.3 us
+      tuned     min     201.4 median     215.4 us
+      cuBLAS    min     201.7 median     217.1 us
+1024x4096x4096 Y {'auto': '128x64 2x2', 'tuned': '64x128 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      tuned     min     388.0 median     415.0 us
+      auto      min     389.9 median     411.5 us
+      cuBLAS    min     396.1 median     419.5 us
+2048x4096x4096 Y {'auto': '128x64 2x2', 'tuned': '128x128 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      auto      min     777.0 median     836.8 us
+      cuBLAS    min     791.6 median     826.2 us
+      tuned     min     797.3 median     830.1 us
+ 64x11008x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2745-2760 MHz
+      auto      min     158.5 median     164.5 us
+      tuned     min     159.8 median     164.3 us
+      cuBLAS    min     163.6 median     168.4 us
+128x11008x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      cuBLAS    min     170.6 median     177.9 us
+      auto      min     175.0 median     182.8 us
+      tuned     min     176.5 median     183.0 us
+256x11008x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2730-2760 MHz
+      cuBLAS    min     272.6 median     295.2 us
+      tuned     min     277.9 median     297.9 us
+      auto      min     278.3 median     299.7 us
+512x11008x4096 Y {'auto': '64x128 2x4', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2730-2760 MHz
+      tuned     min     522.8 median     523.5 us
+      auto      min     545.5 median     550.9 us
+      cuBLAS    min     591.7 median     639.5 us
+1024x11008x4096 Y {'auto': '128x128 2x2', 'tuned': '128x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2490-2760 MHz
+      cuBLAS    min    1032.7 median    1079.7 us
+      tuned     min    1059.8 median    1120.3 us
+      auto      min    1082.5 median    1166.7 us
+2048x11008x4096 Y {'auto': '128x128 2x2', 'tuned': '64x128 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      tuned     min    2041.9 median    2167.3 us
+      auto      min    2067.9 median    2160.2 us
+      cuBLAS    min    2170.0 median    2298.4 us
+ 64x4096x11008 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2475-2760 MHz
+      tuned     min     155.1 median     156.6 us
+      auto      min     157.9 median     160.0 us
+      cuBLAS    min     168.0 median     171.4 us
+128x4096x11008 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2730-2760 MHz
+      tuned     min     155.6 median     164.5 us
+      auto      min     158.1 median     166.8 us
+      cuBLAS    min     169.5 median     176.5 us
+256x4096x11008 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2730-2730 MHz
+      cuBLAS    min     265.9 median     286.3 us
+      auto      min     271.7 median     284.0 us
+      tuned     min     273.9 median     287.6 us
+512x4096x11008 Y {'auto': '64x128 2x4', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2700-2700 MHz
+      cuBLAS    min     524.0 median     532.5 us
+      auto      min     524.4 median     551.0 us
+      tuned     min     529.6 median     561.7 us
+1024x4096x11008 Y {'auto': '128x128 2x2', 'tuned': '128x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2745-2745 MHz
+      tuned     min    1038.7 median    1087.2 us
+      cuBLAS    min    1041.4 median    1051.4 us
+      auto      min    1055.1 median    1101.1 us
+2048x4096x11008 Y {'auto': '128x128 2x2', 'tuned': '64x128 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2475-2760 MHz
+      tuned     min    2064.7 median    2085.4 us
+      cuBLAS    min    2079.2 median    2169.3 us
+      auto      min    2104.3 median    2192.0 us
+ 64x14336x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2475-2760 MHz
+      auto      min     204.0 median     209.0 us
+      tuned     min     207.9 median     211.9 us
+      cuBLAS    min     208.2 median     212.4 us
+128x14336x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      tuned     min     228.7 median     237.6 us
+      cuBLAS    min     236.9 median     245.2 us
+      auto      min     253.3 median     266.1 us
+256x14336x4096 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      tuned     min     349.6 median     366.4 us
+      auto      min     350.8 median     367.3 us
+      cuBLAS    min     395.3 median     417.7 us
+512x14336x4096 Y {'auto': '64x128 2x4', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      tuned     min     688.3 median     695.8 us
+      auto      min     694.1 median     746.7 us
+      cuBLAS    min     785.6 median     822.3 us
+1024x14336x4096 Y {'auto': '128x128 2x2', 'tuned': '128x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      cuBLAS    min    1380.0 median    1429.1 us
+      auto      min    1381.4 median    1445.1 us
+      tuned     min    1399.1 median    1499.1 us
+2048x14336x4096 Y {'auto': '128x128 2x2', 'tuned': '64x128 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2490-2490 MHz
+      cuBLAS    min    2746.4 median    2985.5 us
+      tuned     min    2752.9 median    2896.1 us
+      auto      min    2754.0 median    2989.6 us
+ 64x4096x14336 Y {'auto': '64x64 2x2', 'tuned': '32x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2475-2760 MHz
+      auto      min     196.6 median     206.1 us
+      tuned     min     203.4 median     207.9 us
+      cuBLAS    min     210.0 median     214.0 us
+128x4096x14336 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2745-2760 MHz
+      auto      min     203.2 median     210.9 us
+      tuned     min     204.4 median     213.9 us
+      cuBLAS    min     219.8 median     228.5 us
+256x4096x14336 Y {'auto': '64x64 2x2', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2745-2745 MHz
+      cuBLAS    min     342.5 median     365.9 us
+      auto      min     351.8 median     365.9 us
+      tuned     min     354.0 median     373.4 us
+512x4096x14336 Y {'auto': '64x128 2x4', 'tuned': '64x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2715-2715 MHz
+      cuBLAS    min     679.9 median     707.7 us
+      auto      min     681.6 median     689.3 us
+      tuned     min     688.6 median     716.6 us
+1024x4096x14336 Y {'auto': '128x128 2x2', 'tuned': '128x64 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2745-2745 MHz
+      tuned     min    1354.1 median    1420.7 us
+      cuBLAS    min    1356.1 median    1425.7 us
+      auto      min    1375.3 median    1440.1 us
+2048x4096x14336 Y {'auto': '128x128 2x2', 'tuned': '128x128 2x2'} | exact {'auto': True, 'tuned': True, 'cuBLAS': True} | Triton None | SM 2760-2760 MHz
+      cuBLAS    min    2700.3 median    2908.8 us
+      auto      min    2736.6 median    2846.7 us
+      tuned     min    2763.3 median    2872.8 us

@@ -1,0 +1,6 @@
+bits trial 0 (mixed x1.0): k16 == 2 x k8 bit for bit: True, max |diff| 0
+bits trial 1 (same-sign x1.0): k16 == 2 x k8 bit for bit: True, max |diff| 0
+bits trial 2 (mixed x64.0): k16 == 2 x k8 bit for bit: True, max |diff| 0
+bits trial 3 (mixed x0.015625): k16 == 2 x k8 bit for bit: True, max |diff| 0
+k16  : min 1.292 ms, 27.43 T MAC/s (54.9 TFLOPS)
+k8x2 : min 1.291 ms, 27.44 T MAC/s (54.9 TFLOPS)

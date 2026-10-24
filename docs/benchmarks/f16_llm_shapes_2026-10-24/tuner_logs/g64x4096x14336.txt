@@ -1,0 +1,7 @@
+           1. 32x64x32 2x2 s4        194.72 us (median 201.51, worst 204.68)    38.6 TFLOPS
+           2. 32x64x64 2x2 s2        197.03 us (median 197.48, worst 197.99)    38.1 TFLOPS   <- selected
+           3. 32x32x32 2x1 s4        197.34 us (median 199.94, worst 202.88)    38.1 TFLOPS
+           4. 64x64x64 2x2 s3        197.47 us (median 201.67, worst 211.44)    38.1 TFLOPS
+           5. 32x64x64 2x2 s4        199.09 us (median 204.45, worst 209.29)    37.8 TFLOPS
+           note: #1..#11 are inside this run's own noise floor (+/-6.79 us); selected #2 on warp count then K depth, not on the measured gap
+         [JIT Autotuner Result] `gemm_f16_64x4096x14336` (M=64, N=4096, K=14336): CTA Tile: 32x64x64, Warps: 4, Pipeline Stages: 2
