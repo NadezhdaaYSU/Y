@@ -1,0 +1,32 @@
+==PROF== Connected to process 231026 (/usr/bin/python3.14)
+==PROF== Profiling "gemm_f16_128x11008x4096": 0%....50%....100% - 5 passes
+==PROF== Disconnected from process 231026
+[231026] python3.14@127.0.0.1
+  gemm_f16_128x11008x4096 (172, 2, 1)x(128, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- --------------- ------------
+    Metric Name                                                                     Metric Unit Metric Value
+    --------------------------------------------------------------------------- --------------- ------------
+    launch__block_size                                                                                   128
+    launch__grid_size                                                                                    344
+    launch__occupancy_limit_registers                                                     block            5
+    launch__occupancy_limit_shared_mem                                                    block            3
+    launch__registers_per_thread                                                register/thread           96
+    sm__cycles_active.avg                                                                 cycle   377.750,33
+    sm__cycles_active.max                                                                 cycle      422.035
+    sm__cycles_active.min                                                                 cycle      349.290
+    sm__cycles_elapsed.max                                                                cycle      424.504
+    sm__inst_executed.sum                                                                  inst   11.616.192
+    sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active                    %        45,21
+    sm__pipe_tensor_op_hmma_cycles_active.max                                             cycle      786.432
+    sm__pipe_tensor_op_hmma_cycles_active.sum                                             cycle   45.088.768
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                       inst         2,69
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio                   inst         0,08
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio               inst         2,49
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio            inst        13,75
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio                  inst         0,03
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio              inst         0,48
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                          inst         1,22
+    smsp__warps_active.avg.per_cycle_active                                                warp         2,60
+    --------------------------------------------------------------------------- --------------- ------------
+
