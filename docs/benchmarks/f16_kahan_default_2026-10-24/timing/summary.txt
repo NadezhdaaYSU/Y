@@ -1,0 +1,3 @@
+gemm 1 exit 0
+gemm 2 exit 0
+DONE

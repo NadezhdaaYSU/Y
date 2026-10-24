@@ -76,6 +76,13 @@ fn split_k_names_select_the_shape_and_everything_else_is_refused() {
     assert!(ptx.contains("K=4096 in 4 splits of K=1024 | grid ("), "the launch contract is stated");
     assert!(ptx.contains("%ctaid.z;"), "the split index");
     assert!(accumulates_in_f32(&ptx), "a split accumulates in float32 by default, at any M");
+    // Uncompensated at 32 rows or fewer too, where the unsplit GEMM's adds
+    // are compensated (`sub.rn.f32` is the compensated fold's; the knob is
+    // the control).
+    let decode = compile(&dir, "d_splitk4", 8, 256, 4096, true, None, None).unwrap();
+    assert!(accumulates_in_f32(&decode) && !decode.contains("sub.rn.f32"), "a split of 8 rows is not plain float32");
+    let compensated = compile(&dir, "d_kahan_splitk4", 8, 256, 4096, true, Some("kahan"), None).unwrap();
+    assert!(compensated.contains("sub.rn.f32"), "Y_F16_ACCUMULATE=kahan does not compensate a split");
     let chained = compile(&dir, "g_mma_splitk4", 256, 256, 4096, true, Some("mma"), None).unwrap();
     assert!(!accumulates_in_f32(&chained), "Y_F16_ACCUMULATE=mma still selects the chain");
 

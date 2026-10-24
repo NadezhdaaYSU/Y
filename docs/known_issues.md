@@ -63,8 +63,9 @@ source; each entry there now carries its status. What is still open:
   cuBLAS. cuBLAS's own bits there are Y's chained split 8, and at 4096
   chained split 2.
 
-  GEMMs of at most 32 rows add each mma's result in float32 instead.
-  `Y_F16_ACCUMULATE=f32` selects that everywhere; on square shapes it takes
+  GEMMs of at most 32 rows add each mma's result in float32 instead,
+  compensated by default since 2026-10-24 (below). `Y_F16_ACCUMULATE=f32`
+  selects the plain float32 adds everywhere; on square shapes they take
   1.03-1.09x the time.
   - Against cuBLAS it has the lower Frobenius error in 97 of 99 cases. It is
     not more accurate everywhere.
@@ -78,13 +79,19 @@ source; each entry there now carries its status. What is still open:
     have. SGEMM has the lower Frobenius error in 18 of the 22 same-sign
     cases.
 
-  `Y_F16_ACCUMULATE=kahan` compensates the float32 adds, once per K-tile
-  (`docs/benchmarks/f16_kahan_2026-10-20/`). Its Frobenius and maximum
-  normalized errors are below cuBLAS's and SGEMM's in all 63 cases measured,
-  M = 1 included. It is opt-in: at M <= 32 it costs nothing measurable when
-  B streams from DRAM and 1.06-1.20x when B is L2-resident; on 512 x 512
-  tiles it runs at 0.72-0.75x cuBLAS. The bias stays, and per output it is
-  still farther from R than cuBLAS's GEMV on 6-21% of the outputs at M = 1.
+  The compensated adds, once per K-tile, are the default at M <= 32 outside
+  split K since 2026-10-24, and `Y_F16_ACCUMULATE=kahan` selects them
+  everywhere (`docs/benchmarks/f16_kahan_2026-10-20/`). Their Frobenius and
+  maximum normalized errors are below cuBLAS's and SGEMM's in all 63 cases
+  measured, M = 1 included. At M <= 32 and N = K = 4096 they cost nothing
+  measurable when B streams from DRAM and 1.06-1.20x the plain adds' time
+  when B is L2-resident, still 0.39-0.92x cuBLAS's. At M = 32 with K = 11008
+  or 14336 they take 1.02-1.03x the plain adds' time from DRAM, and at
+  32 x 4096 x 14336 that is 0.99x cuBLAS where the plain adds were 1.01x
+  (`docs/benchmarks/f16_kahan_default_2026-10-24/`). On 512 x 512 tiles they run at
+  0.72-0.75x cuBLAS, so split K keeps the plain adds. The bias stays, and
+  per output the result is still farther from R than cuBLAS's GEMV on 6-21%
+  of the outputs at M = 1.
 
 ### Python packaging
 

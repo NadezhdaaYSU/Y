@@ -597,7 +597,8 @@ pub enum F16Accumulation {
     /// compensation, kept apart from the sum), which is added in once after
     /// the K loop wherever the sum is finite. Four float32 operations per
     /// K-tile on top of `F32`'s one per mma
-    /// (docs/benchmarks/f16_kahan_2026-10-20/).
+    /// (docs/benchmarks/f16_kahan_2026-10-20/). The default up to 32 rows,
+    /// outside split K.
     Kahan,
 }
 
@@ -1217,7 +1218,7 @@ pub struct PtxEmitter {
     /// While an F16 GEMM whose mmas add into float32 is being emitted, the
     /// register holding 0.0 they start from (`emit_f16_mma`).
     f16_mma_zero: Option<String>,
-    /// Under `Y_F16_ACCUMULATE=kahan`, each accumulator register's
+    /// Under `F16Accumulation::Kahan`, each accumulator register's
     /// compensation and tile sum (`emit_f16_kahan_compensations`), and how
     /// many mma results a tile sum takes before it is folded in: the
     /// K-tile's 16-deep steps.
@@ -12361,11 +12362,18 @@ declare it as a Q format.\n{}",
     /// 1.02-1.06x at 512 x 512 x 4096-65536 (1.10-1.12x at K = 1024), and
     /// 0.95-0.98x at M = 1, 4 and 8 and 1.004x at 32 (N = K = 4096), where
     /// the mmas, no longer chained through their accumulator, overlap. So it
-    /// is the default for `m <= 32` and for every split of a split-K GEMM
-    /// (`split_k`, see `gemm_split_k`). `Y_F16_ACCUMULATE=f32` or `=mma`
-    /// selects either for every shape, and `=kahan` float32 accumulation
-    /// with Kahan's compensated summation (`F16Accumulation::Kahan`); any
-    /// other value is an error.
+    /// is the default for every split of a split-K GEMM (`split_k`, see
+    /// `gemm_split_k`) and, compensated (`F16Accumulation::Kahan`), for
+    /// `m <= 32`. Compensated, it has a lower rel_F and max |E|/(|A||B|)
+    /// than cuBLAS and SGEMM in all 63 cases measured, M = 1 included. At
+    /// N = K = 4096 it costs nothing with B streamed from DRAM, and with B in
+    /// the L2 takes 1.19-1.20x float32's time at M <= 8 and 1.06x at 32,
+    /// still 0.39-0.92x cuBLAS's (docs/benchmarks/f16_kahan_2026-10-20/);
+    /// from DRAM at M = 32 with K = 11008 or 14336 it takes 1.02-1.03x
+    /// (docs/benchmarks/f16_kahan_default_2026-10-24/). At 512 x 512, split
+    /// or not, it takes 1.26-1.40x float32's time, so split K keeps float32.
+    /// `Y_F16_ACCUMULATE=f32`, `=kahan` or `=mma` selects one for every
+    /// shape; any other value is an error.
     pub fn f16_accumulates_in_f32(m: u32, split_k: bool) -> bool {
         Self::f16_accumulation(m, split_k) != F16Accumulation::Chain
     }
@@ -12374,7 +12382,8 @@ declare it as a Q format.\n{}",
     /// `f16_accumulates_in_f32`).
     pub fn f16_accumulation(m: u32, split_k: bool) -> F16Accumulation {
         match std::env::var("Y_F16_ACCUMULATE").as_deref() {
-            Err(_) if m <= 32 || split_k => F16Accumulation::F32,
+            Err(_) if split_k => F16Accumulation::F32,
+            Err(_) if m <= 32 => F16Accumulation::Kahan,
             Err(_) => F16Accumulation::Chain,
             Ok("f32") => F16Accumulation::F32,
             Ok("kahan") => F16Accumulation::Kahan,

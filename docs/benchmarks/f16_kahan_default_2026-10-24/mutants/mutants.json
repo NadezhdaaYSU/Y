@@ -1,0 +1,9 @@
+{
+ "old_default_f32": "killed",
+ "no_split_arm": "killed",
+ "decode_arm_first": "killed",
+ "strict_lt_32": "killed",
+ "le_33": "killed",
+ "kahan_everywhere": "killed",
+ "restored_passes": true
+}

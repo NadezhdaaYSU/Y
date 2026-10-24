@@ -1,0 +1,5 @@
+gemm_f16_decode_m1.ptx HEAD: 0 bytes spill stores Used 118 registers  | new: 0 bytes spill stores Used 139 registers 
+gemm_f16_decode_m4.ptx HEAD: 0 bytes spill stores Used 118 registers  | new: 0 bytes spill stores Used 139 registers 
+gemm_f16_decode_m8.ptx HEAD: 0 bytes spill stores Used 118 registers  | new: 0 bytes spill stores Used 139 registers 
+gemm_f16_decode_m32.ptx HEAD: 0 bytes spill stores Used 104 registers  | new: 0 bytes spill stores Used 124 registers 
+Build cuda_13.4.r13.4/compiler.38855100_0

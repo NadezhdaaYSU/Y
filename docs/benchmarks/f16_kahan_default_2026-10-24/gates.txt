@@ -1,0 +1,23 @@
+Validator gates (tools/ptxas_tval), run on HEAD (662a401, base) and on this tree (new),
+the compiler built from each tree on PATH. Exit codes and seconds:
+
+base ./build_corpus.sh 0 13s   new 0 14s
+base ./regress.sh      0 187s  new 0 187s   (identical output)
+base fpgate.py         0 9s    new 0 8s
+base docgate.py        1 55s   new 1 59s    (the same FAIL lines; 18 doc figures disagree on both)
+base gap.py            0 716s  new 0 713s
+base unroll.py         0 0s    new 0 0s     (identical output)
+
+The "new" run was interrupted after docgate when the session ended; build_corpus, gap.py
+and unroll.py were run again on the same tree and source.
+
+Differences, base -> new:
+- fpgate: 29 -> 30 float-semantic opcodes across the 66 committed artifacts; the new one,
+  sub.rn.f32 (the compensated fold's), is modelled (7 -> 8). The README's and
+  docs/ptxas_translation_validation.md's "6 modelled" were already behind HEAD's 7.
+- docgate: the stale-census FAILs name the corpus tree's hash, which the four regenerated
+  kernels change; the FAIL lines are otherwise identical.
+- gap.py: the four decode kernels' PTX opcode gap grows from 10 to 11 unmodelled opcodes,
+  adding mov.b32 (the finite check, `mov.b32 bits, s - s`); cp.async, ldmatrix and mma
+  already kept them outside the validator. Their SASS gaps hold the same opcodes, in a
+  different order.

@@ -10,6 +10,10 @@ had the Steam client open.
 
 ## What changed
 
+Since this record, this mode is the default for GEMMs of at most 32 rows
+outside split K (`../f16_kahan_default_2026-10-24/`). As recorded here it
+was opt-in.
+
 `Y_F16_ACCUMULATE=kahan` (`F16Accumulation::Kahan`) is opt-in; without it
 nothing changes (59 of the 60 committed `tests/*.ptx` regenerate byte for
 byte, `check/regen.txt`; `test_drift` differs under every compiler, as
