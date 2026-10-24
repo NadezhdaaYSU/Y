@@ -1113,6 +1113,41 @@ GPU, against cuBLAS:
   below split 4's (1.52e-7 against 2.62e-7); split 16's, 1.18e-7, is below
   SGEMM's, and split 16 runs at 0.92–0.93x cuBLAS's speed.
 
+**`Y_F16_ACCUMULATE=kahan` (opt-in, 2026-10-24) compensates the float32
+adds** (`docs/benchmarks/f16_kahan_2026-10-20/`). Each K-tile's mma results
+are summed in a register of their own; that tile sum is added into the
+accumulator, and the add's rounding error, `(s − s') + x`, is summed in a
+third register that is added in once after the K loop (Kahan and Babuška's
+compensation, kept apart from the sum, so an infinite input still gives
+±Inf). That is four float32 operations per K-tile on top of float32
+accumulation's one per mma. What is left is each mma's own truncation. At
+M = 1, 8 and 32 (N = K = 4096), 512 x 512 x 4096 and split 4 and 16 at
+512 x 512 x 65536, on the nine distributions:
+
+- **Lower rel_F and max_norm than both cuBLAS and SGEMM in all 63 cases.**
+  At M = 1 cuBLAS's GEMV's rel_F is 5.6–7.6x Y's on mixed signs, 2.8–3.0x on
+  same signs and 7.3–8.9x under cancellation; float32 accumulation's was
+  1.7–1.9x, 0.93–0.95x and 1.8–2.9x.
+- **Same-sign rel_F is 7.6e-8 to 8.6e-8 at every shape and K** (split 16:
+  9.3e-8 to 1.0e-7), against 1.1e-7 to 2.6e-7 for float32 accumulation and
+  1.1e-7 to 2.5e-7 for SGEMM; the bias, −7.2e-8 to −7.8e-8 (mean_norm), is
+  most of it.
+- **Not on every output:** at M = 1 cuBLAS's GEMV is closer to R on 6–21% of
+  the outputs, and SGEMM on 4–34% across the shapes; float32 accumulation is
+  closer on 6–27%, where its rounding happens to offset the truncation.
+- **Decode speed** (M x 4096 x 4096, contended desktop GPU, no game): from
+  DRAM it costs nothing measurable (within 0.3% of float32 accumulation, at
+  54.8–55.4 us); with B in L2 it takes 1.19–1.20x float32 accumulation's
+  time at M = 1–8 (21.0 against 17.6 us) and 1.06x at 32, still 1.27x
+  faster than cuBLAS at M = 1, 2.4–2.6x at 4 and 8 and 1.09x at 32.
+- **Not above the decode tiles:** 0.74–0.75x cuBLAS at 512 x 512 x 4096 and
+  0.72x at 512 x 512 x 65536 in 4 splits, where float32 accumulation is
+  1.04–1.05x and 0.98–0.99x. With compensation, splitting K no longer helps
+  accuracy either: split 16 at K = 65536 is a little worse than split 4.
+
+Per-mma Kahan, per-tile Kahan (with and without a guard for infinities) and
+TwoSum were measured too; the record's table compares them.
+
 ### Fused GEMM + bias + ReLU vs cuDNN
 
 Precision-matched — the cuDNN baseline is fed the same FP16 operands the Y

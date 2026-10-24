@@ -1,0 +1,12 @@
+f32 1x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 118 registers 
+f32 4x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 118 registers 
+f32 8x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 118 registers 
+f32 32x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 104 registers 
+kahan 1x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 139 registers 
+kahan 4x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 139 registers 
+kahan 8x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 139 registers 
+kahan 32x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 124 registers 
+mma 1x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 80 registers 
+mma 4x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 80 registers 
+mma 8x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 80 registers 
+mma 32x4096x4096: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 64 registers 

@@ -1,0 +1,17 @@
+1x4096x4096 Y_f32: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 118 registers 
+1x4096x4096 Y_kahan: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 122 registers 
+1x4096x4096 Y_mma: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 80 registers 
+8x4096x4096 Y_f32: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 118 registers 
+8x4096x4096 Y_kahan: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 122 registers 
+8x4096x4096 Y_mma: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 80 registers 
+32x4096x4096 Y_f32: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 104 registers 
+32x4096x4096 Y_kahan: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 111 registers 
+32x4096x4096 Y_mma: CTA 32x64x64 | 2x2 warps | 0 bytes spill stores Used 64 registers 
+512x512x4096 Y_f32: CTA 64x64x32 | 2x2 warps | 0 bytes spill stores Used 124 registers 
+512x512x4096 Y_kahan: CTA 64x64x32 | 2x2 warps | 0 bytes spill stores Used 136 registers 
+512x512x4096 Y_f32_s2: CTA 64x64x32 | 4x2 warps | 0 bytes spill stores Used 88 registers 
+512x512x4096 Y_kahan_s2: CTA 64x64x32 | 4x2 warps | 0 bytes spill stores Used 88 registers 
+512x512x65536 Y_f32_s4: CTA 128x128x32 | 4x2 warps | 0 bytes spill stores Used 218 registers 
+512x512x65536 Y_kahan_s4: CTA 128x128x32 | 4x2 warps | 0 bytes spill stores Used 238 registers 
+512x512x65536 Y_f32_s16: CTA 128x128x32 | 4x2 warps | 0 bytes spill stores Used 218 registers 
+512x512x65536 Y_kahan_s16: CTA 128x128x32 | 4x2 warps | 0 bytes spill stores Used 238 registers 

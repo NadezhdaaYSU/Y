@@ -1,0 +1,8 @@
+512x512x4096 data=int exact True graph True | during 70, 1935, 12.70 .. 88, 2760, 74.59
+  Y_f32                        min    28.49 med    28.57 us  cuBLAS/this 1.047  64x64 2x2 S=1 f32
+  Y_f32_s2                     min    28.95 med    28.98 us  cuBLAS/this 1.030  64x64 4x2 S=2 f32
+  cuBLAS                       min    29.83 med    30.25 us  cuBLAS/this 1.000   = 
+  Y_kahan_s2                   min    35.53 med    35.59 us  cuBLAS/this 0.840  64x64 4x2 S=2 f32
+  Y_kahan_s2_1                 min    36.62 med    36.68 us  cuBLAS/this 0.815  64x64 4x2 S=2 f32
+  Y_kahan                      min    39.10 med    39.48 us  cuBLAS/this 0.763  64x64 2x2 S=1 f32
+  Y_kahan_1                    min    39.30 med    39.63 us  cuBLAS/this 0.759  64x64 2x2 S=1 f32

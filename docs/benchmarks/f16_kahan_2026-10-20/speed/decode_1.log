@@ -1,0 +1,24 @@
+   1x4096x4096 Y {'f32': '32x64 2x2', 'kahan1': '32x64 2x2', 'kahan2': '32x64 2x2', 'mma': '32x64 2x2'} | exact {'f32': True, 'kahan1': True, 'kahan2': True, 'mma': True, 'cuBLAS': True} | Triton None | SM 2355-2775 MHz
+      f32       min      17.6 median      18.5 us
+      mma       min      18.0 median      18.2 us
+      kahan2    min      21.0 median      21.9 us
+      kahan1    min      23.9 median      24.8 us
+      cuBLAS    min      26.6 median      31.6 us
+   4x4096x4096 Y {'f32': '32x64 2x2', 'kahan1': '32x64 2x2', 'kahan2': '32x64 2x2', 'mma': '32x64 2x2'} | exact {'f32': True, 'kahan1': True, 'kahan2': True, 'mma': True, 'cuBLAS': True} | Triton None | SM 2760-2775 MHz
+      f32       min      17.6 median      18.1 us
+      mma       min      18.1 median      18.4 us
+      kahan2    min      21.0 median      22.1 us
+      kahan1    min      24.0 median      25.0 us
+      cuBLAS    min      53.7 median      56.8 us
+   8x4096x4096 Y {'f32': '32x64 2x2', 'kahan1': '32x64 2x2', 'kahan2': '32x64 2x2', 'mma': '32x64 2x2'} | exact {'f32': True, 'kahan1': True, 'kahan2': True, 'mma': True, 'cuBLAS': True} | Triton None | SM 2670-2760 MHz
+      f32       min      17.8 median      18.2 us
+      mma       min      18.2 median      18.8 us
+      kahan2    min      21.1 median      21.5 us
+      kahan1    min      24.1 median      25.3 us
+      cuBLAS    min      50.5 median      52.2 us
+  32x4096x4096 Y {'f32': '32x64 2x2', 'kahan1': '32x64 2x2', 'kahan2': '32x64 2x2', 'mma': '32x64 2x2'} | exact {'f32': True, 'kahan1': True, 'kahan2': True, 'mma': True, 'cuBLAS': True} | Triton None | SM 2505-2505 MHz
+      mma       min      20.0 median      20.2 us
+      f32       min      20.1 median      20.2 us
+      kahan2    min      21.3 median      21.7 us
+      cuBLAS    min      23.2 median      24.1 us
+      kahan1    min      23.8 median      25.1 us

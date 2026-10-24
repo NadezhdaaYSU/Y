@@ -998,6 +998,23 @@ for i in 0..100 {
   multiples of the tile, each thread's `cp.async` addresses are computed once,
   before the K loop
   ([record](benchmarks/f16_gemm_loop_2026-10-17/README.md)).
+* **Accumulation.** Above 32 rows the K loop chains in the tensor core's
+  accumulator (`mma d, a, b, d`), as cuBLAS and Triton do; the tensor core
+  adds with less than float32 rounding, truncating. At most 32 rows, and in
+  every split of a split-K GEMM, each `mma` starts from zero and its result is
+  added in float32 (`add.rn.f32`). `Y_F16_ACCUMULATE` selects one for every
+  shape: `mma` the chain, `f32` the float32 adds, and `kahan` the float32
+  adds compensated: each K-tile's results are summed in a register of their
+  own, that tile sum is added into the accumulator, and each such add's
+  rounding error is summed in a third register, added in once after the K
+  loop wherever the sum is finite (an infinite input gives +-Inf, as in the
+  other modes). That is four float32 operations per K-tile on top of `f32`'s
+  one per `mma`: no cost measured when B streams from DRAM at M <= 32,
+  1.06-1.20x `f32`'s time when it is L2-resident, and 0.72-0.75x cuBLAS on
+  512 x 512 tiles. Any other value is an error. Each `mma` still truncates
+  its own 16 products in every mode, a bias of about -7.7e-8 of
+  `sum |a| |b|` on same-sign inputs
+  ([record](benchmarks/f16_kahan_2026-10-20/README.md)).
 * **FP8 (e4m3) forms**, on sm_89 and later, with five parameters
   `(A, B, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>)`:
   - A, B: `GlobalMemory<F32>`, A `M`x`K` and B `K`x`N`: each CTA quantises its

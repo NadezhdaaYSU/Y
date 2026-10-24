@@ -1,0 +1,18 @@
+   1x4096x4096 Y {'f32': '32x64 2x2', 'twosum': '32x64 2x2', 'kahan_g': '32x64 2x2', 'mma': '32x64 2x2'} | exact {'f32': True, 'twosum': True, 'kahan_g': True, 'mma': True, 'cuBLAS': True} | Triton None | SM 1755-2775 MHz
+      f32       min      17.5 median      17.7 us
+      mma       min      18.0 median      18.1 us
+      twosum    min      23.0 median      23.1 us
+      kahan_g   min      24.0 median      24.1 us
+      cuBLAS    min      26.5 median      26.5 us
+   8x4096x4096 Y {'f32': '32x64 2x2', 'twosum': '32x64 2x2', 'kahan_g': '32x64 2x2', 'mma': '32x64 2x2'} | exact {'f32': True, 'twosum': True, 'kahan_g': True, 'mma': True, 'cuBLAS': True} | Triton None | SM 2775-2775 MHz
+      f32       min      17.8 median      18.1 us
+      mma       min      18.2 median      18.3 us
+      twosum    min      23.3 median      23.3 us
+      kahan_g   min      24.3 median      24.5 us
+      cuBLAS    min      50.4 median      50.5 us
+  32x4096x4096 Y {'f32': '32x64 2x2', 'twosum': '32x64 2x2', 'kahan_g': '32x64 2x2', 'mma': '32x64 2x2'} | exact {'f32': True, 'twosum': True, 'kahan_g': True, 'mma': True, 'cuBLAS': True} | Triton None | SM 2775-2775 MHz
+      mma       min      19.9 median      20.0 us
+      f32       min      20.0 median      20.1 us
+      twosum    min      22.6 median      23.1 us
+      cuBLAS    min      23.0 median      23.0 us
+      kahan_g   min      23.2 median      23.8 us

@@ -1,0 +1,9 @@
+kahan: SwiGLU 128x256x32: maximum absolute error 9.849378340698323e-9, relative L2 1.1578458373301217e-7
+kahan: SwiGLU 256x128x128: maximum absolute error 2.7107146222116185e-8, relative L2 1.2036139219159305e-7
+kahan: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s
+f32: SwiGLU 128x256x32: maximum absolute error 9.849378340698323e-9, relative L2 1.1578458373301217e-7
+f32: SwiGLU 256x128x128: maximum absolute error 2.983232999520524e-8, relative L2 1.326852600712866e-7
+f32: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+mma: SwiGLU 128x256x32: maximum absolute error 9.849378340698323e-9, relative L2 1.6062941408340235e-7
+mma: SwiGLU 256x128x128: maximum absolute error 1.4631643577289744e-7, relative L2 4.6684348028710027e-7
+mma: test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
