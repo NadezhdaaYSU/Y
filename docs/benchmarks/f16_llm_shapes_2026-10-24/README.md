@@ -62,7 +62,9 @@ N = 14336). Three findings:
 (float32 accumulation, B from DRAM) and takes 1.22x cuBLAS's time at M = 64.
 `m64/`: without that entry the analytic model picks 64x64x32 2x2, 0.97-0.98x
 cuBLAS; the tuned tile is 1.01x (`noborrow` in `m64_*.json`: 31.0 / 30.4 us,
-borrowed 36.2 / 36.6, tuned 29.7 / 29.7, cuBLAS 30.0 / 29.9).
+borrowed 36.2 / 36.6, tuned 29.7 / 29.7, cuBLAS 30.0 / 29.9). Since this
+record, `load_persisted_nearest` never borrows across M = 32
+(`tests/gemm_tile_borrow.rs`), so that shape gets the analytic tile.
 
 **2. The tuner's pick was slower than the tile it replaced at 13 of 30
 shapes, in both runs, by 0.4-3.5%** (faster at 15, by up to 22%, the M = 64
@@ -94,3 +96,29 @@ M = 128) cost more than the waves they balance. cuBLAS runs
 `ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn` there (`prof/`): one
 128x128 tile row, 86 CTAs, loads staged through registers, one shared
 stage; Y's own 128x128 tile is 0.83x at that shape.
+
+## Why cuBLAS wins at 128 x 11008 x 4096 (`prof/cyc_*.txt`)
+
+`ncu`, one launch each, N(0, 1) inputs, in SM cycles (the clock is not
+comparable across `ncu` runs):
+
+| | Y 128x128 2x2 s3 | Y 64x64 2x2 s4 | cuBLAS |
+| :--- | ---: | ---: | ---: |
+| grid | (86, 1, 1) | (172, 2, 1) | **(86, 1, 3)** |
+| elapsed, slowest SM | 557,620 | 424,504 | 432,572 |
+| active cycles, busiest / least busy SM | 553,711 / 336,560 | 422,035 / 349,290 | 427,954 / 342,427 |
+| tensor-pipe cycles, busiest SM (sum over SMs 45,088,768 for all three) | 1,048,576 | 786,432 | 704,512 |
+
+cuBLAS (`ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn`) splits K in
+three inside the one kernel - 258 CTAs, no reduction kernel - so its
+busiest SM carries 1.34 tiles' worth of tensor work. Y's 128x128 grid gives
+whole tiles to SMs, two to some and one to the rest: exactly 2 x 524,288
+tensor cycles on the busiest. Y's 64x64 tile balances as well as cuBLAS
+(and takes fewer cycles here) but loads about twice the tile bytes from the
+L2: 344 CTAs of 64 x 4096 + 4096 x 64 halves, 344 MB, against 258 of
+128 x 1365 + 1365 x 128, 180 MB (computed from the tiles, not measured) -
+which may be why it trails at the boost clock of `bench_ab.py`. Y's split K, with its float32 partials and second
+launch, costs more than it balances (`split/`). An in-kernel split whose
+slices add into C in turn would match cuBLAS's structure; it needs a
+per-tile flag and CTAs that wait on one another, which CUDA does not
+guarantee to make progress.

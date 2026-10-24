@@ -392,6 +392,12 @@ fn load_persisted(
 ///   * every dimension must be within 2x of the requested one, so a decode
 ///     shape can never inherit a large square's tile (or vice versa) - those
 ///     are genuinely different regimes and the measured entries disagree;
+///   * it never crosses M = 32, which 2x alone does not stop: up to 32 rows
+///     the K loop adds each mma's result in float32
+///     (`PtxEmitter::f16_accumulation`) and the tiles were measured for
+///     decode. Borrowed at 64 x 4096 x 4096, the M = 32 tile took 1.21-1.22x
+///     cuBLAS's time, the analytic model's 1.02-1.03x
+///     (`docs/benchmarks/f16_llm_shapes_2026-10-24/m64/`);
 ///   * the winner minimises the largest per-dimension log-ratio, i.e. the
 ///     shape that is closest in the dimension it is *furthest* off in;
 ///   * the borrowed tile must satisfy `is_emittable` at the REQUESTED K, so
@@ -437,6 +443,10 @@ fn load_persisted_nearest(
         }
         let (cm, cn, ck) = (dims[0], dims[1], dims[2]);
         if cm == 0 || cn == 0 || ck == 0 {
+            continue;
+        }
+        // Decode's tiles stay with decode (above).
+        if (cm <= 32) != (m <= 32) {
             continue;
         }
 

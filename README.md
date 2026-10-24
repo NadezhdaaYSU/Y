@@ -1426,11 +1426,13 @@ against Y's 2712–2716 and Y is 1.01x
 At 30 LLM layer shapes (M = 64–2048 against Llama-2-7B's and Llama-3-8B's
 MLP and attention widths) Y is level or ahead at most, up to 1.14x, with
 three exceptions (`docs/benchmarks/f16_llm_shapes_2026-10-24/`). Compiled
-without `--autotune`, 64 x 4096 x 4096 borrows the M = 32 decode tile and is
-0.82x (tuned, 1.01x). The autotuner's pick is slower than the tile it
-replaced at 13 of the 30 shapes, by up to 3.5%: it settles ties inside its
-noise band on warp count, and it times B from DRAM. And at M = 128–256
-against N = 11008 no tile of eight is faster than 0.98x, nor is split K.
+without `--autotune`, 64 x 4096 x 4096 borrowed the M = 32 decode tile and
+was 0.82x; the compiler no longer borrows a tile across M = 32, and the
+analytic model's tile there is 0.97–0.98x (tuned, 1.01x). The autotuner's
+pick is slower than the tile it replaced at 13 of the 30 shapes, by up to
+3.5%: it settles ties inside its noise band on warp count, and it times B
+from DRAM. And at M = 128–256 against N = 11008 no tile of eight is faster
+than 0.98x, nor is split K.
 
 RoPE in place touches half the bytes of RoPE out of place, so the rows that
 are 100 MB out of place are about 50 MB in place, the L2's own size
