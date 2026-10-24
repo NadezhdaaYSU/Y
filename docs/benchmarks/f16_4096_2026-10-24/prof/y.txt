@@ -1,0 +1,40 @@
+==PROF== Connected to process 157860 (/usr/bin/python3.14)
+==PROF== Profiling "gemm_f16_4096": 0%....50%....100% - 12 passes
+==PROF== Disconnected from process 157860
+[157860] python3.14@127.0.0.1
+  gemm_f16_4096 (32, 32, 1)x(128, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- --------------- ------------
+    Metric Name                                                                     Metric Unit Metric Value
+    --------------------------------------------------------------------------- --------------- ------------
+    dram__bytes_read.sum                                                                  Mbyte       163,35
+    gpu__time_duration.sum                                                                   ms         1,64
+    l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_ld.sum                                         127.389
+    l1tex__data_bank_conflicts_pipe_lsu_mem_shared_op_st.sum                                         589.704
+    launch__block_size                                                                                   128
+    launch__grid_size                                                                                  1.024
+    launch__occupancy_limit_registers                                                     block            2
+    launch__registers_per_thread                                                register/thread          231
+    lts__t_sector_hit_rate.pct                                                                %        93,51
+    sm__cycles_elapsed.avg.per_second                                                       Ghz         2,63
+    sm__inst_executed.sum                                                                  inst   81.756.160
+    sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active                    %        48,78
+    sm__throughput.avg.pct_of_peak_sustained_elapsed                                          %        47,27
+    sm__warps_active.avg.pct_of_peak_sustained_active                                         %        16,15
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                       inst         0,12
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio                inst         0,01
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                         inst         0,00
+    smsp__average_warps_issue_stalled_imc_miss_per_issue_active.ratio                      inst         0,01
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio                   inst         0,02
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio               inst         0,09
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio            inst        21,83
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio                  inst         0,01
+    smsp__average_warps_issue_stalled_no_instruction_per_issue_active.ratio                inst         0,01
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio                  inst         0,38
+    smsp__average_warps_issue_stalled_selected_per_issue_active.ratio                      inst         1,00
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio              inst         0,12
+    smsp__average_warps_issue_stalled_tex_throttle_per_issue_active.ratio                  inst            0
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                          inst         2,47
+    smsp__inst_executed_op_shared_ld.sum                                                   inst    1.703.936
+    --------------------------------------------------------------------------- --------------- ------------
+

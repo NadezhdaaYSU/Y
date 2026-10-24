@@ -1,0 +1,3 @@
+4096x4096x4096 data=normal exact True graph True | during 100, 2490, 100.58 .. 100, 2490, 100.58
+  cuBLAS                       min  1548.03 med  1640.70 us  cuBLAS/this 1.000   = 
+  cur                          min  1579.26 med  1662.46 us  cuBLAS/this 0.980  128x128 2x2 S=1 

@@ -1367,7 +1367,8 @@ different baseline.
 | workload | baseline | result |
 |---|---|---|
 | Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
-| Square F16 GEMM, 4096³ | cuBLAS | 0.99x |
+| Square F16 GEMM, 4096³ | cuBLAS | 0.97–0.99x (1.01x under sustained load on random data) |
+| F16 GEMM, M = 128–256 against N or K = 11008 (Llama-2-7B's MLP) | cuBLAS | 0.97–0.98x, the best of eight tiles |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
@@ -1410,6 +1411,26 @@ another harness, `docs/benchmarks/smem_swizzle_2026-10-20/ab/`) and 0.34–0.68x
 at M = 1, 4 and 8; from DRAM the three tie at every M again, 54.7–57.4 us
 (`docs/benchmarks/quiet_2026-10-20/decode_dram/`). Accumulating in float32
 since then (see the accuracy section) made M = 1, 4 and 8 2–5% faster still.
+
+At 4096³ Y is 1.2–1.6% slower per clock cycle than cuBLAS's
+`ampere_s1688gemm` 128x128 kernel: at the same clock, on small-integer
+inputs, its tensor pipe is active 48.8% of the time against 49.5%. Its K
+loop's instruction mix is not the cause: 85% of its stall samples are warps
+waiting on the tensor pipe, and its extra integer instructions (0.86 a
+16x8x16 MMA against cuBLAS's 0.23) sit off the critical path. cuBLAS's `m16n8k8` is not the cause either: two
+of them give the same bits as one `m16n8k16` and the same throughput. On
+N(0, 1) inputs, run back to back for 3 s, cuBLAS throttles to 2658–2660 MHz
+against Y's 2712–2716 and Y is 1.01x
+(`docs/benchmarks/f16_4096_2026-10-24/`).
+
+At 30 LLM layer shapes (M = 64–2048 against Llama-2-7B's and Llama-3-8B's
+MLP and attention widths) Y is level or ahead at most, up to 1.14x, with
+three exceptions (`docs/benchmarks/f16_llm_shapes_2026-10-24/`). Compiled
+without `--autotune`, 64 x 4096 x 4096 borrows the M = 32 decode tile and is
+0.82x (tuned, 1.01x). The autotuner's pick is slower than the tile it
+replaced at 13 of the 30 shapes, by up to 3.5%: it settles ties inside its
+noise band on warp count, and it times B from DRAM. And at M = 128–256
+against N = 11008 no tile of eight is faster than 0.98x, nor is split K.
 
 RoPE in place touches half the bytes of RoPE out of place, so the rows that
 are 100 MB out of place are about 50 MB in place, the L2's own size

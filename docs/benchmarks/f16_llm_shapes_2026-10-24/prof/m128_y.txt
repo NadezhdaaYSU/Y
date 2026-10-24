@@ -1,0 +1,26 @@
+==PROF== Connected to process 170985 (/usr/bin/python3.14)
+==PROF== Profiling "gemm_f16_128x11008x4096": 0%....50%....100% - 3 passes
+==PROF== Disconnected from process 170985
+[170985] python3.14@127.0.0.1
+  gemm_f16_128x11008x4096 (172, 2, 1)x(128, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ---------------------------------------------------------------------- --------------- ------------
+    Metric Name                                                                Metric Unit Metric Value
+    ---------------------------------------------------------------------- --------------- ------------
+    dram__bytes_read.sum                                                             Mbyte        97,37
+    gpu__time_duration.sum                                                              us       204,93
+    launch__block_size                                                                              128
+    launch__grid_size                                                                               344
+    launch__occupancy_limit_registers                                                block            5
+    launch__occupancy_limit_shared_mem                                               block            3
+    launch__registers_per_thread                                           register/thread           96
+    launch__shared_mem_per_block_dynamic                                       Kbyte/block        32,77
+    launch__shared_mem_per_block_static                                         byte/block            0
+    launch__waves_per_multiprocessor                                                               1,74
+    lts__t_sector_hit_rate.pct                                                           %        75,20
+    sm__cycles_elapsed.avg.per_second                                                  Ghz         2,38
+    sm__inst_executed.sum                                                             inst   11.616.192
+    sm__pipe_tensor_op_hmma_cycles_active.avg.pct_of_peak_sustained_active               %        38,53
+    sm__warps_active.avg.pct_of_peak_sustained_active                                    %        22,36
+    ---------------------------------------------------------------------- --------------- ------------
+

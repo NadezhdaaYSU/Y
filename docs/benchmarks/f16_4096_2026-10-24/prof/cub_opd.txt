@@ -1,0 +1,29 @@
+==PROF== Connected to process 159236 (/usr/bin/python3.14)
+==PROF== Profiling "ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn": 0%....50%....100% - 2 passes
+==PROF== Disconnected from process 159236
+[159236] python3.14@127.0.0.1
+  ampere_s1688gemm_fp16_128x128_ldg8_stages_32x1_nn (32, 32, 1)x(128, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    ------------------------------ ----------- ------------------------------
+    Metric Name                    Metric Unit                   Metric Value
+    ------------------------------ ----------- ------------------------------
+    sass__inst_executed_per_opcode              98.578.432 (HMMA: 67.108.864;
+                                                      LDSM: 8.404.992; IADD3:
+                                                   6.991.872; STS: 4.755.456;
+                                                        LDG: 4.268.032; LOP3:
+                                                   1.314.816; R2P: 1.146.880;
+                                                         ISETP: 868.352; BRA:
+                                                       638.976; BAR: 573.440;
+                                                        ULOP3: 524.288; FMUL:
+                                                  524.288; LEA: 368.640; LDS:
+                                                  196.608; SHF: 159.744; MOV:
+                                                 155.648; STG: 135.168; CS2R:
+                                                  131.072; P2R: 90.112; IMAD:
+                                                  77.824; S2R: 32.768; PLOP3:
+                                                   24.576; RET: 16.384; LEPC:
+                                                  16.384; CALL: 16.384; BMSK:
+                                                 16.384; UMOV: 8.192; MEMBAR:
+                                                   4.096; FSETP: 4.096; EXIT:
+                                                                       4.096)
+    ------------------------------ ----------- ------------------------------
+

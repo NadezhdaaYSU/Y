@@ -1,0 +1,6 @@
+           1. 64x64x32 2x2 s3        217.02 us (median 228.82, worst 241.35)    69.3 TFLOPS   <- selected
+           2. 64x64x64 2x2 s4        228.86 us (median 234.57, worst 257.44)    65.7 TFLOPS
+           3. 64x64x64 2x2 s3        229.78 us (median 242.44, worst 264.76)    65.4 TFLOPS
+           4. 64x64x32 2x2 s4        245.32 us (median 252.51, worst 261.00)    61.3 TFLOPS
+           5. 64x64x64 2x2 s2        252.06 us (median 262.04, worst 273.68)    59.6 TFLOPS
+         [JIT Autotuner Result] `gemm_f16_128x14336x4096` (M=128, N=14336, K=4096): CTA Tile: 64x64x32, Warps: 4, Pipeline Stages: 3

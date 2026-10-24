@@ -1,0 +1,3 @@
+4096x4096x4096 data=int exact True graph True | during 100, 2490, 87.36 .. 100, 2490, 87.36
+  cuBLAS                       min  1541.38 med  1595.90 us  cuBLAS/this 1.000   = 
+  cur                          min  1561.60 med  1676.03 us  cuBLAS/this 0.987  128x128 2x2 S=1 
