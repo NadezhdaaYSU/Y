@@ -1,0 +1,36 @@
+1x4096x4096: exact {'f32': True, 'kahan': True, 'mma': True, 'cuBLAS': True} | SM 2505-2760 MHz
+   f32 warm         min   17.983 median   18.336 us   1867.3 GB/s of A, B and C
+   mma warm         min   18.302 median   18.554 us   1834.8 GB/s of A, B and C
+   kahan warm       min   24.186 median   24.493 us   1388.4 GB/s of A, B and C
+   cuBLAS warm      min   26.778 median   56.377 us   1254.0 GB/s of A, B and C
+   kahan cold       min   55.123 median   58.758 us    609.2 GB/s of A, B and C
+   mma cold         min   55.141 median   57.510 us    609.0 GB/s of A, B and C
+   cuBLAS cold      min   55.872 median   59.757 us    601.0 GB/s of A, B and C
+   f32 cold         min   56.877 median   58.854 us    590.4 GB/s of A, B and C
+4x4096x4096: exact {'f32': True, 'kahan': True, 'mma': True, 'cuBLAS': True} | SM 2490-2760 MHz
+   f32 warm         min   17.772 median   18.445 us   1893.6 GB/s of A, B and C
+   mma warm         min   18.534 median   19.405 us   1815.7 GB/s of A, B and C
+   kahan warm       min   24.151 median   24.535 us   1393.4 GB/s of A, B and C
+   cuBLAS warm      min   53.696 median   57.222 us    626.7 GB/s of A, B and C
+   mma cold         min   55.277 median   57.587 us    608.8 GB/s of A, B and C
+   f32 cold         min   55.295 median   57.350 us    608.6 GB/s of A, B and C
+   kahan cold       min   56.179 median   57.626 us    599.0 GB/s of A, B and C
+   cuBLAS cold      min   57.567 median   58.131 us    584.6 GB/s of A, B and C
+8x4096x4096: exact {'f32': True, 'kahan': True, 'mma': True, 'cuBLAS': True} | SM 2760-2760 MHz
+   f32 warm         min   17.952 median   18.317 us   1880.1 GB/s of A, B and C
+   mma warm         min   18.112 median   18.637 us   1863.5 GB/s of A, B and C
+   kahan warm       min   24.064 median   24.780 us   1402.6 GB/s of A, B and C
+   cuBLAS warm      min   50.490 median   51.731 us    668.5 GB/s of A, B and C
+   mma cold         min   54.893 median   57.216 us    614.9 GB/s of A, B and C
+   kahan cold       min   55.060 median   56.659 us    613.0 GB/s of A, B and C
+   f32 cold         min   55.155 median   57.235 us    611.9 GB/s of A, B and C
+   cuBLAS cold      min   58.814 median   60.262 us    573.9 GB/s of A, B and C
+32x4096x4096: exact {'f32': True, 'kahan': True, 'mma': True, 'cuBLAS': True} | SM 2760-2760 MHz
+   mma warm         min   21.316 median   22.470 us   1611.0 GB/s of A, B and C
+   f32 warm         min   21.587 median   21.640 us   1590.8 GB/s of A, B and C
+   kahan warm       min   23.763 median   24.001 us   1445.1 GB/s of A, B and C
+   cuBLAS warm      min   24.141 median   24.351 us   1422.5 GB/s of A, B and C
+   f32 cold         min   55.098 median   57.583 us    623.3 GB/s of A, B and C
+   kahan cold       min   55.130 median   57.728 us    622.9 GB/s of A, B and C
+   mma cold         min   55.191 median   57.299 us    622.2 GB/s of A, B and C
+   cuBLAS cold      min   55.782 median   57.312 us    615.6 GB/s of A, B and C

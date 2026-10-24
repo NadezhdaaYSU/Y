@@ -1,0 +1,124 @@
+[
+ {
+  "mutant": "kahan selects plain f32",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (58349) panicked at tests/ptx_f16_accumulate.rs:312:9:; 8x256x4096: compensated spread 2.4751951432236874e-7 against float32's 2.4751951432236874e-7; "
+  ]
+ },
+ {
+  "mutant": "the default is kahan",
+  "status": "KILLED",
+  "by": [
+   "test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s; thread 'the_default_follows_the_row_count_and_the_knob_overrides_it' (58671) panicked at tests/ptx_f16_accumulate.rs:136:9:; M = 1: compensated with no knob"
+  ]
+ },
+ {
+  "mutant": "no compensation registers",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (59203) panicked at tests/ptx_f16_accumulate.rs:312:9:; 8x256x4096: compensated spread 2.4751951432236874e-7 against float32's 2.4751951432236874e-7; "
+  ]
+ },
+ {
+  "mutant": "GEMM accumulators uncompensated",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (59523) panicked at tests/ptx_f16_accumulate.rs:312:9:; 8x256x4096: compensated spread 2.4751951432236874e-7 against float32's 2.4751951432236874e-7; "
+  ]
+ },
+ {
+  "mutant": "SwiGLU gate uncompensated",
+  "status": "KILLED",
+  "by": [
+   "test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s; thread 'the_default_follows_the_row_count_and_the_knob_overrides_it' (59854) panicked at tests/ptx_f16_accumulate.rs:152:9:; assertion `left == right` failed: SwiGLU, Y_F16_ACCUMULATE=kahan; left: false; right: true"
+  ]
+ },
+ {
+  "mutant": "SwiGLU up uncompensated",
+  "status": "KILLED",
+  "by": [
+   "test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s; thread 'the_default_follows_the_row_count_and_the_knob_overrides_it' (60181) panicked at tests/ptx_f16_accumulate.rs:152:9:; assertion `left == right` failed: SwiGLU, Y_F16_ACCUMULATE=kahan; left: false; right: true"
+  ]
+ },
+ {
+  "mutant": "the error drops x",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (60499) panicked at tests/ptx_f16_accumulate.rs:283:13:; assertion `left == right` failed: 8x256x4096 kahan: 2046 integer products wrong; left: 2046; "
+  ]
+ },
+ {
+  "mutant": "the error's sign flipped",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (61048) panicked at tests/ptx_f16_accumulate.rs:283:13:; assertion `left == right` failed: 8x256x4096 kahan: 2046 integer products wrong; left: 2046; "
+  ]
+ },
+ {
+  "mutant": "the errors never summed",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (61368) panicked at tests/ptx_f16_accumulate.rs:312:9:; 8x256x4096: compensated spread 1.746628477150001e-7 against float32's 2.4751951432236874e-7; t"
+  ]
+ },
+ {
+  "mutant": "the compensation never added in",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (62205) panicked at tests/ptx_f16_accumulate.rs:312:9:; 8x256x4096: compensated spread 1.746628477150001e-7 against float32's 2.4751951432236874e-7"
+  ]
+ },
+ {
+  "mutant": "the compensation added to an infinite sum",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (62531) panicked at tests/ptx_f16_accumulate.rs:297:21:; assertion `left == right` failed: 8x256x4096 kahan: output 768 of the row holding +Inf is NaN; left: NaN; right: inf"
+  ]
+ },
+ {
+  "mutant": "the finite check inverted",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (62857) panicked at tests/ptx_f16_accumulate.rs:297:21:; assertion `left == right` failed: 8x256x4096 kahan: output 768 of the row holding +Inf is NaN; left: NaN; right: inf"
+  ]
+ },
+ {
+  "mutant": "the finish keeps the compensations",
+  "status": "KILLED",
+  "by": [
+   "test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.56s; thread 'the_default_follows_the_row_count_and_the_knob_overrides_it' (64358) panicked at tests/ptx_f16_accumulate.rs:179:17:"
+  ]
+ },
+ {
+  "mutant": "tile sums folded only after the loop",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 0 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (65160) panicked at tests/ptx_f16_accumulate.rs:312:9:; 8x256x4096: compensated spread 2.4751951432236874e-7 against float32's 2.4751951432236874e-7; "
+  ]
+ },
+ {
+  "mutant": "a fold after every mma",
+  "status": "KILLED",
+  "by": [
+   "test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s; thread 'the_default_follows_the_row_count_and_the_knob_overrides_it' (65957) panicked at tests/ptx_f16_accumulate.rs:126:9:; assertion `left == right` failed: M = 8: folds of %f48; left: 3; right: 2"
+  ]
+ },
+ {
+  "mutant": "the tile sum kept after its fold",
+  "status": "KILLED",
+  "by": [
+   "test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s; thread 'float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu' (66264) panicked at tests/ptx_f16_accumulate.rs:283:13:; assertion `left == right` failed: 8x256x4096 kahan: 2048 integer products wrong; left: 2048; right: 0"
+  ]
+ },
+ {
+  "mutant": "no fold after the loop",
+  "status": "KILLED",
+  "by": [
+   "test the_default_follows_the_row_count_and_the_knob_overrides_it ... FAILED; test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.50s; thread 'the_default_follows_the_row_count_and_the_knob_overrides_it' (67545) panicked at tests/ptx_f16_accumulate.rs:126:9:; assertion `left == right` failed: M = 8: folds of %f32; left: 1; right: 2"
+  ]
+ },
+ {
+  "restore_build": 0
+ }
+]

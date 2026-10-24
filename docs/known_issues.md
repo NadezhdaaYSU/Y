@@ -54,8 +54,14 @@ source; each entry there now carries its status. What is still open:
     error on the long-K cancellation case. cuBLAS splits K at 16384 and
     65536.
 
-  Split K would also close a speed gap: cuBLAS takes 400 us at
-  512 x 512 x 65536, Y 420.
+  A kernel named `<name>_splitk<S>` splits K (2026-10-20,
+  `docs/benchmarks/f16_splitk_2026-10-20/`), each split in float32, the
+  partials added in order. It is below cuBLAS in Frobenius error in 27 of
+  27 cases at 512 x 512 x 4096 to 65536, and faster at 4096 and 16384, but
+  at 65536 it takes 404-412 us against cuBLAS's 401-404. Chained
+  (`Y_F16_ACCUMULATE=mma`) it takes 388-398 us and is half as accurate as
+  cuBLAS. cuBLAS's own bits there are Y's chained split 8, and at 4096
+  chained split 2.
 
   GEMMs of at most 32 rows add each mma's result in float32 instead.
   `Y_F16_ACCUMULATE=f32` selects that everywhere; on square shapes it takes
@@ -71,6 +77,14 @@ source; each entry there now carries its status. What is still open:
     on same-sign inputs at any K, which float32 FMAs (cuBLAS SGEMM) do not
     have. SGEMM has the lower Frobenius error in 18 of the 22 same-sign
     cases.
+
+  `Y_F16_ACCUMULATE=kahan` compensates the float32 adds, once per K-tile
+  (`docs/benchmarks/f16_kahan_2026-10-20/`). Its Frobenius and maximum
+  normalized errors are below cuBLAS's and SGEMM's in all 63 cases measured,
+  M = 1 included. It is opt-in: at M <= 32 it costs nothing measurable when
+  B streams from DRAM and 1.06-1.20x when B is L2-resident; on 512 x 512
+  tiles it runs at 0.72-0.75x cuBLAS. The bias stays, and per output it is
+  still farther from R than cuBLAS's GEMV on 6-21% of the outputs at M = 1.
 
 ### Python packaging
 

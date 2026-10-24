@@ -582,6 +582,36 @@ pub fn ptx_version_for_sm(sm: &str) -> &'static str {
     }
 }
 
+/// How an F16 GEMM adds its K loop's mmas (`PtxEmitter::f16_accumulation`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum F16Accumulation {
+    /// `mma d, a, b, d`: chained in the tensor core's accumulator, which
+    /// truncates.
+    Chain,
+    /// Each mma from zero, its result added in float32 (`add.rn.f32`).
+    F32,
+    /// As `F32` in two levels, compensated: each K-tile's mma results are
+    /// summed in a register of their own (`add.rn.f32`), that tile sum is
+    /// added into the accumulator, and the add's rounding error,
+    /// `(s - s') + x`, is summed in a third register (Kahan and Babuska's
+    /// compensation, kept apart from the sum), which is added in once after
+    /// the K loop wherever the sum is finite. Four float32 operations per
+    /// K-tile on top of `F32`'s one per mma
+    /// (docs/benchmarks/f16_kahan_2026-10-20/).
+    Kahan,
+}
+
+/// One accumulator register under `F16Accumulation::Kahan` (`emit_f16_mma`).
+struct KahanAccumulator {
+    /// The accumulator, its compensation, and the sum of the mma results
+    /// added since it was last folded in.
+    acc: String,
+    comp: String,
+    tile: String,
+    /// How many mma results `tile` holds, as emitted.
+    pending: u32,
+}
+
 /// Kernel Dispatch Strategy for H100 / Hopper / Blackwell architectures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KernelDispatch {
@@ -1187,6 +1217,12 @@ pub struct PtxEmitter {
     /// While an F16 GEMM whose mmas add into float32 is being emitted, the
     /// register holding 0.0 they start from (`emit_f16_mma`).
     f16_mma_zero: Option<String>,
+    /// Under `Y_F16_ACCUMULATE=kahan`, each accumulator register's
+    /// compensation and tile sum (`emit_f16_kahan_compensations`), and how
+    /// many mma results a tile sum takes before it is folded in: the
+    /// K-tile's 16-deep steps.
+    f16_kahan: Vec<KahanAccumulator>,
+    f16_kahan_tile_mmas: u32,
     /// CTAs per SM a tile GEMM's registers must leave room for, when it asks
     /// for more than one (`emit_kernel` tightens `.maxnreg` to match).
     tile_gemm_ctas_per_sm: Option<u32>,
@@ -1507,6 +1543,8 @@ impl PtxEmitter {
             line_info: None,
             pending_extern_decls: Vec::new(),
             f16_mma_zero: None,
+            f16_kahan: Vec::new(),
+            f16_kahan_tile_mmas: 1,
             tile_gemm_ctas_per_sm: None,
             pending_module_items: Vec::new(),
             shared_arrays: Vec::new(),
@@ -12254,7 +12292,9 @@ declare it as a Q format.\n{}",
     /// accumulator registers `d`: in the tensor core's accumulator
     /// (`d = a * b + d`) or, while `f16_mma_zero` holds a zero register, from
     /// zero and then folded into `d` with four `add.rn.f32`, as the FP8 GEMM
-    /// does (`emit_fp8_mma_into`) - see `f16_accumulates_in_f32`.
+    /// does (`emit_fp8_mma_into`) - or, when `d`'s register has a
+    /// compensation (`emit_f16_kahan_compensations`), into its tile sum,
+    /// folded in once per K-tile - see `f16_accumulates_in_f32`.
     fn emit_f16_mma(&mut self, d: &[String], a: &[String], b: &[String]) {
         let Some(z) = self.f16_mma_zero.clone() else {
             let d = d.join(",");
@@ -12272,8 +12312,36 @@ declare it as a Q format.\n{}",
             t.join(","), a.join(","), b.join(",")
         ).unwrap();
         for (r, tr) in d.iter().zip(&t) {
-            writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", r, r, tr).unwrap();
+            let Some(i) = self.f16_kahan.iter().position(|k| &k.acc == r) else {
+                writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", r, r, tr).unwrap();
+                continue;
+            };
+            let tile = self.f16_kahan[i].tile.clone();
+            writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", tile, tile, tr).unwrap();
+            self.f16_kahan[i].pending += 1;
+            if self.f16_kahan[i].pending == self.f16_kahan_tile_mmas {
+                self.emit_f16_kahan_fold(i);
+            }
         }
+    }
+
+    /// Accumulator `i`'s tile sum `x` added into it, `s' = s + x`, and the
+    /// add's rounding error, `e = (s - s') + x` (exact while `|s| >= |x|`, as
+    /// in Kahan's step), added into its compensation `c`; the tile sum zeroed.
+    /// The error does not feed the next add (Kahan's `c` does), so the sum's
+    /// dependency chain stays one add per K-tile and an infinite term leaves
+    /// the sum at +-Inf. `emit_f16_mma_finish` adds `c` in once.
+    fn emit_f16_kahan_fold(&mut self, i: usize) {
+        let KahanAccumulator { acc, comp, tile, .. } = &self.f16_kahan[i];
+        let (s, c, x) = (acc.clone(), comp.clone(), tile.clone());
+        let [sum, back, e] = [(); 3].map(|_| self.alloc_regf32());
+        writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", sum, s, x).unwrap();
+        writeln!(&mut self.ptx_buffer, "    sub.rn.f32 {}, {}, {};", back, s, sum).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", e, back, x).unwrap();
+        writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", c, c, e).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mov.f32 {}, {};", s, sum).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", x).unwrap();
+        self.f16_kahan[i].pending = 0;
     }
 
     /// Whether an F16 GEMM of `m` rows adds each mma's result into its
@@ -12295,13 +12363,23 @@ declare it as a Q format.\n{}",
     /// the mmas, no longer chained through their accumulator, overlap. So it
     /// is the default for `m <= 32` and for every split of a split-K GEMM
     /// (`split_k`, see `gemm_split_k`). `Y_F16_ACCUMULATE=f32` or `=mma`
-    /// selects either for every shape; any other value is an error.
+    /// selects either for every shape, and `=kahan` float32 accumulation
+    /// with Kahan's compensated summation (`F16Accumulation::Kahan`); any
+    /// other value is an error.
     pub fn f16_accumulates_in_f32(m: u32, split_k: bool) -> bool {
+        Self::f16_accumulation(m, split_k) != F16Accumulation::Chain
+    }
+
+    /// How an F16 GEMM of `m` rows adds its mmas (see
+    /// `f16_accumulates_in_f32`).
+    pub fn f16_accumulation(m: u32, split_k: bool) -> F16Accumulation {
         match std::env::var("Y_F16_ACCUMULATE").as_deref() {
-            Err(_) => m <= 32 || split_k,
-            Ok("f32") => true,
-            Ok("mma") => false,
-            Ok(other) => panic!("Y_F16_ACCUMULATE must be `f32` or `mma`, not {other:?}"),
+            Err(_) if m <= 32 || split_k => F16Accumulation::F32,
+            Err(_) => F16Accumulation::Chain,
+            Ok("f32") => F16Accumulation::F32,
+            Ok("kahan") => F16Accumulation::Kahan,
+            Ok("mma") => F16Accumulation::Chain,
+            Ok(other) => panic!("Y_F16_ACCUMULATE must be `f32`, `kahan` or `mma`, not {other:?}"),
         }
     }
 
@@ -12314,6 +12392,46 @@ declare it as a Q format.\n{}",
         let z = self.alloc_regf32();
         writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", z).unwrap();
         Some(z)
+    }
+
+    /// Under `F16Accumulation::Kahan`, a zeroed compensation register and a
+    /// zeroed tile sum for each accumulator of `acc`: `emit_f16_mma` adds
+    /// each mma's result into the tile sum and, after `tile_mmas` of them
+    /// (one K-tile's 16-deep steps), folds it into the accumulator
+    /// (`emit_f16_kahan_fold`).
+    fn emit_f16_kahan_compensations(&mut self, m: u32, split_k: bool, acc: &[Vec<Vec<String>>], tile_mmas: u32) {
+        if Self::f16_accumulation(m, split_k) != F16Accumulation::Kahan {
+            return;
+        }
+        self.f16_kahan_tile_mmas = tile_mmas.max(1);
+        for r in acc.iter().flatten().flatten() {
+            let (comp, tile) = (self.alloc_regf32(), self.alloc_regf32());
+            writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", comp).unwrap();
+            writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", tile).unwrap();
+            self.f16_kahan.push(KahanAccumulator { acc: r.clone(), comp, tile, pending: 0 });
+        }
+    }
+
+    /// After the K loop: each tile sum folded into its accumulator - a no-op
+    /// where the loop's last step already folded it, and what keeps the sum
+    /// whole on any path that leaves the loop with a tile sum pending - then
+    /// each compensation added in, where the accumulator is finite. An
+    /// infinite term makes the sum +-Inf and its errors NaN or infinite; the
+    /// sum is then kept as it is, as an uncompensated sum would be. (`s - s` is
+    /// +0 exactly when `s` is finite: the check needs no float compare.) No
+    /// zero register or compensations from here on.
+    fn emit_f16_mma_finish(&mut self) {
+        for i in 0..self.f16_kahan.len() {
+            self.emit_f16_kahan_fold(i);
+            let (s, c) = (self.f16_kahan[i].acc.clone(), self.f16_kahan[i].comp.clone());
+            let (zero, bits, finite) = (self.alloc_regf32(), self.alloc_reg32(), self.alloc_pred());
+            writeln!(&mut self.ptx_buffer, "    sub.rn.f32 {}, {}, {};", zero, s, s).unwrap();
+            writeln!(&mut self.ptx_buffer, "    mov.b32 {}, {};", bits, zero).unwrap();
+            writeln!(&mut self.ptx_buffer, "    setp.eq.b32 {}, {}, 0;", finite, bits).unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{} add.rn.f32 {}, {}, {};", finite, s, s, c).unwrap();
+        }
+        self.f16_kahan.clear();
+        self.f16_mma_zero = None;
     }
 
     /// The MMAs of one 16-deep K step on fragments `emit_gemm_fragment_loads`
@@ -12812,6 +12930,7 @@ declare it as a Q format.\n{}",
             }
             acc.push(row);
         }
+        self.emit_f16_kahan_compensations(m, split.is_some(), &acc, k_substeps);
 
         // Captured from whichever branch below runs, so the fused Bias+ReLU
         // epilogue can reuse this same dynamic shared buffer as its scratch
@@ -13195,7 +13314,7 @@ declare it as a Q format.\n{}",
         // shape needed the same smem staging the Bias+ReLU shape already
         // had, to fix the M<16 all-zero-output bug - see
         // benchmark_y_decode_gemm_results.md. ----
-        self.f16_mma_zero = None;
+        self.emit_f16_mma_finish();
         let smem_c_base = smem_pipeline_base_for_epilogue;
         let stride_c_smem_reg = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", stride_c_smem_reg, smem_c_stride).unwrap();
@@ -13802,6 +13921,8 @@ declare it as a Q format.\n{}",
             acc_gate.push(row_gate);
             acc_up.push(row_up);
         }
+        self.emit_f16_kahan_compensations(m, false, &acc_gate, k_substeps);
+        self.emit_f16_kahan_compensations(m, false, &acc_up, k_substeps);
 
         let smem_symbol = format!("smem_pipeline_{}", kernel_name);
         self.pending_extern_decls.push(format!(".extern .shared .align 16 .b8 {}[];", smem_symbol));
@@ -13975,7 +14096,7 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
         }
 
-        self.f16_mma_zero = None;
+        self.emit_f16_mma_finish();
         // ---- Epilogue: SiLU(gate) * up, banded by warp-column - same
         // rationale as emit_gemm_bias_relu_epilogue (see its doc comment) ----
         let smem_gate_base = base.clone();

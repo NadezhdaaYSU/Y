@@ -1,0 +1,8 @@
+A[3,100] = inf: Y_f32    row 3: 4096 +Inf, 0 NaN of 4096; other rows finite: True
+A[3,100] = inf: Y_kahan  row 3: 0 +Inf, 4096 NaN of 4096; other rows finite: True
+A[3,100] = inf: Y_mma    row 3: 4096 +Inf, 0 NaN of 4096; other rows finite: True
+A[3,100] = inf: cuBLAS   row 3: 4096 +Inf, 0 NaN of 4096
+A[3,100] = nan: Y_f32    row 3: 0 +Inf, 4096 NaN of 4096; other rows finite: True
+A[3,100] = nan: Y_kahan  row 3: 0 +Inf, 4096 NaN of 4096; other rows finite: True
+A[3,100] = nan: Y_mma    row 3: 0 +Inf, 4096 NaN of 4096; other rows finite: True
+A[3,100] = nan: cuBLAS   row 3: 0 +Inf, 4096 NaN of 4096
