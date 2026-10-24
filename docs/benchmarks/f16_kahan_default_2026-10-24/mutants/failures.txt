@@ -1,0 +1,6 @@
+mut_decode_arm_first: panicked at tests/ptx_f16_split_k.rs:83:5: a split of 8 rows is not plain float32
+mut_kahan_everywhere: panicked at tests/ptx_f16_accumulate.rs:143:9: M = 33, no knob
+mut_le_33: panicked at tests/ptx_f16_accumulate.rs:143:9: M = 33, no knob
+mut_no_split_arm: panicked at tests/ptx_f16_split_k.rs:78:5: a split accumulates in float32 by default, at any M
+mut_old_default_f32: panicked at tests/ptx_f16_accumulate.rs:144:9: M = 1, no knob
+mut_strict_lt_32: panicked at tests/ptx_f16_accumulate.rs:143:9: M = 32, no knob

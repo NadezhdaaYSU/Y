@@ -1017,14 +1017,18 @@ out_dtype=torch.float32)`.
 
 The table gives cuBLAS's error over Y's, as rel_F / max_norm: above 1, Y's
 error is the smaller. Each cell is a range over the group's distributions.
+The compensated rows are from `docs/benchmarks/f16_kahan_2026-10-20/accuracy/`,
+on the same distributions.
 
 | shapes | Y | mixed sign | same sign | cancellation | outputs where Y's error is larger |
 |---|---|---|---|---|---|
 | 256³, 1024³, 4096³, 512 x 512 x 1024 | default (chain) | same bits | same bits | same bits | 0 |
 | 8192³ | default (chain) | 0.34 / 0.31–0.38 | 0.31–0.37 / 0.32–0.37 | 0.34–0.35 / 0.32–0.36 | 80–100% |
 | 512 x 512 x 4096–65536 | default (chain) | 0.13–0.51 / 0.10–0.53 | 0.12–0.49 / 0.12–0.49 | 0.014–0.55 / 0.024–0.55 | 71–100% |
-| M = 8, 32 | default (float32) | 22–23 / 9.7–15 | 193–204 / 45–50 | 18 / 8.2–12 | 0–2.5% |
-| M = 1 | default (float32) | 1.7–1.9 / 0.71–2.5 | 0.93–0.95 / 0.82–0.93 | 1.9–2.9 / 1.8–2.0 | 21–48% |
+| M = 8, 32 | default (compensated) | 73–89 / 72–95 | 584–617 / 328–378 | 55–71 / 54–78 | 0–1.2% |
+| M = 1 | default (compensated) | 5.6–7.6 / 5.6–12 | 2.8–3.0 / 5.3–6.6 | 7.3–8.9 / 11–13 | 6.2–21% |
+| M = 8, 32 | `Y_F16_ACCUMULATE=f32` | 22–23 / 9.7–15 | 193–204 / 45–50 | 18 / 8.2–12 | 0–2.5% |
+| M = 1 | `Y_F16_ACCUMULATE=f32` | 1.7–1.9 / 0.71–2.5 | 0.93–0.95 / 0.82–0.93 | 1.9–2.9 / 1.8–2.0 | 21–48% |
 | the 8 shapes above 32 rows | `Y_F16_ACCUMULATE=f32` | 4.7–23 / 2.5–14 | 26–202 / 11–40 | 1.04–18 / 0.83–9.7 | 0–45% |
 
 **Above 32 rows, Y chains its K loop in the tensor core's accumulator, as
@@ -1051,7 +1055,8 @@ adds its result in float32** (`add.rn.f32`), as the FP8 GEMM does
 (`docs/benchmarks/f16_accumulate_2026-10-20/`). It is 2–5% faster at M = 1, 4
 and 8 and 0.4% slower at 32. `Y_F16_ACCUMULATE=f32` does the same for every
 shape, at 1.03–1.09x the time on the square ones and 1.02–1.06x at
-512 x 512 x 4096–65536; `=mma` keeps the chain everywhere.
+512 x 512 x 4096–65536; `=mma` keeps the chain everywhere. Since 2026-10-24
+those adds are compensated by default (below), and `=f32` keeps them plain.
 
 **Against cuBLAS, float32 accumulation has the lower rel_F in 97 of the 99
 cases and the lower max_abs and max_norm in 94.** It is not more accurate on
@@ -1113,8 +1118,10 @@ GPU, against cuBLAS:
   below split 4's (1.52e-7 against 2.62e-7); split 16's, 1.18e-7, is below
   SGEMM's, and split 16 runs at 0.92–0.93x cuBLAS's speed.
 
-**`Y_F16_ACCUMULATE=kahan` (opt-in, 2026-10-24) compensates the float32
-adds** (`docs/benchmarks/f16_kahan_2026-10-20/`). Each K-tile's mma results
+**Since 2026-10-24 a GEMM of at most 32 rows compensates its float32 adds**
+outside split K, and `Y_F16_ACCUMULATE=kahan` does so for every shape
+(`docs/benchmarks/f16_kahan_2026-10-20/`,
+`docs/benchmarks/f16_kahan_default_2026-10-24/`). Each K-tile's mma results
 are summed in a register of their own; that tile sum is added into the
 accumulator, and the add's rounding error, `(s − s') + x`, is summed in a
 third register that is added in once after the K loop (Kahan and Babuška's
@@ -1140,6 +1147,14 @@ M = 1, 8 and 32 (N = K = 4096), 512 x 512 x 4096 and split 4 and 16 at
   54.8–55.4 us); with B in L2 it takes 1.19–1.20x float32 accumulation's
   time at M = 1–8 (21.0 against 17.6 us) and 1.06x at 32, still 1.27x
   faster than cuBLAS at M = 1, 2.4–2.6x at 4 and 8 and 1.09x at 32.
+- **At N or K = 11008 and 14336** (M = 1, 8 and 32, B from DRAM,
+  contended, `docs/benchmarks/f16_kahan_default_2026-10-24/`): 0.99–1.02x
+  float32 accumulation's time at M = 1 and 8, and at M = 32 1.00–1.01x with
+  K = 4096 but 1.02–1.03x with K = 11008 or 14336, on the analytic 32x64x32
+  tile that folds every 2 mmas. Against cuBLAS it is ahead or level at 9 of
+  the 12 shapes, up to 1.15x; it trails at 1 and 8 x 14336 x 4096 (0.96–0.97x,
+  as every mode does on that tile) and at 32 x 4096 x 14336 (0.99x, where
+  float32 accumulation is 1.01x).
 - **Not above the decode tiles:** 0.74–0.75x cuBLAS at 512 x 512 x 4096 and
   0.72x at 512 x 512 x 65536 in 4 splits, where float32 accumulation is
   1.04–1.05x and 0.98–0.99x. With compensation, splitting K no longer helps
@@ -1411,6 +1426,10 @@ another harness, `docs/benchmarks/smem_swizzle_2026-10-20/ab/`) and 0.34–0.68x
 at M = 1, 4 and 8; from DRAM the three tie at every M again, 54.7–57.4 us
 (`docs/benchmarks/quiet_2026-10-20/decode_dram/`). Accumulating in float32
 since then (see the accuracy section) made M = 1, 4 and 8 2–5% faster still.
+Compensating those adds, the default since 2026-10-24, costs nothing from
+DRAM at these shapes (1.02–1.03x at M = 32 with K = 11008 or 14336); with B
+in the L2, Y then takes 0.79x cuBLAS's time at M = 1, 0.39–0.42x
+at 4 and 8 and 0.92x at 32 (`docs/benchmarks/f16_kahan_2026-10-20/speed/`).
 
 At 4096³ Y is 1.2–1.6% slower per clock cycle than cuBLAS's
 `ampere_s1688gemm` 128x128 kernel: at the same clock, on small-integer

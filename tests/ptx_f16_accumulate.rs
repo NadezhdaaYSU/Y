@@ -4,12 +4,13 @@
 //! so a K loop chained in it - `mma d, a, b, d`, what cuBLAS's and Triton's
 //! tensor-core kernels do - leaves same-sign results about 1.2e-5 per 1024 of
 //! K below the true sum. Starting each mma from zero and adding its result in
-//! float32 (`add.rn.f32`) keeps them within float32 rounding at any K. It is
-//! the default for GEMMs of at most 32 rows, where it is no slower, and
-//! `Y_F16_ACCUMULATE=f32|mma` selects either everywhere; `=kahan` compensates
-//! the float32 adds. This file checks the selection, and on the device that
-//! each mode computes exact integer products, that only the float32 ones keep
-//! same-sign error at float32's level, and that compensation narrows it.
+//! float32 (`add.rn.f32`) keeps them within float32 rounding at any K, and
+//! compensating those adds (`kahan`) narrows the error further. Compensated,
+//! it is the default for GEMMs of at most 32 rows (split K keeps plain
+//! float32), and `Y_F16_ACCUMULATE=f32|kahan|mma` selects one everywhere.
+//! This file checks the selection, and on the device that each mode computes
+//! exact integer products, that only the float32 ones keep same-sign error at
+//! float32's level, and that compensation narrows it.
 
 use std::path::Path;
 use std::process::Command;
@@ -31,14 +32,21 @@ fn compile_kernel(dir: &Path, tag: &str, m: u32, n: u32, k: u32, params: &str, k
 
 /// The module the compiler emits for `source`, under `knob` as `compile`.
 fn compile_source(dir: &Path, tag: &str, source: &str, knob: Option<&str>) -> Result<String, String> {
+    compile_source_tiled(dir, tag, source, knob, None)
+}
+
+/// `compile_source` with `Y_SWIGLU_TILE` set to `swiglu_tile` (or unset).
+fn compile_source_tiled(dir: &Path, tag: &str, source: &str, knob: Option<&str>, swiglu_tile: Option<&str>) -> Result<String, String> {
     let src = dir.join(format!("{tag}.ysu"));
     std::fs::write(&src, source).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_Y"));
     cmd.arg(&src).arg("--emit-ptx").current_dir(dir).env_remove("Y_CTA_OVERRIDE");
-    match knob {
-        Some(v) => cmd.env("Y_F16_ACCUMULATE", v),
-        None => cmd.env_remove("Y_F16_ACCUMULATE"),
-    };
+    for (var, value) in [("Y_F16_ACCUMULATE", knob), ("Y_SWIGLU_TILE", swiglu_tile)] {
+        match value {
+            Some(v) => cmd.env(var, v),
+            None => cmd.env_remove(var),
+        };
+    }
     let out = cmd.output().expect("run Y");
     if !out.status.success() {
         return Err(format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
@@ -133,9 +141,12 @@ fn the_default_follows_the_row_count_and_the_knob_overrides_it() {
     for (m, want) in [(1u32, true), (8, true), (32, true), (33, false), (256, false)] {
         let ptx = compile(&dir, &format!("acc_m{m}"), m, 256, 512, None).unwrap();
         assert_eq!(accumulates_in_f32(&ptx), want, "M = {m}, no knob");
-        assert!(!compensated(&ptx), "M = {m}: compensated with no knob");
+        assert_eq!(compensated(&ptx), want, "M = {m}, no knob");
+        if want {
+            assert_tile_sums(&ptx, &format!("M = {m}, no knob"));
+        }
     }
-    for (m, knob, want) in [(256u32, "f32", true), (8, "mma", false), (8, "kahan", true), (256, "kahan", true)] {
+    for (m, knob, want) in [(256u32, "f32", true), (8, "f32", true), (8, "mma", false), (8, "kahan", true), (256, "kahan", true)] {
         let ptx = compile(&dir, &format!("acc_{knob}_{m}"), m, 256, 512, Some(knob)).unwrap();
         assert_eq!(accumulates_in_f32(&ptx), want, "M = {m}, Y_F16_ACCUMULATE={knob}");
         assert_eq!(compensated(&ptx), knob == "kahan", "M = {m}, Y_F16_ACCUMULATE={knob}");
@@ -153,6 +164,16 @@ fn the_default_follows_the_row_count_and_the_knob_overrides_it() {
         if knob == "kahan" {
             assert_tile_sums(&ptx, "SwiGLU");
         }
+    }
+    // With no knob it follows the row count as the GEMM does. Its fixed
+    // tile's 64 rows must divide M, so 32 rows need a `Y_SWIGLU_TILE` of 32.
+    for (m, tile, want) in [(32u32, Some("32,64,32,2,2"), true), (64, None, false)] {
+        let tag = format!("acc_swiglu_m{m}");
+        let src = format!("@tile({m}, 128, 256)\nkernel {tag}({swiglu}) {{\n}}\n\nfn main() {{\n}}\n");
+        let ptx = compile_source_tiled(&dir, &tag, &src, None, tile).unwrap();
+        assert!(ptx.contains("EPI_SWIGLU"), "not the fused SwiGLU kernel");
+        assert_eq!(accumulates_in_f32(&ptx), want, "SwiGLU, M = {m}, no knob");
+        assert_eq!(compensated(&ptx), want, "SwiGLU, M = {m}, no knob");
     }
     // Two kernels with different numbers of accumulators in one module: each
     // kernel's compensations and tile sums are its own registers, zeroed in
@@ -225,8 +246,8 @@ fn float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu() {
     let dir = pinned::pinned_scratch("f16_acc_gpu", pinned::SM_PINNED);
     let k = 4096u32;
     let mut state = 0xACC0_F16Fu64;
-    // A decode shape (float32 by default) and a square one (the tensor-core
-    // chain by default), each in both modes.
+    // A decode shape (compensated by default) and a square one (the
+    // tensor-core chain by default), each in every mode.
     for (m, n) in [(8u32, 256u32), (128, 128)] {
         let (mu, nu, ku) = (m as usize, n as usize, k as usize);
         // |N|-like positive f16 in [0.25, 2): no cancellation hides an error.

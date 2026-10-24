@@ -1,0 +1,5 @@
+# regen_all.sh: every tests/*.ysu with a committed .ptx, compiled by this commit's compiler with the re-tuned profile,
+# against this commit's tests/*.ptx. Against HEAD (662a401) the first run differed in exactly gemm_f16_decode_m{1,4,8,32}
+# and test_drift (whose latency comments differ under every compiler); those four were replaced by the regenerated ones.
+differs test_drift
+same 59 differ 1 fail 0
