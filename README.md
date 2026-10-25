@@ -16,6 +16,13 @@ disk persistence reuses successful decisions across runs; ordinary compiler
 behavior is unchanged.
 Try `cargo run --release --example adaptive_gemm` on an NVIDIA sm_80+ GPU.
 
+Y's FP16 tensor-core GEMM (f16 in, f32 out) is now at least as accurate as
+cuBLAS at every shape measured, in relative Frobenius and maximum normalized
+error: the same bits where both chain K in the tensor core, and lower error
+where cuBLAS used to win (8192³, 512 x 512 x K ≥ 4096, 64 x 4096 x 4096), at
+0.96–1.02x its previous speed; split-K kernels became 1.02–1.06x faster too.
+See [Accuracy against cuBLAS](#accuracy-against-cublas).
+
 An in-process [general-purpose CPU JIT](docs/cpu_jit.md) compiles ordinary Y
 host functions through LLVM ORC on Linux x86-64. Run
 `cargo run --release --bin Y -- examples/cpu_jit.ysu --jit` or embed it from
@@ -907,8 +914,9 @@ checked exact first; interleaved rounds, ranked by minimum; two runs on
 with Discord's GPU process running beside them (10–37% utilisation with none
 of these jobs running). 8192 and 16384 were measured again on 2026-10-25,
 when they began summing K in blocks (below), in two runs of the same harness
-(`docs/benchmarks/f16_blocked_2026-10-25/speed/readme_table/`); the chained kernels they replace ran
-at 1.025–1.029x and 1.015x cuBLAS's speed in the same runs.
+(`docs/benchmarks/f16_blocked_2026-10-25/speed/readme_table/`); the chained
+kernels they replace ran at 1.025–1.029x and 1.015x cuBLAS's speed in the
+same runs.
 
 | M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 |
 |---|---|---|---|---|---|---|---|
@@ -977,6 +985,21 @@ staging loops because their trip count depended on `%tid.x`, costing ~22
 SASS instructions per 16-byte copy.
 
 ### Accuracy against cuBLAS
+
+**In short: at every shape measured, Y's default output is at least as close
+to the exact product as cuBLAS's** in relative Frobenius error and in maximum
+error normalized by `sum |a| |b|` (below). Where K is at most 2048, at 4096³
+and at 2048 x 4096 x 14336, Y chains K in the tensor core as cuBLAS does
+there, and the two give the same bits. Elsewhere Y's relative Frobenius error
+is the smaller: 7.9–16x at 8192³, 2.5–38x at 512 x 512 x K ≥ 4096 and
+2.8–9.4x at 64 x 4096 x 4096, where cuBLAS used to be the more accurate, and
+11–79x at three more LLM layer shapes (blocked summation, since
+2026-10-25); 2.8–617x at M = 1, 8 and 32 (compensated float32 adds, since
+2026-10-24). It is not closer on every output: under heavy cancellation up
+to 27% of the outputs are farther from float64 than cuBLAS's, and at M = 1
+cuBLAS's float32 GEMV is closer on 6–21%. Above 32 rows that costs 0–4% of
+the previous speed (median 1% over 22 LLM layer shapes); split K became
+faster.
 
 Measured on nine input distributions and eleven shapes, f16 in and f32 out,
 with every output compared against float64 (`docs/benchmarks/f16_accuracy_2026-10-20/`,
@@ -1066,9 +1089,10 @@ splits added in order: Y's split-K kernel chained (below, with
 How cuBLAS orders the sum at 8192³ was not established.
 
 **From K = 4096 the sum is blocked instead** (since 2026-10-25,
-`docs/benchmarks/f16_blocked_2026-10-25/`). The mmas chain into a block sum of their own,
-which is added into the accumulator with `add.rn.f32` after every 256 of K
-and zeroed, so the truncation acts on one block's sum rather than on all of K.
+`docs/benchmarks/f16_blocked_2026-10-25/`). The mmas chain into a block sum
+of their own, which is added into the accumulator with `add.rn.f32` after
+every 256 of K and zeroed, so the truncation acts on one block's sum rather
+than on all of K.
 The block sums take one register per accumulator, and the chain is kept where
 they would not fit: 4096³ and the 128x128 tiles of the larger LLM shapes,
 whose 64 x 64 warp tiles hold 128 accumulators a thread (blocked, 844 bytes
@@ -1153,9 +1177,10 @@ GPU, against cuBLAS:
   cuBLAS's speed and split 2 is 1.02–1.03x; at 16384 split 4 is
   1.008–1.009x, with cuBLAS's rel_F 11x Y's on mixed signs, 164–166x on same
   signs and 1.5–5.7x under cancellation.
-- **K = 65536: more accurate, not faster.** Split 4 in float32 runs at
-  0.98–0.99x cuBLAS's speed (cuBLAS's rel_F 22–23x, 388–404x and 1.5–12x
-  Y's). Split 4 chained is 1.01–1.04x, and half as accurate as cuBLAS.
+- **K = 65536: more accurate, not faster** (in float32 splits; blocked splits,
+  the default since 2026-10-25, are both: below). Split 4 in float32 runs at
+  0.98–0.99x cuBLAS's speed (cuBLAS's rel_F 22–23x, 388–404x and 1.5–12x Y's).
+  Split 4 chained is 1.01–1.04x, and half as accurate as cuBLAS.
 - **Not on every output:** under cancellation (the paired inputs), 25–36% of
   split 4's outputs are farther from R than cuBLAS's; on mixed signs,
   2.4–4.8%.
@@ -1165,8 +1190,9 @@ GPU, against cuBLAS:
   SGEMM's, and split 16 runs at 0.92–0.93x cuBLAS's speed.
 
 **Since 2026-10-25 a split of more than 32 rows whose K is longer than a
-block is blocked,** where its block sums fit (`docs/benchmarks/f16_blocked_2026-10-25/`). At
-512 x 512 x 16384 and 65536 in 4 splits it runs at 1.02–1.06x the float32
+block is blocked,** where its block sums fit
+(`docs/benchmarks/f16_blocked_2026-10-25/`). At 512 x 512 x 16384 and 65536
+in 4 splits it runs at 1.02–1.06x the float32
 splits' speed and 1.01–1.04x cuBLAS's, so K = 65536 is faster than cuBLAS
 too. Its rel_F and max_norm are below cuBLAS's in all 18 cases: cuBLAS's
 rel_F is 6.6–26x its own on mixed signs, 9.3–39x on same signs and 2.6–21x
