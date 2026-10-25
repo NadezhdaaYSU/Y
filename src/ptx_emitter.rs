@@ -13027,7 +13027,7 @@ declare it as a Q format.\n{}",
             if split.is_none() {
                 writeln!(
                     &mut self.ptx_buffer,
-                    "    // [Y SPLIT-K GEMM] K={} in 1 split (not split) | grid ({}, {}, 1) writes C; Partial is neither read nor written; then {}_reduce, on any grid, does nothing",
+                    "    // [Y SPLIT-K GEMM] K={} in 1 split (not split) | grid ({}, {}, 1) writes C; Partial is neither read nor written; then {}_reduce, on any grid, does nothing (a host may skip it)",
                     lda, n.div_ceil(cta_n), m.div_ceil(cta_m), kernel_name
                 ).unwrap();
             }
@@ -16655,7 +16655,9 @@ declare it as a Q format.\n{}",
     /// does not split: its main entry writes C, so this entry returns at
     /// once, on any grid. It takes the main entry's parameters, as
     /// `emit_gemm_split_reduce_entry`'s does, so a host launches the pair
-    /// the same way for every split.
+    /// the same way for every split; one that reads the header's "in 1
+    /// split" may skip it, which saves up to about 4% on the shortest
+    /// kernels (docs/benchmarks/f16_auto_splitk_2026-10-25/).
     fn emit_gemm_noop_reduce_entry(&mut self, kernel: &KernelDecl, kernel_name: &str) {
         let mut entry = String::new();
         writeln!(&mut entry, ".visible .entry {}_reduce(", kernel_name).unwrap();
