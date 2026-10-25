@@ -2117,21 +2117,42 @@ fn main() {
                         // A split-K kernel is tuned as one (its own key and
                         // candidates); asking for the unsplit shape here
                         // measured a kernel this source does not contain.
-                        let splits = match ptx_emitter::PtxEmitter::gemm_split_k(&k.name) {
-                            Some(Ok(s)) => s,
-                            _ => 1,
+                        // `_splitk` takes the split-K rule's split and tile,
+                        // as codegen does.
+                        let split = ptx_emitter::PtxEmitter::gemm_split_k(&k.name);
+                        let plan = autotuner::Autotuner::split_k_plan(m, n, k_dim, &hw_profile);
+                        let (splits, tuned_config) = match split {
+                            Some(Ok(ptx_emitter::SplitK::Fixed(s))) => {
+                                (s, autotuner::Autotuner::autotune_split(m, n, k_dim, s, &hw_profile, autotuner::Precision::F16))
+                            }
+                            Some(Ok(ptx_emitter::SplitK::Auto)) => match &plan.tile {
+                                Some(tile) if plan.splits > 1 => (
+                                    plan.splits,
+                                    autotuner::Autotuner::autotune_split_planned(m, n, k_dim, plan.splits, &hw_profile, autotuner::Precision::F16, tile),
+                                ),
+                                _ => (1, autotuner::Autotuner::autotune(m, n, k_dim, &hw_profile, autotuner::Precision::F16)),
+                            },
+                            _ => (1, autotuner::Autotuner::autotune(m, n, k_dim, &hw_profile, autotuner::Precision::F16)),
                         };
-                        let tuned_config = autotuner::Autotuner::autotune_split(
-                            m,
-                            n,
-                            k_dim,
-                            splits,
-                            &hw_profile,
-                            autotuner::Precision::F16,
-                        );
                         println!("         [JIT Autotuner Result] `{}` (M={}, N={}, K={}{}): CTA Tile: {}x{}x{}, Warps: {}, Pipeline Stages: {}",
                             k.name, m, n, k_dim, if splits > 1 { format!(", split {} ways", splits) } else { String::new() },
                             tuned_config.cta_m, tuned_config.cta_n, tuned_config.cta_k, tuned_config.num_warps, tuned_config.num_stages);
+                        match split {
+                            Some(Ok(ptx_emitter::SplitK::Auto)) => {
+                                println!("         [Y split-K rule] `{}`: S={}: {}", k.name, plan.splits, plan.reason);
+                            }
+                            // A plain GEMM keeps its launch; the rule's split
+                            // needs the split-K one, so it is only named.
+                            None if plan.splits > 1 && k.params.len() == 3 => {
+                                println!(
+                                    "         [Y split-K rule] `{}` would split K {} ways: {}. Named `{}_splitk`, with a fourth parameter Partial: GlobalMemory<F32> of {} floats ({:.1} MB) and its `_reduce` entry launched after it, it takes that split (see `PtxEmitter::gemm_split_k`).",
+                                    k.name, plan.splits, plan.reason, k.name,
+                                    plan.splits as u64 * m as u64 * n as u64,
+                                    plan.splits as f64 * m as f64 * n as f64 * 4.0 / 1e6
+                                );
+                            }
+                            _ => {}
+                        }
                         printed_any_tune = true;
                     }
                 }

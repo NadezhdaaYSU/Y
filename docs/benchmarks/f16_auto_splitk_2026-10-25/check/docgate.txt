@@ -1,0 +1,18 @@
+# tools/ptxas_tval/docgate.py on HEAD's tree (base) and this one (new), after the README change. The README's
+# own figures (staging census, back-edge census) give the same result in both; the lines that differ are
+# liftgap/frontier figures of each tree's untracked validator corpus, which neither tree rebuilt (the corpus
+# PTX is the same: regen.txt).
+base exit 1
+new exit 1
+base: 49 FAIL lines
+new: 47 FAIL lines
+new: FAIL: README says (33, 48, 32, 1); measured (28, 47, 27, 1) (total, kernels, PTX side, SASS side)
+new: ok: the README frontier figures agree with the stamp at both levels
+new: FAIL: README says (33, 48, 32, 1); measured (28, 47, 27, 1) (total, kernels, PTX side, SASS side)
+new: FAIL: int8_gemm.ptx mma.sync: README says 1, the artifact has 2
+new: FAIL: the README says O3 is (66, 105, 6) (kernels, distinct, clear); the stamped census measured (66, 104, 6)
+base: FAIL: README says (33, 48, 32, 1); measured (28, 47, 27, 1) (total, kernels, PTX side, SASS side)
+base: ok: the README frontier figures agree with the stamp at both levels
+base: FAIL: README says (33, 48, 32, 1); measured (28, 47, 27, 1) (total, kernels, PTX side, SASS side)
+base: FAIL: int8_gemm.ptx mma.sync: README says 1, the artifact has 2
+base: FAIL: the README says O3 is (66, 105, 6) (kernels, distinct, clear); the stamped census measured (66, 104, 6)

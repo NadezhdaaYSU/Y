@@ -1,0 +1,6 @@
+8x4096x4096 data=normal exact True graph True | during 100, 2760, 75.24 .. 100, 2760, 153.90
+  s2_32x64w22s3                min    16.83 med    17.14 us  cuBLAS/this 2.976  32x64 2x2 S=2 f32
+  s4_32x64w22s3                min    17.79 med    17.99 us  cuBLAS/this 2.816  32x64 2x2 S=4 f32
+  unsplit                      min    20.76 med    21.14 us  cuBLAS/this 2.412  32x64 2x2 S=1 f32
+  auto                         min    21.20 med    21.49 us  cuBLAS/this 2.362  32x64 2x2 S=1 f32
+  cuBLAS                       min    50.08 med    52.48 us  cuBLAS/this 1.000   = 

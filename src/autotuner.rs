@@ -171,9 +171,12 @@ impl Precision {
     }
 }
 
-static AUTOTUNE_CACHE: OnceLock<Mutex<HashMap<(u32, u32, u32, u32), AutotuneCandidate>>> = OnceLock::new();
+/// Each resolved tile, and whether it was measured on this shape (persisted
+/// or just now) rather than borrowed or modelled: the split-K rule's tile
+/// (`Autotuner::autotune_split_planned`) yields only to a measured one.
+static AUTOTUNE_CACHE: OnceLock<Mutex<HashMap<(u32, u32, u32, u32), (AutotuneCandidate, bool)>>> = OnceLock::new();
 
-fn get_cache() -> &'static Mutex<HashMap<(u32, u32, u32, u32), AutotuneCandidate>> {
+fn get_cache() -> &'static Mutex<HashMap<(u32, u32, u32, u32), (AutotuneCandidate, bool)>> {
     AUTOTUNE_CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -338,6 +341,50 @@ fn parse_persisted_value(value: &str) -> Option<AutotuneCandidate> {
         num_stages: parts[5],
         num_warps: parts[3] * parts[4],
     })
+}
+
+/// The split counts the split-K rule (`Autotuner::split_k_plan`) tries.
+pub const SPLIT_K_COUNTS: [u32; 3] = [2, 4, 8];
+
+/// The least depth of one split the split-K rule accepts. The partials and
+/// the reduction cost the same per split at any K, so their share of the
+/// time falls as K / S grows: from the two 512 x 512 records in 4 splits,
+/// about 5% at K / S = 4096 and, scaled, 21% at 1024, against about 11%
+/// gained (docs/benchmarks/f16_auto_splitk_2026-10-25/).
+pub const SPLIT_K_MIN_DEPTH: u32 = 4096;
+
+/// The least arithmetic intensity at which the split-K rule splits: flops
+/// per byte of the GEMM's compulsory DRAM traffic (A and B once in f16, C
+/// once in float32). Below it the unsplit grid streams from DRAM near its
+/// peak, and the partials only add traffic: at 64 x 4096 x 11008 and 14336
+/// (62 flops a byte) 64 unsplit CTAs read about 600 GB/s of the RTX 4070 Ti
+/// SUPER's 672, and every split took longer; at 256 x 256 x 16384 (126) and
+/// 512 x 512 x K (248) splits ran faster
+/// (docs/benchmarks/f16_auto_splitk_2026-10-25/). The intensity is at most
+/// M, so a GEMM of at most 32 rows is never split.
+pub const SPLIT_K_MIN_INTENSITY: u64 = 96;
+
+/// The split tiles the split-K rule chooses from, largest first, eight warps
+/// each: the fastest in 4 splits of 512 x 512 x 65536 and in 2 and 4 of
+/// 512 x 512 x 16384 (docs/benchmarks/f16_splitk_2026-10-20/ and
+/// f16_auto_splitk_2026-10-25/), with few enough accumulators a thread that
+/// a split's block sums fit (`PtxEmitter::f16_block_sums_fit`; a test holds
+/// every tile to it and to `validate_warp_tiling`).
+pub const SPLIT_K_TILES: [AutotuneCandidate; 3] = [
+    AutotuneCandidate { cta_m: 128, cta_n: 128, cta_k: 32, warps_m: 4, warps_n: 2, num_stages: 3, num_warps: 8 },
+    AutotuneCandidate { cta_m: 64, cta_n: 128, cta_k: 32, warps_m: 4, warps_n: 2, num_stages: 4, num_warps: 8 },
+    AutotuneCandidate { cta_m: 64, cta_n: 64, cta_k: 32, warps_m: 4, warps_n: 2, num_stages: 4, num_warps: 8 },
+];
+
+/// What the split-K rule chose for an F16 GEMM (`Autotuner::split_k_plan`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SplitKPlan {
+    /// The split count; 1 when K is not split.
+    pub splits: u32,
+    /// The split kernel's tile; `None` when K is not split.
+    pub tile: Option<AutotuneCandidate>,
+    /// The CTA counts behind the choice, for the PTX header and the CLI.
+    pub reason: String,
 }
 
 /// The persisted-key namespace of an F16 GEMM split `splits` ways in K:
@@ -955,6 +1002,87 @@ impl Autotuner {
     /// `generate_split_candidates`; borrowing and the analytic model work at
     /// the split's depth.
     pub fn autotune_split(m: u32, n: u32, k: u32, splits: u32, hw_profile: &HardwareProfile, precision: Precision) -> CtaTileConfig {
+        Self::resolve_split(m, n, k, splits, hw_profile, precision, None)
+    }
+
+    /// `autotune_split` for the split the split-K rule chose
+    /// (`split_k_plan`) on its tile `planned`: the override, a measurement of
+    /// this shape and split (persisted, or taken under `--autotune`) still
+    /// come first, but `planned` replaces the borrowed and the analytic tile.
+    /// The rule counted its CTAs on `planned`; the analytic model gives every
+    /// split of 512 x 512 the unsplit 64x64 tile, 0.86-0.93x cuBLAS where
+    /// 128x128 was 0.98-0.99x (`split_tag`).
+    pub fn autotune_split_planned(m: u32, n: u32, k: u32, splits: u32, hw_profile: &HardwareProfile, precision: Precision, planned: &AutotuneCandidate) -> CtaTileConfig {
+        Self::resolve_split(m, n, k, splits, hw_profile, precision, Some(planned))
+    }
+
+    /// The split-K rule for an `m x n x k` F16 GEMM, against the tile its
+    /// unsplit kernel would take (`autotune`) and the profile's SM count
+    /// (`split_k_choice`). A kernel named `<name>_splitk` takes this split.
+    pub fn split_k_plan(m: u32, n: u32, k: u32, hw_profile: &HardwareProfile) -> SplitKPlan {
+        let unsplit = Self::autotune(m, n, k, hw_profile, Precision::F16);
+        Self::split_k_choice(m, n, k, &unsplit, hw_profile.sm_count)
+    }
+
+    /// The split-K rule. Split only when the unsplit kernel's `unsplit` tile
+    /// leaves SMs without a CTA (fewer CTAs than `sm_count`) and the GEMM is
+    /// not bound to DRAM (`SPLIT_K_MIN_INTENSITY`); then take the split count
+    /// S of `SPLIT_K_COUNTS` and the tile of `SPLIT_K_TILES` no larger than
+    /// M x N that give the most CTAs with each split at least
+    /// `SPLIT_K_MIN_DEPTH` deep, no fewer CTAs than unsplit and no more than
+    /// one for each SM; a tie keeps the smaller S, found first. (The intensity
+    /// is below min(M, N), so at 96 or more neither is 64 or less: no two of
+    /// the tiles then have as many CTAs at one S, and none larger than M x N
+    /// could be chosen; the filter keeps that so at a lower threshold.)
+    pub fn split_k_choice(m: u32, n: u32, k: u32, unsplit: &CtaTileConfig, sm_count: u32) -> SplitKPlan {
+        let ctas = |cta_m: u32, cta_n: u32, s: u32| m.div_ceil(cta_m.max(1)) as u64 * n.div_ceil(cta_n.max(1)) as u64 * s as u64;
+        let unsplit_ctas = ctas(unsplit.cta_m, unsplit.cta_n, 1);
+        let not_split = |reason: String| SplitKPlan { splits: 1, tile: None, reason };
+        let on = format!("{} CTAs of {}x{} unsplit on {} SMs", unsplit_ctas, unsplit.cta_m, unsplit.cta_n, sm_count);
+        if unsplit_ctas >= sm_count as u64 {
+            return not_split(on);
+        }
+        let (m64, n64, k64) = (m as u128, n as u128, k as u128);
+        let (flops, bytes) = (2 * m64 * n64 * k64, 2 * m64 * k64 + 2 * k64 * n64 + 4 * m64 * n64);
+        if flops < SPLIT_K_MIN_INTENSITY as u128 * bytes {
+            return not_split(format!(
+                "{}, but {:.0} flops a byte of A, B and C is below {}: bound to DRAM",
+                on, flops as f64 / bytes as f64, SPLIT_K_MIN_INTENSITY
+            ));
+        }
+        let menu: Vec<&AutotuneCandidate> = SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m && t.cta_n <= n).collect();
+        let mut best: Option<(u64, u32, AutotuneCandidate)> = None;
+        for s in SPLIT_K_COUNTS {
+            if crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s).is_err() || k / s < SPLIT_K_MIN_DEPTH {
+                continue;
+            }
+            for &t in &menu {
+                let c = ctas(t.cta_m, t.cta_n, s);
+                if c < unsplit_ctas || c > sm_count as u64 {
+                    continue;
+                }
+                if best.as_ref().is_none_or(|(b, ..)| c > *b) {
+                    best = Some((c, s, t.clone()));
+                }
+            }
+        }
+        match best {
+            Some((c, s, t)) => SplitKPlan {
+                reason: format!(
+                    "{}; {} splits of K={} on {}x{}x{} tiles, {}x{} warps: {} CTAs",
+                    on, s, k / s, t.cta_m, t.cta_n, t.cta_k, t.warps_m, t.warps_n, c
+                ),
+                splits: s,
+                tile: Some(t),
+            },
+            None => not_split(format!(
+                "{}, but no split of K={} into {:?} parts at least {} deep fills from {} to {} CTAs",
+                on, k, SPLIT_K_COUNTS, SPLIT_K_MIN_DEPTH, unsplit_ctas, sm_count
+            )),
+        }
+    }
+
+    fn resolve_split(m: u32, n: u32, k: u32, splits: u32, hw_profile: &HardwareProfile, precision: Precision, planned: Option<&AutotuneCandidate>) -> CtaTileConfig {
         let splits = splits.max(1);
         let k_split = k / splits;
         let tag = split_tag(precision, splits);
@@ -1005,8 +1133,10 @@ impl Autotuner {
         // per invocation.
         let key = (m, n, k, splits);
         if let Ok(cache) = get_cache().lock() {
-            if let Some(cached_candidate) = cache.get(&key) {
-                return cached_candidate.to_cta_tile_config();
+            if let Some((cached_candidate, measured)) = cache.get(&key) {
+                if *measured || planned.is_none() {
+                    return cached_candidate.to_cta_tile_config();
+                }
             }
         }
 
@@ -1044,7 +1174,7 @@ impl Autotuner {
                     cached.warps_m, cached.warps_n, cached.num_stages
                 );
                 if let Ok(mut cache) = get_cache().lock() {
-                    cache.insert(key, cached.clone());
+                    cache.insert(key, (cached.clone(), true));
                 }
                 return cached.to_cta_tile_config();
             }
@@ -1057,7 +1187,7 @@ impl Autotuner {
                     let best = measured[0].candidate.clone();
                     store_persisted(m, n, k, &tag, hw_profile, &best);
                     if let Ok(mut cache) = get_cache().lock() {
-                        cache.insert(key, best.clone());
+                        cache.insert(key, (best.clone(), true));
                     }
                     return best.to_cta_tile_config();
                 }
@@ -1081,6 +1211,13 @@ impl Autotuner {
             }
         }
 
+        // The split-K rule's own tile, in place of a borrowed or modelled one
+        // (`autotune_split_planned`). Not cached: a `_splitk<S>` kernel of
+        // the same shape in this process still takes steps (6) and (7).
+        if let Some(planned) = planned {
+            return planned.to_cta_tile_config();
+        }
+
         // (6) A measurement taken at a NEARBY shape, before the analytic
         // model. Ordered here deliberately: this is still real on-device data,
         // just from a neighbouring shape, and tile choice varies slowly with
@@ -1100,7 +1237,7 @@ impl Autotuner {
                     borrowed.warps_m, borrowed.warps_n, borrowed.num_stages
                 );
                 if let Ok(mut cache) = get_cache().lock() {
-                    cache.insert(key, borrowed.clone());
+                    cache.insert(key, (borrowed.clone(), false));
                 }
                 return borrowed.to_cta_tile_config();
             }
@@ -1119,7 +1256,7 @@ impl Autotuner {
         }
 
         if let Ok(mut cache) = get_cache().lock() {
-            cache.insert(key, best_candidate.clone());
+            cache.insert(key, (best_candidate.clone(), false));
         }
 
         best_candidate.to_cta_tile_config()

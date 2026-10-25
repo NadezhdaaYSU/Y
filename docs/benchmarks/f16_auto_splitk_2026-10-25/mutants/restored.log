@@ -1,0 +1,43 @@
+   Compiling Y-compiler v1.0.0 (/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/xbar)
+   Compiling y-gpu v0.1.0 (/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/xbar/crates/y-gpu)
+    Finished `release` profile [optimized] target(s) in 10.25s
+     Running tests/f16_split_k_rule.rs (target/release/deps/f16_split_k_rule-fc11c375f3376523)
+
+running 6 tests
+test each_bound_of_the_rule_on_both_sides ... ok
+test the_rule_leaves_full_grids_short_splits_dram_bound_and_decode_gemms_unsplit ... ok
+test every_split_tile_tiles_and_fits_its_block_sums ... ok
+test the_split_counts_and_the_shape_check ... ok
+test the_rule_splits_where_the_unsplit_grid_leaves_sms_without_a_cta ... ok
+test every_choice_over_a_grid_of_shapes_keeps_the_rules_bounds ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ptx_f16_accumulate.rs (target/release/deps/ptx_f16_accumulate-80f04cf54c0d237f)
+
+running 7 tests
+test compensated_blocks_fold_once_a_block_with_their_error_kept ... ok
+test blocks_start_at_k_4096_above_32_rows_where_the_block_sums_fit ... ok
+test the_default_follows_the_row_count_and_the_knob_overrides_it ... ok
+test blocked_swiglu_asks_for_the_ctas_shared_memory_allows ... ok
+test blocked_sums_count_every_product_once_on_the_gpu ... ok
+test compensated_blocks_count_every_product_once_and_keep_what_a_fold_rounds_away_on_the_gpu ... ok
+test float32_accumulation_keeps_same_sign_error_at_float32_rounding_on_the_gpu ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests/ptx_f16_split_k.rs (target/release/deps/ptx_f16_split_k-0d825d5f7904f8a2)
+
+running 9 tests
+test a_split_kernel_takes_its_own_measured_tile ... ok
+test a_plain_gemm_is_told_the_rules_split_and_keeps_its_launch ... ok
+test the_rules_tile_yields_only_to_a_measurement_of_its_split ... ok
+test split_k_names_select_the_shape_and_everything_else_is_refused ... ok
+test the_rules_kernel_is_the_pinned_split_or_else_the_plain_kernel ... ok
+test split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu ... ok
+test compensated_splits_are_the_compensated_kernel_on_each_slot_on_the_gpu ... ok
+test the_rules_kernels_run_as_their_headers_state_on_the_gpu ... ok
+test the_tuner_measures_a_split_kernel_with_its_reduction ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.72s
+

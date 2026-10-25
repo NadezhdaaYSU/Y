@@ -1,0 +1,4 @@
+1024x1024x1024 data=int exact True graph True | during 83, 2760, 59.34 .. 83, 2760, 101.67
+  unsplit                      min    26.77 med    28.35 us  cuBLAS/this 1.051  64x128 2x2 S=1 
+  auto                         min    27.93 med    30.29 us  cuBLAS/this 1.007  64x128 2x2 S=1 
+  cuBLAS                       min    28.14 med    29.48 us  cuBLAS/this 1.000   = 

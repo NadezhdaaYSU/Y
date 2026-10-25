@@ -1,0 +1,52 @@
+shape              unsplit tile     T1 | user K/S>=1024 | refined K/S>=1024 | refined K/S>=2048 | refined K/S>=4096
+1x4096x4096       32x64x64 2x2       64 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1x4096x14336      16x64x64 1x2       64 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1x14336x4096       16x64x64 1x2      224 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1x14336x14336      16x64x64 1x2      224 | unsplit                      | unsplit                      | unsplit                      | unsplit
+8x4096x4096       32x64x64 2x2       64 | unsplit                      | unsplit                      | unsplit                      | unsplit
+8x4096x14336      16x64x64 1x2       64 | unsplit                      | unsplit                      | unsplit                      | unsplit
+8x14336x4096       16x64x64 1x2      224 | unsplit                      | unsplit                      | unsplit                      | unsplit
+8x14336x14336      16x64x64 1x2      224 | unsplit                      | unsplit                      | unsplit                      | unsplit
+32x4096x4096       32x64x64 2x2       64 | unsplit                      | unsplit                      | unsplit                      | unsplit
+32x4096x14336      32x64x32 2x2       64 | unsplit                      | unsplit                      | unsplit                      | unsplit
+32x14336x4096       32x64x32 2x2      224 | unsplit                      | unsplit                      | unsplit                      | unsplit
+32x14336x14336      32x64x32 2x2      224 | unsplit                      | unsplit                      | unsplit                      | unsplit
+64x4096x4096       64x64x32 2x2       64 | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)  | unsplit
+64x4096x11008      64x64x32 2x2       64 | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)
+64x4096x14336      64x64x32 2x2       64 | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)  | S=2 64x128x32 2x4 (64 CTAs)
+64x11008x4096       64x64x32 2x2      172 | unsplit                      | unsplit                      | unsplit                      | unsplit
+64x14336x4096       64x64x32 2x2      224 | unsplit                      | unsplit                      | unsplit                      | unsplit
+128x4096x4096       64x64x32 2x2      128 | unsplit                      | unsplit                      | unsplit                      | unsplit
+128x4096x11008      64x64x32 2x2      128 | unsplit                      | unsplit                      | unsplit                      | unsplit
+128x4096x14336      64x64x32 2x2      128 | unsplit                      | unsplit                      | unsplit                      | unsplit
+128x11008x4096       64x64x32 2x2      344 | unsplit                      | unsplit                      | unsplit                      | unsplit
+128x14336x4096       64x64x32 2x2      448 | unsplit                      | unsplit                      | unsplit                      | unsplit
+256x256x16384      32x32x32 2x1       64 | S=8 128x128x32 4x2 (32 CTAs) | S=8 64x128x32 2x4 (64 CTAs)  | S=8 64x128x32 2x4 (64 CTAs)  | S=4 64x64x32 4x2 (64 CTAs)
+256x4096x4096       64x64x32 2x2      256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+256x4096x11008      64x64x32 2x2      256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+256x4096x14336      64x64x32 2x2      256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+256x11008x4096       64x64x32 2x2      688 | unsplit                      | unsplit                      | unsplit                      | unsplit
+256x14336x4096       64x64x32 2x2      896 | unsplit                      | unsplit                      | unsplit                      | unsplit
+512x512x4096       64x64x32 2x2       64 | S=4 128x128x32 4x2 (64 CTAs) | S=4 128x128x32 4x2 (64 CTAs) | S=2 64x128x32 2x4 (64 CTAs)  | unsplit
+512x512x16384      64x64x32 2x2       64 | S=4 128x128x32 4x2 (64 CTAs) | S=4 128x128x32 4x2 (64 CTAs) | S=4 128x128x32 4x2 (64 CTAs) | S=4 128x128x32 4x2 (64 CTAs)
+512x512x65536      64x64x32 2x2       64 | S=4 128x128x32 4x2 (64 CTAs) | S=4 128x128x32 4x2 (64 CTAs) | S=4 128x128x32 4x2 (64 CTAs) | S=4 128x128x32 4x2 (64 CTAs)
+512x4096x4096       64x128x32 2x4     256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+512x4096x11008      64x128x32 2x4     256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+512x4096x14336      64x128x32 2x4     256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+512x11008x4096       64x128x32 2x4     688 | unsplit                      | unsplit                      | unsplit                      | unsplit
+512x14336x4096       64x128x32 2x4     896 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1024x1024x1024       64x128x32 2x2     128 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1024x1024x16384      64x128x32 2x2     128 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1024x4096x4096       128x64x32 2x2     512 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1024x4096x11008      128x128x32 2x2    256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1024x4096x14336      128x128x32 2x2    256 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1024x11008x4096       128x128x32 2x2    688 | unsplit                      | unsplit                      | unsplit                      | unsplit
+1024x14336x4096       128x128x32 2x2    896 | unsplit                      | unsplit                      | unsplit                      | unsplit
+2048x2048x2048       128x64x32 2x2     512 | unsplit                      | unsplit                      | unsplit                      | unsplit
+2048x4096x4096       128x64x32 2x2    1024 | unsplit                      | unsplit                      | unsplit                      | unsplit
+2048x4096x11008      128x128x32 2x2    512 | unsplit                      | unsplit                      | unsplit                      | unsplit
+2048x4096x14336      128x128x32 2x2    512 | unsplit                      | unsplit                      | unsplit                      | unsplit
+2048x11008x4096       128x128x32 2x2   1376 | unsplit                      | unsplit                      | unsplit                      | unsplit
+2048x14336x4096       128x128x32 2x2   1792 | unsplit                      | unsplit                      | unsplit                      | unsplit
+4096x4096x4096       128x128x32 2x2   1024 | unsplit                      | unsplit                      | unsplit                      | unsplit
+8192x8192x8192       128x128x32 4x2   4096 | unsplit                      | unsplit                      | unsplit                      | unsplit

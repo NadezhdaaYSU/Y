@@ -1,0 +1,17 @@
+512x512x16384 run 1 int exit 0 20:01:22
+512x512x16384 run 1 normal exit 0 20:01:28
+512x512x65536 run 1 int exit 0 20:01:34
+512x512x65536 run 1 normal exit 0 20:01:40
+256x256x16384 run 1 int exit 0 20:01:47
+256x256x16384 run 1 normal exit 0 20:01:55
+512x512x4096 run 1 int exit 0 20:02:01
+512x512x4096 run 1 normal exit 0 20:02:07
+512x512x16384 run 2 int exit 0 20:02:13
+512x512x16384 run 2 normal exit 0 20:02:19
+512x512x65536 run 2 int exit 0 20:02:25
+512x512x65536 run 2 normal exit 0 20:02:31
+256x256x16384 run 2 int exit 0 20:02:38
+256x256x16384 run 2 normal exit 0 20:02:46
+512x512x4096 run 2 int exit 0 20:02:52
+512x512x4096 run 2 normal exit 0 20:02:58
+DONE
