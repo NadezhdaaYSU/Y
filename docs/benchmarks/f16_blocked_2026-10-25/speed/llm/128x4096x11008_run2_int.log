@@ -1,0 +1,5 @@
+128x4096x11008 data=int exact True graph True | during 100, 2775, 74.25 .. 100, 2775, 161.47
+  Y_mma                        min   157.76 med   158.14 us  cuBLAS/this 1.085  64x64 2x2 S=1 
+  Y_blk256                     min   158.11 med   159.59 us  cuBLAS/this 1.083  64x64 2x2 S=1 
+  Y_blk128                     min   158.18 med   159.56 us  cuBLAS/this 1.082  64x64 2x2 S=1 
+  cuBLAS                       min   171.22 med   173.15 us  cuBLAS/this 1.000   = 

@@ -1,5 +1,9 @@
 # F16 GEMM accuracy: three error metrics, nine input distributions, 2026-10-20
 
+*Since 2026-10-25 the default above 32 rows from K = 4096 is blocked
+summation, not the chain measured here as `Y_mma`
+(`../f16_blocked_2026-10-25/`).*
+
 RTX 4070 Ti SUPER, driver 615.71.09, PyTorch 2.13.0+cu130 (CUDA 13.0),
 Triton 3.7.1, NumPy 2.5.1; Y's compiler at c67119a under the re-tuned
 profile. Nothing here is timed. The results reproduce bit for bit. Two runs

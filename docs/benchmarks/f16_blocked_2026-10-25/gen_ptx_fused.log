@@ -1,0 +1,12 @@
+mma gemm_f16_swiglu_4096: CTA 64x64x32 (fixed) | 4x2 warps | blocks 0 | 0 bytes spill stores Used 103 registers 
+mma gemm_f16_bias_relu_8192: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 146 registers 
+mma gemm_f16_16384: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 146 registers 
+mma gemm_f16_4096: CTA 128x128x32 | 2x2 warps | blocks 0 | 0 bytes spill stores Used 231 registers 
+blk128 gemm_f16_swiglu_4096: CTA 64x64x32 (fixed) | 4x2 warps | blocks 0 | 0 bytes spill stores Used 138 registers 
+blk128 gemm_f16_bias_relu_8192: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 212 registers 
+blk128 gemm_f16_16384: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 212 registers 
+blk128 gemm_f16_4096: CTA 128x128x32 | 2x2 warps | blocks 0 | 0 bytes spill stores Used 231 registers 
+blk256 gemm_f16_swiglu_4096: CTA 64x64x32 (fixed) | 4x2 warps | blocks 0 | 0 bytes spill stores Used 138 registers 
+blk256 gemm_f16_bias_relu_8192: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 212 registers 
+blk256 gemm_f16_16384: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 212 registers 
+blk256 gemm_f16_4096: CTA 128x128x32 | 2x2 warps | blocks 0 | 0 bytes spill stores Used 231 registers 

@@ -1,0 +1,10 @@
+# The check/regen_all.sh of ../f16_kahan_default_2026-10-24 run with this tree's compiler: every tests/*.ysu that has a
+# committed .ptx, under the re-tuned profile, compared with HEAD's (b67116d) committed .ptx and with this tree's.
+differs from HEAD: gemm_f16_16384
+differs from HEAD: gemm_f16_8192
+differs from HEAD: gemm_f16_bias_relu_8192
+differs from HEAD: gemm_f16_swiglu_4096
+differs from HEAD: test_drift
+DIFFERS FROM THIS TREE: test_drift
+same as HEAD: 55 of 60
+(test_drift's latency comments differ under every compiler; it is not regenerated.)

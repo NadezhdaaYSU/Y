@@ -1,0 +1,7 @@
+  4096 {'mma': '64x64 4x2', 'blk128': '64x64 4x2', 'blk256': '64x64 4x2', 'blk256cap': '64x64 4x2', 'Y unfused': '128x128 2x2'} | fused bitwise equal False | max err mma 1.5e-05, blk128 7.6e-07, blk256 1.0e-06, blk256cap 1.0e-06, Y unfused 1.5e-05, PyTorch 1.5e-05 | SM 2715-2715 MHz
+      mma          min   3317.76 median   3346.43 us
+      blk256cap    min   3418.11 median   3476.48 us
+      PyTorch      min   3620.29 median   3670.53 us
+      Y unfused    min   3642.86 median   3702.14 us
+      blk256       min   4310.02 median   4457.98 us
+      blk128       min   4351.42 median   4510.50 us

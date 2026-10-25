@@ -1,0 +1,23 @@
+
+Totals over all cases: below cuBLAS in rel_F and max_norm / same bits as cuBLAS / neither
+  Y_f32       70 /   0 /   2
+  Y_mma        0 /  36 /  36
+  Y_blk64     72 /   0 /   0
+  Y_blk128    72 /   0 /   0
+  Y_blk256    63 /   9 /   0
+  Y_blk512    63 /   9 /   0
+  Y_blk1024   45 /  27 /   0
+
+Totals over all cases: below cuBLAS in rel_F and max_norm / same bits as cuBLAS / neither
+  Y_f32       54 /   0 /   0
+  Y_mma        0 /  45 /   9
+  Y_blk128    54 /   0 /   0
+  Y_blk256    54 /   0 /   0
+
+Totals over all cases: below cuBLAS in rel_F and max_norm / same bits as cuBLAS / neither
+  Y_mma        0 /   0 /  18
+  Y_blk256    18 /   0 /   0
+  Y_f32_s4    18 /   0 /   0
+  Y_mma_s4     0 /   0 /  18
+  Y_blk128_s4  18 /   0 /   0
+  Y_blk256_s4  18 /   0 /   0

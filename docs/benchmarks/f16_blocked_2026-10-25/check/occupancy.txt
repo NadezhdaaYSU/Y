@@ -1,0 +1,19 @@
+# occupancy.py on the committed kernels this changes: HEAD's (b67116d, chain) then this tree's (blocked)
+HEAD:tests/gemm_f16_8192.ptx 128x128x32 4x2 regs 146 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+tree:tests/gemm_f16_8192.ptx 128x128x32 4x2 regs 212 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+HEAD:tests/gemm_f16_16384.ptx 128x128x32 4x2 regs 146 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+tree:tests/gemm_f16_16384.ptx 128x128x32 4x2 regs 212 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+HEAD:tests/gemm_f16_bias_relu_8192.ptx 128x128x32 4x2 regs 146 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+tree:tests/gemm_f16_bias_relu_8192.ptx 128x128x32 4x2 regs 212 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+HEAD:tests/gemm_f16_swiglu_4096.ptx 64x64x32 4x2 regs 103 spill    0 smem  49152 | CTAs/SM regs 2 smem 2 threads 6 -> 2
+tree:tests/gemm_f16_swiglu_4096.ptx 64x64x32 4x2 regs 133 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+# and the measured kernels of each tile kind
+ptx/512x512x4096/Y_mma.ptx                                   64x64x32 2x2 regs  96 spill    0 smem  32768 | CTAs/SM regs 5 smem 3 threads 12 -> 3
+ptx/512x512x4096/Y_blk256.ptx                                64x64x32 2x2 regs 128 spill    0 smem  32768 | CTAs/SM regs 4 smem 3 threads 12 -> 3
+ptx3/512x4096x4096/Y_mma.ptx                                 64x128x32 2x4 regs  94 spill    0 smem  49152 | CTAs/SM regs 2 smem 2 threads 6 -> 2
+ptx3/512x4096x4096/Y_blk256.ptx                              64x128x32 2x4 regs 126 spill    0 smem  49152 | CTAs/SM regs 2 smem 2 threads 6 -> 2
+ptx3/1024x4096x4096/Y_mma.ptx                                128x64x32 2x2 regs 150 spill    0 smem  49152 | CTAs/SM regs 3 smem 2 threads 12 -> 2
+ptx3/1024x4096x4096/Y_blk256.ptx                             128x64x32 2x2 regs 214 spill    0 smem  49152 | CTAs/SM regs 2 smem 2 threads 12 -> 2
+ptx_split/512x512x65536/Y_f32_s4.ptx                         128x128x32 4x2 regs 218 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+ptx_split/512x512x65536/Y_mma_s4.ptx                         128x128x32 4x2 regs 148 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1
+ptx_split/512x512x65536/Y_blk256_s4.ptx                      128x128x32 4x2 regs 214 spill    0 smem  49152 | CTAs/SM regs 1 smem 2 threads 6 -> 1

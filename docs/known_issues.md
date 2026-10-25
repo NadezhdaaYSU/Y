@@ -48,11 +48,25 @@ source; each entry there now carries its status. What is still open:
   Frobenius error, the maximum absolute error, and the maximum error over
   S_ij = sum_k |a_ik| |b_kj|. Where cuBLAS and Triton also chain (256^3 to
   4096^3, 512 x 512 x 1024), the three give the same bits. Elsewhere cuBLAS is
-  more accurate on every distribution and metric:
+  more accurate than the chain on every distribution and metric:
   - 8192^3: about 3x.
   - 512 x 512 x 4096 to 65536: 2-8x, and up to 70x in relative Frobenius
     error on the long-K cancellation case. cuBLAS splits K at 16384 and
     65536.
+  - 64 x 4096 x 4096: 2-9x.
+
+  **Status (2026-10-25): fixed where the block sums fit.** From K = 4096 the
+  sum is blocked by default (`docs/benchmarks/f16_blocked_2026-10-25/`):
+  chained 256 of K at a time into a block sum added in float32. Its relative Frobenius and maximum
+  normalized errors are below cuBLAS's in all 117 cases where it differs from
+  the chain, at all three shapes above and at 512 x 4096 x 14336 among
+  others. Tiles holding 128 accumulators a thread (64 x 64 warp tiles, such
+  as 4096^3's) keep the chain, whose bits are cuBLAS's at the shapes measured
+  with them. Per output it is still farther from R than cuBLAS on up to 27%
+  of the outputs under cancellation. It costs 0-4% of the chain's speed
+  (median 1% over 22 LLM layer shapes); at 512 x 512 x 16384 that is
+  0.97-0.985x cuBLAS's speed where the chain was 1.01x, and at 65536
+  0.91-0.94x (the blocked split-K kernel runs at 1.01-1.04x).
 
   A kernel named `<name>_splitk<S>` splits K (2026-10-20,
   `docs/benchmarks/f16_splitk_2026-10-20/`), each split in float32, the
@@ -61,7 +75,10 @@ source; each entry there now carries its status. What is still open:
   at 65536 it takes 404-412 us against cuBLAS's 401-404. Chained
   (`Y_F16_ACCUMULATE=mma`) it takes 388-398 us and is half as accurate as
   cuBLAS. cuBLAS's own bits there are Y's chained split 8, and at 4096
-  chained split 2.
+  chained split 2. Since 2026-10-25 a split of more than 32 rows longer
+  than a block sums blocks by default: in 4 splits it is below cuBLAS in
+  all 18 cases at 16384 and 65536 and runs at 1.01-1.04x cuBLAS's speed
+  (`docs/benchmarks/f16_blocked_2026-10-25/`).
 
   GEMMs of at most 32 rows add each mma's result in float32 instead,
   compensated by default since 2026-10-24 (below). `Y_F16_ACCUMULATE=f32`

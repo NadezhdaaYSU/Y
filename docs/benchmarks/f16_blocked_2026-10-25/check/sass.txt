@@ -1,0 +1,19 @@
+# sass_loops.py (Build cuda_13.4.r13.4/compiler.38855100_0): each kernel's K loop in SASS, the innermost backward branch around its first HMMA.
+# 8192^3 (128x128x32, 4x2 warps): the chain; blocked v1 (fold behind a branch in the loop body); v2 (fold on an inner
+# loop's exit, tested as 'a multiple of 8 and not all of K'); v3 (this commit: the block's end computed once). Then v3 and
+# the chain or float32 at each other tile kind the change reaches.
+chain_8192.ptx: K loop 94 instructions, 1 predicated, HMMA 32, FADD 0; kernel 552 instructions, FADD 0
+v1_branch_8192.ptx: K loop 193 instructions, 97 predicated, HMMA 32, FADD 64; kernel 744 instructions, FADD 128
+v2_inner_two_tests_8192.ptx: K loop 95 instructions, 1 predicated, HMMA 32, FADD 0; kernel 680 instructions, FADD 64
+v3_inner_bound_8192.ptx: K loop 92 instructions, 1 predicated, HMMA 32, FADD 0; kernel 696 instructions, FADD 64
+v3_fused_blk256_gemm_f16_swiglu_4096.ptx: K loop 72 instructions, 1 predicated, HMMA 16, FADD 0; kernel 512 instructions, FADD 34
+v3_fused_mma_gemm_f16_swiglu_4096.ptx: K loop 71 instructions, 1 predicated, HMMA 16, FADD 0; kernel 424 instructions, FADD 2
+v3_ptx3_1024x4096x4096_Y_blk256.ptx: K loop 92 instructions, 1 predicated, HMMA 32, FADD 0; kernel 688 instructions, FADD 64
+v3_ptx3_1024x4096x4096_Y_mma.ptx: K loop 92 instructions, 1 predicated, HMMA 32, FADD 0; kernel 552 instructions, FADD 0
+v3_ptx3_512x4096x4096_Y_blk256.ptx: K loop 61 instructions, 1 predicated, HMMA 16, FADD 0; kernel 616 instructions, FADD 32
+v3_ptx3_512x4096x4096_Y_mma.ptx: K loop 61 instructions, 1 predicated, HMMA 16, FADD 0; kernel 536 instructions, FADD 0
+v3_ptx_512x512x4096_Y_blk256.ptx: K loop 64 instructions, 1 predicated, HMMA 16, FADD 0; kernel 472 instructions, FADD 32
+v3_ptx_512x512x4096_Y_mma.ptx: K loop 64 instructions, 1 predicated, HMMA 16, FADD 0; kernel 392 instructions, FADD 0
+v3_ptx_split_512x512x65536_Y_blk256_s4.ptx: K loop 92 instructions, 1 predicated, HMMA 32, FADD 0; kernel 760 instructions, FADD 76
+v3_ptx_split_512x512x65536_Y_f32_s4.ptx: K loop 221 instructions, 1 predicated, HMMA 32, FADD 128; kernel 736 instructions, FADD 140
+v3_ptx_split_512x512x65536_Y_mma_s4.ptx: K loop 94 instructions, 1 predicated, HMMA 32, FADD 0; kernel 608 instructions, FADD 12

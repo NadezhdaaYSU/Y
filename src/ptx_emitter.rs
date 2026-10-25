@@ -600,6 +600,12 @@ pub enum F16Accumulation {
     /// (docs/benchmarks/f16_kahan_2026-10-20/). The default up to 32 rows,
     /// outside split K.
     Kahan,
+    /// Blocked summation: chained as `Chain` into a block sum of its own,
+    /// which is added into the accumulator in float32 (`add.rn.f32`) and
+    /// zeroed after every `f16_block_k` of K. The tensor core's truncation
+    /// then acts on sums of one block, not of the whole K. The default above
+    /// 32 rows from K = 4096, split or not, where the block sums fit.
+    Blocked,
 }
 
 /// One accumulator register under `F16Accumulation::Kahan` (`emit_f16_mma`).
@@ -1224,6 +1230,13 @@ pub struct PtxEmitter {
     /// K-tile's 16-deep steps.
     f16_kahan: Vec<KahanAccumulator>,
     f16_kahan_tile_mmas: u32,
+    /// Under `F16Accumulation::Blocked`, each accumulator register and the
+    /// block sum its mmas chain into (`emit_f16_block_sums`), how many
+    /// K-tiles a block spans, and the K loop's inner top and the register
+    /// holding where the block ends (`emit_f16_block_loop_top`).
+    f16_blocks: Vec<(String, String)>,
+    f16_block_tiles: u32,
+    f16_block_inner: Option<(String, String)>,
     /// CTAs per SM a tile GEMM's registers must leave room for, when it asks
     /// for more than one (`emit_kernel` tightens `.maxnreg` to match).
     tile_gemm_ctas_per_sm: Option<u32>,
@@ -1546,6 +1559,9 @@ impl PtxEmitter {
             f16_mma_zero: None,
             f16_kahan: Vec::new(),
             f16_kahan_tile_mmas: 1,
+            f16_blocks: Vec::new(),
+            f16_block_tiles: 1,
+            f16_block_inner: None,
             tile_gemm_ctas_per_sm: None,
             pending_module_items: Vec::new(),
             shared_arrays: Vec::new(),
@@ -7953,7 +7969,7 @@ declare it as a Q format.\n{}",
     /// floats), and a second entry, `<name>_reduce`, sums the slots in
     /// order into C: a fixed order, no atomics, so the result does not
     /// depend on which CTAs ran first. Every split accumulates each mma in
-    /// float32 unless `Y_F16_ACCUMULATE=mma` (see `f16_accumulates_in_f32`).
+    /// float32 unless `Y_F16_ACCUMULATE=mma` (see `f16_accumulation`).
     /// `type_checker::verify_tile_gemm_kernel` applies this same function.
     pub fn gemm_split_k(name: &str) -> Option<Result<u32, String>> {
         let (_, last) = name.rsplit_once('_')?;
@@ -12295,10 +12311,16 @@ declare it as a Q format.\n{}",
     /// zero and then folded into `d` with four `add.rn.f32`, as the FP8 GEMM
     /// does (`emit_fp8_mma_into`) - or, when `d`'s register has a
     /// compensation (`emit_f16_kahan_compensations`), into its tile sum,
-    /// folded in once per K-tile - see `f16_accumulates_in_f32`.
+    /// folded in once per K-tile - see `f16_accumulation`. Under
+    /// `F16Accumulation::Blocked` the chain runs in `d`'s block sums
+    /// (`emit_f16_block_sums`) instead.
     fn emit_f16_mma(&mut self, d: &[String], a: &[String], b: &[String]) {
         let Some(z) = self.f16_mma_zero.clone() else {
-            let d = d.join(",");
+            let d: Vec<&String> = d.iter().map(|r| match self.f16_blocks.iter().find(|(acc, _)| acc == r) {
+                Some((_, block)) => block,
+                None => r,
+            }).collect();
+            let d = d.iter().map(|r| r.as_str()).collect::<Vec<_>>().join(",");
             writeln!(
                 &mut self.ptx_buffer,
                 "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
@@ -12345,9 +12367,9 @@ declare it as a Q format.\n{}",
         self.f16_kahan[i].pending = 0;
     }
 
-    /// Whether an F16 GEMM of `m` rows adds each mma's result into its
-    /// accumulators in float32 rather than chaining the K loop in the tensor
-    /// core's accumulator.
+    /// How an F16 GEMM of `m` rows and `k` deep adds its K loop's mmas, when
+    /// each of its CTA's `threads` threads holds `accumulators` float32
+    /// accumulator registers (`split_k`: each split of a split-K GEMM).
     ///
     /// The tensor core adds into its accumulator with less than float32
     /// rounding: chained over K, same-sign results sit below float64 by about
@@ -12362,9 +12384,9 @@ declare it as a Q format.\n{}",
     /// 1.02-1.06x at 512 x 512 x 4096-65536 (1.10-1.12x at K = 1024), and
     /// 0.95-0.98x at M = 1, 4 and 8 and 1.004x at 32 (N = K = 4096), where
     /// the mmas, no longer chained through their accumulator, overlap. So it
-    /// is the default for every split of a split-K GEMM (`split_k`, see
-    /// `gemm_split_k`) and, compensated (`F16Accumulation::Kahan`), for
-    /// `m <= 32`. Compensated, it has a lower rel_F and max |E|/(|A||B|)
+    /// is the default for a split of a split-K GEMM (`split_k`, see
+    /// `gemm_split_k`) that is not blocked (below) and, compensated
+    /// (`F16Accumulation::Kahan`), for `m <= 32`. Compensated, it has a lower rel_F and max |E|/(|A||B|)
     /// than cuBLAS and SGEMM in all 63 cases measured, M = 1 included. At
     /// N = K = 4096 it costs nothing with B streamed from DRAM, and with B in
     /// the L2 takes 1.19-1.20x float32's time at M <= 8 and 1.06x at 32,
@@ -12372,30 +12394,61 @@ declare it as a Q format.\n{}",
     /// from DRAM at M = 32 with K = 11008 or 14336 it takes 1.02-1.03x
     /// (docs/benchmarks/f16_kahan_default_2026-10-24/). At 512 x 512, split
     /// or not, it takes 1.26-1.40x float32's time, so split K keeps float32.
-    /// `Y_F16_ACCUMULATE=f32`, `=kahan` or `=mma` selects one for every
-    /// shape; any other value is an error.
-    pub fn f16_accumulates_in_f32(m: u32, split_k: bool) -> bool {
-        Self::f16_accumulation(m, split_k) != F16Accumulation::Chain
-    }
-
-    /// How an F16 GEMM of `m` rows adds its mmas (see
-    /// `f16_accumulates_in_f32`).
-    pub fn f16_accumulation(m: u32, split_k: bool) -> F16Accumulation {
+    ///
+    /// Above 32 rows the chain is cuBLAS's sum wherever K is at most 2048
+    /// (bit for bit, in all 36 cases measured at 256^3-2048^3 and
+    /// 512 x 512 x 1024); from K = 4096 cuBLAS sometimes splits it and is
+    /// then the more accurate (8192^3, 512 x 512 x K, 64 x 4096 x 4096).
+    /// There, K at least 4096 and longer than a block (`f16_block_k`), the
+    /// sum is blocked (`F16Accumulation::Blocked`) where the block sums fit
+    /// (`f16_block_sums_fit`): below cuBLAS in rel_F and max |E|/(|A||B|)
+    /// in all 117 cases measured where it is not the chain, at 0.96-1.02x
+    /// the chain's speed (median 0.99 over 22 LLM layer shapes; 8192^3
+    /// 0.98-1.00x, still 1.005-1.02x cuBLAS's); elsewhere it is the chain
+    /// (docs/benchmarks/f16_blocked_2026-10-25/). A split of more than 32
+    /// rows whose K is longer than a block is blocked too, where its block
+    /// sums fit: below cuBLAS in all 18 cases at 512 x 512 x 16384 and 65536
+    /// in 4 splits, at 1.02-1.06x float32's speed there (1.01-1.04x
+    /// cuBLAS's). `Y_F16_ACCUMULATE=f32`, `=kahan`, `=blocked` or `=mma`
+    /// selects one for every shape; any other value is an error.
+    pub fn f16_accumulation(m: u32, k: u32, accumulators: u32, threads: u32, split_k: bool) -> F16Accumulation {
         match std::env::var("Y_F16_ACCUMULATE").as_deref() {
+            Err(_) if split_k && m > 32 && k > Self::f16_block_k() && Self::f16_block_sums_fit(accumulators, threads) => F16Accumulation::Blocked,
             Err(_) if split_k => F16Accumulation::F32,
             Err(_) if m <= 32 => F16Accumulation::Kahan,
+            Err(_) if k >= 4096 && k > Self::f16_block_k() && Self::f16_block_sums_fit(accumulators, threads) => F16Accumulation::Blocked,
             Err(_) => F16Accumulation::Chain,
             Ok("f32") => F16Accumulation::F32,
             Ok("kahan") => F16Accumulation::Kahan,
             Ok("mma") => F16Accumulation::Chain,
-            Ok(other) => panic!("Y_F16_ACCUMULATE must be `f32`, `kahan` or `mma`, not {other:?}"),
+            Ok("blocked") => F16Accumulation::Blocked,
+            Ok(other) => panic!("Y_F16_ACCUMULATE must be `f32`, `kahan`, `blocked` or `mma`, not {other:?}"),
+        }
+    }
+
+    /// Whether a block sum for each of `accumulators` registers a thread
+    /// leaves the chain's registers within what each of `threads` threads
+    /// can have (65,536 an SM, at most 255 a thread). Measured, the chain
+    /// kept 54-103 registers besides its accumulators and the block sums
+    /// added one each (8192^3: 146 -> 212); a 64 x 64 warp tile's 128
+    /// accumulators would pass 255 (4096^3: 844 bytes of spill stores).
+    fn f16_block_sums_fit(accumulators: u32, threads: u32) -> bool {
+        2 * accumulators + 100 <= (65536 / threads.max(1)).min(255)
+    }
+
+    /// How much of K a block sum takes under `F16Accumulation::Blocked`.
+    pub fn f16_block_k() -> u32 {
+        match std::env::var("Y_F16_BLOCK_K") {
+            Ok(v) => v.parse().ok().filter(|b: &u32| b.is_power_of_two() && *b >= 16)
+                .unwrap_or_else(|| panic!("Y_F16_BLOCK_K must be a power of two of at least 16, not {v:?}")),
+            Err(_) => 256,
         }
     }
 
     /// The zero register `emit_f16_mma` starts each mma from, emitted, when an
-    /// F16 GEMM of `m` rows accumulates in float32; `None` otherwise.
-    fn emit_f16_mma_zero(&mut self, m: u32, split_k: bool) -> Option<String> {
-        if !Self::f16_accumulates_in_f32(m, split_k) {
+    /// F16 GEMM's `mode` adds each mma's result in float32; `None` otherwise.
+    fn emit_f16_mma_zero(&mut self, mode: F16Accumulation) -> Option<String> {
+        if !matches!(mode, F16Accumulation::F32 | F16Accumulation::Kahan) {
             return None;
         }
         let z = self.alloc_regf32();
@@ -12408,8 +12461,8 @@ declare it as a Q format.\n{}",
     /// each mma's result into the tile sum and, after `tile_mmas` of them
     /// (one K-tile's 16-deep steps), folds it into the accumulator
     /// (`emit_f16_kahan_fold`).
-    fn emit_f16_kahan_compensations(&mut self, m: u32, split_k: bool, acc: &[Vec<Vec<String>>], tile_mmas: u32) {
-        if Self::f16_accumulation(m, split_k) != F16Accumulation::Kahan {
+    fn emit_f16_kahan_compensations(&mut self, mode: F16Accumulation, acc: &[Vec<Vec<String>>], tile_mmas: u32) {
+        if mode != F16Accumulation::Kahan {
             return;
         }
         self.f16_kahan_tile_mmas = tile_mmas.max(1);
@@ -12421,6 +12474,66 @@ declare it as a Q format.\n{}",
         }
     }
 
+    /// Under `F16Accumulation::Blocked`, a zeroed block sum for each
+    /// accumulator of `acc`, which `emit_f16_mma` chains into and
+    /// `emit_f16_block_fold` adds in once every `f16_block_k` of K, as
+    /// `cta_k`-deep K-tiles.
+    fn emit_f16_block_sums(&mut self, mode: F16Accumulation, acc: &[Vec<Vec<String>>], cta_k: u32) {
+        if mode != F16Accumulation::Blocked {
+            return;
+        }
+        self.f16_block_tiles = (Self::f16_block_k() / cta_k).max(1);
+        for r in acc.iter().flatten().flatten() {
+            let block = self.alloc_regf32();
+            writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", block).unwrap();
+            self.f16_blocks.push((r.clone(), block));
+        }
+    }
+
+    /// Under `F16Accumulation::Blocked`, after the K loop's exit test, when a
+    /// block spans more than one K-tile: where the block starting at K-tile
+    /// `k_iter` ends, `min(k_iter + tiles, k_tiles)`, and the top of the
+    /// inner loop over its K-tiles (`emit_f16_block_fold`).
+    fn emit_f16_block_loop_top(&mut self, k_iter: &str, k_tiles: u32) {
+        if self.f16_blocks.is_empty() || self.f16_block_tiles == 1 {
+            return;
+        }
+        let end = self.alloc_reg32();
+        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", end, k_iter, self.f16_block_tiles).unwrap();
+        writeln!(&mut self.ptx_buffer, "    min.u32 {}, {}, {};", end, end, k_tiles).unwrap();
+        let label = self.alloc_label("F16_BLOCK_TILE");
+        writeln!(&mut self.ptx_buffer, "    {}:", label).unwrap();
+        self.f16_block_inner = Some((label, end));
+    }
+
+    /// Under `F16Accumulation::Blocked`, after the K loop has counted K-tile
+    /// `k_iter - 1` done: back to the inner loop's top while the block has
+    /// K-tiles left, and then each block sum added into its accumulator and
+    /// zeroed. The folds sit on the inner loop's exit, not behind a branch in
+    /// its body: `ptxas` turned such a branch into predicated instructions
+    /// issued on every K-tile (8192^3: 193 SASS instructions a K-tile against
+    /// the chain's 94; with the inner loop 92, and the folds once a block).
+    /// The block's end is computed before the inner loop rather than tested
+    /// here as "a multiple of `tiles`, and not past K": `ptxas` fused that pair
+    /// into a two-predicate `BRA P0, ...`, a back edge
+    /// `tools/ptxas_tval/loopcfg.py` does not parse (its unroll census
+    /// refused the kernels). Every path out of the K loop passes a fold, so
+    /// no block sum is left to add after it.
+    fn emit_f16_block_fold(&mut self, k_iter: &str) {
+        if self.f16_blocks.is_empty() {
+            return;
+        }
+        if let Some((inner, end)) = self.f16_block_inner.take() {
+            let p = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, k_iter, end).unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{} bra {};", p, inner).unwrap();
+        }
+        for (acc, block) in &self.f16_blocks {
+            writeln!(&mut self.ptx_buffer, "    add.rn.f32 {}, {}, {};", acc, acc, block).unwrap();
+            writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", block).unwrap();
+        }
+    }
+
     /// After the K loop: each tile sum folded into its accumulator - a no-op
     /// where the loop's last step already folded it, and what keeps the sum
     /// whole on any path that leaves the loop with a tile sum pending - then
@@ -12428,7 +12541,8 @@ declare it as a Q format.\n{}",
     /// infinite term makes the sum +-Inf and its errors NaN or infinite; the
     /// sum is then kept as it is, as an uncompensated sum would be. (`s - s` is
     /// +0 exactly when `s` is finite: the check needs no float compare.) No
-    /// zero register or compensations from here on.
+    /// zero register, compensations or block sums from here on (the K loop
+    /// folded the block sums, `emit_f16_block_fold`).
     fn emit_f16_mma_finish(&mut self) {
         for i in 0..self.f16_kahan.len() {
             self.emit_f16_kahan_fold(i);
@@ -12440,6 +12554,7 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    @{} add.rn.f32 {}, {}, {};", finite, s, s, c).unwrap();
         }
         self.f16_kahan.clear();
+        self.f16_blocks.clear();
         self.f16_mma_zero = None;
     }
 
@@ -12922,7 +13037,8 @@ declare it as a Q format.\n{}",
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
         let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
-        self.f16_mma_zero = self.emit_f16_mma_zero(m, split.is_some());
+        let f16_mode = Self::f16_accumulation(m, k, num_i * num_j * 8, threads_per_cta, split.is_some());
+        self.f16_mma_zero = self.emit_f16_mma_zero(f16_mode);
 
         // ---- accumulator fragments acc[i][j]: 8 f32 regs each, zeroed ----
         let mut acc: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -12939,7 +13055,8 @@ declare it as a Q format.\n{}",
             }
             acc.push(row);
         }
-        self.emit_f16_kahan_compensations(m, split.is_some(), &acc, k_substeps);
+        self.emit_f16_kahan_compensations(f16_mode, &acc, k_substeps);
+        self.emit_f16_block_sums(f16_mode, &acc, cta_k);
 
         // Captured from whichever branch below runs, so the fused Bias+ReLU
         // epilogue can reuse this same dynamic shared buffer as its scratch
@@ -13000,6 +13117,7 @@ declare it as a Q format.\n{}",
             let exit_pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", exit_pred, k_iter, k_tiles).unwrap();
             writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
+            self.emit_f16_block_loop_top(&k_iter, k_tiles);
             let k0 = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0, k_iter, cta_k).unwrap();
 
@@ -13017,6 +13135,7 @@ declare it as a Q format.\n{}",
             );
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
+            self.emit_f16_block_fold(&k_iter);
             writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
             writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
         } else {
@@ -13151,6 +13270,7 @@ declare it as a Q format.\n{}",
             let exit_pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", exit_pred, k_iter, k_tiles).unwrap();
             writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
+            self.emit_f16_block_loop_top(&k_iter, k_tiles);
 
             // Where the copies are spread between the MMAs, the wait for
             // this iteration's tile (group `k_iter`) and the barrier start
@@ -13299,6 +13419,7 @@ declare it as a Q format.\n{}",
             }
 
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
+            self.emit_f16_block_fold(&k_iter);
             writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
             writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
 
@@ -13906,7 +14027,10 @@ declare it as a Q format.\n{}",
         let col_bit_a = self.alloc_reg32();
         writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 1;", col_bit_a, col_bit_a_wide).unwrap();
         let frag_layout = self.emit_gemm_frag_layout(smem_a, smem_b, &row_off, &col_bit_a);
-        self.f16_mma_zero = self.emit_f16_mma_zero(m, false);
+        // Two arrays (gate, up) of 8 float32 registers per 16x16 fragment.
+        let f16_accumulators = 2 * num_i * num_j * 8;
+        let f16_mode = Self::f16_accumulation(m, k, f16_accumulators, threads_per_cta, false);
+        self.f16_mma_zero = self.emit_f16_mma_zero(f16_mode);
 
         let mut acc_gate: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
         let mut acc_up: Vec<Vec<Vec<String>>> = Vec::with_capacity(num_i as usize);
@@ -13930,8 +14054,23 @@ declare it as a Q format.\n{}",
             acc_gate.push(row_gate);
             acc_up.push(row_up);
         }
-        self.emit_f16_kahan_compensations(m, false, &acc_gate, k_substeps);
-        self.emit_f16_kahan_compensations(m, false, &acc_up, k_substeps);
+        self.emit_f16_kahan_compensations(f16_mode, &acc_gate, k_substeps);
+        self.emit_f16_kahan_compensations(f16_mode, &acc_up, k_substeps);
+        self.emit_f16_block_sums(f16_mode, &acc_gate, cta_k);
+        self.emit_f16_block_sums(f16_mode, &acc_up, cta_k);
+        // Blocked, the two arrays' block sums took this kernel from 103
+        // registers to 138 at 4096^3, one CTA an SM where shared memory
+        // allows two, and 0.77-0.78x the chain's speed; under the register
+        // limit two CTAs leave (128) `ptxas` fit it in 122, no spills, at
+        // 0.97x (docs/benchmarks/f16_blocked_2026-10-25/). So ask for the
+        // CTAs shared memory allows, where that leaves the block sums twice
+        // the accumulators and 64 more.
+        if f16_mode == F16Accumulation::Blocked {
+            let ctas = (hw_profile.max_smem_per_sm_bytes / (total_dyn_smem_bytes + 1024)).max(1);
+            if ctas > 1 && 2 * f16_accumulators + 64 <= 65536 / (threads_per_cta * ctas) {
+                self.tile_gemm_ctas_per_sm = Some(ctas);
+            }
+        }
 
         let smem_symbol = format!("smem_pipeline_{}", kernel_name);
         self.pending_extern_decls.push(format!(".extern .shared .align 16 .b8 {}[];", smem_symbol));
@@ -13961,6 +14100,7 @@ declare it as a Q format.\n{}",
             let exit_pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", exit_pred, k_iter, k_tiles).unwrap();
             writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
+            self.emit_f16_block_loop_top(&k_iter, k_tiles);
             let k0 = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", k0, k_iter, cta_k).unwrap();
 
@@ -13984,6 +14124,7 @@ declare it as a Q format.\n{}",
             );
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
+            self.emit_f16_block_fold(&k_iter);
             writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
             writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
         } else {
@@ -14035,6 +14176,7 @@ declare it as a Q format.\n{}",
             let exit_pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", exit_pred, k_iter, k_tiles).unwrap();
             writeln!(&mut self.ptx_buffer, "    @{} bra {};", exit_pred, loop_end).unwrap();
+            self.emit_f16_block_loop_top(&k_iter, k_tiles);
 
             let read_stage = self.alloc_reg32();
             writeln!(&mut self.ptx_buffer, "    rem.u32 {}, {}, {};", read_stage, k_iter, n_stages).unwrap();
@@ -14096,6 +14238,7 @@ declare it as a Q format.\n{}",
             writeln!(&mut self.ptx_buffer, "    bar.sync 0;").unwrap();
 
             writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, 1;", k_iter, k_iter).unwrap();
+            self.emit_f16_block_fold(&k_iter);
             writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
             writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
 

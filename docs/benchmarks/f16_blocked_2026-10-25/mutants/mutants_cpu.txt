@@ -1,0 +1,25 @@
+k_ge_2048 killed
+k_gt_4096 killed
+no_fit_check killed
+fit_counts_once killed
+blocked_before_split killed
+blocked_before_decode killed
+block_end_off_by_one killed
+inner_test_le killed
+block_end_not_capped_at_k killed
+fold_no_zeroing killed
+inner_back_edge_to_nowhere_new killed
+no_inner_loop killed
+mma_into_accumulator killed
+tiles_per_16 killed
+block_k_default_128 killed
+block_k_not_power_of_two killed
+zero_register_for_blocked killed
+drop_fold_gemm_single_stage killed
+drop_fold_gemm_pipelined killed
+drop_fold_swiglu_single_stage killed
+drop_fold_swiglu_pipelined killed
+drop_top_gemm_pipelined killed
+drop_top_swiglu_single_stage killed
+swiglu_counts_one_array killed
+restored passes True
