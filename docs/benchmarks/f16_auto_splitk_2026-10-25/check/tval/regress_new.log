@@ -1,0 +1,68 @@
+tval --selftest        ok: symmetric_cuts drops exactly the asymmetric cut, in both directions
+rn                     VALIDATED  9 obligations  1 stores, 3 loads, 0.0s
+plain                  UNPROVED  10 obligations  1 stores, 3 loads, 0.0s
+folded                 VALIDATED  9 obligations  1 stores, 3 loads, 0.0s
+sub                    VALIDATED  7 obligations  1 stores, 2 loads, 0.0s
+unfoldable             UNPROVED  9 obligations  2 stores, 1 loads, 0.0s
+relu                   VALIDATED  5 obligations  1 stores, 1 loads, 0.0s
+general                VALIDATED  7 obligations  1 stores, 2 loads, 0.0s
+min                    VALIDATED  7 obligations  1 stores, 2 loads, 0.0s
+bn254_permute          VALIDATED  30 obligations  8 stores, 3 loads, 0.2s
+bn254_sub_vec          VALIDATED  62 obligations  8 stores, 4 loads, 0.6s
+ptx_carry_chain        VALIDATED  97 obligations  16 stores, 8 loads, 0.9s
+exact_pv               VALIDATED  18 obligations  2 stores, 3 relation pairs, 1 multiplier identity instance(s) ASSUMED, 1.4s
+naive_gemm_f32         VALIDATED  13 obligations  1 stores, 2 relation pairs, 0.2s
+naive_gemm_f32_muladd  UNPROVED  11 obligations  store 0 value: sat, 0.2s
+naive_gemm_f32_rn      VALIDATED  13 obligations  1 stores, 2 relation pairs, 0.3s
+smem_roundtrip         VALIDATED  18 obligations  4 stores, 0 loads  [+6 shared obligations, 1 barrier(s)]  0.2s
+mem/las_sass           UNPROVED  11 obligations  2 stores, 2 loads, 0.0s
+mem/las_ptx            UNPROVED  11 obligations  2 stores, 2 loads, 0.0s
+mem/lsls               VALIDATED  10 obligations  2 stores, 2 loads, 0.0s
+mem/swap_alias         UNPROVED  9 obligations  stores 0 and 1 are REORDERED and may overlap [sat]
+mem/swap_off3          UNPROVED  9 obligations  stores 0 and 1 are REORDERED and may overlap [sat]
+mem/swap_off4          VALIDATED  11 obligations  2 stores, 2 loads, 0.0s
+mem/off3               VALIDATED  10 obligations  2 stores, 2 loads, 0.0s
+mem/sls_alias          VALIDATED  10 obligations  2 stores, 2 loads, 0.0s
+mem/pret               VALIDATED  5 obligations  1 stores, 1 loads, 0.0s
+mem/pret_wrong         UNPROVED  3 obligations  store 0 guard: sat
+mem/pstore             REFUSED  0 obligations  store in the PTX prologue (1); this validator compares the stores after the loop only, so a store before it would go uncompared  (refusing, not guessing), 0.0s
+mem/pstore_wrong       REFUSED  0 obligations  store in the PTX prologue (1); this validator compares the stores after the loop only, so a store before it would go uncompared  (refusing, not guessing), 0.0s
+corpus/ptx_subword_ops VALIDATED  31 obligations  7 stores, 5 loads, 0.2s
+mem/subword_hoist      UNPROVED  32 obligations  7 stores, 5 loads, 0.4s
+mem/subword_widen      UNPROVED  12 obligations  store 5 width: ptx 8 bits, sass 32 bits
+mem/loop_ls            REFUSED  0 obligations  PTX: 1 global load(s) in a region that runs after a region containing a global store; this validator executes regions separately, so a load that could read back a store made in an earlier region is a program it cannot represent  (refusing, not guessing), 0.0s
+mem/loop_swap          VALIDATED  12 obligations  2 stores, 2 relation pairs, 0.0s
+mem/loop_swap_wrong    UNPROVED  9 obligations  epilogue stores 0 and 1 are REORDERED and may overlap: sat, 0.0s
+mem/loop_swap_exit     REFUSED  0 obligations  SASS prologue can end the program (EXIT / ret); the epilogue is validated as if it always runs, which a program that may end first does not do  (refusing, not guessing), 0.0s
+mem/loop_body_exit     REFUSED  0 obligations  SASS loop body can end the program (EXIT / ret); the epilogue is validated as if it always runs, which a program that may end first does not do  (refusing, not guessing), 0.0s
+mem/loop_nostore       REFUSED  0 obligations  this loop kernel stores nothing on either side -- there is nothing to prove equal  (refusing, not guessing), 0.0s
+mem/loop_ret_wrong     REFUSED  0 obligations  PTX loop body can end the program (EXIT / ret); the epilogue is validated as if it always runs, which a program that may end first does not do  (refusing, not guessing), 0.0s
+smemval mem/las_sass   UNPROVED  9 obligations  store 1 value: sat  0.0s
+smemval mem/las_ptx    UNPROVED  9 obligations  store 1 value: sat  0.0s
+smemval mem/swap_alias UNPROVED  9 obligations  stores 0 and 1 are REORDERED and may overlap [sat]  0.0s
+smemval mem/lsls       VALIDATED  10 obligations  2 stores, 2 loads  0.0s
+nest y_cpu_matmul      VALIDATED  23 obligations  1 store(s) across the nest, 0.3s
+nest y_cpu_matmul_w1_store_stride UNPROVED  16 obligations  iteration store 0 address matched 0 sass stores, 0.3s
+nest y_cpu_matmul_w2_acc_add UNPROVED  16 obligations  iteration store 0 value: sat, 0.2s
+nest y_cpu_matmul_w3_acc_init UNPROVED  16 obligations  iteration store 0 value: sat, 0.3s
+nest y_cpu_matmul_w4_top_guard UNPROVED  23 obligations  ENTRY: zero-trip guards disagree: sat, 0.3s
+nest y_cpu_matmul_w5_inner_guard UNPROVED  14 obligations  ENTRY: zero-trip guards disagree: sat, 0.3s
+nest y_cpu_matmul_w6_inner_backedge UNPROVED  13 obligations  LOOPCOND: back edge vs the next guard: sat, 0.3s
+nest y_cpu_matmul_w7_acc_init_k0 UNPROVED  16 obligations  iteration store 0 value: sat, 0.3s
+nest nest_accum        VALIDATED  13 obligations  1 store(s) across the nest, 0.0s
+nest nest_accum_stale  UNPROVED  0 obligations  prologue load counts 0 vs 1, 0.0s
+nest naive_gemm_f32_rn VALIDATED  15 obligations  1 store(s) across the nest, 0.3s
+nest naive_gemm_f32_muladd UNPROVED  13 obligations  epilogue store 0 value: sat, 0.2s
+nest exact_pv          VALIDATED  22 obligations  2 store(s) across the nest, 2.0s
+nest loop_ls           VALIDATED  9 obligations  1 store(s) across the nest, 0.0s
+nest loop_swap_exit    REFUSED  0 obligations  the SASS program EXITs when the nest runs zero times, and something after it loads or stores  (refusing, not guessing), 0.0s
+tval executor refusal  REFUSED 0 probe refusal from inside an executor
+ptx_integer_ops        VALIDATED  66 obligations  17 stores, 2 loads, 2 over Int, 1.2s
+no_second_corr         UNPROVED  70 obligations  17 stores, 2 loads, 61.0s
+rem_wrong              UNPROVED  67 obligations  17 stores, 2 loads, 1 over Int, 13.9s
+rem_any_at_d0          VALIDATED  66 obligations  17 stores, 2 loads, 2 over Int, 1.0s
+bias_moved             REFUSED  0 obligations  IADD3 ['R8', 'R10', '0xfffffff', 'RZ'] on the estimate is not the measured bias +0xffffffe  (refusing, not guessing)
+twice                  VALIDATED  15 obligations  2 stores, 2 loads, 2 over Int, 0.8s
+twice_split            UNPROVED  13 obligations  2 stores, 2 loads, 1 over Int, 0.4s
+and1                   UNPROVED  7 obligations  1 stores, 2 loads, 0.2s
+and1_two               UNPROVED  7 obligations  1 stores, 2 loads, 0.2s

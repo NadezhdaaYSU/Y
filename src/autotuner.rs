@@ -376,15 +376,39 @@ pub const SPLIT_K_TILES: [AutotuneCandidate; 3] = [
     AutotuneCandidate { cta_m: 64, cta_n: 64, cta_k: 32, warps_m: 4, warps_n: 2, num_stages: 4, num_warps: 8 },
 ];
 
-/// What the split-K rule chose for an F16 GEMM (`Autotuner::split_k_plan`).
+/// The least depth of one split the measured choice tries
+/// (`Autotuner::split_k_measure_candidates`). The rule itself stops at
+/// `SPLIT_K_MIN_DEPTH`, but measured, 8 splits of 2048 were the fastest at
+/// 256 x 256 x 16384 with A and B from DRAM
+/// (docs/benchmarks/f16_auto_splitk_2026-10-25/followup/).
+pub const SPLIT_K_MEASURE_MIN_DEPTH: u32 = 1024;
+
+/// The persisted-key namespace of a measured split choice:
+/// `AUTOTUNE_F16_SPLITK_AUTO_<M>x<N>x<K>_<gpu>` (`Autotuner::split_k_plan`).
+const SPLIT_K_AUTO_TAG: &str = "F16_SPLITK_AUTO";
+
+/// What the split-K rule chose for an F16 GEMM, or what was measured
+/// (`Autotuner::split_k_plan`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SplitKPlan {
     /// The split count; 1 when K is not split.
     pub splits: u32,
     /// The split kernel's tile; `None` when K is not split.
     pub tile: Option<AutotuneCandidate>,
-    /// The CTA counts behind the choice, for the PTX header and the CLI.
+    /// The CTA counts or the measurement behind the choice, for the PTX
+    /// header and the CLI.
     pub reason: String,
+    /// Whether the choice was measured on this shape rather than the rule's.
+    pub measured: bool,
+}
+
+/// The split choices measured in this process (`Autotuner::split_k_plan`):
+/// the CLI resolves each kernel before codegen does, and one shape is
+/// measured once.
+static SPLIT_K_MEASURED: OnceLock<Mutex<HashMap<(u32, u32, u32), SplitKPlan>>> = OnceLock::new();
+
+fn split_k_measured() -> &'static Mutex<HashMap<(u32, u32, u32), SplitKPlan>> {
+    SPLIT_K_MEASURED.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 /// The persisted-key namespace of an F16 GEMM split `splits` ways in K:
@@ -408,16 +432,17 @@ fn load_persisted(
     tag: &str,
     hw_profile: &HardwareProfile,
 ) -> Option<AutotuneCandidate> {
-    let key = persist_key(m, n, k, tag, hw_profile);
+    parse_persisted_value(&load_profile_value(&persist_key(m, n, k, tag, hw_profile))?)
+}
+
+/// The profile's value for `key`, if it has one.
+fn load_profile_value(key: &str) -> Option<String> {
     let contents = std::fs::read_to_string(PROFILE_PATH).ok()?;
-    for line in contents.lines() {
-        if let Some((found, value)) = line.split_once('=') {
-            if found.trim() == key {
-                return parse_persisted_value(value);
-            }
-        }
-    }
-    None
+    contents
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .find(|(found, _)| found.trim() == key)
+        .map(|(_, value)| value.trim().to_string())
 }
 
 /// Nearest *measured* shape, for when this exact (M, N, K) has no entry.
@@ -528,9 +553,8 @@ fn store_persisted(
     candidate: &AutotuneCandidate,
 ) {
     let key = persist_key(m, n, k, tag, hw_profile);
-    let entry = format!(
-        "{}={},{},{},{},{},{}",
-        key,
+    let value = format!(
+        "{},{},{},{},{},{}",
         candidate.cta_m,
         candidate.cta_n,
         candidate.cta_k,
@@ -538,6 +562,13 @@ fn store_persisted(
         candidate.warps_n,
         candidate.num_stages
     );
+    store_profile_value(&key, &value);
+}
+
+/// Sets `key=value` in the profile, replacing a line for `key`.
+fn store_profile_value(key: &str, value: &str) {
+    let key = key.to_string();
+    let entry = format!("{}={}", key, value);
 
     let existing = std::fs::read_to_string(PROFILE_PATH).unwrap_or_default();
     if existing.is_empty() {
@@ -1016,12 +1047,169 @@ impl Autotuner {
         Self::resolve_split(m, n, k, splits, hw_profile, precision, Some(planned))
     }
 
-    /// The split-K rule for an `m x n x k` F16 GEMM, against the tile its
-    /// unsplit kernel would take (`autotune`) and the profile's SM count
-    /// (`split_k_choice`). A kernel named `<name>_splitk` takes this split.
+    /// The split of an `m x n x k` F16 GEMM: one measured on this shape where
+    /// there is one, else the split-K rule (`split_k_choice`) against the tile
+    /// the unsplit kernel would take (`autotune`) and the profile's SM count.
+    /// Only where the rule's gate passes (`split_k_gate`): elsewhere no split
+    /// was measured faster, and none is measured. A measurement is read from
+    /// the profile's `AUTOTUNE_F16_SPLITK_AUTO_<M>x<N>x<K>_<gpu>` entry
+    /// (`parse_split_k_entry`; an invalid one is refused, and the rule
+    /// decides) unless the tuning mode ignores persisted measurements, and is
+    /// taken under `--autotune`: `split_k_measure_candidates`, timed together
+    /// by `tune_gemm_f16_split_choice`, a tie with the unsplit kernel going to
+    /// it. No candidate of the rule's kind fits every shape:
+    /// near the DRAM balance more CTAs an SM win, where the GEMM is compute
+    /// bound the larger tile (docs/benchmarks/f16_auto_splitk_2026-10-25/followup/).
+    /// A kernel named `<name>_splitk` takes this split.
     pub fn split_k_plan(m: u32, n: u32, k: u32, hw_profile: &HardwareProfile) -> SplitKPlan {
+        Self::plan_split_k(m, n, k, hw_profile, true)
+    }
+
+    /// `split_k_plan`, but never measuring: what the CLI tells a plain GEMM.
+    pub fn split_k_plan_unmeasured(m: u32, n: u32, k: u32, hw_profile: &HardwareProfile) -> SplitKPlan {
+        Self::plan_split_k(m, n, k, hw_profile, false)
+    }
+
+    fn plan_split_k(m: u32, n: u32, k: u32, hw_profile: &HardwareProfile, may_measure: bool) -> SplitKPlan {
         let unsplit = Self::autotune(m, n, k, hw_profile, Precision::F16);
-        Self::split_k_choice(m, n, k, &unsplit, hw_profile.sm_count)
+        let rule = Self::split_k_choice(m, n, k, &unsplit, hw_profile.sm_count);
+        if Self::split_k_gate(m, n, k, &unsplit, hw_profile.sm_count).is_err() {
+            return rule;
+        }
+        if let Some(plan) = split_k_measured().lock().ok().and_then(|c| c.get(&(m, n, k)).cloned()) {
+            return plan;
+        }
+        let mode = tuning_mode();
+        let key = persist_key(m, n, k, SPLIT_K_AUTO_TAG, hw_profile);
+        if mode.may_use_cache() {
+            if let Some(value) = load_profile_value(&key) {
+                match Self::parse_split_k_entry(&value, m, n, k) {
+                    Ok((splits, tile)) => return Self::measured_split(splits, tile, &format!("measured ({})", key), k),
+                    Err(why) => eprintln!("[Y autotuner] ignoring {}={}: {}; the split-K rule decides", key, value, why),
+                }
+            }
+        }
+        if !(may_measure && mode.may_measure()) {
+            return rule;
+        }
+        let candidates = Self::split_k_measure_candidates(m, n, k, &unsplit);
+        let plan = match crate::empirical_autotune::tune_gemm_f16_split_choice(m, n, k, &candidates, hw_profile, true) {
+            Ok(ranked) if !ranked.is_empty() => {
+                let w = &ranked[0];
+                store_profile_value(&key, &Self::split_k_entry_value(w.splits, &w.candidate));
+                let tile = (w.splits > 1).then(|| w.candidate.clone());
+                Self::measured_split(w.splits, tile, &format!("measured by --autotune among {} kernels", ranked.len()), k)
+            }
+            Ok(_) => {
+                eprintln!("[Y autotuner] measuring the split of M={} N={} K={} ranked nothing; the split-K rule decides", m, n, k);
+                rule
+            }
+            Err(e) => {
+                eprintln!("[Y autotuner] could not measure the split of M={} N={} K={} ({}); the split-K rule decides", m, n, k, e);
+                rule
+            }
+        };
+        if let Ok(mut c) = split_k_measured().lock() {
+            c.insert((m, n, k), plan.clone());
+        }
+        plan
+    }
+
+    fn measured_split(splits: u32, tile: Option<AutotuneCandidate>, source: &str, k: u32) -> SplitKPlan {
+        let reason = match &tile {
+            Some(t) => format!(
+                "{}: {} splits of K={} on {}x{}x{} tiles, {}x{} warps",
+                source, splits, k / splits, t.cta_m, t.cta_n, t.cta_k, t.warps_m, t.warps_n
+            ),
+            None => format!("{}: not split", source),
+        };
+        SplitKPlan { splits, tile, reason, measured: true }
+    }
+
+    /// What `--autotune` measures for a `_splitk` GEMM: the unsplit kernel on
+    /// `unsplit`'s tile, then every split count of `SPLIT_K_COUNTS` the shape
+    /// allows (`PtxEmitter::gemm_split_k_shape`) at least
+    /// `SPLIT_K_MEASURE_MIN_DEPTH` deep, on each tile of `SPLIT_K_TILES` no
+    /// larger than M x N: at most ten kernels.
+    pub fn split_k_measure_candidates(m: u32, n: u32, k: u32, unsplit: &CtaTileConfig) -> Vec<(u32, AutotuneCandidate)> {
+        let mut candidates = vec![(
+            1,
+            AutotuneCandidate {
+                cta_m: unsplit.cta_m,
+                cta_n: unsplit.cta_n,
+                cta_k: unsplit.cta_k,
+                warps_m: unsplit.warps_m,
+                warps_n: unsplit.warps_n,
+                num_stages: unsplit.num_stages,
+                num_warps: unsplit.num_warps,
+            },
+        )];
+        for s in SPLIT_K_COUNTS {
+            if crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s).is_err() || k / s < SPLIT_K_MEASURE_MIN_DEPTH {
+                continue;
+            }
+            for t in SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m && t.cta_n <= n) {
+                candidates.push((s, t.clone()));
+            }
+        }
+        candidates
+    }
+
+    /// A measured split choice's profile value: `1` unsplit, else
+    /// `S,cta_m,cta_n,cta_k,warps_m,warps_n,stages`.
+    pub fn split_k_entry_value(splits: u32, tile: &AutotuneCandidate) -> String {
+        if splits > 1 {
+            format!("{},{},{},{},{},{},{}", splits, tile.cta_m, tile.cta_n, tile.cta_k, tile.warps_m, tile.warps_n, tile.num_stages)
+        } else {
+            "1".to_string()
+        }
+    }
+
+    /// Reads `split_k_entry_value`'s form for an `m x n x k` GEMM, refusing
+    /// what codegen could not emit: a split count the shape does not allow
+    /// (`PtxEmitter::gemm_split_k_shape`), a tile that does not tile
+    /// (`validate_warp_tiling`) or cannot be staged at the split's depth
+    /// (`empirical_autotune::is_emittable`), no pipeline stage, or anything
+    /// else.
+    pub fn parse_split_k_entry(value: &str, m: u32, n: u32, k: u32) -> Result<(u32, Option<AutotuneCandidate>), String> {
+        let nums = value
+            .split(',')
+            .map(|p| p.trim().parse::<u32>().map_err(|_| format!("`{}` is not a count", p.trim())))
+            .collect::<Result<Vec<u32>, String>>()?;
+        match nums[..] {
+            [1] => Ok((1, None)),
+            [s, cta_m, cta_n, cta_k, warps_m, warps_n, num_stages] if s >= 2 => {
+                crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s)?;
+                validate_warp_tiling(cta_m, cta_n, cta_k, warps_m, warps_n, 16, 16, 16)?;
+                let tile = AutotuneCandidate { cta_m, cta_n, cta_k, warps_m, warps_n, num_stages, num_warps: warps_m * warps_n };
+                if num_stages == 0 || !crate::empirical_autotune::is_emittable(&tile, k / s) {
+                    return Err(format!("the tile cannot be staged {} deep", k / s));
+                }
+                Ok((s, Some(tile)))
+            }
+            _ => Err("want `1`, or `S,cta_m,cta_n,cta_k,warps_m,warps_n,stages` with S of at least 2".into()),
+        }
+    }
+
+    /// The split-K rule's gate: the unsplit kernel's `unsplit` tile leaves SMs
+    /// without a CTA (fewer CTAs than `sm_count`) and the GEMM is not bound to
+    /// DRAM (`SPLIT_K_MIN_INTENSITY`). The unsplit CTAs where it passes, the
+    /// reason where it does not.
+    fn split_k_gate(m: u32, n: u32, k: u32, unsplit: &CtaTileConfig, sm_count: u32) -> Result<u64, String> {
+        let unsplit_ctas = m.div_ceil(unsplit.cta_m.max(1)) as u64 * n.div_ceil(unsplit.cta_n.max(1)) as u64;
+        let on = format!("{} CTAs of {}x{} unsplit on {} SMs", unsplit_ctas, unsplit.cta_m, unsplit.cta_n, sm_count);
+        if unsplit_ctas >= sm_count as u64 {
+            return Err(on);
+        }
+        let (m64, n64, k64) = (m as u128, n as u128, k as u128);
+        let (flops, bytes) = (2 * m64 * n64 * k64, 2 * m64 * k64 + 2 * k64 * n64 + 4 * m64 * n64);
+        if flops < SPLIT_K_MIN_INTENSITY as u128 * bytes {
+            return Err(format!(
+                "{}, but {:.0} flops a byte of A, B and C is below {}: bound to DRAM",
+                on, flops as f64 / bytes as f64, SPLIT_K_MIN_INTENSITY
+            ));
+        }
+        Ok(unsplit_ctas)
     }
 
     /// The split-K rule. Split only when the unsplit kernel's `unsplit` tile
@@ -1036,20 +1224,12 @@ impl Autotuner {
     /// could be chosen; the filter keeps that so at a lower threshold.)
     pub fn split_k_choice(m: u32, n: u32, k: u32, unsplit: &CtaTileConfig, sm_count: u32) -> SplitKPlan {
         let ctas = |cta_m: u32, cta_n: u32, s: u32| m.div_ceil(cta_m.max(1)) as u64 * n.div_ceil(cta_n.max(1)) as u64 * s as u64;
-        let unsplit_ctas = ctas(unsplit.cta_m, unsplit.cta_n, 1);
-        let not_split = |reason: String| SplitKPlan { splits: 1, tile: None, reason };
+        let not_split = |reason: String| SplitKPlan { splits: 1, tile: None, reason, measured: false };
+        let unsplit_ctas = match Self::split_k_gate(m, n, k, unsplit, sm_count) {
+            Ok(c) => c,
+            Err(why) => return not_split(why),
+        };
         let on = format!("{} CTAs of {}x{} unsplit on {} SMs", unsplit_ctas, unsplit.cta_m, unsplit.cta_n, sm_count);
-        if unsplit_ctas >= sm_count as u64 {
-            return not_split(on);
-        }
-        let (m64, n64, k64) = (m as u128, n as u128, k as u128);
-        let (flops, bytes) = (2 * m64 * n64 * k64, 2 * m64 * k64 + 2 * k64 * n64 + 4 * m64 * n64);
-        if flops < SPLIT_K_MIN_INTENSITY as u128 * bytes {
-            return not_split(format!(
-                "{}, but {:.0} flops a byte of A, B and C is below {}: bound to DRAM",
-                on, flops as f64 / bytes as f64, SPLIT_K_MIN_INTENSITY
-            ));
-        }
         let menu: Vec<&AutotuneCandidate> = SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m && t.cta_n <= n).collect();
         let mut best: Option<(u64, u32, AutotuneCandidate)> = None;
         for s in SPLIT_K_COUNTS {
@@ -1074,6 +1254,7 @@ impl Autotuner {
                 ),
                 splits: s,
                 tile: Some(t),
+                measured: false,
             },
             None => not_split(format!(
                 "{}, but no split of K={} into {:?} parts at least {} deep fills from {} to {} CTAs",
@@ -1180,8 +1361,9 @@ impl Autotuner {
             }
         }
 
-        // (5) Fresh measurement on the real device.
-        if mode.may_measure() {
+        // (5) Fresh measurement on the real device - not for a planned split,
+        // whose tile the split's own measurement chose (`split_k_plan`).
+        if mode.may_measure() && planned.is_none() {
             match crate::empirical_autotune::tune_gemm_f16_split(m, n, k, splits, hw_profile, &candidates, true) {
                 Ok(measured) if !measured.is_empty() => {
                     let best = measured[0].candidate.clone();

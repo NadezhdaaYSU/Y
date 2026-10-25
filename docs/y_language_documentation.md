@@ -1092,10 +1092,23 @@ for i in 0..100 {
   written (any pointer will do), and `_reduce` returns at once on any grid,
   so one launch sequence serves every S; a host that reads the header may
   skip it, which saves up to about 4% on the shortest kernels. A plain
-  three-parameter GEMM the
-  rule would split keeps its own launch; the compiler prints the split and
-  the workspace it would take
+  three-parameter GEMM the rule would split keeps its own launch; the
+  compiler prints the split and the workspace it would take
   ([record](benchmarks/f16_auto_splitk_2026-10-25/README.md)).
+
+  Under `--autotune` (or `Y_AUTOTUNE=measure`) a `_splitk` GEMM whose shape
+  passes the rule's gate is measured instead: the unsplit kernel on its own
+  tile and every S of 2, 4 and 8 with parts at least 1024 deep on each of the
+  three tiles that fits, timed together (B rotated through up to eight
+  copies, from DRAM unless eight fit in the L2; each split with its
+  reduction). The fastest wins unless the unsplit kernel is inside
+  that run's noise, which then keeps it. The choice is kept in
+  `.ysu_hw_profile` as `AUTOTUNE_F16_SPLITK_AUTO_<M>x<N>x<K>_<gpu>`, `1` or
+  `S,cta_m,cta_n,cta_k,warps_m,warps_n,stages`; later builds take it (the
+  header says `as measured`), `--no-autotune` ignores it, `--autotune-force`
+  measures again, and an entry codegen could not emit is refused with a
+  warning and the rule decides. A plain GEMM's note reads the entry but never
+  measures.
 * **On a loop, a statement or a `fn` it is refused.** It used to parse there
   and change nothing: on a `for`, the LLVM and PTX backends wrote it into their
   output as a comment (`[Y TILE OPTIMIZATION] Tiled loop dimensions`, the PTX

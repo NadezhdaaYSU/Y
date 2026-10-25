@@ -938,6 +938,7 @@ mod tests {
         let candidate = Autotuner::generate_candidates(256, 256, 256, Precision::F16)[0].clone();
         let result = MeasuredCandidate {
             candidate,
+            splits: 1,
             timing: Timing {
                 best_us: 10.0,
                 median_us: 11.0,

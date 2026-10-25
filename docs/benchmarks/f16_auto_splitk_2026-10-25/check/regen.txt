@@ -8,3 +8,24 @@ differs test_drift
 same 59 differ 1 fail 0
 this tree against HEAD, file for file: 0 of 60 differ
 (test_drift's latency comments differ under every compiler; it is not regenerated.)
+
+Rerun for the measured split choice, with this tree's compiler and HEAD's (391b7a1, the integ worktree's build):
+this tree:
+differs gemm_f16_decode_m1
+differs gemm_f16_decode_m32
+differs gemm_f16_decode_m4
+differs gemm_f16_decode_m8
+differs test_drift
+same 55 differ 5 fail 0
+HEAD:
+differs gemm_f16_decode_m1
+differs gemm_f16_decode_m32
+differs gemm_f16_decode_m4
+differs gemm_f16_decode_m8
+differs test_drift
+same 55 differ 5 fail 0
+this tree against HEAD, file for file: 0 of 60 differ
+The check above was taken before 38acd8e's emit_f16_mma_finish change (every fold first, then every finite
+check; each check reads only its own accumulator and compensation), so 38acd8e shipped the four decode kernels
+in the old order. They are regenerated here: 120 lines of each change, and with register numbers masked both
+versions hold the same lines (sorted, byte for byte). The validator's gates were run on both trees (check/tval/).

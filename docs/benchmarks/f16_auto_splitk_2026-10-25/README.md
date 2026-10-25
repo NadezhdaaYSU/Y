@@ -6,22 +6,29 @@ was in use (0-12% utilisation before the first batch, 26-46% before the later
 ones; `speed/*/env.txt`), and no game ran.
 
 **Status: opt-in.** A kernel named `<name>_splitk` takes the split-K rule's
-split; `Y_F16_ACCUMULATE=blocked_kahan` compensates the block folds. No default
-changed.
+split, or under `--autotune` a measured one; `Y_F16_ACCUMULATE=blocked_kahan`
+compensates the block folds. No default changed.
 
 ## In brief
 
-The rule splits three of the 51 shapes timed:
+The rule splits three of the 51 shapes timed. Against two unsplit baselines,
+the kernel on the profile's tile (what an ordinary build emits; the profile has
+no measurement of these shapes) and on a tile `--autotune` measured for the
+shape (`tuned_unsplit/`):
 
-| shape | split | over unsplit | over cuBLAS | over cuBLAS, A and B from DRAM |
+| shape | split | over unsplit, profile's tile | over unsplit, measured tile | over cuBLAS, L2 / DRAM |
 | :--- | :--- | ---: | ---: | ---: |
-| 512 x 512 x 16384 | 2, on 64x128 tiles | 1.085-1.089x | 1.059-1.065x | 1.02-1.07x |
-| 512 x 512 x 65536 | 2, on 64x128 tiles | 1.102-1.113x | 1.006-1.057x | (128 MB: from DRAM already) |
-| 256 x 256 x 16384 | 4, on 64x64 tiles | 2.36-2.40x | 1.023-1.025x | 0.93-0.96x |
+| 512 x 512 x 16384 | 2, on 64x128 tiles | 1.085-1.089x | 1.00-1.02x | 1.06-1.07x / 1.02-1.07x |
+| 512 x 512 x 65536 | 2, on 64x128 tiles | 1.102-1.113x | 1.03-1.05x | 0.96-1.06x (from DRAM) |
+| 256 x 256 x 16384 | 4, on 64x64 tiles | 2.36-2.40x | 1.78-2.21x | 1.02x / 0.94x |
 
-All 27 accuracy cases of these splits are below cuBLAS in rel_F and
-max |E|/(|A||B|). The other 48 shapes stay unsplit; above 32 rows no split of
-them was faster beyond the run's noise once operands came from DRAM.
+So at 512 x 512 most of the gap behind cuBLAS was the unsplit kernel's tile; at
+256 x 256 the split is the gain. All 27 accuracy cases of these splits are below
+cuBLAS in rel_F and max |E|/(|A||B|). The other 48 shapes stay unsplit; above
+32 rows no split of them was faster beyond the run's noise once operands came
+from DRAM. Under `--autotune` the split is measured (`measured/`): at the eight
+shapes timed with every candidate it takes the fastest or one inside the
+noise, but at 256 x 256 x 16384 from DRAM.
 
 ## What changed
 
@@ -159,37 +166,146 @@ shorter blocks reduce. At 512 x 512 x 16384 the cost takes the split from
 1.04-1.08x cuBLAS's speed to 0.98-1.01x (256) or 0.91-0.92x (64). Kept as an
 opt-in knob; the default is unchanged.
 
+## Follow-up: near the DRAM balance (`followup/`)
+
+`followup/run_balance.sh` timed five shapes with fewer than 66 unsplit CTAs and
+126-167 flops a byte (256 x 256 x 16384, 32768, 65536; 256 x 512 x 16384;
+256 x 384 x 32768), every S of 2, 4, 8 on 64x64, 64x128 and (at the last two)
+128x128, with A and B in the L2 (`l2`, `l2b`) and from DRAM (`dram`, `dramb`;
+the `b` batches retime the last two shapes with every column). The rule's
+choice against the fastest kernel measured:
+
+| shape | the rule | fastest | rule / fastest, L2 and DRAM |
+| :--- | :--- | :--- | :--- |
+| 256 x 256 x 16384 | 4 on 64x64 | 8 on 64x64 (DRAM) | 1.00 / 0.88 |
+| 256 x 256 x 32768 | 4 on 64x64 | 8 on 64x128 | 0.98 / 0.93 |
+| 256 x 256 x 65536 | 4 on 64x64 | 8 on 64x128 | 0.93 / 0.95 |
+| 256 x 512 x 16384 | 2 on 64x64 | 4 on 64x128 | 0.98 / 0.93 |
+| 256 x 384 x 32768 | 2 on 64x64 (48 CTAs) | 8 on 64x64 (192 CTAs) | 0.77 / 0.77 |
+
+`followup/variants.py` scores rule variants over every measured case of the
+eight shapes above 32 rows with fewer than 66 unsplit CTAs, both regimes
+(`variants.txt`; the pick's time over the fastest, 1 the best):
+
+| variant | worst | mean |
+| :--- | ---: | ---: |
+| the rule | 0.767 | 0.945 |
+| a tie to the larger tile, splits 2048 deep allowed | 0.801 | 0.966 |
+| two CTAs an SM for 64x64 tiles | 0.759 | 0.947-0.951 |
+
+No variant of the CTA count fits both kinds of shape: at 256 x 384 x 32768 the
+fastest runs 192 CTAs, about three an SM, 1.23x anything at one an SM, while at
+512 x 512 two 64x64 CTAs an SM were 0.92-0.96x one 64x128. Near the DRAM balance
+more CTAs in flight win; where the GEMM is compute bound the larger tile does.
+The rule is unchanged; a measured choice among its candidates (as `--autotune`
+measures tiles) would settle each shape on the hardware it runs on.
+
+## Against a tuned unsplit tile (`tuned_unsplit/`)
+
+The `--autotune` runs below measured the unsplit kernel's tile as well, and it
+was not the profile's: 64x64x64 4x2 (s3 at K = 4096 and 65536, s4 at 16384)
+at 512 x 512, 16x64x64 1x2 s4 at 256 x 256 x 16384. Pinned as `unsplit_tuned`
+beside the profile's tile and the splits, `l2/` and `dram/`
+(`summary.txt`; over `unsplit_tuned`):
+
+| shape | best split | unsplit, profile's tile | unsplit_tuned over cuBLAS |
+| :--- | :--- | ---: | ---: |
+| 512 x 512 x 4096 | 2 on 64x128: 0.94-0.96x | 0.93-0.95x | 1.11-1.13x |
+| 512 x 512 x 16384 | 2 on 64x128: 1.00-1.02x | 0.92-0.93x | 1.02-1.06x |
+| 512 x 512 x 65536 | 2 on 64x128: 1.03-1.05x | 0.93-0.97x | 0.94-0.99x |
+| 256 x 256 x 16384 | 4 on 64x64: 2.19-2.21x (L2); 8 on 64x64: 1.95-1.97x (DRAM) | 0.80-0.93x | 0.46-0.53x |
+
+The task's starting numbers (0.97-0.985x cuBLAS at 512 x 512 x 16384) were the
+profile's tile. Splitting there gains 0-2% over a tuned unsplit kernel, at
+65536 3-5%; at 256 rows it doubles the speed whatever the unsplit tile.
+
+## Measured choice (`--autotune`, `measured/`)
+
+Under `--autotune` `Autotuner::split_k_plan` measures, where the rule's gate
+passes, the unsplit kernel on the tile the tile tuner picks and every split of
+2, 4 or 8 at least `SPLIT_K_MEASURE_MIN_DEPTH` = 1024 deep on each of the three
+tiles that fits (`split_k_measure_candidates`, at most ten kernels), timed
+together by `empirical_autotune::tune_gemm_f16_split_choice` (the tile tuner's
+correctness gate, clock ramp, screening and final interleaved rounds; B
+rotated through up to eight copies, from DRAM unless eight fit in the L2, as
+at 256 x 256 x 8192, 37.7 MB). The fastest wins unless the unsplit kernel is inside the
+run's noise (`select_split_winner`); the choice is kept as
+`AUTOTUNE_F16_SPLITK_AUTO_<M>x<N>x<K>_<gpu>` and later builds take it. Its picks
+against the fastest the harness found (`followup/`, `speed/`, `tuned_unsplit/`):
+
+| shape | measured choice | fastest in the harness |
+| :--- | :--- | :--- |
+| 512 x 512 x 4096 | unsplit | unsplit on the measured tile |
+| 512 x 512 x 16384 | unsplit (run 1), 2 on 64x128 (run 2) | the two tie (1.00-1.02x) |
+| 512 x 512 x 65536 | 2 on 64x128 | 2 on 64x128, level with 4 on 128x128 |
+| 256 x 256 x 16384 | 4 on 64x64 | the same in the L2; 8 on 64x64 from DRAM (the 4: 0.88x) |
+| 256 x 256 x 32768 | 8 on 64x128 | the same |
+| 256 x 256 x 65536 | 8 on 64x128 | the same |
+| 256 x 512 x 16384 | 4 on 64x128 (run 2) | the same |
+| 256 x 384 x 32768 | 8 on 64x64 | the same (1.30x the rule's pick) |
+
+Run 1's selector also broke ties between splits toward the fewer, and at
+256 x 512 x 16384 took 2 on 64x64 inside a 6% band, 4-7% slower than the 4 on
+64x128 the harness found fastest; between splits the fastest now wins. At
+512 x 512 x 16384 run 2's tile tuner took a slower unsplit tile (64x64x64 2x2,
+5% behind 4x2, inside a 7% band, by its four-warp tie-break), and the choice
+then split; either is within 2% of the other there.
+
 ## Tests and mutants
 
 - `tests/f16_split_k_rule.rs`: the rule, each bound on both sides, a grid of
-  shapes.
+  shapes; the measured choice's candidates (unsplit, then every split at least
+  1024 deep on each tile that fits, at most 10) and its profile entry (`1` or
+  `S,cta_m,cta_n,cta_k,warps_m,warps_n,stages` read back; a split count, tile,
+  stage count or form codegen could not emit refused).
 - `tests/ptx_f16_split_k.rs`: the `_splitk` module against its pinned and plain
   twins (PTX operand for operand, SASS), the tile's precedence, the CLI note;
   on the GPU exact integers, each slot equal to the unsplit kernel on its K
   range, the plain kernel's bits where unsplit, Partial untouched, repeated
-  launches, and the same slot check for compensated splits.
+  launches, and the same slot check for compensated splits. For the measured
+  choice: an entry replacing the rule's split and tile, `1` keeping the plain
+  kernel, the analytic mode (`Y_AUTOTUNE=off`, which `--no-autotune` sets)
+  ignoring the entry, invalid entries refused with a warning, a shape outside
+  the gate never taking one, and a plain GEMM's note;
+  on the GPU `--autotune` measuring once (one split run), storing the choice,
+  the PTX saying "as measured", a later build taking it without measuring, a
+  plain GEMM under `--autotune` measuring no split, and the chosen kernel exact
+  on integers.
+- `src/empirical_autotune.rs` (`a_split_wins_only_where_it_is_measurably_faster`):
+  the tie-break keeps unsplit inside the run's noise and otherwise takes the
+  fastest, never the fewest splits.
 - `tests/ptx_f16_accumulate.rs`: `blocked_kahan`'s structure (each block sum
   folded once, compensated, on the inner loop's exit; each compensation zeroed
   before the loop and added once after it, behind the finite check); on the GPU
   exact integers, a case the plain fold rounds away (A of ones, B's first block
   2^23 and 31 blocks of 0.5: 8388608 blocked, 8388624 compensated, exact
   8388623.5) and a +Inf row staying +Inf.
-- `mutants/mutants.py`: 39 mutants of the rule, its tile's precedence, the
-  `_splitk` form, the type checker, the CLI note and `blocked_kahan`, each
-  against the three files with the GPU tests. 37 killed (`mutants.txt`; the
-  tests each failed in `killed_by.txt`); the 2 that survive drop the
-  tile-fits-M-x-N filter, which can change no choice while the intensity bound
-  is 96 or more (`split_k_choice`'s doc comment). The restored sources pass and
-  hash as before (`sources_before.sha256`).
+- `mutants/mutants.py`: 57 mutants of the rule, its tile's precedence, the
+  `_splitk` form, the type checker, the CLI note, `blocked_kahan` and the
+  measured choice (its candidates, gate, entry, memo, tie-break, header and the
+  plain GEMM's note), each against the three files with the GPU tests and
+  `empirical_autotune`'s unit tests. 55 killed (`mutants.txt`; the tests each
+  failed in `killed_by.txt`); the 2 that survive drop the tile-fits-M-x-N
+  filter, which can change no choice while the intensity bound is 96 or more
+  (`split_k_choice`'s doc comment). Three are killed only by the GPU test
+  (`measured_not_memoised`, `note_measures`, `planned_split_tile_measured`),
+  so `--skip on_the_gpu` leaves them alive. The restored sources pass and hash
+  as before (`sources_before.sha256`).
 
 ## Checks
 
 - The full suites in a clean worktree: `cargo test --release --features zk`
-  (1565 passed, 0 failed, 50 ignored), `-p y-gpu` (8 passed), `cargo build
-  --release`, both Python suites (66 and 123 OK), and
-  `gemm_compute_schedule_gpu -- --ignored` (2 passed).
-- `check/regen.txt`: all 60 committed `tests/*.ptx` regenerate the same under
-  this compiler and HEAD's, so the validator's gates read unchanged PTX.
+  (1565 passed, 0 failed, 50 ignored at 38acd8e; 1570, 0 and 50 with the
+  measured choice), `-p y-gpu` (8 passed), `cargo build --release`, both
+  Python suites (66 and 123 OK), and `gemm_compute_schedule_gpu -- --ignored`
+  (2 passed).
+- `check/regen.txt`: at 38acd8e the 60 committed `tests/*.ptx` were checked to
+  regenerate the same under this compiler and HEAD's, but that check came
+  before `emit_f16_mma_finish` was reordered, and the four decode kernels were
+  committed in the old order. With the measured choice they are regenerated
+  (the same lines, register numbers aside) and this compiler and 391b7a1's emit
+  all 60 alike. `check/tval/`: the validator's gates on 391b7a1 and on this
+  tree differ in timings and tree hashes only.
 - `check/docgate.txt`, `check/docgate_final.log`: docgate's README checks give
   the same result as on HEAD's tree (the same pre-existing failures).
 

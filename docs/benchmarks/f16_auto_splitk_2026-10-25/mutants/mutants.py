@@ -1,6 +1,6 @@
-"""Mutants of the split-K rule, the `_splitk` form and compensated block folds: each must fail
-tests/f16_split_k_rule.rs, tests/ptx_f16_split_k.rs or tests/ptx_f16_accumulate.rs (GPU tests included
-unless SKIP_GPU is set).
+"""Mutants of the split-K rule, the `_splitk` form, its measured choice and compensated block folds: each
+must fail tests/f16_split_k_rule.rs, tests/ptx_f16_split_k.rs, tests/ptx_f16_accumulate.rs or the tuner's unit
+tests (GPU tests included unless SKIP_GPU is set).
 
 Run under the GPU lock. Every mutated file is restored by writing its text back, then touched and the
 suites rerun, whatever happens. `mutants.py NAME...` reruns those alone (into mutants_rerun.json).
@@ -9,7 +9,7 @@ import json, os, pathlib, subprocess, sys
 
 X = pathlib.Path("/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/xbar")
 OUT = pathlib.Path(__file__).parent
-AT, PE, TC, MAIN = (X / p for p in ("src/autotuner.rs", "src/ptx_emitter.rs", "src/type_checker.rs", "src/main.rs"))
+AT, PE, TC, MAIN, TU = (X / p for p in ("src/autotuner.rs", "src/ptx_emitter.rs", "src/type_checker.rs", "src/main.rs", "src/empirical_autotune.rs"))
 PLANNED = """        if let Some(planned) = planned {
             return planned.to_cta_tile_config();
         }
@@ -47,8 +47,10 @@ MUTANTS = {
     "intensity_without_c": (AT, rep("2 * m64 * k64 + 2 * k64 * n64 + 4 * m64 * n64", "2 * m64 * k64 + 2 * k64 * n64")),
     # Expected to survive: with the intensity at least 96 neither M nor N is 64 or less, and only then
     # could a tile larger than M x N have the most CTAs (split_k_choice's doc comment).
-    "no_row_fit_equivalent": (AT, rep(".filter(|t| t.cta_m <= m && t.cta_n <= n)", ".filter(|t| t.cta_n <= n)")),
-    "no_column_fit_equivalent": (AT, rep(".filter(|t| t.cta_m <= m && t.cta_n <= n)", ".filter(|t| t.cta_m <= m)")),
+    "no_row_fit_equivalent": (AT, rep("let menu: Vec<&AutotuneCandidate> = SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m && t.cta_n <= n)", "let menu: Vec<&AutotuneCandidate> = SPLIT_K_TILES.iter().filter(|t| t.cta_n <= n)")),
+    "no_column_fit_equivalent": (AT, rep("let menu: Vec<&AutotuneCandidate> = SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m && t.cta_n <= n)", "let menu: Vec<&AutotuneCandidate> = SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m)")),
+    "measured_no_row_fit": (AT, rep("for t in SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m && t.cta_n <= n) {", "for t in SPLIT_K_TILES.iter().filter(|t| t.cta_n <= n) {")),
+    "measured_no_column_fit": (AT, rep("for t in SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m && t.cta_n <= n) {", "for t in SPLIT_K_TILES.iter().filter(|t| t.cta_m <= m) {")),
     "no_shape_check": (AT, rep("if crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s).is_err() || k / s < SPLIT_K_MIN_DEPTH {", "if k / s < SPLIT_K_MIN_DEPTH {")),
     "counts_2_4_16": (AT, rep("pub const SPLIT_K_COUNTS: [u32; 3] = [2, 4, 8];", "pub const SPLIT_K_COUNTS: [u32; 3] = [2, 4, 16];")),
     "tiles_misordered": (AT, rep("    AutotuneCandidate { cta_m: 128, cta_n: 128, cta_k: 32, warps_m: 4, warps_n: 2, num_stages: 3, num_warps: 8 },\n    AutotuneCandidate { cta_m: 64, cta_n: 128, cta_k: 32, warps_m: 4, warps_n: 2, num_stages: 4, num_warps: 8 },\n",
@@ -78,23 +80,47 @@ MUTANTS = {
     "bk_comp_not_zeroed": (PE, rep('                let comp = self.alloc_regf32();\n                writeln!(&mut self.ptx_buffer, "    mov.f32 {}, 0f00000000;", comp).unwrap();\n', '                let comp = self.alloc_regf32();\n')),
     "bk_sum_not_kept": (PE, rep('                    writeln!(&mut self.ptx_buffer, "    mov.f32 {}, {};", acc, sum).unwrap();\n', "")),
     "bk_error_reversed": (PE, rep('"    sub.rn.f32 {}, {}, {};", back, acc, sum', '"    sub.rn.f32 {}, {}, {};", back, sum, acc')),
+    # the measured choice (autotuner.rs, empirical_autotune.rs, main.rs)
+    "measured_without_gate": (AT, rep("        if Self::split_k_gate(m, n, k, &unsplit, hw_profile.sm_count).is_err() {\n            return rule;\n        }\n        if let Some(plan) = split_k_measured()", "        if let Some(plan) = split_k_measured()")),
+    "measured_entry_never_read": (AT, rep("        if mode.may_use_cache() {\n            if let Some(value) = load_profile_value(&key) {", "        if false {\n            if let Some(value) = load_profile_value(&key) {")),
+    "entry_any_split_count": (AT, rep("                crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s)?;\n                validate_warp_tiling(cta_m,", "                validate_warp_tiling(cta_m,")),
+    "entry_any_tiling": (AT, rep("                validate_warp_tiling(cta_m, cta_n, cta_k, warps_m, warps_n, 16, 16, 16)?;\n                let tile = AutotuneCandidate { cta_m, cta_n, cta_k, warps_m, warps_n, num_stages,", "                let tile = AutotuneCandidate { cta_m, cta_n, cta_k, warps_m, warps_n, num_stages,")),
+    "entry_zero_stages": (AT, rep("if num_stages == 0 || !crate::empirical_autotune::is_emittable(&tile, k / s) {", "if !crate::empirical_autotune::is_emittable(&tile, k / s) {")),
+    "entry_unsplit_with_tile": (AT, rep("            [s, cta_m, cta_n, cta_k, warps_m, warps_n, num_stages] if s >= 2 => {", "            [s, cta_m, cta_n, cta_k, warps_m, warps_n, num_stages] if s >= 1 => {")),
+    "entry_written_without_s": (AT, rep('format!("{},{},{},{},{},{},{}", splits, tile.cta_m, tile.cta_n, tile.cta_k, tile.warps_m, tile.warps_n, tile.num_stages)', 'format!("{},{},{},{},{},{}", tile.cta_m, tile.cta_n, tile.cta_k, tile.warps_m, tile.warps_n, tile.num_stages)')),
+    "measured_flag_false": (AT, rep("        SplitKPlan { splits, tile, reason, measured: true }", "        SplitKPlan { splits, tile, reason, measured: false }")),
+    "measure_no_unsplit": (AT, rep("        let mut candidates = vec![(\n            1,", "        let mut candidates = vec![(\n            2,")),
+    "measure_depth_4096": (AT, rep("pub const SPLIT_K_MEASURE_MIN_DEPTH: u32 = 1024;", "pub const SPLIT_K_MEASURE_MIN_DEPTH: u32 = 4096;")),
+    "measured_not_memoised": (AT, rep("        if let Ok(mut c) = split_k_measured().lock() {\n            c.insert((m, n, k), plan.clone());\n        }", "")),
+    "planned_split_tile_measured": (AT, rep("        if mode.may_measure() && planned.is_none() {", "        if mode.may_measure() {")),
+    "tie_never_unsplit": (TU, rep("    results.iter().position(|r| r.splits == 1 && r.timing.tied_with(&best)).unwrap_or(0)", "    let _ = best;\n    0")),
+    "unsplit_kept_outside_noise": (TU, rep("    results.iter().position(|r| r.splits == 1 && r.timing.tied_with(&best)).unwrap_or(0)", "    let _ = best;\n    results.iter().position(|r| r.splits == 1).unwrap_or(0)")),
+    "tie_to_fewer_splits": (TU, rep("    results.iter().position(|r| r.splits == 1 && r.timing.tied_with(&best)).unwrap_or(0)", "    (0..results.len()).filter(|&i| results[i].timing.tied_with(&best)).min_by_key(|&i| results[i].splits).unwrap_or(0)")),
+    "note_measures": (MAIN, rep("                            _ => autotuner::Autotuner::split_k_plan_unmeasured(m, n, k_dim, &hw_profile),", "                            _ => autotuner::Autotuner::split_k_plan(m, n, k_dim, &hw_profile),")),
     # the type checker and the CLI
     "checker_refuses_bare": (TC, rep("((Some(_), Some(_), Some(_)), crate::ptx_emitter::SplitK::Auto) => None,", "((Some(_), Some(_), Some(_)), crate::ptx_emitter::SplitK::Auto) => Some(\"no\".into()),")),
     "checker_bare_takes_shape_check": (TC, rep("((Some(_), Some(_), Some(_)), crate::ptx_emitter::SplitK::Auto) => None,", "((Some(m), Some(n), Some(k)), crate::ptx_emitter::SplitK::Auto) => crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, 2).err(),")),
     "note_for_any_gemm": (MAIN, rep("None if plan.splits > 1 && k.params.len() == 3 => {", "None if plan.splits > 1 => {")),
     "note_never": (MAIN, rep("None if plan.splits > 1 && k.params.len() == 3 => {", "None if plan.splits > 99 && k.params.len() == 3 => {")),
 }
-TEST = ["cargo", "test", "--release", "--no-fail-fast", "--test", "f16_split_k_rule", "--test", "ptx_f16_split_k", "--test", "ptx_f16_accumulate"]
+TESTS = [
+    ["cargo", "test", "--release", "--no-fail-fast", "--test", "f16_split_k_rule", "--test", "ptx_f16_split_k", "--test", "ptx_f16_accumulate"],
+    ["cargo", "test", "--release", "--lib", "empirical_autotune::tests"],
+]
 if os.environ.get("SKIP_GPU"):
-    TEST += ["--", "--skip", "on_the_gpu"]
+    TESTS[0] += ["--", "--skip", "on_the_gpu"]
 
 
-def run(cmd, log):
+def run(cmds, log):
+    """Every command of `cmds` in turn, into `log`; the first non-zero exit, or 0."""
+    rc = 0
     with open(log, "w") as f:
-        return subprocess.run(cmd, cwd=X, stdout=f, stderr=subprocess.STDOUT).returncode
+        for cmd in cmds:
+            rc = rc or subprocess.run(cmd, cwd=X, stdout=f, stderr=subprocess.STDOUT).returncode
+    return rc
 
 
-originals = {p: p.read_text() for p in (AT, PE, TC, MAIN)}
+originals = {p: p.read_text() for p in (AT, PE, TC, MAIN, TU)}
 ONLY = sys.argv[1:]
 if ONLY:
     MUTANTS = {k: MUTANTS[k] for k in ONLY}
@@ -105,7 +131,7 @@ try:
     for name, (p, f) in MUTANTS.items():
         p.write_text(f(originals[p]))
         os.utime(p)
-        rc = run(TEST, OUT / f"mut_{name}.log")
+        rc = run(TESTS, OUT / f"mut_{name}.log")
         results[name] = "killed" if rc != 0 else "SURVIVED"
         print(name, results[name], flush=True)
         p.write_text(originals[p])
@@ -114,7 +140,7 @@ finally:
     for p, t in originals.items():
         p.write_text(t)
         os.utime(p)
-    rc = run(TEST, OUT / "restored.log")
+    rc = run(TESTS, OUT / "restored.log")
     results["restored_passes"] = rc == 0
     print("restored passes", rc == 0, flush=True)
 (OUT / ("mutants_rerun.json" if ONLY else "mutants.json")).write_text(json.dumps(results, indent=1) + "\n")

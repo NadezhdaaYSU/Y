@@ -1,0 +1,70 @@
+== l2
+512x512x4096 (4 runs)
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 1.128-1.133      26.75 us
+  s2_64x128w42s4       vs base 0.944-0.947  vs cuBLAS 1.067-1.070      28.28 us
+  unsplit              vs base 0.935-0.947  vs cuBLAS 1.057-1.068      28.30 us
+  s4_64x64w42s4        vs base 0.886-0.888  vs cuBLAS 1.001-1.004      30.15 us
+  cuBLAS               vs base 0.883-0.886  vs cuBLAS 1.000-1.000      30.19 us
+  s4_128x128w42s3      vs base 0.874-0.878  vs cuBLAS 0.990-0.991      30.49 us
+512x512x16384 (4 runs)
+  s2_64x128w42s4       vs base 1.006-1.012  vs cuBLAS 1.064-1.065     100.17 us
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 1.051-1.059     100.75 us
+  s4_128x128w42s3      vs base 0.982-0.988  vs cuBLAS 1.038-1.041     102.53 us
+  s4_64x64w42s4        vs base 0.963-0.974  vs cuBLAS 1.014-1.031     103.49 us
+  cuBLAS               vs base 0.944-0.951  vs cuBLAS 1.000-1.000     106.72 us
+  s8_64x64w42s4        vs base 0.941-0.951  vs cuBLAS 0.992-1.007     105.94 us
+  s8_64x128w42s4       vs base 0.928-0.932  vs cuBLAS 0.977-0.987     108.14 us
+  unsplit              vs base 0.926-0.932  vs cuBLAS 0.980-0.987     108.19 us
+512x512x65536 (4 runs)
+  s2_64x128w42s4       vs base 1.029-1.054  vs cuBLAS 0.963-1.026     390.42 us
+  s4_128x128w42s3      vs base 1.026-1.074  vs cuBLAS 1.006-1.031     390.42 us
+  cuBLAS               vs base 1.003-1.068  vs cuBLAS 1.000-1.000     399.73 us
+  s8_64x128w42s4       vs base 1.001-1.034  vs cuBLAS 0.968-0.998     401.22 us
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 0.936-0.997     401.59 us
+  s4_64x64w42s4        vs base 0.983-0.996  vs cuBLAS 0.932-0.989     404.01 us
+  s8_64x64w42s4        vs base 0.961-0.992  vs cuBLAS 0.928-0.978     408.91 us
+  unsplit              vs base 0.929-0.974  vs cuBLAS 0.912-0.929     430.17 us
+256x256x16384 (4 runs)
+  s4_64x64w42s4        vs base 2.185-2.213  vs cuBLAS 1.023-1.024      27.70 us
+  s8_64x128w42s4       vs base 2.156-2.185  vs cuBLAS 1.009-1.010      28.10 us
+  cuBLAS               vs base 2.136-2.163  vs cuBLAS 1.000-1.000      28.35 us
+  s8_64x64w42s4        vs base 2.133-2.165  vs cuBLAS 0.999-1.001      28.35 us
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 0.462-0.468      60.60 us
+  unsplit              vs base 0.915-0.928  vs cuBLAS 0.428-0.435      65.53 us
+  s2_64x128w42s4       vs base 0.613-0.624  vs cuBLAS 0.287-0.289      98.30 us
+  s4_128x128w42s3      vs base 0.603-0.611  vs cuBLAS 0.281-0.286      99.65 us
+== dram
+512x512x4096 (4 runs)
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 1.109-1.131      27.04 us
+  s2_64x128w42s4       vs base 0.941-0.963  vs cuBLAS 1.061-1.073      28.73 us
+  unsplit              vs base 0.929-0.953  vs cuBLAS 1.031-1.061      28.89 us
+  cuBLAS               vs base 0.884-0.901  vs cuBLAS 1.000-1.000      30.57 us
+  s4_64x64w42s4        vs base 0.877-0.881  vs cuBLAS 0.975-0.996      30.69 us
+  s4_128x128w42s3      vs base 0.872-0.893  vs cuBLAS 0.986-0.994      31.00 us
+512x512x16384 (4 runs)
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 1.024-1.062     100.77 us
+  s2_64x128w42s4       vs base 0.998-1.020  vs cuBLAS 1.035-1.065     100.40 us
+  s4_128x128w42s3      vs base 0.979-1.017  vs cuBLAS 1.039-1.042     102.93 us
+  s4_64x64w42s4        vs base 0.953-0.971  vs cuBLAS 0.976-1.030     103.87 us
+  cuBLAS               vs base 0.942-0.976  vs cuBLAS 1.000-1.000     106.94 us
+  s8_64x64w42s4        vs base 0.932-0.947  vs cuBLAS 0.954-1.004     106.54 us
+  unsplit              vs base 0.922-0.933  vs cuBLAS 0.944-0.984     108.72 us
+  s8_64x128w42s4       vs base 0.919-0.955  vs cuBLAS 0.941-0.991     108.23 us
+512x512x65536 (4 runs)
+  s2_64x128w42s4       vs base 1.039-1.054  vs cuBLAS 1.011-1.040     388.19 us
+  s4_128x128w42s3      vs base 1.033-1.072  vs cuBLAS 1.006-1.058     390.40 us
+  cuBLAS               vs base 1.008-1.041  vs cuBLAS 1.000-1.000     400.08 us
+  s8_64x128w42s4       vs base 1.005-1.024  vs cuBLAS 0.984-0.997     401.38 us
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 0.961-0.992     403.46 us
+  s4_64x64w42s4        vs base 0.976-1.000  vs cuBLAS 0.937-0.991     404.01 us
+  s8_64x64w42s4        vs base 0.954-0.988  vs cuBLAS 0.916-0.979     408.67 us
+  unsplit              vs base 0.939-0.954  vs cuBLAS 0.916-0.932     429.43 us
+256x256x16384 (4 runs)
+  s8_64x64w42s4        vs base 1.951-1.973  vs cuBLAS 1.024-1.038      30.84 us
+  s8_64x128w42s4       vs base 1.950-1.961  vs cuBLAS 1.026-1.028      31.10 us
+  cuBLAS               vs base 1.900-1.912  vs cuBLAS 1.000-1.000      31.98 us
+  s4_64x64w42s4        vs base 1.780-1.793  vs cuBLAS 0.936-0.943      33.95 us
+  unsplit_tuned        vs base 1.000-1.000  vs cuBLAS 0.523-0.526      60.75 us
+  unsplit              vs base 0.803-0.806  vs cuBLAS 0.421-0.424      75.51 us
+  s4_128x128w42s3      vs base 0.608-0.612  vs cuBLAS 0.320-0.321      99.85 us
+  s2_64x128w42s4       vs base 0.608-0.617  vs cuBLAS 0.320-0.325      98.51 us

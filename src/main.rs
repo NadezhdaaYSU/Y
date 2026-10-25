@@ -2120,7 +2120,12 @@ fn main() {
                         // `_splitk` takes the split-K rule's split and tile,
                         // as codegen does.
                         let split = ptx_emitter::PtxEmitter::gemm_split_k(&k.name);
-                        let plan = autotuner::Autotuner::split_k_plan(m, n, k_dim, &hw_profile);
+                        // A plain GEMM is only told the split; measuring one
+                        // is for the `_splitk` form.
+                        let plan = match split {
+                            Some(Ok(ptx_emitter::SplitK::Auto)) => autotuner::Autotuner::split_k_plan(m, n, k_dim, &hw_profile),
+                            _ => autotuner::Autotuner::split_k_plan_unmeasured(m, n, k_dim, &hw_profile),
+                        };
                         let (splits, tuned_config) = match split {
                             Some(Ok(ptx_emitter::SplitK::Fixed(s))) => {
                                 (s, autotuner::Autotuner::autotune_split(m, n, k_dim, s, &hw_profile, autotuner::Precision::F16))
@@ -2139,7 +2144,7 @@ fn main() {
                             tuned_config.cta_m, tuned_config.cta_n, tuned_config.cta_k, tuned_config.num_warps, tuned_config.num_stages);
                         match split {
                             Some(Ok(ptx_emitter::SplitK::Auto)) => {
-                                println!("         [Y split-K rule] `{}`: S={}: {}", k.name, plan.splits, plan.reason);
+                                println!("         [Y split-K {}] `{}`: S={}: {}", if plan.measured { "choice" } else { "rule" }, k.name, plan.splits, plan.reason);
                             }
                             // A plain GEMM keeps its launch; the rule's split
                             // needs the split-K one, so it is only named.

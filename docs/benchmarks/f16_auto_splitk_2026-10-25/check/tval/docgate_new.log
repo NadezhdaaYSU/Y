@@ -1,0 +1,66 @@
+ok: the doc's wall bracket (33, 49) is the one wall.py derives from its ground truth
+FAIL: doc says 48 kernels / 0 validated; measured 47 / 0
+FAIL: doc says the census was answered by {'loopval': 13, 'nestval': 35}; measured {'nestval': 29, 'loopval': 18}
+FAIL: doc says 2 for "PTX loop body has more than one branch"; measured 7
+FAIL: measured 1 kernel(s) refusing "UNMODELLED SASS reachable self-branch at 0x290: only unreachable trailing traps may be omitted (refusing, not guessing)" and the doc has no such row
+FAIL: the doc publishes a bucket of 4 for "PTX loop cross-thread effect: st.shared.b32" that nothing measures
+FAIL: the doc publishes a bucket of 1 for "SASS branch form this CFG cannot place: 'BRA.DIV ~URZ, `(.L)'" that nothing measures
+FAIL: the doc publishes a bucket of 1 for "PTX loop cross-thread effect: st.shared.v4.f32" that nothing measures
+FAIL: the doc publishes a bucket of 1 for "SASS: loop finder found NO back edge" that nothing measures
+FAIL: prose says 33 of 48; measured 28 of 47
+FAIL: README says (33, 48, 32, 1); measured (28, 47, 27, 1) (total, kernels, PTX side, SASS side)
+ok: staging census, 2 artifacts, counted as instructions
+ok: -O figures, 5 kernels re-censused at two levels, and the y_cpu_matmul sufficiency case
+  control: the shape moves with the artifact, and the corpus really does hold 3 distinct multi-back-edge shapes
+FAIL: the doc says 33 kernels / 115 levels; liftgap measures 28 / 88
+FAIL: the doc says 25 for 'SEQUENTIAL depth 1'; liftgap measures 20
+FAIL: the doc says 24 MATCHED; measured 25
+FAIL: the doc says 18 REFUSED; measured 17
+FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+ok: the README frontier figures agree with the stamp at both levels
+
+--- positive controls (the FAIL lines below are EXPECTED) ---
+FAIL: doc says 48 kernels / 0 validated; measured 47 / 0
+FAIL: doc says the census was answered by {'loopval': 13, 'nestval': 35}; measured {'nestval': 29, 'loopval': 18}
+FAIL: doc says 2 for "PTX loop body has more than one branch"; measured 7
+FAIL: measured 1 kernel(s) refusing "UNMODELLED SASS reachable self-branch at 0x290: only unreachable trailing traps may be omitted (refusing, not guessing)" and the doc has no such row
+FAIL: measured 1 kernel(s) refusing "PTX: more than one back edge, NESTED depth 9" and the doc has no such row
+FAIL: the doc publishes a bucket of 4 for "PTX loop cross-thread effect: st.shared.b32" that nothing measures
+FAIL: the doc publishes a bucket of 1 for "SASS branch form this CFG cannot place: 'BRA.DIV ~URZ, `(.L)'" that nothing measures
+FAIL: the doc publishes a bucket of 1 for "PTX loop cross-thread effect: st.shared.v4.f32" that nothing measures
+FAIL: the doc publishes a bucket of 1 for "SASS: loop finder found NO back edge" that nothing measures
+FAIL: prose says 33 of 48; measured 28 of 47
+FAIL: README says (33, 48, 32, 1); measured (28, 47, 27, 1) (total, kernels, PTX side, SASS side)
+FAIL: int8_gemm.ptx mma.sync: README says 1, the artifact has 2
+FAIL: doc says y_cpu_matmul 2 -> 0; measured 2 -> 1 (PLOP3.LUT, UIADD3  ->  -)
+FAIL: the doc says y_cpu_matmul has an empty opcode gap at -O1; measured ptx=[] sass=['SYNTHETIC']
+FAIL: the doc says 33 kernels / 115 levels; liftgap measures 28 / 88
+FAIL: the doc says None for 'NESTED depth 9'; liftgap measures 1
+FAIL: the doc says 25 for 'SEQUENTIAL depth 1'; liftgap measures 20
+FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 31c3a3799e88), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 31c3a3799e88), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+FAIL: the doc says the wall is between (29, 49); wall.py derives (33, 49) from its ground truth
+FAIL: the doc says 24 MATCHED; measured 25
+FAIL: the doc says 18 REFUSED; measured 17
+FAIL: the doc says 3 UNROLLED; measured 4
+FAIL: the README says O3 is (66, 105, 6) (kernels, distinct, clear); the stamped census measured (66, 104, 6)
+FAIL: a SASS body with every observable operation doubled reports None (no loop); the unroll measurement is not reading its artifact
+  control: a perturbed census, artifact, -O figure and unroll tally are all reported, and a doubled SASS body reads as UNROLLED
+  control: each measurement moves when its own INPUT moves, so none of the three is reading the doc
+
+  control: the suite answers y_cpu_matmul @ -O1 with nestval=VALIDATED, 23 obligations -- loopval refuses it on a back-edge count
+  control: bn254_msm_bucket keeps loopval's non-count refusal
+  control: 'PTX: more than one loop at one level, shape unknown' folds both members' phrasings and every count, and is kept apart from 'PTX: loop finder found NO back edge'
+
+  control: a synthetic harness with a dead heredoc anchor and a dead sed pattern is reported, both kinds
+  control: a step that changes its target is not reported
+  control: a one-line function that applies no patch does not inherit the next function's body
+  control: a harness whose patching function is never invoked is EMPTY and the diagnosis NAMES it; one that delegates to another harness is a runner
+ok: 201 patch steps across 17 mutation tables, every one of them changes the file it targets; 2 runner(s) carry no rows of their own (lmutrun.sh, smutrun.sh)
+
+FAIL: 17 doc figure(s) disagree with the measurement.

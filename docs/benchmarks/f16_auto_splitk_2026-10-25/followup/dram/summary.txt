@@ -1,0 +1,21 @@
+256x256x16384 run 1 int exit 0 22:32:23
+256x256x16384 run 1 normal exit 0 22:32:30
+256x256x32768 run 1 int exit 0 22:32:36
+256x256x32768 run 1 normal exit 0 22:32:43
+256x256x65536 run 1 int exit 0 22:32:50
+256x256x65536 run 1 normal exit 0 22:32:56
+256x512x16384 run 1 int exit 0 22:33:02
+256x512x16384 run 1 normal exit 0 22:33:08
+256x384x32768 run 1 int exit 0 22:33:15
+256x384x32768 run 1 normal exit 0 22:33:21
+256x256x16384 run 2 int exit 0 22:33:28
+256x256x16384 run 2 normal exit 0 22:33:35
+256x256x32768 run 2 int exit 0 22:33:41
+256x256x32768 run 2 normal exit 0 22:33:48
+256x256x65536 run 2 int exit 0 22:33:55
+256x256x65536 run 2 normal exit 0 22:34:01
+256x512x16384 run 2 int exit 0 22:34:08
+256x512x16384 run 2 normal exit 0 22:34:14
+256x384x32768 run 2 int exit 0 22:34:20
+256x384x32768 run 2 normal exit 0 22:34:26
+DONE

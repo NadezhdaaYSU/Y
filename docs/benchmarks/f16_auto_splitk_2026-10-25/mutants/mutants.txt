@@ -1,3 +1,4 @@
+games: []
 trigger_gt killed
 depth_le killed
 depth_2048 killed
@@ -10,6 +11,8 @@ intensity_128 killed
 intensity_without_c killed
 no_row_fit_equivalent SURVIVED
 no_column_fit_equivalent SURVIVED
+measured_no_row_fit killed
+measured_no_column_fit killed
 no_shape_check killed
 counts_2_4_16 killed
 tiles_misordered killed
@@ -33,6 +36,22 @@ bk_knob_is_blocked killed
 bk_comp_not_zeroed killed
 bk_sum_not_kept killed
 bk_error_reversed killed
+measured_without_gate killed
+measured_entry_never_read killed
+entry_any_split_count killed
+entry_any_tiling killed
+entry_zero_stages killed
+entry_unsplit_with_tile killed
+entry_written_without_s killed
+measured_flag_false killed
+measure_no_unsplit killed
+measure_depth_4096 killed
+measured_not_memoised killed
+planned_split_tile_measured killed
+tie_never_unsplit killed
+unsplit_kept_outside_noise killed
+tie_to_fewer_splits killed
+note_measures killed
 checker_refuses_bare killed
 checker_bare_takes_shape_check killed
 note_for_any_gemm killed
@@ -43,3 +62,4 @@ src/autotuner.rs: OK
 src/ptx_emitter.rs: OK
 src/type_checker.rs: OK
 src/main.rs: OK
+src/empirical_autotune.rs: OK
