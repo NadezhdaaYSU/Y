@@ -80,6 +80,26 @@ source; each entry there now carries its status. What is still open:
   all 18 cases at 16384 and 65536 and runs at 1.01-1.04x cuBLAS's speed
   (`docs/benchmarks/f16_blocked_2026-10-25/`).
 
+  Since 2026-10-25 a kernel named `<name>_splitk` chooses the split itself
+  (opt-in, `docs/benchmarks/f16_auto_splitk_2026-10-25/`): 2 splits on 64x128
+  tiles at 512 x 512 x 16384 and 65536, 1.02-1.07x and 1.01-1.06x cuBLAS's
+  speed (with A and B in the L2 or from DRAM), below cuBLAS's error in all
+  18 cases there (and in the 9 of its
+  third split, 256 x 256 x 16384). Still open:
+  - A plain three-parameter GEMM is not split: its hosts launch it with no
+    workspace on a z = 1 grid. The compiler names the split it would take;
+    the adaptive JIT, which owns its launches and buffers, is where a default
+    could apply it.
+  - At 256 x 256 x 16384 with A and B streamed from DRAM the rule's 4 splits
+    run at 0.93-0.96x cuBLAS, where 8 (2048 deep, below the rule's bound)
+    run at 1.01-1.04x; with A and B in the L2 the 4 are 1.7% ahead.
+  - Decode splits at N = 14336 ran 1.04-1.08x faster from DRAM. The rule does
+    not take them: a split of at most 32 rows adds in plain float32, not the
+    compensated sum, and its accuracy against cuBLAS is unmeasured.
+  - Under cancellation up to 25% of the splits' outputs are still farther
+    from R than cuBLAS's. `Y_F16_ACCUMULATE=blocked_kahan` with
+    `Y_F16_BLOCK_K=64` takes that to 5-11%, at 0.84-0.87x the speed.
+
   GEMMs of at most 32 rows add each mma's result in float32 instead,
   compensated by default since 2026-10-24 (below). `Y_F16_ACCUMULATE=f32`
   selects the plain float32 adds everywhere; on square shapes they take

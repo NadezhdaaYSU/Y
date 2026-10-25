@@ -681,7 +681,7 @@ fn split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu() {
 }
 
 #[test]
-fn the_tuner_measures_a_split_kernel_with_its_reduction() {
+fn the_tuner_measures_a_split_kernel_with_its_reduction_on_the_gpu() {
     use y::autotuner::AutotuneCandidate;
     use y::cuda_runtime::CudaContext;
     if CudaContext::new().is_none() {

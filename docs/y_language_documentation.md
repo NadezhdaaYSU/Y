@@ -1012,7 +1012,13 @@ for i in 0..100 {
   unsplit, those adds are also compensated, as `kahan` below (since
   2026-10-24). `Y_F16_ACCUMULATE` selects one for every shape: `mma` the
   chain, `blocked` the blocked chain (`Y_F16_BLOCK_K`, a power of two of at
-  least 16, sets its block), `f32` the float32 adds, and `kahan` the float32
+  least 16, sets its block), `blocked_kahan` the blocked chain with each
+  block sum's add compensated as `kahan`'s tile sums are (since 2026-10-25;
+  a third register per accumulator; blocks of 64 cut the share of outputs
+  farther from float64 than cuBLAS's under cancellation by half or more, at
+  0.84-0.87x the speed at 512 x 512,
+  [record](benchmarks/f16_auto_splitk_2026-10-25/README.md)), `f32` the
+  float32 adds, and `kahan` the float32
   adds compensated: each K-tile's results are summed in a register of their
   own, that tile sum is added into the accumulator, and each such add's
   rounding error is summed in a third register, added in once after the K
@@ -1065,10 +1071,31 @@ for i in 0..100 {
   `Y_F16_ACCUMULATE` selects one for every part. The tile is measured per split
   count (`--autotune`; profile entries `AUTOTUNE_F16_SPLITK<S>_...`), among
   the unsplit shape's candidates and the large-square tiles that fit. A
-  malformed `_splitk` suffix, or one on any other shape, is refused rather
+  malformed `_splitk<S>` suffix, or one on any other shape, is refused rather
   than compiled as the shape its parameters match (the four parameters are
   also the bias form's)
   ([record](benchmarks/f16_splitk_2026-10-20/README.md)).
+
+  A name ending in `_splitk`, with no count, takes S and the tile from the
+  split-K rule (`Autotuner::split_k_choice`, since 2026-10-25). It splits only
+  where the unsplit tile gives fewer CTAs than the profile's SM count and
+  `2MNK / (2MK + 2KN + 4MN)`, the flops per byte of A, B and C, is at least
+  96; S is then 2, 4 or 8 with each part at least 4096 deep, on a tile of
+  128x128, 64x128 or 64x64 on 4x2 warps no larger than M x N, with the most
+  CTAs from the unsplit count up to one an SM, a tie to the smaller S.
+  `Y_CTA_OVERRIDE` or a measurement of that shape and S replaces the rule's
+  tile; a borrowed or analytic one does not. The header states S (`in S
+  splits`) and why (`[Y AUTO SPLIT-K]`). Where the rule does not split, the
+  header says `in 1 split (not split)`: the main entry is the unsplit kernel
+  (its tile and its sum, the same machine code) writing C on grid
+  `(ceil(N / cta_n), ceil(M / cta_m), 1)`, Partial is neither read nor
+  written (any pointer will do), and `_reduce` returns at once on any grid,
+  so one launch sequence serves every S; a host that reads the header may
+  skip it, which saves up to about 4% on the shortest kernels. A plain
+  three-parameter GEMM the
+  rule would split keeps its own launch; the compiler prints the split and
+  the workspace it would take
+  ([record](benchmarks/f16_auto_splitk_2026-10-25/README.md)).
 * **On a loop, a statement or a `fn` it is refused.** It used to parse there
   and change nothing: on a `for`, the LLVM and PTX backends wrote it into their
   output as a comment (`[Y TILE OPTIMIZATION] Tiled loop dimensions`, the PTX
