@@ -1,0 +1,20 @@
+512x512x4096 Y_mma: CTA 64x64x32 | 2x2 warps |  | sub.rn 0 | 0 bytes spill stores Used 96 registers 
+512x512x4096 Y_unsplit: CTA 64x64x32 | 2x2 warps |  | sub.rn 0 | 0 bytes spill stores Used 128 registers 
+512x512x4096 Y_auto: CTA 64x64x32 | 2x2 warps | in 1 split | sub.rn 0 | 0 bytes spill stores Used 128 registers 
+512x512x4096 Y_unsplit_bk: CTA 64x64x32 | 2x2 warps |  | sub.rn 64 | 0 bytes spill stores Used 164 registers 
+512x512x4096 Y_auto_bk: CTA 64x64x32 | 2x2 warps | in 1 split | sub.rn 64 | 0 bytes spill stores Used 164 registers 
+512x512x16384 Y_mma: CTA 64x64x32 | 2x2 warps |  | sub.rn 0 | 0 bytes spill stores Used 96 registers 
+512x512x16384 Y_unsplit: CTA 64x64x32 | 2x2 warps |  | sub.rn 0 | 0 bytes spill stores Used 128 registers 
+512x512x16384 Y_auto: CTA 64x128x32 | 4x2 warps | in 2 splits | sub.rn 0 | 0 bytes spill stores Used 140 registers 
+512x512x16384 Y_unsplit_bk: CTA 64x64x32 | 2x2 warps |  | sub.rn 64 | 0 bytes spill stores Used 164 registers 
+512x512x16384 Y_auto_bk: CTA 64x128x32 | 4x2 warps | in 2 splits | sub.rn 64 | 0 bytes spill stores Used 168 registers 
+512x512x65536 Y_mma: CTA 64x64x32 | 2x2 warps |  | sub.rn 0 | 0 bytes spill stores Used 96 registers 
+512x512x65536 Y_unsplit: CTA 64x64x32 | 2x2 warps |  | sub.rn 0 | 0 bytes spill stores Used 128 registers 
+512x512x65536 Y_auto: CTA 64x128x32 | 4x2 warps | in 2 splits | sub.rn 0 | 0 bytes spill stores Used 140 registers 
+512x512x65536 Y_unsplit_bk: CTA 64x64x32 | 2x2 warps |  | sub.rn 64 | 0 bytes spill stores Used 164 registers 
+512x512x65536 Y_auto_bk: CTA 64x128x32 | 4x2 warps | in 2 splits | sub.rn 64 | 0 bytes spill stores Used 168 registers 
+256x256x16384 Y_mma: CTA 32x32x32 | 2x1 warps |  | sub.rn 0 | 0 bytes spill stores Used 64 registers 
+256x256x16384 Y_unsplit: CTA 32x32x32 | 2x1 warps |  | sub.rn 0 | 0 bytes spill stores Used 80 registers 
+256x256x16384 Y_auto: CTA 64x64x32 | 4x2 warps | in 4 splits | sub.rn 0 | 0 bytes spill stores Used 90 registers 
+256x256x16384 Y_unsplit_bk: CTA 32x32x32 | 2x1 warps |  | sub.rn 32 | 0 bytes spill stores Used 96 registers 
+256x256x16384 Y_auto_bk: CTA 64x64x32 | 4x2 warps | in 4 splits | sub.rn 32 | 0 bytes spill stores Used 106 registers 

@@ -1,0 +1,51 @@
+512x512x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 64 CTAs of 64x64 unsplit on 66 SMs, but no split of K=4096 into [2, 4, 8] parts at least 4096 deep fills from 64 to 66 CTAs
+512x512x16384 S=2 twin=s2_64x128w42s4.ptx | S=2 by the split-K rule: 64 CTAs of 64x64 unsplit on 66 SMs; 2 splits of K=8192 on 64x128x32 tiles, 4x2 warps: 64 CTAs
+512x512x65536 S=2 twin=s2_64x128w42s4.ptx | S=2 by the split-K rule: 64 CTAs of 64x64 unsplit on 66 SMs; 2 splits of K=32768 on 64x128x32 tiles, 4x2 warps: 64 CTAs
+256x256x16384 S=4 twin=s4_64x64w42s4.ptx | S=4 by the split-K rule: 64 CTAs of 32x32 unsplit on 66 SMs; 4 splits of K=4096 on 64x64x32 tiles, 4x2 warps: 64 CTAs
+64x4096x4096 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 64x64 unsplit on 66 SMs, but 61 flops a byte of A, B and C is below 96: bound to DRAM
+64x4096x11008 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 64x64 unsplit on 66 SMs, but 62 flops a byte of A, B and C is below 96: bound to DRAM
+64x4096x14336 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 64x64 unsplit on 66 SMs, but 62 flops a byte of A, B and C is below 96: bound to DRAM
+1x4096x4096 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 32x64 unsplit on 66 SMs, but 1 flops a byte of A, B and C is below 96: bound to DRAM
+1x4096x14336 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 16x64 unsplit on 66 SMs, but 1 flops a byte of A, B and C is below 96: bound to DRAM
+1x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 224 CTAs of 16x64 unsplit on 66 SMs
+1x14336x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 224 CTAs of 16x64 unsplit on 66 SMs
+8x4096x4096 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 32x64 unsplit on 66 SMs, but 8 flops a byte of A, B and C is below 96: bound to DRAM
+8x4096x14336 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 16x64 unsplit on 66 SMs, but 8 flops a byte of A, B and C is below 96: bound to DRAM
+8x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 224 CTAs of 16x64 unsplit on 66 SMs
+8x14336x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 224 CTAs of 16x64 unsplit on 66 SMs
+32x4096x4096 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 32x64 unsplit on 66 SMs, but 31 flops a byte of A, B and C is below 96: bound to DRAM
+32x4096x14336 S=1 twin=none | S=1 by the split-K rule: 64 CTAs of 32x64 unsplit on 66 SMs, but 32 flops a byte of A, B and C is below 96: bound to DRAM
+32x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 224 CTAs of 32x64 unsplit on 66 SMs
+32x14336x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 224 CTAs of 32x64 unsplit on 66 SMs
+1024x1024x16384 S=1 twin=auto.ptx | S=1 by the split-K rule: 128 CTAs of 64x128 unsplit on 66 SMs
+1024x1024x1024 S=1 twin=auto.ptx | S=1 by the split-K rule: 128 CTAs of 64x128 unsplit on 66 SMs
+2048x2048x2048 S=1 twin=auto.ptx | S=1 by the split-K rule: 512 CTAs of 128x64 unsplit on 66 SMs
+4096x4096x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 1024 CTAs of 128x128 unsplit on 66 SMs
+8192x8192x8192 S=1 twin=auto.ptx | S=1 by the split-K rule: 4096 CTAs of 128x128 unsplit on 66 SMs
+128x4096x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 128 CTAs of 64x64 unsplit on 66 SMs
+256x4096x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 64x64 unsplit on 66 SMs
+512x4096x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 64x128 unsplit on 66 SMs
+1024x4096x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 512 CTAs of 128x64 unsplit on 66 SMs
+2048x4096x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 1024 CTAs of 128x64 unsplit on 66 SMs
+64x11008x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 172 CTAs of 64x64 unsplit on 66 SMs
+128x11008x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 344 CTAs of 64x64 unsplit on 66 SMs
+256x11008x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 688 CTAs of 64x64 unsplit on 66 SMs
+512x11008x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 688 CTAs of 64x128 unsplit on 66 SMs
+1024x11008x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 688 CTAs of 128x128 unsplit on 66 SMs
+2048x11008x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 1376 CTAs of 128x128 unsplit on 66 SMs
+128x4096x11008 S=1 twin=auto.ptx | S=1 by the split-K rule: 128 CTAs of 64x64 unsplit on 66 SMs
+256x4096x11008 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 64x64 unsplit on 66 SMs
+512x4096x11008 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 64x128 unsplit on 66 SMs
+1024x4096x11008 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 128x128 unsplit on 66 SMs
+2048x4096x11008 S=1 twin=auto.ptx | S=1 by the split-K rule: 512 CTAs of 128x128 unsplit on 66 SMs
+64x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 224 CTAs of 64x64 unsplit on 66 SMs
+128x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 448 CTAs of 64x64 unsplit on 66 SMs
+256x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 896 CTAs of 64x64 unsplit on 66 SMs
+512x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 896 CTAs of 64x128 unsplit on 66 SMs
+1024x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 896 CTAs of 128x128 unsplit on 66 SMs
+2048x14336x4096 S=1 twin=auto.ptx | S=1 by the split-K rule: 1792 CTAs of 128x128 unsplit on 66 SMs
+128x4096x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 128 CTAs of 64x64 unsplit on 66 SMs
+256x4096x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 64x64 unsplit on 66 SMs
+512x4096x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 64x128 unsplit on 66 SMs
+1024x4096x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 256 CTAs of 128x128 unsplit on 66 SMs
+2048x4096x14336 S=1 twin=auto.ptx | S=1 by the split-K rule: 512 CTAs of 128x128 unsplit on 66 SMs

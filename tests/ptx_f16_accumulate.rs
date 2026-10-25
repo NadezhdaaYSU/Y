@@ -220,6 +220,56 @@ fn assert_blocked(ptx: &str, tiles: u32, what: &str) {
     }
 }
 
+/// Compensated blocked summation (`Y_F16_ACCUMULATE=blocked_kahan`) in every
+/// kernel of `ptx`: the mmas chain in block sums, never accumulators, as
+/// `assert_blocked` checks; each block sum is folded into its accumulator
+/// once, by `kahan_folds`'s step, the accumulator then taking the new sum and
+/// the block sum zeroed; the folds are one run, after the inner loop's back
+/// edge when a block spans more than one K-tile (so once a block); and each
+/// compensation, zeroed before the K loop, is added into its accumulator once
+/// after it, under the finite check's predicate.
+fn assert_blocked_kahan(ptx: &str, tiles: u32, what: &str) {
+    use std::collections::HashSet;
+    for body in ptx.split(".visible .entry ").skip(1) {
+        let lines: Vec<&str> = body.lines().map(str::trim).collect();
+        let mmas: Vec<Vec<String>> = lines
+            .iter()
+            .filter(|l| l.starts_with("mma.sync.aligned.m16n8k16"))
+            .map(|l| l.split('{').skip(1).map(|o| o.split('}').next().unwrap().to_string()).collect())
+            .collect();
+        assert!(!mmas.is_empty(), "{what}: no f16 mma");
+        assert!(mmas.iter().all(|o| o.len() == 4 && o[0] == o[3]), "{what}: an mma does not chain");
+        let sums: HashSet<String> = mmas.iter().flat_map(|o| o[0].split(',').map(|r| r.trim().to_string())).collect();
+        let folds = kahan_folds(body);
+        assert_eq!(folds.iter().map(|(x, _, _)| x.clone()).collect::<HashSet<_>>(), sums, "{what}: the block sums folded are not the registers the mmas chain in");
+        assert_eq!(folds.len(), sums.len(), "{what}: a block sum folded more than once");
+        let accs: HashSet<&str> = folds.iter().map(|(_, s, _)| s.as_str()).collect();
+        let comps: HashSet<&str> = folds.iter().map(|(_, _, c)| c.as_str()).collect();
+        assert!(accs.len() == folds.len() && comps.len() == folds.len(), "{what}: two block sums share an accumulator or a compensation");
+        assert!(accs.iter().chain(&comps).all(|r| !sums.contains(*r)) && accs.is_disjoint(&comps), "{what}: a register in two roles");
+        let mut at = Vec::new();
+        for (x, s, c) in &folds {
+            let i = lines.iter().position(|l| operands(l, "add.rn.f32 ").is_some_and(|o| o[1] == *s && o[2] == *x)).unwrap();
+            let sum = operands(lines[i], "add.rn.f32 ").unwrap()[0].clone();
+            assert_eq!(lines[i + 4], format!("mov.f32 {s}, {sum};"), "{what}: {s} does not take its new sum");
+            assert_eq!(lines[i + 5], format!("mov.f32 {x}, 0f00000000;"), "{what}: {x} is not zeroed after its fold");
+            let zeroed = lines.iter().position(|l| *l == format!("mov.f32 {c}, 0f00000000;")).unwrap_or_else(|| panic!("{what}: {c} is never zeroed"));
+            assert!(zeroed < i, "{what}: {c} is zeroed after its fold");
+            let finish: Vec<usize> = lines.iter().enumerate().filter(|(_, l)| l.starts_with('@') && l.ends_with(&format!("add.rn.f32 {s}, {s}, {c};"))).map(|(j, _)| j).collect();
+            assert!(finish.len() == 1 && finish[0] > i, "{what}: {c} is added into {s} {} times after the loop", finish.len());
+            at.push(i);
+        }
+        at.sort();
+        assert!(at.windows(2).all(|w| w[1] == w[0] + 6), "{what}: the folds are not one run");
+        if tiles > 1 {
+            let back = lines[at[0] - 1];
+            assert!(back.starts_with('@') && back.contains(" bra $F16_BLOCK_TILE"), "{what}: {back} above the folds, not the inner loop's back edge");
+        } else {
+            assert!(!body.contains("F16_BLOCK_TILE"), "{what}: an inner loop for one-tile blocks");
+        }
+    }
+}
+
 /// The tile in a kernel's header (`CTA MxNxK ... | WMxWN warps`) as the
 /// float32 accumulators each thread holds and the CTA's threads.
 fn accumulators_and_threads(ptx: &str) -> (u32, u32) {
@@ -576,4 +626,84 @@ fn blocked_sums_count_every_product_once_on_the_gpu() {
         let wrong = got.iter().zip(&iref).filter(|(x, y)| x.to_bits() != y.to_bits()).count();
         assert_eq!(wrong, 0, "{m}x{n}x{k} blocked: {wrong} of {} integer products wrong", got.len());
     }
+}
+
+
+#[test]
+fn compensated_blocks_fold_once_a_block_with_their_error_kept() {
+    let dir = pinned::pinned_scratch("f16_bk_ptx", pinned::SM_PINNED);
+    // As the blocked GEMM's K-tiles fall (one K-tile, a part block, a block
+    // and a tile, whole blocks), and with one-tile blocks (no inner loop).
+    for k in [32u32, 96, 2080, 4096] {
+        let ptx = compile(&dir, &format!("bk_{k}"), 64, 128, k, Some("blocked_kahan")).unwrap();
+        assert_blocked_kahan(&ptx, 8, &format!("K = {k}"));
+        // The control: the plain blocked sum has no compensated fold.
+        let plain = compile(&dir, &format!("bk_plain_{k}"), 64, 128, k, Some("blocked")).unwrap();
+        assert!(kahan_folds(&plain).is_empty(), "K = {k}: Y_F16_ACCUMULATE=blocked compensates");
+    }
+    let src = "@tile(64, 128, 4096)\nkernel bk_tile(A: GlobalMemory<F16>, B: GlobalMemory<F16>, C: GlobalMemory<F32>) {\n}\n\nfn main() {\n}\n";
+    let one = compile_source_env(&dir, "bk_tile", src, Some("blocked_kahan"), None, Some("32")).unwrap();
+    assert_blocked_kahan(&one, 1, "blocks of one K-tile");
+}
+
+#[test]
+fn compensated_blocks_count_every_product_once_and_keep_what_a_fold_rounds_away_on_the_gpu() {
+    use y::cuda_runtime::CudaContext;
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - no F16 GEMM was executed.");
+        return;
+    };
+    let dir = pinned::pinned_scratch("f16_bk_gpu", pinned::SM_PINNED);
+    let mut state = 0xB10C_CA4Au64;
+    let (m, n) = (64u32, 128u32);
+    // 1. Small integers sum exactly at any order: a product left out or
+    // counted twice, or a fold that loses its sum, changes an output.
+    for k in [32u32, 96, 2080, 4096] {
+        let (mu, nu, ku) = (m as usize, n as usize, k as usize);
+        let ia: Vec<i32> = (0..mu * ku).map(|_| (splitmix(&mut state) % 9) as i32 - 4).collect();
+        let ib: Vec<i32> = (0..ku * nu).map(|_| (splitmix(&mut state) % 9) as i32 - 4).collect();
+        let mut iref = vec![0f32; mu * nu];
+        for i in 0..mu {
+            for j in 0..nu {
+                iref[i * nu + j] = (0..ku).map(|kk| (ia[i * ku + kk] * ib[kk * nu + j]) as i64).sum::<i64>() as f32;
+            }
+        }
+        let tag = format!("bk_gpu_{k}");
+        let ptx = compile(&dir, &tag, m, n, k, Some("blocked_kahan")).unwrap();
+        let run = launcher(&ctx, &ptx, &tag, m, n, k);
+        let got = run(&ia.iter().map(|&v| f16_of_int(v)).collect::<Vec<_>>(), &ib.iter().map(|&v| f16_of_int(v)).collect::<Vec<_>>());
+        let wrong = got.iter().zip(&iref).filter(|(x, y)| x.to_bits() != y.to_bits()).count();
+        assert_eq!(wrong, 0, "{m}x{n}x{k} blocked_kahan: {wrong} of {} integer products wrong", got.len());
+    }
+    // 2. A of ones; B's first block (256 deep) sums to 2^23 and each of the
+    // next 31 to 0.5 (all exact in the block sums). Added in float32, 2^23 +
+    // 0.5 rounds back to 2^23: the plain blocked sum ends at 8388608, 15.5
+    // below the exact 8388623.5. Compensated, the 31 halves are kept and the
+    // sum ends at 8388624, the float32 nearest.
+    let k = 8192u32;
+    let (mu, nu, ku) = (m as usize, n as usize, k as usize);
+    let a = vec![0x3C00u16; mu * ku];
+    let b: Vec<u16> = (0..ku * nu).map(|x| if x / nu < 256 { 0x7800 } else { 0x1800 }).collect();
+    let mut results = Vec::new();
+    for knob in ["blocked", "blocked_kahan"] {
+        let tag = format!("bk_round_{knob}");
+        let ptx = compile(&dir, &tag, m, n, k, Some(knob)).unwrap();
+        let run = launcher(&ctx, &ptx, &tag, m, n, k);
+        let got = run(&a, &b);
+        assert!(got.iter().all(|v| v.to_bits() == got[0].to_bits()), "{knob}: the outputs differ");
+        results.push(got[0]);
+        // 3. One +Inf in row 3 of A: that row stays +Inf (`Inf - Inf` in a
+        // compensation must not make it NaN), and no other row moves.
+        let mut a_inf = a.clone();
+        a_inf[3 * ku + 300] = 0x7C00;
+        let inf = run(&a_inf, &b);
+        for (idx, &v) in inf.iter().enumerate() {
+            if idx / nu == 3 {
+                assert_eq!(v, f32::INFINITY, "{knob}: output {idx} of the row holding +Inf is {v}");
+            } else {
+                assert_eq!(v.to_bits(), got[idx].to_bits(), "{knob}: output {idx} moved with another row's +Inf");
+            }
+        }
+    }
+    assert_eq!(results, [8388608.0, 8388624.0], "blocked, then compensated");
 }

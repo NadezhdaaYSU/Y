@@ -1,0 +1,10 @@
+# ../f16_kahan_default_2026-10-24/check/regen_all.sh with this tree's compiler and with HEAD's (a5bd73d, the integ
+# worktree's build): every tests/*.ysu with a committed .ptx, under the re-tuned profile.
+this tree:
+differs test_drift
+same 59 differ 1 fail 0
+HEAD:
+differs test_drift
+same 59 differ 1 fail 0
+this tree against HEAD, file for file: 0 of 60 differ
+(test_drift's latency comments differ under every compiler; it is not regenerated.)

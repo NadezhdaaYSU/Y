@@ -1609,12 +1609,15 @@ not know its length",
                         )
             )
         }
-        // A `_splitk<S>` name selects the split-K F16 GEMM, (A, B:
-        // GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), whose types are
-        // the bias shape's: `PtxEmitter::gemm_split_k` and
+        // A `_splitk<S>` or `_splitk` name selects the split-K F16 GEMM, (A,
+        // B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), whose types
+        // are the bias shape's: `PtxEmitter::gemm_split_k` and
         // `gemm_split_k_shape` decide it in codegen and decide it here, so the
         // two cannot disagree. A malformed suffix or another shape under such
         // a name is refused rather than compiled as what its types match.
+        // `_splitk` splits only where the split-K rule finds a split that
+        // `gemm_split_k_shape` accepts, so its dimensions need only be the
+        // GEMM's.
         if let Some(split) = crate::ptx_emitter::PtxEmitter::gemm_split_k(&kernel.name) {
             let shape_ok = kernel.params.len() == 4
                 && is_global_memory_of(&kernel.params[0].ty, "F16")
@@ -1629,11 +1632,12 @@ not know its length",
             let why = match split {
                 Err(why) => Some(why),
                 Ok(_) if !shape_ok => Some(format!(
-                    "a split-K GEMM (`_splitk<S>`) takes exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>); found {} parameter(s)",
+                    "a split-K GEMM (`_splitk<S>` or `_splitk`) takes exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>); found {} parameter(s)",
                     kernel.params.len()
                 )),
-                Ok(s) => match dims {
-                    (Some(m), Some(n), Some(k)) => crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s).err(),
+                Ok(split) => match (dims, split) {
+                    ((Some(m), Some(n), Some(k)), crate::ptx_emitter::SplitK::Fixed(s)) => crate::ptx_emitter::PtxEmitter::gemm_split_k_shape(m, n, k, s).err(),
+                    ((Some(_), Some(_), Some(_)), crate::ptx_emitter::SplitK::Auto) => None,
                     _ => Some("M, N and K must be positive integer literals below 2^32".into()),
                 },
             };

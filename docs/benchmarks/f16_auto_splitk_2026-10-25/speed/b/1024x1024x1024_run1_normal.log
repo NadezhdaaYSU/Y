@@ -1,0 +1,4 @@
+1024x1024x1024 data=normal exact True graph True | during 100, 2745, 78.97 .. 100, 2745, 118.32
+  unsplit                      min    27.11 med    28.09 us  cuBLAS/this 1.041  64x128 2x2 S=1 
+  auto                         min    28.09 med    29.09 us  cuBLAS/this 1.005  64x128 2x2 S=1 
+  cuBLAS                       min    28.22 med    29.22 us  cuBLAS/this 1.000   = 

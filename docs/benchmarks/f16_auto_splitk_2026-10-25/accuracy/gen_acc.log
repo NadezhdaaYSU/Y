@@ -1,0 +1,28 @@
+512x512x4096 Y_mma: CTA 64x64x32 | 2x2 warps | 
+512x512x4096 Y_unsplit: CTA 64x64x32 | 2x2 warps | 
+512x512x4096 Y_auto: CTA 64x64x32 | 2x2 warps | in 1 split
+512x512x4096 Y_s2_64x128w42: CTA 64x128x32 | 4x2 warps | in 2 splits
+512x512x16384 Y_mma: CTA 64x64x32 | 2x2 warps | 
+512x512x16384 Y_unsplit: CTA 64x64x32 | 2x2 warps | 
+512x512x16384 Y_auto: CTA 64x128x32 | 4x2 warps | in 2 splits
+512x512x16384 Y_s4_128x128w42: CTA 128x128x32 | 4x2 warps | in 4 splits
+512x512x65536 Y_mma: CTA 64x64x32 | 2x2 warps | 
+512x512x65536 Y_unsplit: CTA 64x64x32 | 2x2 warps | 
+512x512x65536 Y_auto: CTA 64x128x32 | 4x2 warps | in 2 splits
+512x512x65536 Y_s4_128x128w42: CTA 128x128x32 | 4x2 warps | in 4 splits
+256x256x16384 Y_mma: CTA 32x32x32 | 2x1 warps | 
+256x256x16384 Y_unsplit: CTA 32x32x32 | 2x1 warps | 
+256x256x16384 Y_auto: CTA 64x64x32 | 4x2 warps | in 4 splits
+256x256x16384 Y_s8_64x128w42: CTA 64x128x32 | 4x2 warps | in 8 splits
+64x4096x4096 Y_mma: CTA 64x64x32 | 2x2 warps | 
+64x4096x4096 Y_unsplit: CTA 64x64x32 | 2x2 warps | 
+64x4096x4096 Y_auto: CTA 64x64x32 | 2x2 warps | in 1 split
+64x4096x4096 Y_s2_64x128w42: CTA 64x128x32 | 4x2 warps | in 2 splits
+64x4096x11008 Y_mma: CTA 64x64x32 | 2x2 warps | 
+64x4096x11008 Y_unsplit: CTA 64x64x32 | 2x2 warps | 
+64x4096x11008 Y_auto: CTA 64x64x32 | 2x2 warps | in 1 split
+64x4096x11008 Y_s2_64x128w42: CTA 64x128x32 | 4x2 warps | in 2 splits
+64x4096x14336 Y_mma: CTA 64x64x32 | 2x2 warps | 
+64x4096x14336 Y_unsplit: CTA 64x64x32 | 2x2 warps | 
+64x4096x14336 Y_auto: CTA 64x64x32 | 2x2 warps | in 1 split
+64x4096x14336 Y_s2_64x128w42: CTA 64x128x32 | 4x2 warps | in 2 splits

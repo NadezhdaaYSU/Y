@@ -1,0 +1,31 @@
+36 cases
+
+512x512x4096 (9 cases)
+  Y_auto           at or below cuBLAS in both: 9/9 | mixed: rel_F x6.56-6.98, max_norm x6.07-7.93, worse 0.0591-0.0666 | same sign: rel_F x9.27-9.4, max_norm x8.82-8.96, worse 0-0 | cancellation: rel_F x2.85-5.71, max_norm x5.27-5.93, worse 0.115-0.27 |
+  Y_auto_bk        at or below cuBLAS in both: 9/9 | mixed: rel_F x6.64-7.06, max_norm x7.12-8.08, worse 0.0584-0.0663 | same sign: rel_F x9.27-9.41, max_norm x9.17-9.22, worse 0-0 | cancellation: rel_F x3.04-5.77, max_norm x5.5-6.43, worse 0.115-0.265 |
+  Y_mma            at or below cuBLAS in both: 0/9 | mixed: rel_F x0.506-0.509, max_norm x0.463-0.526, worse 0.807-0.81 | same sign: rel_F x0.491-0.493, max_norm x0.491-0.491, worse 1-1 | cancellation: rel_F x0.111-0.545, max_norm x0.251-0.548, worse 0.712-0.961 |
+  Y_unsplit        at or below cuBLAS in both: 9/9 | mixed: rel_F x6.56-6.98, max_norm x6.07-7.93, worse 0.0591-0.0666 | same sign: rel_F x9.27-9.4, max_norm x8.82-8.96, worse 0-0 | cancellation: rel_F x2.85-5.71, max_norm x5.27-5.93, worse 0.115-0.27 |
+  Y_unsplit_bk     at or below cuBLAS in both: 9/9 | mixed: rel_F x6.64-7.06, max_norm x7.12-8.08, worse 0.0584-0.0663 | same sign: rel_F x9.27-9.41, max_norm x9.17-9.22, worse 0-0 | cancellation: rel_F x3.04-5.77, max_norm x5.5-6.43, worse 0.115-0.265 |
+
+512x512x16384 (9 cases)
+  Y_auto           at or below cuBLAS in both: 9/9 | mixed: rel_F x6.55-6.88, max_norm x5.67-7.8, worse 0.0592-0.0654 | same sign: rel_F x9.27-9.41, max_norm x8.57-8.67, worse 0-0 | cancellation: rel_F x2.44-5.48, max_norm x2.24-4.96, worse 0.106-0.252 |
+  Y_auto_bk        at or below cuBLAS in both: 9/9 | mixed: rel_F x6.68-7.04, max_norm x6.15-8.15, worse 0.0571-0.0637 | same sign: rel_F x9.27-9.42, max_norm x8.95-9.17, worse 0-0 | cancellation: rel_F x3-5.75, max_norm x4.71-5.33, worse 0.101-0.214 |
+  Y_mma            at or below cuBLAS in both: 0/9 | mixed: rel_F x0.129-0.13, max_norm x0.104-0.147, worse 0.946-0.947 | same sign: rel_F x0.121-0.122, max_norm x0.12-0.122, worse 1-1 | cancellation: rel_F x0.0278-0.125, max_norm x0.0431-0.129, worse 0.911-0.984 |
+  Y_unsplit        at or below cuBLAS in both: 9/9 | mixed: rel_F x6.42-6.75, max_norm x4.92-6.11, worse 0.0599-0.0662 | same sign: rel_F x9.26-9.41, max_norm x7.91-8.07, worse 0-0 | cancellation: rel_F x2.45-5.49, max_norm x2.64-4.93, worse 0.107-0.258 |
+  Y_unsplit_bk     at or below cuBLAS in both: 9/9 | mixed: rel_F x6.69-7.06, max_norm x6.15-7.64, worse 0.0573-0.0639 | same sign: rel_F x9.27-9.42, max_norm x9.11-9.23, worse 0-0 | cancellation: rel_F x3.05-5.76, max_norm x4.67-5.43, worse 0.103-0.221 |
+
+512x512x65536 (9 cases)
+  Y_auto           at or below cuBLAS in both: 9/9 | mixed: rel_F x24-25.3, max_norm x17.8-21.1, worse 0.0172-0.0192 | same sign: rel_F x37.8-38.6, max_norm x32.1-32.6, worse 0-0 | cancellation: rel_F x3.49-20.3, max_norm x3.15-12.5, worse 0.0345-0.176 |
+  Y_auto_bk        at or below cuBLAS in both: 9/9 | mixed: rel_F x26-27.5, max_norm x26.2-28.7, worse 0.0154-0.0171 | same sign: rel_F x37.8-38.7, max_norm x36.4-37.6, worse 0-0 | cancellation: rel_F x6.11-24.3, max_norm x9.6-18.9, worse 0.0285-0.112 |
+  Y_mma            at or below cuBLAS in both: 0/9 | mixed: rel_F x0.126-0.127, max_norm x0.123-0.133, worse 0.948-0.949 | same sign: rel_F x0.124-0.124, max_norm x0.124-0.124, worse 1-1 | cancellation: rel_F x0.014-0.124, max_norm x0.024-0.114, worse 0.917-0.992 |
+  Y_unsplit        at or below cuBLAS in both: 9/9 | mixed: rel_F x22.5-23.5, max_norm x12.7-17, worse 0.0177-0.0196 | same sign: rel_F x37.7-38.5, max_norm x27.4-28, worse 0-0 | cancellation: rel_F x3.49-20.4, max_norm x3.42-11.6, worse 0.0345-0.183 |
+  Y_unsplit_bk     at or below cuBLAS in both: 9/9 | mixed: rel_F x26-27.5, max_norm x26.2-29.5, worse 0.0154-0.0172 | same sign: rel_F x37.8-38.7, max_norm x37.1-38, worse 0-0 | cancellation: rel_F x6.21-24.4, max_norm x9.62-18.9, worse 0.029-0.114 |
+
+256x256x16384 (9 cases)
+  Y_auto           at or below cuBLAS in both: 9/9 | mixed: rel_F x6.6-6.94, max_norm x5.61-7.12, worse 0.0579-0.0662 | same sign: rel_F x9.27-9.43, max_norm x8.8-9.01, worse 0-0 | cancellation: rel_F x2.62-5.5, max_norm x3.78-4.97, worse 0.112-0.238 |
+  Y_auto_bk        at or below cuBLAS in both: 9/9 | mixed: rel_F x6.68-7.02, max_norm x6.36-7.16, worse 0.0559-0.0645 | same sign: rel_F x9.27-9.42, max_norm x8.92-9.12, worse 0-0 | cancellation: rel_F x2.92-5.67, max_norm x3.87-5.36, worse 0.11-0.218 |
+  Y_mma            at or below cuBLAS in both: 0/9 | mixed: rel_F x0.129-0.13, max_norm x0.115-0.147, worse 0.945-0.948 | same sign: rel_F x0.121-0.122, max_norm x0.122-0.122, worse 1-1 | cancellation: rel_F x0.0276-0.129, max_norm x0.0408-0.128, worse 0.913-0.985 |
+  Y_unsplit        at or below cuBLAS in both: 9/9 | mixed: rel_F x6.42-6.74, max_norm x4.89-6.21, worse 0.06-0.0675 | same sign: rel_F x9.26-9.41, max_norm x8.16-8.17, worse 0-0 | cancellation: rel_F x2.43-5.42, max_norm x2.34-5.16, worse 0.114-0.258 |
+  Y_unsplit_bk     at or below cuBLAS in both: 9/9 | mixed: rel_F x6.69-7.04, max_norm x6.36-7.12, worse 0.0564-0.0648 | same sign: rel_F x9.27-9.42, max_norm x9.1-9.27, worse 0-0 | cancellation: rel_F x3.01-5.69, max_norm x3.62-5.38, worse 0.113-0.221 |
+
+Y_auto (the rule's kernel) not at or below cuBLAS in both: none

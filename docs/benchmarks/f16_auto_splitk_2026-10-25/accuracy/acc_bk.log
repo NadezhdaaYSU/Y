@@ -1,0 +1,181 @@
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     normal   512x512x4096 kF 4.1e+01 | Y_auto 4.91e-07 Y_auto_bk 4.86e-07 Y_mma 6.61e-06 Y_unsplit 4.91e-07 Y_unsplit_bk 4.86e-07 cuBLAS 3.36e-06 SGEMM 5.68e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.932 Y_auto_bk 0.933 Y_mma 0.183 Y_unsplit 0.932 Y_unsplit_bk 0.933
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:06 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     normal  512x512x16384 kF 8.2e+01 | Y_auto 4.97e-07 Y_auto_bk 4.86e-07 Y_mma 2.59e-05 Y_unsplit 5.06e-07 Y_unsplit_bk 4.86e-07 cuBLAS 3.36e-06 SGEMM 8.07e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.933 Y_auto_bk 0.935 Y_mma 0.053 Y_unsplit 0.932 Y_unsplit_bk 0.936
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     normal  512x512x65536 kF 1.6e+02 | Y_auto 5.27e-07 Y_auto_bk 4.86e-07 Y_mma 1.03e-04 Y_unsplit 5.64e-07 Y_unsplit_bk 4.85e-07 cuBLAS 1.31e-05 SGEMM 8.00e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.981 Y_auto_bk 0.983 Y_mma 0.051 Y_unsplit 0.980 Y_unsplit_bk 0.983
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     normal  256x256x16384 kF 8.2e+01 | Y_auto 4.92e-07 Y_auto_bk 4.87e-07 Y_mma 2.59e-05 Y_unsplit 5.05e-07 Y_unsplit_bk 4.85e-07 cuBLAS 3.38e-06 SGEMM 5.71e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.935 Y_auto_bk 0.936 Y_mma 0.053 Y_unsplit 0.934 Y_unsplit_bk 0.937
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:07 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+uniform_pm1   512x512x4096 kF 4.8e+01 | Y_auto 4.86e-07 Y_auto_bk 4.81e-07 Y_mma 6.63e-06 Y_unsplit 4.86e-07 Y_unsplit_bk 4.81e-07 cuBLAS 3.37e-06 SGEMM 5.68e-07 RN32 2.52e-08 | vs cuBLAS better: Y_auto 0.934 Y_auto_bk 0.935 Y_mma 0.185 Y_unsplit 0.934 Y_unsplit_bk 0.935
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+uniform_pm1  512x512x16384 kF 9.6e+01 | Y_auto 4.92e-07 Y_auto_bk 4.81e-07 Y_mma 2.60e-05 Y_unsplit 5.01e-07 Y_unsplit_bk 4.80e-07 cuBLAS 3.38e-06 SGEMM 8.09e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.935 Y_auto_bk 0.937 Y_mma 0.053 Y_unsplit 0.935 Y_unsplit_bk 0.938
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+uniform_pm1  512x512x65536 kF 1.9e+02 | Y_auto 5.25e-07 Y_auto_bk 4.83e-07 Y_mma 1.03e-04 Y_unsplit 5.61e-07 Y_unsplit_bk 4.82e-07 cuBLAS 1.31e-05 SGEMM 8.02e-07 RN32 2.52e-08 | vs cuBLAS better: Y_auto 0.981 Y_auto_bk 0.983 Y_mma 0.051 Y_unsplit 0.981 Y_unsplit_bk 0.983
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+uniform_pm1  256x256x16384 kF 9.6e+01 | Y_auto 4.87e-07 Y_auto_bk 4.83e-07 Y_mma 2.60e-05 Y_unsplit 5.02e-07 Y_unsplit_bk 4.81e-07 cuBLAS 3.38e-06 SGEMM 5.71e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.935 Y_auto_bk 0.936 Y_mma 0.053 Y_unsplit 0.934 Y_unsplit_bk 0.936
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:08 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ abs_normal   512x512x4096 kF 1.0e+00 | Y_auto 2.63e-06 Y_auto_bk 2.63e-06 Y_mma 5.03e-05 Y_unsplit 2.63e-06 Y_unsplit_bk 2.63e-06 cuBLAS 2.47e-05 SGEMM 2.50e-07 RN32 2.70e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:09 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:09 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:09 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:09 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ abs_normal  512x512x16384 kF 1.0e+00 | Y_auto 2.63e-06 Y_auto_bk 2.62e-06 Y_mma 2.04e-04 Y_unsplit 2.63e-06 Y_unsplit_bk 2.62e-06 cuBLAS 2.47e-05 SGEMM 2.52e-07 RN32 2.70e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ abs_normal  512x512x65536 kF 1.0e+00 | Y_auto 2.63e-06 Y_auto_bk 2.63e-06 Y_mma 8.19e-04 Y_unsplit 2.64e-06 Y_unsplit_bk 2.63e-06 cuBLAS 1.02e-04 SGEMM 1.52e-07 RN32 2.70e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ abs_normal  256x256x16384 kF 1.0e+00 | Y_auto 2.62e-06 Y_auto_bk 2.62e-06 Y_mma 2.04e-04 Y_unsplit 2.63e-06 Y_unsplit_bk 2.62e-06 cuBLAS 2.47e-05 SGEMM 1.40e-07 RN32 2.70e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  uniform01   512x512x4096 kF 1.0e+00 | Y_auto 2.40e-06 Y_auto_bk 2.40e-06 Y_mma 4.51e-05 Y_unsplit 2.40e-06 Y_unsplit_bk 2.40e-06 cuBLAS 2.23e-05 SGEMM 2.17e-07 RN32 2.72e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  uniform01  512x512x16384 kF 1.0e+00 | Y_auto 2.40e-06 Y_auto_bk 2.40e-06 Y_mma 1.83e-04 Y_unsplit 2.41e-06 Y_unsplit_bk 2.40e-06 cuBLAS 2.23e-05 SGEMM 2.18e-07 RN32 2.72e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:10 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  uniform01  512x512x65536 kF 1.0e+00 | Y_auto 2.41e-06 Y_auto_bk 2.40e-06 Y_mma 7.31e-04 Y_unsplit 2.41e-06 Y_unsplit_bk 2.40e-06 cuBLAS 9.10e-05 SGEMM 1.30e-07 RN32 2.73e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  uniform01  256x256x16384 kF 1.0e+00 | Y_auto 2.40e-06 Y_auto_bk 2.40e-06 Y_mma 1.83e-04 Y_unsplit 2.40e-06 Y_unsplit_bk 2.40e-06 cuBLAS 2.23e-05 SGEMM 1.22e-07 RN32 2.72e-08 | vs cuBLAS better: Y_auto 1.000 Y_auto_bk 1.000 Y_mma 0.000 Y_unsplit 1.000 Y_unsplit_bk 1.000
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     offset   512x512x4096 kF 5.1e+03 | Y_auto 2.72e-05 Y_auto_bk 2.69e-05 Y_mma 2.85e-04 Y_unsplit 2.72e-05 Y_unsplit_bk 2.69e-05 cuBLAS 1.55e-04 SGEMM 5.08e-05 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.881 Y_auto_bk 0.884 Y_mma 0.288 Y_unsplit 0.881 Y_unsplit_bk 0.884
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:11 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     offset  512x512x16384 kF 1.0e+04 | Y_auto 2.73e-05 Y_auto_bk 2.60e-05 Y_mma 1.20e-03 Y_unsplit 2.72e-05 Y_unsplit_bk 2.59e-05 cuBLAS 1.49e-04 SGEMM 7.58e-05 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.890 Y_auto_bk 0.895 Y_mma 0.089 Y_unsplit 0.891 Y_unsplit_bk 0.897
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     offset  512x512x65536 kF 2.0e+04 | Y_auto 3.10e-05 Y_auto_bk 2.58e-05 Y_mma 5.05e-03 Y_unsplit 3.08e-05 Y_unsplit_bk 2.58e-05 cuBLAS 6.28e-04 SGEMM 7.83e-05 RN32 2.52e-08 | vs cuBLAS better: Y_auto 0.964 Y_auto_bk 0.970 Y_mma 0.083 Y_unsplit 0.965 Y_unsplit_bk 0.971
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     offset  256x256x16384 kF 1.0e+04 | Y_auto 2.69e-05 Y_auto_bk 2.61e-05 Y_mma 1.14e-03 Y_unsplit 2.73e-05 Y_unsplit_bk 2.60e-05 cuBLAS 1.48e-04 SGEMM 5.49e-05 RN32 2.52e-08 | vs cuBLAS better: Y_auto 0.883 Y_auto_bk 0.886 Y_mma 0.087 Y_unsplit 0.884 Y_unsplit_bk 0.887
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     paired   512x512x4096 kF 5.8e+04 | Y_auto 2.10e-04 Y_auto_bk 1.97e-04 Y_mma 5.38e-03 Y_unsplit 2.10e-04 Y_unsplit_bk 1.97e-04 cuBLAS 5.99e-04 SGEMM 7.62e-04 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.711 Y_auto_bk 0.730 Y_mma 0.039 Y_unsplit 0.711 Y_unsplit_bk 0.730
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:12 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     paired  512x512x16384 kF 1.2e+05 | Y_auto 2.47e-04 Y_auto_bk 2.01e-04 Y_mma 2.17e-02 Y_unsplit 2.46e-04 Y_unsplit_bk 1.98e-04 cuBLAS 6.02e-04 SGEMM 1.07e-03 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.728 Y_auto_bk 0.766 Y_mma 0.016 Y_unsplit 0.734 Y_unsplit_bk 0.778
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     paired  512x512x65536 kF 2.3e+05 | Y_auto 3.51e-04 Y_auto_bk 2.01e-04 Y_mma 8.73e-02 Y_unsplit 3.51e-04 Y_unsplit_bk 1.97e-04 cuBLAS 1.23e-03 SGEMM 1.12e-03 RN32 2.52e-08 | vs cuBLAS better: Y_auto 0.815 Y_auto_bk 0.879 Y_mma 0.008 Y_unsplit 0.815 Y_unsplit_bk 0.885
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:13 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+     paired  256x256x16384 kF 1.2e+05 | Y_auto 2.29e-04 Y_auto_bk 2.05e-04 Y_mma 2.17e-02 Y_unsplit 2.47e-04 Y_unsplit_bk 2.00e-04 cuBLAS 6.00e-04 SGEMM 7.71e-04 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.742 Y_auto_bk 0.763 Y_mma 0.015 Y_unsplit 0.735 Y_unsplit_bk 0.778
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ wide_range   512x512x4096 kF 8.9e+00 | Y_auto 4.99e-07 Y_auto_bk 4.93e-07 Y_mma 6.47e-06 Y_unsplit 4.99e-07 Y_unsplit_bk 4.93e-07 cuBLAS 3.27e-06 SGEMM 4.88e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.927 Y_auto_bk 0.928 Y_mma 0.179 Y_unsplit 0.927 Y_unsplit_bk 0.928
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:14 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ wide_range  512x512x16384 kF 1.8e+01 | Y_auto 5.03e-07 Y_auto_bk 4.93e-07 Y_mma 2.55e-05 Y_unsplit 5.13e-07 Y_unsplit_bk 4.92e-07 cuBLAS 3.29e-06 SGEMM 6.81e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.928 Y_auto_bk 0.930 Y_mma 0.052 Y_unsplit 0.928 Y_unsplit_bk 0.931
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ wide_range  512x512x65536 kF 3.5e+01 | Y_auto 5.34e-07 Y_auto_bk 4.93e-07 Y_mma 1.02e-04 Y_unsplit 5.70e-07 Y_unsplit_bk 4.93e-07 cuBLAS 1.28e-05 SGEMM 6.80e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.979 Y_auto_bk 0.982 Y_mma 0.051 Y_unsplit 0.979 Y_unsplit_bk 0.982
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+ wide_range  256x256x16384 kF 1.8e+01 | Y_auto 5.00e-07 Y_auto_bk 4.94e-07 Y_mma 2.56e-05 Y_unsplit 5.13e-07 Y_unsplit_bk 4.92e-07 cuBLAS 3.30e-06 SGEMM 4.94e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.928 Y_auto_bk 0.929 Y_mma 0.053 Y_unsplit 0.927 Y_unsplit_bk 0.930
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:16 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      small   512x512x4096 kF 4.1e+01 | Y_auto 4.79e-07 Y_auto_bk 4.74e-07 Y_mma 6.59e-06 Y_unsplit 4.79e-07 Y_unsplit_bk 4.74e-07 cuBLAS 3.35e-06 SGEMM 5.64e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.935 Y_auto_bk 0.936 Y_mma 0.185 Y_unsplit 0.935 Y_unsplit_bk 0.936
+USDT:2026-10-25 19:42:17 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:17 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:17 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:17 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      small  512x512x16384 kF 8.2e+01 | Y_auto 4.87e-07 Y_auto_bk 4.77e-07 Y_mma 2.59e-05 Y_unsplit 4.97e-07 Y_unsplit_bk 4.76e-07 cuBLAS 3.36e-06 SGEMM 8.05e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.935 Y_auto_bk 0.937 Y_mma 0.052 Y_unsplit 0.934 Y_unsplit_bk 0.937
+USDT:2026-10-25 19:42:18 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:18 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:18 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:18 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      small  512x512x65536 kF 1.6e+02 | Y_auto 5.17e-07 Y_auto_bk 4.76e-07 Y_mma 1.03e-04 Y_unsplit 5.55e-07 Y_unsplit_bk 4.75e-07 cuBLAS 1.31e-05 SGEMM 7.98e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.982 Y_auto_bk 0.983 Y_mma 0.051 Y_unsplit 0.981 Y_unsplit_bk 0.984
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      small  256x256x16384 kF 8.1e+01 | Y_auto 4.82e-07 Y_auto_bk 4.77e-07 Y_mma 2.60e-05 Y_unsplit 4.97e-07 Y_unsplit_bk 4.75e-07 cuBLAS 3.35e-06 SGEMM 5.67e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.936 Y_auto_bk 0.937 Y_mma 0.054 Y_unsplit 0.935 Y_unsplit_bk 0.938
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      large   512x512x4096 kF 4.1e+01 | Y_auto 4.90e-07 Y_auto_bk 4.84e-07 Y_mma 6.60e-06 Y_unsplit 4.90e-07 Y_unsplit_bk 4.84e-07 cuBLAS 3.35e-06 SGEMM 5.65e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.932 Y_auto_bk 0.933 Y_mma 0.183 Y_unsplit 0.932 Y_unsplit_bk 0.933
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:19 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      large  512x512x16384 kF 8.2e+01 | Y_auto 4.96e-07 Y_auto_bk 4.85e-07 Y_mma 2.59e-05 Y_unsplit 5.06e-07 Y_unsplit_bk 4.85e-07 cuBLAS 3.36e-06 SGEMM 8.05e-07 RN32 2.54e-08 | vs cuBLAS better: Y_auto 0.933 Y_auto_bk 0.935 Y_mma 0.053 Y_unsplit 0.933 Y_unsplit_bk 0.936
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      large  512x512x65536 kF 1.6e+02 | Y_auto 5.28e-07 Y_auto_bk 4.86e-07 Y_mma 1.03e-04 Y_unsplit 5.64e-07 Y_unsplit_bk 4.85e-07 cuBLAS 1.31e-05 SGEMM 8.02e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.981 Y_auto_bk 0.983 Y_mma 0.051 Y_unsplit 0.981 Y_unsplit_bk 0.983
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-10-25 19:42:20 286316:286316 SyncActivityProfilerHandler.cpp:59] profiler_stop
+      large  256x256x16384 kF 8.1e+01 | Y_auto 4.91e-07 Y_auto_bk 4.86e-07 Y_mma 2.60e-05 Y_unsplit 5.05e-07 Y_unsplit_bk 4.84e-07 cuBLAS 3.36e-06 SGEMM 5.66e-07 RN32 2.53e-08 | vs cuBLAS better: Y_auto 0.935 Y_auto_bk 0.936 Y_mma 0.052 Y_unsplit 0.934 Y_unsplit_bk 0.937
+exit 0

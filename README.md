@@ -1199,6 +1199,73 @@ rel_F is 6.6–26x its own on mixed signs, 9.3–39x on same signs and 2.6–21x
 under cancellation (the float32 splits': 11–23x, 164–404x and 1.5–12x).
 Splits of at most 32 rows or one block deep stay float32.
 
+**Since 2026-10-25 a kernel named `<name>_splitk` chooses its own split**
+(opt-in, not a default; `docs/benchmarks/f16_auto_splitk_2026-10-25/`). It
+takes `_splitk<S>`'s four parameters and is launched the same way, main entry
+then `_reduce`. The rule (`Autotuner::split_k_choice`) splits K only where the
+unsplit kernel leaves SMs without a CTA and the GEMM does at least 96 flops
+per byte of A, B and C, so not where it is bound to DRAM, and never at 32
+rows or fewer. It then takes 2, 4 or 8 splits, each at least 4096 deep, on
+one of three eight-warp tiles: the most CTAs up to one an SM, and on a tie
+the fewer splits. Where it does not split, the main entry is the plain
+kernel, the same machine code, and writes C; `_reduce` returns at once. A
+plain `@tile` GEMM keeps its launch: where the rule would split it, the
+compiler prints the split and the workspace it would need. Timed on a
+contended GPU against the unsplit kernel and cuBLAS (`sbench.py`: the
+minimum of 21 interleaved rounds, two runs on integer and N(0, 1) inputs,
+the reduction included; above 1 the rule's kernel is faster):
+
+| shape | the rule's split | over unsplit | over cuBLAS |
+| :--- | :--- | ---: | ---: |
+| 512 x 512 x 16384 | 2, on 64x128 tiles | 1.085–1.089x | 1.059–1.065x |
+| 512 x 512 x 65536 | 2, on 64x128 tiles | 1.102–1.113x | 1.006–1.057x |
+| 256 x 256 x 16384 | 4, on 64x64 tiles | 2.36–2.40x | 1.023–1.025x |
+
+- **It leaves the other 48 shapes timed unsplit**: 512 x 512 x 4096, the
+  30 LLM layer shapes, the squares 1024³–8192³, 1024 x 1024 x 16384 and
+  decode at M = 1, 8 and 32. Above 32 rows no split of them was faster
+  beyond its run's own noise, except at 64 x 4096 x 4096 (1.10–1.11x), whose
+  32 MB of B stayed in the L2 between calls. From DRAM, at K = 11008 and
+  14336, the same splits were 0.88–0.99x.
+- **Decode splits were faster but are not taken**: 1.04–1.08x at M = 1 and
+  8 with N = 14336, B from DRAM; 1.22–1.24x at N = K = 4096 with B in the L2,
+  where the unsplit kernel's compensated sum costs the most (0.96–1.01x with
+  B from DRAM, below). A split of at
+  most 32 rows adds each mma in plain float32, and its accuracy against
+  cuBLAS has not been measured.
+- **Where it does not split**, the empty `_reduce` launch costs up to about
+  4% on the shortest kernels (1024³, 32 x 4096 x 4096) and 2% at
+  512 x 512 x 4096; at long K it is within the noise.
+- **More accurate than cuBLAS in all 27 cases** of the three splits (the
+  nine distributions of `docs/benchmarks/f16_accuracy_2026-10-20/`), in both
+  rel_F and max |E|/(|A||B|): cuBLAS's rel_F is 6.5–25x theirs on mixed
+  signs, 9.3–39x on same signs and 2.4–20x under cancellation. Not on every
+  output: up to 6.6% of the mixed-sign outputs, 3.5–11% of the offset ones
+  and 18–25% of the paired ones are farther from float64 than cuBLAS's. Against the
+  unsplit default the splits are level in rel_F (0.985–1.006x), and in
+  max |E|/(|A||B|) 0.93–1.18x, the highest on paired cancellation.
+- **From DRAM** (each call reading the next of several copies of A and B,
+  three L2s' worth): 512 x 512 x 16384's split is still 1.06–1.11x unsplit
+  and 1.02–1.07x cuBLAS. 256 x 256 x 16384's is 2.26–2.32x unsplit but
+  0.93–0.96x cuBLAS, where 8 splits (2048 deep, below the rule's bound) were
+  1.01–1.04x; in the L2 the rule's 4 were 1.7% ahead of them. The L2-only
+  gains above vanish: every split of 64 x 4096 x 4096 is 0.98x unsplit or
+  less, and decode at N = K = 4096 0.96–1.01x.
+
+**`Y_F16_ACCUMULATE=blocked_kahan` compensates the block folds** (opt-in,
+2026-10-25; `docs/benchmarks/f16_auto_splitk_2026-10-25/`): each block sum is
+added into the accumulator as the compensated mode adds a tile sum, its
+rounding error kept apart and added in once after the K loop. With
+`Y_F16_BLOCK_K=64` it takes the rule's splits' share of outputs farther from
+float64 than cuBLAS's on the paired cancellation inputs from 18–25% to
+5–11%, and on N(0, 1) inputs from 1.8–6.2% to 0.6–2.1%, where cuBLAS's rel_F
+becomes 20–81x Y's (6.8–25x by default; blocks of 64 were measured on three
+of the nine distributions). It costs speed: at 512 x 512 the splits run at
+0.84–0.87x the default's speed (blocks of 256, compensated: 0.91–0.96x),
+below cuBLAS's. What it cannot remove
+is each block's own truncation inside the tensor core, which only shorter
+blocks reduce.
+
 **Since 2026-10-24 a GEMM of at most 32 rows compensates its float32 adds**
 outside split K, and `Y_F16_ACCUMULATE=kahan` does so for every shape
 (`docs/benchmarks/f16_kahan_2026-10-20/`,

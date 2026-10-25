@@ -1,0 +1,10 @@
+512x4096x11008 data=normal exact True graph True | during 100, 2715, 132.12 .. 100, 2700, 276.88
+  cuBLAS                       min   520.58 med   563.07 us  cuBLAS/this 1.000   = 
+  auto                         min   547.33 med   583.76 us  cuBLAS/this 0.951  64x128 2x4 S=1 
+  unsplit                      min   554.37 med   584.57 us  cuBLAS/this 0.939  64x128 2x4 S=1 
+  s2_128x128w42s3              min   559.49 med   588.50 us  cuBLAS/this 0.930  128x128 4x2 S=2 
+  s2_64x128w24s4               min   572.01 med   608.64 us  cuBLAS/this 0.910  64x128 2x4 S=2 
+  s4_128x128w42s3              min   587.39 med   624.51 us  cuBLAS/this 0.886  128x128 4x2 S=4 
+  s4_64x128w24s4               min   614.27 med   646.78 us  cuBLAS/this 0.847  64x128 2x4 S=4 
+  s8_128x128w42s3              min   688.07 med   733.82 us  cuBLAS/this 0.757  128x128 4x2 S=8 
+  s8_64x128w24s4               min   719.49 med   751.36 us  cuBLAS/this 0.724  64x128 2x4 S=8 
