@@ -192,6 +192,8 @@ impl Timing {
 #[derive(Debug, Clone)]
 pub struct MeasuredCandidate {
     pub candidate: AutotuneCandidate,
+    /// The split count it was measured as (1: unsplit).
+    pub splits: u32,
     pub timing: Timing,
     pub tflops: f64,
     /// False when this candidate was screened out and never re-measured in
@@ -507,9 +509,9 @@ struct GemmProbe<'ctx> {
     /// `plan_weight_replicas`.
     b: Vec<DeviceBuffer>,
     c: DeviceBuffer,
-    /// A split-K GEMM's workspace, `splits` M x N float32 planes.
+    /// The split-K GEMMs' workspace: as many M x N float32 planes as the
+    /// most-split candidate needs.
     p: Option<DeviceBuffer>,
-    splits: u32,
     ctx: &'ctx CudaContext,
     m: u32,
     n: u32,
@@ -599,25 +601,29 @@ impl<'ctx> GemmProbe<'ctx> {
             b.push(extra);
         }
 
-        Ok(GemmProbe { a, b, c, p, splits, ctx, m, n, k, l2_bytes })
+        Ok(GemmProbe { a, b, c, p, ctx, m, n, k, l2_bytes })
     }
 
-    fn args_with(&self, b: &DeviceBuffer) -> Vec<u64> {
+    /// A kernel's arguments against weight replica `b`: the workspace too
+    /// for a split-K GEMM (`splits > 1`).
+    fn args_with(&self, b: &DeviceBuffer, splits: u32) -> Vec<u64> {
         let mut args = vec![self.a.device_ptr(), b.device_ptr(), self.c.device_ptr()];
-        args.extend(self.p.as_ref().map(|p| p.device_ptr()));
+        if splits > 1 {
+            args.extend(self.p.as_ref().map(|p| p.device_ptr()));
+        }
         args
     }
 
     /// One argument set per weight replica, cycled across launches.
-    fn arg_sets(&self) -> Vec<Vec<u64>> {
-        self.b.iter().map(|b| self.args_with(b)).collect()
+    fn arg_sets(&self, splits: u32) -> Vec<Vec<u64>> {
+        self.b.iter().map(|b| self.args_with(b, splits)).collect()
     }
 
     /// The single argument set used for correctness, always against replica 0
     /// (the only one whose contents the CPU reference knows how to predict -
     /// though they are all identical, this keeps the dependency explicit).
-    fn correctness_args(&self) -> Vec<u64> {
-        self.args_with(&self.b[0])
+    fn correctness_args(&self, splits: u32) -> Vec<u64> {
+        self.args_with(&self.b[0], splits)
     }
 
     /// The launches one GEMM call makes: the kernel, then for a split-K
@@ -629,7 +635,7 @@ impl<'ctx> GemmProbe<'ctx> {
     ) -> Vec<(&'a crate::cuda_runtime::KernelModule, (u32, u32, u32), (u32, u32, u32), u32)> {
         let mut steps = vec![(
             &c.kernel,
-            (c.launch.grid_x, c.launch.grid_y, self.splits),
+            (c.launch.grid_x, c.launch.grid_y, c.splits),
             (c.launch.threads, 1, 1),
             c.launch.dyn_smem_bytes,
         )];
@@ -644,7 +650,7 @@ impl<'ctx> GemmProbe<'ctx> {
     fn correctness_rel_l2(&self, compiled: &Compiled) -> Result<f64, String> {
         self.ctx.memset_u8(&self.c, 0)?;
         for (kernel, grid, block, smem) in self.steps(compiled) {
-            self.ctx.launch(kernel, grid, block, smem, &self.correctness_args())?;
+            self.ctx.launch(kernel, grid, block, smem, &self.correctness_args(compiled.splits))?;
         }
         self.ctx.synchronize()?;
 
@@ -688,7 +694,7 @@ impl<'ctx> GemmProbe<'ctx> {
     /// Picks an iteration count that makes one timed batch last roughly
     /// `target_us`, so event overhead is negligible regardless of shape.
     fn calibrate_iters(&self, compiled: &Compiled, target_us: f64) -> Result<u32, String> {
-        let per_launch = self.ctx.time_launch_sequence(&self.steps(compiled), &self.arg_sets(), 3)?;
+        let per_launch = self.ctx.time_launch_sequence(&self.steps(compiled), &self.arg_sets(compiled.splits), 3)?;
         if per_launch <= 0.0 {
             return Ok(20);
         }
@@ -696,7 +702,7 @@ impl<'ctx> GemmProbe<'ctx> {
     }
 
     fn time(&self, compiled: &Compiled, iters: u32) -> Result<f64, String> {
-        self.ctx.time_launch_sequence(&self.steps(compiled), &self.arg_sets(), iters)
+        self.ctx.time_launch_sequence(&self.steps(compiled), &self.arg_sets(compiled.splits), iters)
     }
 }
 
@@ -728,6 +734,8 @@ fn fill_f16_buffer(
 
 struct Compiled {
     candidate: AutotuneCandidate,
+    /// Its split count (1: unsplit).
+    splits: u32,
     launch: LaunchConfig,
     kernel: crate::cuda_runtime::KernelModule,
     /// A split-K GEMM's `_reduce` entry.
@@ -764,12 +772,44 @@ pub fn tune_gemm_f16_split(
     verbose: bool,
 ) -> Result<Vec<MeasuredCandidate>, TuneFailure> {
     let ctx = CudaContext::new().ok_or(TuneFailure::NoCudaDevice)?;
-    match tune_gemm_f16_impl(&ctx, m, n, k, splits, hw_profile, candidates, verbose, None, None)? {
+    let candidates: Vec<(u32, AutotuneCandidate)> = candidates.iter().map(|c| (splits, c.clone())).collect();
+    match tune_gemm_f16_impl(&ctx, m, n, k, hw_profile, &candidates, verbose, None, None, Pick::Tile)? {
         AdaptiveGemmMeasurement::Confirmed(results) => Ok(results),
         AdaptiveGemmMeasurement::Screened { .. } => {
             unreachable!("the full autotuner never stops after adaptive screening")
         }
     }
+}
+
+/// `tune_gemm_f16_split` across split counts: each candidate is a split count
+/// (1: the unsplit kernel) and a tile, all timed in one interleaved
+/// measurement, each split-K kernel with its reduction. A tie inside the
+/// run's noise with the unsplit kernel goes to it (`select_split_winner`). The split-K rule's candidates
+/// (`Autotuner::split_k_plan`) are measured this way.
+pub fn tune_gemm_f16_split_choice(
+    m: u32,
+    n: u32,
+    k: u32,
+    candidates: &[(u32, AutotuneCandidate)],
+    hw_profile: &HardwareProfile,
+    verbose: bool,
+) -> Result<Vec<MeasuredCandidate>, TuneFailure> {
+    let ctx = CudaContext::new().ok_or(TuneFailure::NoCudaDevice)?;
+    match tune_gemm_f16_impl(&ctx, m, n, k, hw_profile, candidates, verbose, None, None, Pick::Split)? {
+        AdaptiveGemmMeasurement::Confirmed(results) => Ok(results),
+        AdaptiveGemmMeasurement::Screened { .. } => {
+            unreachable!("the full autotuner never stops after adaptive screening")
+        }
+    }
+}
+
+/// How the tuner breaks a tie inside the run's noise: on the tile's
+/// structure (`select_winner`), or toward fewer splits
+/// (`select_split_winner`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pick {
+    Tile,
+    Split,
 }
 
 /// Screening can justify keeping a verified incumbent, but it cannot justify
@@ -806,8 +846,9 @@ pub(crate) fn tune_gemm_f16_in_context(
     baseline: &AutotuneCandidate,
     min_improvement: f64,
 ) -> Result<AdaptiveGemmMeasurement, TuneFailure> {
+    let candidates: Vec<(u32, AutotuneCandidate)> = candidates.iter().map(|c| (1, c.clone())).collect();
     tune_gemm_f16_impl(
-        ctx, m, n, k, 1, hw_profile, candidates, verbose, Some(baseline), Some(min_improvement),
+        ctx, m, n, k, hw_profile, &candidates, verbose, Some(baseline), Some(min_improvement), Pick::Tile,
     )
 }
 
@@ -817,13 +858,16 @@ fn tune_gemm_f16_impl(
     m: u32,
     n: u32,
     k: u32,
-    splits: u32,
     hw_profile: &HardwareProfile,
-    candidates: &[AutotuneCandidate],
+    candidates: &[(u32, AutotuneCandidate)],
     verbose: bool,
     baseline: Option<&AutotuneCandidate>,
     adaptive_min_improvement: Option<f64>,
+    pick: Pick,
 ) -> Result<AdaptiveGemmMeasurement, TuneFailure> {
+    // The baseline (adaptive maintenance only) is unsplit.
+    let splits = candidates.iter().map(|(s, _)| *s).max().unwrap_or(1).max(1);
+    let one_split_count = candidates.iter().all(|(s, _)| *s == candidates.first().map_or(1, |(f, _)| *f));
     let probe = GemmProbe::new(ctx, m, n, k, splits)?;
     if verbose {
         let working_set = (m as usize * k as usize * 2)
@@ -833,7 +877,13 @@ fn tune_gemm_f16_impl(
              {:.1} MB working set vs {:.1} MB L2 ({})",
             probe.ctx.device_name(),
             m, n, k,
-            if splits > 1 { format!(" split {} ways", splits) } else { String::new() },
+            if !one_split_count {
+                format!(" split 1-{} ways", splits)
+            } else if splits > 1 {
+                format!(" split {} ways", splits)
+            } else {
+                String::new()
+            },
             probe.b.len(),
             working_set as f64 / 1e6,
             probe.l2_bytes as f64 / 1e6,
@@ -864,15 +914,16 @@ fn tune_gemm_f16_impl(
 
     // Compile the incumbent first so deduplicating identical PTX preserves
     // its identity in the ranking rather than an equivalent requested tile.
-    let entry = probe_kernel_name(splits);
-    for cand in baseline.into_iter().chain(candidates.iter()) {
+    for (splits, cand) in baseline.map(|b| (1u32, b)).into_iter().chain(candidates.iter().map(|(s, c)| (*s, c))) {
+        let splits = splits.max(1);
+        let entry = probe_kernel_name(splits);
         if !is_emittable(cand, k / splits) {
             continue;
         }
         let (ptx, launch) = match emit_candidate_ptx_split(m, n, k, splits, cand, hw_profile) {
             Ok(v) => v,
             Err(e) => {
-                rejects.push(format!("{} -> codegen: {}", describe(cand), e));
+                rejects.push(format!("{} -> codegen: {}", describe_split(splits, cand), e));
                 continue;
             }
         };
@@ -908,7 +959,7 @@ fn tune_gemm_f16_impl(
         }
 
         seen_ptx.insert(identity);
-        compiled.push(Compiled { candidate: cand.clone(), launch, kernel, reduce });
+        compiled.push(Compiled { candidate: cand.clone(), splits, launch, kernel, reduce });
     }
 
     if compiled.is_empty() {
@@ -927,7 +978,7 @@ fn tune_gemm_f16_impl(
                 continue;
             }
         };
-        require_correct_baseline(error, baseline == Some(&c.candidate))?;
+        require_correct_baseline(error, c.splits == 1 && baseline == Some(&c.candidate))?;
         if error <= CORRECTNESS_REL_L2_TOL {
             verified.push(c);
         } else {
@@ -946,7 +997,7 @@ fn tune_gemm_f16_impl(
     }
 
     let baseline_index = match baseline {
-        Some(candidate) => Some(verified.iter().position(|c| &c.candidate == candidate)
+        Some(candidate) => Some(verified.iter().position(|c| c.splits == 1 && &c.candidate == candidate)
             .ok_or_else(|| TuneFailure::NoUsableCandidate(format!(
                 "baseline {} could not be compiled and verified: {}",
                 describe(candidate),
@@ -1038,6 +1089,7 @@ fn tune_gemm_f16_impl(
         .enumerate()
         .map(|(i, c)| MeasuredCandidate {
             candidate: c.candidate.clone(),
+            splits: c.splits,
             timing: times[i],
             tflops: flops / (times[i].best_us * 1e-6) / 1e12,
             finalist: is_finalist[i],
@@ -1045,7 +1097,10 @@ fn tune_gemm_f16_impl(
         .collect();
     results.sort_by(|a, b| a.us().partial_cmp(&b.us()).unwrap_or(std::cmp::Ordering::Equal));
 
-    let winner = select_winner(&results);
+    let winner = match pick {
+        Pick::Tile => select_winner(&results),
+        Pick::Split => select_split_winner(&results),
+    };
 
     if verbose {
         println!(
@@ -1058,7 +1113,7 @@ fn tune_gemm_f16_impl(
             println!(
                 "           {}. {:<20} {:>8.2} us (median {:.2}, worst {:.2})  {:>6.1} TFLOPS{}",
                 i + 1,
-                describe(&r.candidate),
+                describe_split(r.splits, &r.candidate),
                 r.timing.best_us,
                 r.timing.median_us,
                 r.timing.max_us,
@@ -1072,10 +1127,14 @@ fn tune_gemm_f16_impl(
         if winner != 0 {
             println!(
                 "           note: #1..#{} are inside this run's own noise floor \
-                 (+/-{:.2} us); selected #{} on warp count then K depth, not on the measured gap",
+                 (+/-{:.2} us); selected #{} on {}, not on the measured gap",
                 results.iter().filter(|r| r.timing.tied_with(&results[0].timing)).count(),
                 results[0].timing.median_us - results[0].timing.best_us,
-                winner + 1
+                winner + 1,
+                match pick {
+                    Pick::Tile => "warp count then K depth",
+                    Pick::Split => "the unsplit kernel inside the noise",
+                }
             );
         } else if results.len() >= 2 && results[0].timing.tied_with(&results[1].timing) {
             println!(
@@ -1279,6 +1338,31 @@ pub fn select_winner(results: &[MeasuredCandidate]) -> usize {
         }
     }
     winner
+}
+
+/// Picks the winner of a ranking across split counts
+/// (`tune_gemm_f16_split_choice`): the unsplit kernel where it is tied with
+/// the fastest inside the run's own noise (`Timing::tied_with`), else the
+/// fastest. A split adds a workspace, a second launch and a different sum, so
+/// where it is not measurably faster it is not taken; between splits the
+/// noise band is no reason to prefer fewer: at 256 x 512 x 16384 it held
+/// four (6% wide), and the fewest, 2 on 64x64, measured 4-7% slower than the
+/// fastest, 4 on 64x128 (docs/benchmarks/f16_auto_splitk_2026-10-25/).
+/// Returns an index into `results`, which is sorted fastest first.
+pub fn select_split_winner(results: &[MeasuredCandidate]) -> usize {
+    let Some(best) = results.first().map(|r| r.timing) else {
+        return 0;
+    };
+    results.iter().position(|r| r.splits == 1 && r.timing.tied_with(&best)).unwrap_or(0)
+}
+
+/// `describe`, with the split count when there is one.
+pub fn describe_split(splits: u32, c: &AutotuneCandidate) -> String {
+    if splits > 1 {
+        format!("{} in {}", describe(c), splits)
+    } else {
+        describe(c)
+    }
 }
 
 pub fn describe(c: &AutotuneCandidate) -> String {
@@ -1645,10 +1729,27 @@ mod tests {
     fn measured(c: AutotuneCandidate, best_us: f64, median_us: f64) -> MeasuredCandidate {
         MeasuredCandidate {
             candidate: c,
+            splits: 1,
             timing: Timing { best_us, median_us, max_us: median_us * 1.05 },
             tflops: 0.0,
             finalist: true,
         }
+    }
+
+    #[test]
+    fn a_split_wins_only_where_it_is_measurably_faster() {
+        let split = |splits: u32, best_us: f64, median_us: f64| MeasuredCandidate { splits, ..measured(cand(64, 128, 32, 4, 2, 4), best_us, median_us) };
+        // Fastest first, all inside the noise (0.15 us): the unsplit kernel.
+        assert_eq!(select_split_winner(&[split(4, 10.0, 10.1), split(1, 10.05, 10.2), split(2, 10.08, 10.15)]), 1);
+        // Splits alone inside the noise: the fastest, not the fewer.
+        assert_eq!(select_split_winner(&[split(8, 10.0, 10.1), split(2, 10.05, 10.12), split(4, 10.06, 10.1)]), 0);
+        // An unsplit kernel outside the noise is not kept.
+        assert_eq!(select_split_winner(&[split(4, 9.0, 9.05), split(2, 9.02, 9.06), split(1, 9.5, 9.55)]), 0);
+        // A real gap: the faster split, though unsplit is the next.
+        assert_eq!(select_split_winner(&[split(4, 9.0, 9.05), split(1, 10.0, 10.05)]), 0);
+        // And an unsplit winner stays.
+        assert_eq!(select_split_winner(&[split(1, 9.0, 9.05), split(2, 9.01, 9.06)]), 0);
+        assert_eq!(select_split_winner(&[]), 0);
     }
 
     #[test]

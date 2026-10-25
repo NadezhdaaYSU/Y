@@ -21,10 +21,13 @@ cuBLAS at every shape measured, in relative Frobenius and maximum normalized
 error: the same bits where both chain K in the tensor core, and lower error
 where cuBLAS used to win (8192³, 512 x 512 x K ≥ 4096, 64 x 4096 x 4096), at
 0.96–1.02x its previous speed; split-K kernels became 1.02–1.06x faster too.
-A kernel named `<name>_splitk` now chooses its own split (opt-in): at
-512 x 512 x 16384 and 65536 it runs 1.08–1.11x the unsplit kernel and ahead
-of cuBLAS, and its splits are more accurate than cuBLAS in all 27 cases
-measured.
+A kernel named `<name>_splitk` now chooses its own split (opt-in), by a rule
+or, under `--autotune`, by measurement: at 256 x 256 x 16384 it runs 1.8–2.2x
+an unsplit kernel tuned for the shape, level with cuBLAS (0.94–1.02x), and
+below cuBLAS's error in every case measured. At 512 x 512 the gap that
+prompted it was mostly the unsplit kernel's untuned tile: on a measured tile
+the unsplit kernel runs 1.02–1.06x cuBLAS at K = 16384, and a split adds
+0–5%.
 See [Accuracy against cuBLAS](#accuracy-against-cublas).
 
 An in-process [general-purpose CPU JIT](docs/cpu_jit.md) compiles ordinary Y
@@ -1219,13 +1222,34 @@ and prints the workspace the split needs.
 
 Timed on a contended GPU (`sbench.py`: the minimum of 21 interleaved rounds,
 two runs on integer and N(0, 1) inputs, the reduction included; above 1 the
-rule's kernel is faster):
+rule's kernel is faster). Two unsplit baselines: the kernel on the tile the
+profile gives it (no measurement of these shapes: 64x64x32 2x2 at 512 x 512),
+which is what an ordinary build emits, and on a tile `--autotune` measures for
+the shape (64x64x64 4x2 at 512 x 512, 16x64x64 1x2 at 256 x 256):
 
-| shape | the rule's split | over unsplit | over cuBLAS | over cuBLAS, A and B from DRAM |
+| shape | the rule's split | over unsplit, profile's tile | over unsplit, measured tile | over cuBLAS, A and B in the L2 / from DRAM |
 | :--- | :--- | ---: | ---: | ---: |
-| 512 x 512 x 16384 | 2, on 64x128 tiles | 1.085–1.089x | 1.059–1.065x | 1.02–1.07x |
-| 512 x 512 x 65536 | 2, on 64x128 tiles | 1.102–1.113x | 1.006–1.057x | (128 MB: from DRAM already) |
-| 256 x 256 x 16384 | 4, on 64x64 tiles | 2.36–2.40x | 1.023–1.025x | 0.93–0.96x |
+| 512 x 512 x 16384 | 2, on 64x128 tiles | 1.085–1.089x | 1.00–1.02x | 1.06–1.07x / 1.02–1.07x |
+| 512 x 512 x 65536 | 2, on 64x128 tiles | 1.102–1.113x | 1.03–1.05x | 0.96–1.06x (128 MB: from DRAM) |
+| 256 x 256 x 16384 | 4, on 64x64 tiles | 2.36–2.40x | 1.78–2.21x | 1.02x / 0.94x |
+
+On its measured tile the unsplit kernel runs 1.11–1.13x cuBLAS at
+512 x 512 x 4096, 1.02–1.06x at 16384 and 0.94–0.99x at 65536: the gap at
+512 x 512 that prompted the split was mostly the untuned tile.
+
+**Under `--autotune` the split is measured** instead: the unsplit kernel and
+every split of 2, 4 or 8 at least 1024 deep on the three tiles, timed together
+(B rotated through up to eight copies, so from DRAM unless eight fit in the
+L2), each split with its reduction. A split must beat
+the unsplit kernel beyond the run's own noise; the winner is kept in the
+profile (`AUTOTUNE_F16_SPLITK_AUTO_<M>x<N>x<K>_<gpu>`), which later builds
+read and `--no-autotune` ignores. It is measured only where the rule's gate
+passes. At the eight shapes where the record times every candidate it takes
+the fastest or one inside the harness's noise, but for 256 x 256 x 16384
+from DRAM (4 splits, 0.88x the 8 that are fastest there; the tuner streams B
+alone). At 256 x 384 x 32768 it takes 8 splits on 64x64 tiles, 192 CTAs, 1.3x
+the rule's 2 splits; no rule on the CTA count fits both that shape and
+512 x 512.
 
 - **More accurate than cuBLAS in all 27 cases** of the three splits (the
   nine distributions of `docs/benchmarks/f16_accuracy_2026-10-20/`), in both

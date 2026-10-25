@@ -7,7 +7,7 @@
 //! Every case gives the unsplit tile and the SM count explicitly, so no
 //! verdict depends on a profile. Each bound is checked on both sides of it.
 
-use y::autotuner::{validate_warp_tiling, Autotuner, SPLIT_K_COUNTS, SPLIT_K_MIN_DEPTH, SPLIT_K_MIN_INTENSITY, SPLIT_K_TILES};
+use y::autotuner::{validate_warp_tiling, Autotuner, SPLIT_K_COUNTS, SPLIT_K_MEASURE_MIN_DEPTH, SPLIT_K_MIN_DEPTH, SPLIT_K_MIN_INTENSITY, SPLIT_K_TILES};
 use y::ptx_emitter::{CtaTileConfig, PtxEmitter};
 
 fn tile(cta_m: u32, cta_n: u32, cta_k: u32, warps_m: u32, warps_n: u32, num_stages: u32) -> CtaTileConfig {
@@ -137,3 +137,56 @@ fn every_split_tile_tiles_and_fits_its_block_sums() {
     let areas: Vec<u32> = SPLIT_K_TILES.iter().map(|t| t.cta_m * t.cta_n).collect();
     assert!(areas.windows(2).all(|w| w[0] > w[1]), "the tiles are not largest first, each a distinct size");
 }
+
+#[test]
+fn the_measured_choice_tries_unsplit_and_every_split_down_to_its_depth() {
+    let names = |m: u32, n: u32, k: u32, unsplit: &CtaTileConfig| -> Vec<String> {
+        Autotuner::split_k_measure_candidates(m, n, k, unsplit)
+            .iter()
+            .map(|(s, t)| format!("{s}:{}x{} {}x{}", t.cta_m, t.cta_n, t.warps_m, t.warps_n))
+            .collect()
+    };
+    // Unsplit first, on the unsplit tile; then every S at least 1024 deep on
+    // each tile that fits.
+    assert_eq!(SPLIT_K_MEASURE_MIN_DEPTH, 1024);
+    let all = names(256, 256, 16384, &T32());
+    assert_eq!(all[0], "1:32x32 2x1");
+    assert_eq!(all.len(), 10, "{all:?}");
+    assert!(all.contains(&"8:64x64 4x2".to_string()) && all.contains(&"2:128x128 4x2".to_string()));
+    // K = 8192: 8 splits of 1024 are tried, of 1016 (K = 8128) not.
+    assert_eq!(names(256, 256, 8192, &T32()).len(), 10);
+    assert!(names(256, 256, 8128, &T32()).iter().all(|c| !c.starts_with("8:")));
+    // 64 rows: no 128-row tile; 64 columns: no 128-column tile; N = 510:
+    // no split at all.
+    assert!(names(64, 4096, 16384, &T64()).iter().all(|c| !c.contains("128x128")));
+    assert_eq!(names(64, 4096, 16384, &T64()).len(), 1 + 3 * 2);
+    assert!(names(512, 64, 65536, &T64()).iter().all(|c| !c.contains("x128 ")));
+    assert_eq!(names(512, 64, 65536, &T64()).len(), 1 + 3);
+    assert_eq!(names(512, 510, 65536, &T64()), ["1:64x64 2x2"]);
+}
+
+#[test]
+fn a_measured_choice_reads_back_and_anything_else_is_refused() {
+    let (m, n, k) = (512, 512, 16384);
+    assert_eq!(Autotuner::parse_split_k_entry("1", m, n, k), Ok((1, None)));
+    let (s, t) = Autotuner::parse_split_k_entry(" 4, 128,128,32,4,2,3", m, n, k).unwrap();
+    assert_eq!((s, t.clone().map(|t| (t.cta_m, t.cta_n, t.cta_k, t.warps_m, t.warps_n, t.num_stages, t.num_warps))), (4, Some((128, 128, 32, 4, 2, 3, 8))));
+    assert_eq!(Autotuner::split_k_entry_value(4, &t.unwrap()), "4,128,128,32,4,2,3");
+    assert_eq!(Autotuner::split_k_entry_value(1, &SPLIT_K_TILES[0]), "1");
+    for (value, why) in [
+        ("3,64,64,32,4,2,4", "does not split into 3 parts"),
+        ("2,64,48,32,4,2,4", "does not tile"),
+        ("2,64,64,32,4,2,0", "cannot be staged"),
+        ("65,64,64,32,4,2,4", "is not from 1 to 64"),
+        ("1,64,64,32,2,2,4", "want `1`"),
+        ("0", "want `1`"),
+        ("2", "want `1`"),
+        ("2,64,64,32,4,2,4,9", "want `1`"),
+        ("two", "is not a count"),
+        ("", "is not a count"),
+    ] {
+        let err = Autotuner::parse_split_k_entry(value, m, n, k).expect_err(value);
+        assert!(err.contains(why), "{value:?}: {err}");
+    }
+}
+

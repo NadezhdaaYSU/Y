@@ -1,0 +1,40 @@
+# The validator's gates (tools/ptxas_tval: build_corpus, regress, fpgate, docgate, gap, unroll) on 391b7a1 (base) and
+# this tree with the four decode tests/*.ptx regenerated (new); diff base new for each gate's log:
+== build_corpus
+== regress
+12c12
+< ptx_carry_chain        VALIDATED  97 obligations  16 stores, 8 loads, 1.0s
+---
+> ptx_carry_chain        VALIDATED  97 obligations  16 stores, 8 loads, 0.9s
+61,62c61,62
+< no_second_corr         UNPROVED  70 obligations  17 stores, 2 loads, 61.2s
+< rem_wrong              UNPROVED  67 obligations  17 stores, 2 loads, 1 over Int, 13.4s
+---
+> no_second_corr         UNPROVED  70 obligations  17 stores, 2 loads, 61.0s
+> rem_wrong              UNPROVED  67 obligations  17 stores, 2 loads, 1 over Int, 13.9s
+== pythonfpgatepy
+== pythondocgatepy
+19,20c19,20
+< FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 7d48521c2b30), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+< FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 7d48521c2b30), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+---
+> FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+> FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+41,46c41,46
+< FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 260c9f82d4a2), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+< FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 260c9f82d4a2), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+< FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 7d48521c2b30), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+< FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 7d48521c2b30), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+< FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 7d48521c2b30), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+< FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 7d48521c2b30), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+---
+> FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 31c3a3799e88), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+> FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 31c3a3799e88), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+> FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+> FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+> FAIL: the O3 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O3 figures are unconfirmed until `python3 frontier.py` runs (minutes)
+> FAIL: the O1 census was stamped on a different tree (bcefb17c9617 != 5dcb72a200fa), so the doc's O1 figures are unconfirmed until `python3 frontier.py --o1` runs (minutes)
+== pythongappy
+== pythonunrollpy
+== docgate FAIL lines: base 47, new 47
+# Only timings and the tree hashes stamped in docgate's stale-census messages differ.

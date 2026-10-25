@@ -1,0 +1,14 @@
+base ./build_corpus.sh exit 0 13s
+base ./regress.sh exit 0 186s
+base python3 fpgate.py exit 0 8s
+base python3 docgate.py exit 1 70s
+base python3 gap.py exit 0 714s
+base python3 unroll.py exit 0 1s
+base DONE
+new ./build_corpus.sh exit 0 13s
+new ./regress.sh exit 0 185s
+new python3 fpgate.py exit 0 9s
+new python3 docgate.py exit 1 79s
+new python3 gap.py exit 0 711s
+new python3 unroll.py exit 0 0s
+new DONE

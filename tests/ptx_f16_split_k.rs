@@ -734,3 +734,129 @@ fn compensated_splits_are_the_compensated_kernel_on_each_slot_on_the_gpu() {
     let (cp, _) = run_auto(&ctx, &plain, "p256_splitk", m, n, k, &a, &b);
     assert!(cp.iter().zip(&c).any(|(x, y)| x.to_bits() != y.to_bits()), "compensation changed no output");
 }
+
+/// `compile` with `envs` set and `args` after `--emit-ptx` (`Y_AUTOTUNE`,
+/// `Y_F16_ACCUMULATE` and `Y_CTA_OVERRIDE` unset otherwise): the module, if
+/// one was written, and the compiler's output.
+#[allow(clippy::too_many_arguments)]
+fn compile_with(dir: &Path, name: &str, m: u32, n: u32, k: u32, partial: bool, envs: &[(&str, &str)], args: &[&str]) -> (Option<String>, String) {
+    let src = dir.join(format!("{name}.ysu"));
+    let p = if partial { ", P: GlobalMemory<F32>" } else { "" };
+    std::fs::write(&src, format!("@tile({m}, {n}, {k})\nkernel {name}(A: GlobalMemory<F16>, B: GlobalMemory<F16>, C: GlobalMemory<F32>{p}) {{\n}}\n\nfn main() {{\n}}\n")).unwrap();
+    let ptx = src.with_extension("ptx");
+    let _ = std::fs::remove_file(&ptx);
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_Y"));
+    cmd.arg(&src).arg("--emit-ptx").args(args).current_dir(dir);
+    for var in ["Y_AUTOTUNE", "Y_F16_ACCUMULATE", "Y_CTA_OVERRIDE"] {
+        cmd.env_remove(var);
+    }
+    cmd.envs(envs.iter().copied());
+    let out = cmd.output().expect("run Y");
+    let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+    (out.status.success().then(|| std::fs::read_to_string(&ptx).ok()).flatten(), said)
+}
+
+/// Sets the pinned profile's measured split choice for `m x n x k` to `value`.
+fn set_split_entry(dir: &Path, base: &str, m: u32, n: u32, k: u32, value: &str) {
+    std::fs::write(dir.join(".ysu_hw_profile"), format!("{base}AUTOTUNE_F16_SPLITK_AUTO_{m}x{n}x{k}_{}={value}\n", pinned::GPU_NAME)).unwrap();
+}
+
+#[test]
+fn a_measured_split_choice_replaces_the_rules_and_only_a_valid_one() {
+    let dir = pinned::pinned_scratch("f16_splitk_measured", pinned::SM_PINNED);
+    let base = std::fs::read_to_string(dir.join(".ysu_hw_profile")).unwrap();
+    let (m, n, k) = (512, 512, 16384);
+    // The rule's own choice, the control: 2 splits on 64x128.
+    let (rule, _) = compile_with(&dir, "r_splitk", m, n, k, true, &[], &[]);
+    assert_eq!(splits_of(&rule.unwrap()), 2);
+    // A measurement of 4 splits on 128x128 is taken, and said so.
+    set_split_entry(&dir, &base, m, n, k, "4,128,128,32,4,2,3");
+    let (ptx, said) = compile_with(&dir, "m_splitk", m, n, k, true, &[], &[]);
+    let ptx = ptx.unwrap_or_else(|| panic!("{said}"));
+    assert_eq!(splits_of(&ptx), 4);
+    assert!(ptx.contains("| CTA 128x128x32 | 4x2 warps |"));
+    assert!(ptx.contains(&format!("[Y AUTO SPLIT-K] S=4 as measured: measured (AUTOTUNE_F16_SPLITK_AUTO_512x512x16384_{}): 4 splits of K=4096 on 128x128x32 tiles, 4x2 warps", pinned::GPU_NAME)), "{ptx}");
+    assert!(said.contains("[Y split-K choice] `m_splitk`: S=4"), "{said}");
+    // The plain GEMM's note reads it too.
+    let (_, note) = compile_with(&dir, "g", m, n, k, false, &[], &[]);
+    assert!(note.contains("`g` would split K 4 ways: measured (AUTOTUNE_F16_SPLITK_AUTO"), "{note}");
+    // A measurement of no split leaves the plain kernel where the rule splits.
+    set_split_entry(&dir, &base, m, n, k, "1");
+    let (one, _) = compile_with(&dir, "o_splitk", m, n, k, true, &[], &[]);
+    let one = one.unwrap();
+    assert_eq!(splits_of(&one), 1);
+    assert!(one.contains("[Y AUTO SPLIT-K] S=1 as measured: measured (AUTOTUNE_F16_SPLITK_AUTO_512x512x16384_"));
+    // `Y_AUTOTUNE=off` ignores persisted measurements: the rule decides.
+    set_split_entry(&dir, &base, m, n, k, "4,128,128,32,4,2,3");
+    let (off, _) = compile_with(&dir, "f_splitk", m, n, k, true, &[("Y_AUTOTUNE", "off")], &[]);
+    let off = off.unwrap();
+    assert_eq!(splits_of(&off), 2);
+    assert!(off.contains("S=2 by the split-K rule"));
+    // An entry codegen could not emit is refused, said so, and the rule decides.
+    for bad in ["3,64,64,32,4,2,4", "2,64,48,32,4,2,4", "2,64,64,32,4,2,0", "x"] {
+        set_split_entry(&dir, &base, m, n, k, bad);
+        let (ptx, said) = compile_with(&dir, "b_splitk", m, n, k, true, &[], &[]);
+        let ptx = ptx.unwrap_or_else(|| panic!("{bad}: {said}"));
+        assert!(said.contains(&format!("ignoring AUTOTUNE_F16_SPLITK_AUTO_512x512x16384_{}={bad}", pinned::GPU_NAME)), "{bad}: {said}");
+        assert!(splits_of(&ptx) == 2 && ptx.contains("S=2 by the split-K rule"), "{bad}");
+    }
+    // Where the rule's gate does not pass, no measured split is taken:
+    // 64 x 4096 x 11008 is bound to DRAM.
+    set_split_entry(&dir, &base, 64, 4096, 11008, "2,64,128,32,4,2,4");
+    let (dram, _) = compile_with(&dir, "d_splitk", 64, 4096, 11008, true, &[], &[]);
+    let dram = dram.unwrap();
+    assert!(splits_of(&dram) == 1 && dram.contains("bound to DRAM"));
+}
+
+#[test]
+fn the_split_choice_is_measured_and_then_kept_on_the_gpu() {
+    use y::cuda_runtime::CudaContext;
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - no split choice was measured.");
+        return;
+    };
+    let dir = pinned::pinned_scratch("f16_splitk_measure_gpu", pinned::SM_PINNED);
+    let (m, n, k) = (256u32, 256u32, 8192u32);
+    let key = format!("AUTOTUNE_F16_SPLITK_AUTO_{m}x{n}x{k}_{}", pinned::GPU_NAME);
+    // --autotune measures the rule's candidates and keeps the winner.
+    let (ptx, said) = compile_with(&dir, "a_splitk", m, n, k, true, &[], &["--autotune"]);
+    let ptx = ptx.unwrap_or_else(|| panic!("{said}"));
+    // Two measurements: the unsplit kernel's tile, then the split choice -
+    // once, though the CLI and codegen both ask, and no split's own tile
+    // measurement after it.
+    assert_eq!(said.matches("[Y autotuner] measuring on").count(), 2, "{said}");
+    assert_eq!(said.matches("split 1-8 ways").count(), 1, "{said}");
+    let profile = std::fs::read_to_string(dir.join(".ysu_hw_profile")).unwrap();
+    let value = profile.lines().find_map(|l| l.strip_prefix(&format!("{key}="))).unwrap_or_else(|| panic!("no {key} in the profile"));
+    let (s, tile) = y::autotuner::Autotuner::parse_split_k_entry(value, m, n, k).unwrap();
+    assert_eq!(splits_of(&ptx), s);
+    assert!(ptx.contains("as measured: measured by --autotune among"), "{ptx}");
+    if let Some(t) = &tile {
+        assert!(ptx.contains(&format!("| CTA {}x{}x{} | {}x{} warps |", t.cta_m, t.cta_n, t.cta_k, t.warps_m, t.warps_n)));
+    }
+    // A later build reads it, and makes the same module but for the line
+    // naming the measurement's source.
+    let (again, said) = compile_with(&dir, "a_splitk", m, n, k, true, &[], &[]);
+    let again = again.unwrap();
+    assert!(!said.contains("[Y autotuner] measuring on"), "measured again: {said}");
+    assert!(again.contains(&format!("as measured: measured ({key})")));
+    let body = |p: &str| p.lines().filter(|l| !l.contains("[Y AUTO SPLIT-K]")).collect::<Vec<_>>().join("\n");
+    assert_eq!(body(&again), body(&ptx));
+    // A plain GEMM under --autotune measures its own tile, never a split.
+    let (_, plain) = compile_with(&dir, "p", m, n, 2 * k, false, &[], &["--autotune"]);
+    assert!(plain.contains("[Y autotuner] measuring on") && !plain.contains("split 1-"), "{plain}");
+    assert!(!std::fs::read_to_string(dir.join(".ysu_hw_profile")).unwrap().contains(&format!("SPLITK_AUTO_{m}x{n}x{}", 2 * k)));
+    // And the chosen kernel is exact on small integers.
+    let mut state = 0x5E1F_C401u64;
+    let (mu, nu, ku) = (m as usize, n as usize, k as usize);
+    let ia: Vec<i32> = (0..mu * ku).map(|_| (splitmix(&mut state) % 9) as i32 - 4).collect();
+    let ib: Vec<i32> = (0..ku * nu).map(|_| (splitmix(&mut state) % 9) as i32 - 4).collect();
+    let iref: Vec<f32> = (0..mu * nu)
+        .map(|x| (0..ku).map(|kk| (ia[(x / nu) * ku + kk] * ib[kk * nu + x % nu]) as i64).sum::<i64>() as f32)
+        .collect();
+    let (ha, hb): (Vec<u16>, Vec<u16>) = (ia.iter().map(|&v| f16_of_int(v)).collect(), ib.iter().map(|&v| f16_of_int(v)).collect());
+    let (c, _) = run_auto(&ctx, &again, "a_splitk", m, n, k, &ha, &hb);
+    let wrong = c.iter().zip(&iref).filter(|(x, y)| x.to_bits() != y.to_bits()).count();
+    assert_eq!(wrong, 0, "{wrong} integer products wrong");
+}
+

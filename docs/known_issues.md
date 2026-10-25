@@ -82,17 +82,33 @@ source; each entry there now carries its status. What is still open:
 
   Since 2026-10-25 a kernel named `<name>_splitk` chooses the split itself
   (opt-in, `docs/benchmarks/f16_auto_splitk_2026-10-25/`): 2 splits on 64x128
-  tiles at 512 x 512 x 16384 and 65536, 1.02-1.07x and 1.01-1.06x cuBLAS's
-  speed (with A and B in the L2 or from DRAM), below cuBLAS's error in all
-  18 cases there (and in the 9 of its
-  third split, 256 x 256 x 16384). Still open:
+  tiles at 512 x 512 x 16384 and 65536, 1.02-1.07x and 0.96-1.06x cuBLAS's
+  speed (with A and B in the L2 or from DRAM), below cuBLAS's error in all 18
+  cases there (and in the 9 of its third split, 256 x 256 x 16384). Most of
+  the gap at 512 x 512, though, was the unsplit kernel's tile: the profile
+  holds no measurement of these shapes, and on the tile `--autotune` measures
+  (64x64x64 4x2) the unsplit kernel runs 1.02-1.06x cuBLAS at K = 16384 and
+  0.94-0.99x at 65536, where a split adds 0-2% and 3-5% (`tuned_unsplit/` in
+  the record). Still open:
   - A plain three-parameter GEMM is not split: its hosts launch it with no
     workspace on a z = 1 grid. The compiler names the split it would take;
     the adaptive JIT, which owns its launches and buffers, is where a default
     could apply it.
-  - At 256 x 256 x 16384 with A and B streamed from DRAM the rule's 4 splits
-    run at 0.93-0.96x cuBLAS, where 8 (2048 deep, below the rule's bound)
-    run at 1.01-1.04x; with A and B in the L2 the 4 are 1.7% ahead.
+  - Near the DRAM balance the rule takes too few CTAs. At 256 x 256 x 16384
+    with A and B streamed from DRAM its 4 splits run at 0.93-0.96x cuBLAS,
+    where 8 (2048 deep, below the rule's bound) run at 1.01-1.04x; with A
+    and B in the L2 the 4 are 1.7% ahead. At 256 x 384 x 32768 its pick is
+    0.77x the fastest measured (8 splits on 64x64, about three CTAs an SM),
+    while at 512 x 512 more CTAs an SM lose 4-8%: no variant of the CTA
+    count fits both (the record's follow-up). The measured choice
+    (`--autotune`) takes the fastest at both; at 256 x 256 x 16384 it keeps
+    the 4 splits, its probe streaming B but not A.
+  - The measured choice compares the splits with the unsplit kernel on the
+    tile the tile tuner picks, and that tuner's tie-break (four warps first)
+    can pick a slower tile when a run's noise band is wide: at
+    512 x 512 x 16384 one run's band was 7%, the tuner took 64x64x64 2x2 (5%
+    slower than 4x2), and the choice then split. Either is within 2% of the
+    other there, but the tile tuner's tie-break is the weaker link.
   - Decode splits at N = 14336 ran 1.04-1.08x faster from DRAM. The rule does
     not take them: a split of at most 32 rows adds in plain float32, not the
     compensated sum, and its accuracy against cuBLAS is unmeasured.

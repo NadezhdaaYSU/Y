@@ -13037,7 +13037,8 @@ declare it as a Q format.\n{}",
                 }
                 _ => String::new(),
             };
-            writeln!(&mut self.ptx_buffer, "    // [Y AUTO SPLIT-K] S={} by the split-K rule: {}{}", plan.splits, plan.reason, other_tile).unwrap();
+            let by = if plan.measured { "as measured" } else { "by the split-K rule" };
+            writeln!(&mut self.ptx_buffer, "    // [Y AUTO SPLIT-K] S={} {}: {}{}", plan.splits, by, plan.reason, other_tile).unwrap();
         }
         if effective_stages >= 2 {
             writeln!(&mut self.ptx_buffer, "    // Autotuner selected {} pipeline stages ({} used after k_tiles/smem clamping); cp.async multi-stage pipelined. Dynamic shared memory required: {} bytes.", config.num_stages, effective_stages, total_dyn_smem_bytes).unwrap();
