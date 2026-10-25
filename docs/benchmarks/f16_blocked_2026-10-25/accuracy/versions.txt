@@ -1,0 +1,6 @@
+acc exit 0
+72 cases, 720 columns compared; inputs identical; outputs differing: none
+acc2 exit 0
+54 cases, 378 columns compared; inputs identical; outputs differing: none
+acc_split exit 0
+18 cases, 162 columns compared; inputs identical; outputs differing: none

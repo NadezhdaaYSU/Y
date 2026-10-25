@@ -1,0 +1,8 @@
+512x512x16384 Y_f32_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 218 registers 
+512x512x16384 Y_mma_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 148 registers 
+512x512x16384 Y_blk128_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 214 registers 
+512x512x16384 Y_blk256_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 214 registers 
+512x512x65536 Y_f32_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 218 registers 
+512x512x65536 Y_mma_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 148 registers 
+512x512x65536 Y_blk128_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 214 registers 
+512x512x65536 Y_blk256_s4: CTA 128x128x32 | 4x2 warps | blocks 0 | 0 bytes spill stores Used 214 registers 

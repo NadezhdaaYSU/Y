@@ -1,15 +1,17 @@
 //! The split-K F16 GEMM: an `@tile(M, N, K)` kernel named `<name>_splitk<S>`
 //! taking (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>). Its main
 //! entry runs S equal K ranges in `%ctaid.z`, each written as an M x N float32
-//! partial to slot z of Partial, accumulating each mma in float32 by default;
-//! its `_reduce` entry adds the slots into C in slot order, with no atomics.
+//! partial to slot z of Partial; by default each range of more than 32 rows
+//! and longer than a block is summed in blocks (`Y_F16_ACCUMULATE=blocked`),
+//! any other adds each mma in float32. Its `_reduce` entry adds the slots
+//! into C in slot order, with no atomics.
 //!
 //! This file checks the name grammar and the shapes refused, and on the
 //! device: exact integer products; every slot equal, bit for bit, to the
 //! unsplit kernel run on that slot's K range; C equal to the slots summed in
 //! order on the host; the same bits on every launch; same-sign error at
-//! float32's level against the chained control; and the tuner measuring the
-//! split kernel with its reduction.
+//! float32's level, or blocked well below the chained control's; and the
+//! tuner measuring the split kernel with its reduction.
 
 use std::path::Path;
 use std::process::Command;
@@ -46,6 +48,17 @@ fn compile_source(dir: &Path, src: &Path, knob: Option<&str>, tile: Option<&str>
     Ok(std::fs::read_to_string(ptx).unwrap())
 }
 
+/// The main entry adds block sums into its accumulators in the K loop
+/// (`add.rn.f32 s, s, x` and then `mov.f32 x, 0f00000000;`); see
+/// `ptx_f16_accumulate.rs` for the structure checked in full.
+fn blocked(ptx: &str) -> bool {
+    let lines: Vec<&str> = ptx.lines().map(str::trim).collect();
+    lines.windows(2).any(|w| {
+        let add = w[0].strip_prefix("add.rn.f32 ").and_then(|l| l.strip_suffix(';')).map(|l| l.split(", ").collect::<Vec<_>>());
+        matches!(add, Some(o) if o.len() == 3 && o[0] == o[1] && w[1] == format!("mov.f32 {}, 0f00000000;", o[2]))
+    })
+}
+
 fn entries(ptx: &str) -> Vec<String> {
     ptx.lines()
         .filter_map(|l| l.trim().strip_prefix(".visible .entry "))
@@ -75,10 +88,22 @@ fn split_k_names_select_the_shape_and_everything_else_is_refused() {
     assert_eq!(entries(&ptx), ["g_splitk4_reduce", "g_splitk4"], "the reduction entry beside the main one");
     assert!(ptx.contains("K=4096 in 4 splits of K=1024 | grid ("), "the launch contract is stated");
     assert!(ptx.contains("%ctaid.z;"), "the split index");
-    assert!(accumulates_in_f32(&ptx), "a split accumulates in float32 by default, at any M");
+    // 256 rows, splits of 1024: blocked, its block sums folded in the K
+    // loop (the knob is the control).
+    assert!(!accumulates_in_f32(&ptx) && blocked(&ptx), "a split of 256 rows and K = 1024 is not blocked");
+    let f32_split = compile(&dir, "g_f32_splitk4", 256, 256, 4096, true, Some("f32"), None).unwrap();
+    assert!(accumulates_in_f32(&f32_split) && !blocked(&f32_split), "Y_F16_ACCUMULATE=f32 does not add each mma in a split");
+    // Where the block sums do not fit - a 128x128 tile of 2x2 warps, 128
+    // accumulators a thread - a split adds each mma in float32.
+    let wide = compile(&dir, "g_wide_splitk4", 256, 256, 4096, true, None, Some("128,128,32,2,2,3")).unwrap();
+    assert!(wide.contains("| CTA 128x128x32 | 2x2 warps"), "not the tile this case checks");
+    assert!(accumulates_in_f32(&wide) && !blocked(&wide), "a split of 128 accumulators a thread is not plain float32");
+    // Splits no longer than a block (256 of K) add each mma in float32.
+    let short = compile(&dir, "g_short_splitk4", 256, 256, 1024, true, None, None).unwrap();
+    assert!(accumulates_in_f32(&short) && !blocked(&short), "a split of K = 256 is not plain float32");
     // Uncompensated at 32 rows or fewer too, where the unsplit GEMM's adds
     // are compensated (`sub.rn.f32` is the compensated fold's; the knob is
-    // the control).
+    // the control), and not blocked.
     let decode = compile(&dir, "d_splitk4", 8, 256, 4096, true, None, None).unwrap();
     assert!(accumulates_in_f32(&decode) && !decode.contains("sub.rn.f32"), "a split of 8 rows is not plain float32");
     let compensated = compile(&dir, "d_kahan_splitk4", 8, 256, 4096, true, Some("kahan"), None).unwrap();
@@ -196,9 +221,13 @@ fn split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu() {
         let name = format!("g{m}x{n}x{k}_splitk{s}");
         let split = compile(&dir, &name, m, n, k, true, None, Some(tile)).unwrap();
         let chained = compile(&dir, &format!("c{m}x{n}x{k}_splitk{s}"), m, n, k, true, Some("mma"), Some(tile)).unwrap();
-        // The unsplit float32 kernel of one split's depth, same tile.
+        // The square shape's splits (1024 deep) are blocked by default, the
+        // ragged one's (200) float32.
+        let mode = if blocked(&split) { "blocked" } else { "f32" };
+        assert_eq!(mode, if k / s > 256 { "blocked" } else { "f32" }, "{name}: not the default this case checks");
+        // The unsplit kernel of one split's depth in the same mode, same tile.
         let slice_name = format!("u{m}x{n}x{}", k / s);
-        let slice = compile(&dir, &slice_name, m, n, k / s, false, Some("f32"), Some(tile)).unwrap();
+        let slice = compile(&dir, &slice_name, m, n, k / s, false, Some(mode), Some(tile)).unwrap();
         assert_eq!(launch_of(&split), launch_of(&slice), "{name}: the slice kernel's tile differs");
 
         let d_a = ctx.alloc(mu * ku * 2).unwrap();
@@ -308,17 +337,25 @@ fn split_k_is_exact_sums_its_slots_in_order_and_repeats_on_the_gpu() {
         ctx.memcpy_dtoh_at(&mut raw, &d_c, 0).unwrap();
         assert!(f32s(&raw).iter().zip(&c).all(|(x, y)| x.to_bits() == y.to_bits()), "{name}: the timed sequence did not leave C as the reduction writes it");
 
-        // 5. Same-sign error: float32 accumulation at float32's level, the
-        // chained splits (the control) visibly biased low.
+        // 5. Same-sign error: float32 accumulation at float32's level, blocked
+        // sums a fraction of the chained splits' (the control) bias low.
         if k / s >= 1024 {
             let exact: Vec<f64> = (0..mu * nu)
                 .map(|x| (0..ku).map(|kk| f16_value(a[(x / nu) * ku + kk]) * f16_value(b[kk * nu + x % nu])).sum())
                 .collect();
             let mean_rel = |got: &[f32]| got.iter().zip(&exact).map(|(&g, &e)| (g as f64 - e) / e).sum::<f64>() / (mu * nu) as f64;
             let (cc, _) = run_split(&chained, &format!("c{m}x{n}x{k}_splitk{s}"), &a, &b);
-            let (f32_err, chained_err) = (mean_rel(&c), mean_rel(&cc));
+            let (split_err, chained_err) = (mean_rel(&c), mean_rel(&cc));
             assert!(chained_err < -5e-6, "{name}: the chained splits are off by only {chained_err:e} on average");
-            assert!(f32_err.abs() < 1e-6, "{name}: float32 accumulation is off by {f32_err:e} on average");
+            assert_eq!(mode, "blocked");
+            // Blocks of 256 chain 16 mmas, a split of 1024 64: measured
+            // -2.6e-6 against the chain's -1.2e-5.
+            assert!(split_err < 0.0 && split_err.abs() < chained_err.abs() / 3.0, "{name}: blocked splits are off by {split_err:e} on average, the chained by {chained_err:e}");
+            let f32_name = format!("f{m}x{n}x{k}_splitk{s}");
+            let plain = compile(&dir, &f32_name, m, n, k, true, Some("f32"), Some(tile)).unwrap();
+            let (cf, _) = run_split(&plain, &f32_name, &a, &b);
+            let plain_err = mean_rel(&cf);
+            assert!(plain_err.abs() < 1e-6, "{name}: float32 accumulation is off by {plain_err:e} on average");
         }
     }
 }

@@ -1,0 +1,30 @@
+Validator gates (tools/ptxas_tval), run on HEAD (b67116d, base) and on this tree (new), the compiler built from
+each tree on PATH, at nice 19 under the GPU lock (tval_blk/run.sh). Exit codes and seconds:
+
+base ./build_corpus.sh 0 13s   new 0 13s
+base ./regress.sh      0 186s  new 0 186s   (identical output but timings)
+base fpgate.py         0 9s    new 0 8s     (identical output)
+base docgate.py        1 59s   new 1 59s    (18 doc figures disagree on base, 17 on new; see below)
+base gap.py            0 718s  new 0 715s
+base unroll.py         0 1s    new 0 0s
+
+Differences, base -> new (the four regenerated kernels: gemm_f16_8192, gemm_f16_16384,
+gemm_f16_bias_relu_8192, gemm_f16_swiglu_4096):
+- unroll.py: all four MATCHED on both, `1/1/1` -> `1/vac/1/1 (1 vacuous)`: the blocked K loop is an
+  outer loop over blocks, whose own body (the folds, the block's end) holds no global access, around
+  an inner loop over a block's K-tiles.
+- docgate: liftgap's nest-shape census sees the same: 84 -> 88 loop levels, 'SEQUENTIAL depth 1'
+  24 -> 20, 'MIXED depth 2' 1 -> 5 (the doc's stale 5, so that FAIL line goes); the stale-census
+  FAILs name the corpus tree's hash, which the kernels change. The other FAIL lines are identical.
+- gap.py: the same opcode gaps for 8192 and 16384 (19 opcodes, listed in another order; one
+  'other' refusal fewer, '@UP0'); gemm_f16_swiglu_4096's grows from 18 to 20 unmodelled SASS
+  opcodes, adding USEL and UISETP.LT.U32.AND (the block's end, `min(k + 8, K-tiles)`, and its test,
+  on the uniform datapath). HMMA, LDGSTS and LDSM already kept all four outside the validator.
+
+An intermediate version (the inner loop's exit tested as "a multiple of 8, and not all of K") made
+unroll.py REFUSE all four: ptxas fused the two tests into `@P1 BRA P0, ...`, a back edge
+loopcfg.SASS_BRA does not parse, so the SASS nest read as depth 1 against the PTX's 2. The block's
+end computed once per block keeps one predicate on the back edge.
+
+The gates ran on the final source and kernels (fused SwiGLU with its register limit); docgate ran again
+after the README and docs changed, with the same FAIL lines (tree hashes aside).

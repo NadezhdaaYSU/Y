@@ -1,0 +1,6 @@
+[W1025 14:15:04.533658920 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 2147483648 bytes (free: 1979580416, total: 16769744896).
+16384x16384x16384 data=normal exact True graph True | during 100, 2670, 284.93 .. 100, 2730, 282.28
+  cuBLAS                       min 98017.62 med 99401.63 us  cuBLAS/this 1.000   = 
+  Y_mma                        min 98636.09 med 99407.87 us  cuBLAS/this 0.994  128x128 4x2 S=1 
+  Y_blk256                     min 99431.43 med 103078.23 us  cuBLAS/this 0.986  128x128 4x2 S=1 
+  Y_blk128                     min 100455.77 med 103686.15 us  cuBLAS/this 0.976  128x128 4x2 S=1 

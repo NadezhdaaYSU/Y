@@ -1000,11 +1000,19 @@ for i in 0..100 {
   ([record](benchmarks/f16_gemm_loop_2026-10-17/README.md)).
 * **Accumulation.** Above 32 rows the K loop chains in the tensor core's
   accumulator (`mma d, a, b, d`), as cuBLAS and Triton do; the tensor core
-  adds with less than float32 rounding, truncating. In every split of a
-  split-K GEMM each `mma` starts from zero and its result is added in float32
-  (`add.rn.f32`); at most 32 rows, unsplit, those adds are also compensated,
-  as `kahan` below (since 2026-10-24). `Y_F16_ACCUMULATE` selects one for every
-  shape: `mma` the chain, `f32` the float32 adds, and `kahan` the float32
+  adds with less than float32 rounding, truncating. From K = 4096 (since
+  2026-10-25) the chain runs in a block sum of its own instead, added into
+  the accumulator with `add.rn.f32` after every 256 of K and zeroed
+  (`blocked`), wherever the block sums, one register per accumulator, fit
+  beside the chain's: not for a 64 x 64 warp tile's 128 accumulators a
+  thread ([record](benchmarks/f16_blocked_2026-10-25/README.md)). A split
+  of a split-K GEMM is blocked the same way where it has more than 32 rows
+  and a K longer than a block; in any other split each `mma` starts from
+  zero and its result is added in float32 (`add.rn.f32`). At most 32 rows,
+  unsplit, those adds are also compensated, as `kahan` below (since
+  2026-10-24). `Y_F16_ACCUMULATE` selects one for every shape: `mma` the
+  chain, `blocked` the blocked chain (`Y_F16_BLOCK_K`, a power of two of at
+  least 16, sets its block), `f32` the float32 adds, and `kahan` the float32
   adds compensated: each K-tile's results are summed in a register of their
   own, that tile sum is added into the accumulator, and each such add's
   rounding error is summed in a third register, added in once after the K
@@ -1051,8 +1059,10 @@ for i in 0..100 {
   depend on which CTAs ran first. Launch the main entry on grid
   `(ceil(N / cta_n), ceil(M / cta_m), S)`, then `_reduce` on
   `ceil(M * N / 4 / 256)` CTAs of 256 threads, both with the same four
-  arguments; the PTX header states both. Every part adds each `mma`'s result
-  in float32 unless `Y_F16_ACCUMULATE=mma`. The tile is measured per split
+  arguments; the PTX header states both. A part of more than 32 rows whose
+  K is longer than a block (256) is blocked, as above, where its block sums
+  fit; any other part adds each `mma`'s result in float32;
+  `Y_F16_ACCUMULATE` selects one for every part. The tile is measured per split
   count (`--autotune`; profile entries `AUTOTUNE_F16_SPLITK<S>_...`), among
   the unsplit shape's candidates and the large-square tiles that fit. A
   malformed `_splitk` suffix, or one on any other shape, is refused rather

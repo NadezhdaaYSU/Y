@@ -1,0 +1,5 @@
+256x4096x11008 data=normal exact True graph True | during 100, 2535, 80.90 .. 100, 2535, 173.89
+  cuBLAS                       min   266.11 med   283.16 us  cuBLAS/this 1.000   = 
+  Y_mma                        min   277.38 med   289.66 us  cuBLAS/this 0.959  64x64 2x2 S=1 
+  Y_blk256                     min   280.27 med   292.62 us  cuBLAS/this 0.949  64x64 2x2 S=1 
+  Y_blk128                     min   281.82 med   293.27 us  cuBLAS/this 0.944  64x64 2x2 S=1 

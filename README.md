@@ -905,16 +905,19 @@ output, as Y's C is float32) and an autotuned Triton GEMM. Every column is
 checked exact first; interleaved rounds, ranked by minimum; two runs on
 2026-10-20 after the tiles were re-tuned (`docs/benchmarks/retune_2026-10-20/`),
 with Discord's GPU process running beside them (10–37% utilisation with none
-of these jobs running).
+of these jobs running). 8192 and 16384 were measured again on 2026-10-25,
+when they began summing K in blocks (below), in two runs of the same harness
+(`docs/benchmarks/f16_blocked_2026-10-25/speed/readme_table/`); the chained kernels they replace ran
+at 1.025–1.029x and 1.015x cuBLAS's speed in the same runs.
 
 | M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 |
 |---|---|---|---|---|---|---|---|
-| **Y vs cuBLAS** | 1.50x / 1.50x | 1.08x / 1.08x | 1.05x / 1.05x | 1.04x / 1.04x | 0.987x / 0.989x | 1.03x / 1.01x | 1.02x / 1.02x |
-| **Y vs Triton** | 3.62x / 3.62x | 1.46x / 1.76x | 1.13x / 1.10x | 1.05x / 1.05x | 1.02x / 1.02x | 1.14x / 1.12x | 1.10x / 1.14x |
-| **Y TFLOPS** | 12.8 / 12.8 | 49.8 / 49.5 | 78.5 / 78.4 | 87.1 / 87.2 | 88.0 / 88.0 | 88.9 / 87.9 | 89.5 / 89.4 |
+| **Y vs cuBLAS** | 1.50x / 1.50x | 1.08x / 1.08x | 1.05x / 1.05x | 1.04x / 1.04x | 0.987x / 0.989x | 1.01x / 1.02x | 1.01x / 1.00x |
+| **Y vs Triton** | 3.62x / 3.62x | 1.46x / 1.76x | 1.13x / 1.10x | 1.05x / 1.05x | 1.02x / 1.02x | 1.12x / 1.12x | 1.10x / 1.10x |
+| **Y TFLOPS** | 12.8 / 12.8 | 49.8 / 49.5 | 78.5 / 78.4 | 87.1 / 87.2 | 88.0 / 88.0 | 87.6 / 88.5 | 91.4 / 89.3 |
 
 **Y is ahead of cuBLAS at every size but 4096, where it is 0.99x, and ahead of
-Triton at every size**, 1.02x at 4096 and 1.10–1.14x at 8192 and 16384, where
+Triton at every size**, 1.02x at 4096 and 1.10–1.12x at 8192 and 16384, where
 Triton's autotuner picks a 128x256 tile on 8 warps. Triton's 512 minimum moved
 by 21% between the runs, so that ratio carries little weight. The 16384 TFLOPS
 were measured with the SM at 2760 MHz, where the peak is 93.2.
@@ -934,9 +937,10 @@ two 16-deep steps, so the next tile's first fragments load while the last
 step's MMAs run: 1.2–1.5% faster at 1024 and 0.7% at 256, level at 512
 (`docs/benchmarks/f16_xbar_2026-10-18/`). 2048 and up run two stages and are
 unchanged. On random inputs Y's output is the same, bit for bit, on every tile
-tried, and from 256 to 4096 it is also cuBLAS's. At 8192 it is not, and cuBLAS
-is the closer to float64: on same-sign inputs Y's results are on average
-1.0e-4 below it and cuBLAS's 3.2e-5 (see known issues).
+tried, and from 256 to 4096 it is also cuBLAS's. At 8192 it is not: on
+same-sign inputs the chain's results were on average 1.0e-4 below float64 and
+cuBLAS's 3.2e-5, and since 2026-10-25, summed in blocks, Y's are 2.5e-6 below
+(Accuracy against cuBLAS, below).
 
 On 2026-10-19 the emitter stopped asking `ptxas` to divide by constants
 (`docs/benchmarks/const_div_2026-10-19/`). `ptxas` turns a `div.u32` or
@@ -977,6 +981,9 @@ SASS instructions per 16-byte copy.
 Measured on nine input distributions and eleven shapes, f16 in and f32 out,
 with every output compared against float64 (`docs/benchmarks/f16_accuracy_2026-10-20/`,
 2026-10-20). That record gives each input's seed and the SHA-256 of its bytes.
+Blocked summation, the default above 32 rows from K = 4096 since 2026-10-25,
+was measured the same way on fourteen shapes, 2048³ and five LLM layer
+shapes among them (`docs/benchmarks/f16_blocked_2026-10-25/`).
 
 R is the float64 product. It is the exact sum up to float64 rounding, since
 f16 products are exact in float64; it is checked against `math.fsum` on 3,168
@@ -1017,31 +1024,39 @@ out_dtype=torch.float32)`.
 
 The table gives cuBLAS's error over Y's, as rel_F / max_norm: above 1, Y's
 error is the smaller. Each cell is a range over the group's distributions.
-The compensated rows are from `docs/benchmarks/f16_kahan_2026-10-20/accuracy/`,
-on the same distributions.
+The compensated rows are from `docs/benchmarks/f16_kahan_2026-10-20/accuracy/`
+and the blocked ones from `docs/benchmarks/f16_blocked_2026-10-25/`, on the same distributions.
 
 | shapes | Y | mixed sign | same sign | cancellation | outputs where Y's error is larger |
 |---|---|---|---|---|---|
-| 256³, 1024³, 4096³, 512 x 512 x 1024 | default (chain) | same bits | same bits | same bits | 0 |
-| 8192³ | default (chain) | 0.34 / 0.31–0.38 | 0.31–0.37 / 0.32–0.37 | 0.34–0.35 / 0.32–0.36 | 80–100% |
-| 512 x 512 x 4096–65536 | default (chain) | 0.13–0.51 / 0.10–0.53 | 0.12–0.49 / 0.12–0.49 | 0.014–0.55 / 0.024–0.55 | 71–100% |
+| 256³, 1024³, 2048³, 512 x 512 x 1024 | default (chain, K ≤ 2048) | same bits | same bits | same bits | 0 |
+| 4096³, 2048 x 4096 x 14336 | default (chain: the block sums do not fit) | same bits | same bits | same bits | 0 |
+| 8192³ | default (blocked) | 8.7–9.1 / 8.0–8.7 | 12–14 / 11–12 | 7.9–16 / 6.8–12 | 0–8.2% |
+| 512 x 512 x 4096–65536 | default (blocked) | 6.4–24 / 4.9–17 | 9.3–38 / 7.9–28 | 2.5–20 / 2.6–12 | 0–27% |
+| 64 x 4096 x 4096, 1024 x 4096 x 4096, 128 x 14336 x 4096, 512 x 4096 x 14336 | default (blocked) | 6.6–46 / 6.8–51 | 9.3–70 / 8.9–60 | 2.8–79 / 5.2–61 | 0–27% |
+| 8192³ | `Y_F16_ACCUMULATE=mma` (chain) | 0.34 / 0.31–0.38 | 0.31–0.37 / 0.32–0.37 | 0.34–0.35 / 0.32–0.36 | 80–100% |
+| 512 x 512 x 4096–65536 | `Y_F16_ACCUMULATE=mma` (chain) | 0.13–0.51 / 0.10–0.53 | 0.12–0.49 / 0.12–0.49 | 0.014–0.55 / 0.024–0.55 | 71–100% |
+| 64 x 4096 x 4096 | `Y_F16_ACCUMULATE=mma` (chain) | 0.50–0.51 / 0.43–0.69 | 0.49 / 0.49–0.50 | 0.11–0.51 / 0.20–0.56 | 73–100% |
 | M = 8, 32 | default (compensated) | 73–89 / 72–95 | 584–617 / 328–378 | 55–71 / 54–78 | 0–1.2% |
 | M = 1 | default (compensated) | 5.6–7.6 / 5.6–12 | 2.8–3.0 / 5.3–6.6 | 7.3–8.9 / 11–13 | 6.2–21% |
 | M = 8, 32 | `Y_F16_ACCUMULATE=f32` | 22–23 / 9.7–15 | 193–204 / 45–50 | 18 / 8.2–12 | 0–2.5% |
 | M = 1 | `Y_F16_ACCUMULATE=f32` | 1.7–1.9 / 0.71–2.5 | 0.93–0.95 / 0.82–0.93 | 1.9–2.9 / 1.8–2.0 | 21–48% |
 | the 8 shapes above 32 rows | `Y_F16_ACCUMULATE=f32` | 4.7–23 / 2.5–14 | 26–202 / 11–40 | 1.04–18 / 0.83–9.7 | 0–45% |
 
-**Above 32 rows, Y chains its K loop in the tensor core's accumulator, as
-cuBLAS and Triton do.** Where they chain too, the three give the same bits for
-every distribution. The tensor core adds into its accumulator with less than
-float32 rounding, truncating, so same-sign results land below float64 by
-about 1.2e-5 per 1024 of K. cuBLAS is more accurate where it does something
-else, on every distribution and all three metrics:
+**Above 32 rows and up to K = 2048, Y chains its K loop in the tensor core's
+accumulator, as cuBLAS and Triton do.** Where they chain too, the three give
+the same bits for every distribution: at every shape measured with K ≤ 2048,
+and at 4096³ and the larger LLM shapes, where cuBLAS chains as well. The
+tensor core adds into its accumulator with less than float32 rounding,
+truncating, so the chain's same-sign results land below float64 by about
+1.2e-5 per 1024 of K. Where cuBLAS does something else it is more accurate
+than the chain, on every distribution and all three metrics:
 
 - **512 x 512 x K ≥ 4096:** 2–8x more accurate, and up to 70x on the paired
   inputs at K = 65536. At K = 16384 and 65536 cuBLAS splits K in 8 (a
   `splitKreduce` kernel follows), and the float32 reduction bounds each
   tensor-core chain.
+- **64 x 4096 x 4096:** 2–9x, with the kernel it runs at 512 x 512 x 4096.
 - **8192³:** about 3x more accurate.
 
 At 512 x 512 x 4096 cuBLAS runs one kernel whose bits are those of two
@@ -1049,6 +1064,35 @@ chained halves of K added in float32, and at 16384 and 65536 eight chained
 splits added in order: Y's split-K kernel chained (below, with
 `Y_F16_ACCUMULATE=mma`) gives cuBLAS's bits there on all nine distributions.
 How cuBLAS orders the sum at 8192³ was not established.
+
+**From K = 4096 the sum is blocked instead** (since 2026-10-25,
+`docs/benchmarks/f16_blocked_2026-10-25/`). The mmas chain into a block sum of their own,
+which is added into the accumulator with `add.rn.f32` after every 256 of K
+and zeroed, so the truncation acts on one block's sum rather than on all of K.
+The block sums take one register per accumulator, and the chain is kept where
+they would not fit: 4096³ and the 128x128 tiles of the larger LLM shapes,
+whose 64 x 64 warp tiles hold 128 accumulators a thread (blocked, 844 bytes
+of spill stores). There cuBLAS chains too. `Y_F16_ACCUMULATE=blocked` blocks
+every shape and `Y_F16_BLOCK_K` sets the block, a power of two. On the
+record's fourteen shapes and nine distributions, blocked everywhere:
+
+- **Lower rel_F and max_norm than cuBLAS in 117 of 126 cases,** and in the
+  other nine (256³, whose K is one block) cuBLAS's bits.
+- **Not on every output:** under cancellation 0.7–27% of the outputs are
+  farther from R than cuBLAS's, on the other inputs at most 12%.
+- **Under the paired cancellation its rel_F is at most 3.8e-4,** against
+  1.2e-3 for float32 accumulation and 8.7e-2 for the chain.
+- **On same-sign inputs float32 accumulation stays ahead** (cuBLAS's rel_F
+  26–202x its own, against 9.3–70x blocked): each block still truncates.
+- **Speed:** 0.96–1.02x the chain's (median 0.99 over 22 LLM layer shapes from
+  64 to 2048 rows, 16 of them within 2%); 0.98–1.00x at 8192³, still
+  1.005–1.02x cuBLAS's; 0.96–0.98x at 512 x 512 x 4096–65536, where it is
+  1.05–1.08x, 0.97–0.985x and 0.91–0.94x cuBLAS's. Its K loop is no longer
+  than the chain's, but `ptxas` schedules it differently and issues the next
+  K-tile's fragment loads later. The fused SwiGLU kernel asks for a register
+  limit that keeps two CTAs an SM, as the chain has, and runs at 0.97x the
+  chain (0.77x without it). Contended desktop GPU, two runs on small-integer
+  and N(0, 1) data, the minimum of 21 interleaved rounds each.
 
 **Since 2026-10-20 a GEMM of at most 32 rows starts each mma from zero and
 adds its result in float32** (`add.rn.f32`), as the FP8 GEMM does
@@ -1091,13 +1135,15 @@ N(0, 1). rel_F still reaches:
 
 - 1.2e-3 (about three digits) for float32 accumulation and cuBLAS's split K;
 - 5.4e-3 for cuBLAS's chain at 4096³;
-- 8.7e-2 for Y's default chain at 512 x 512 x 65536.
+- 8.7e-2 for Y's chain at 512 x 512 x 65536 (`Y_F16_ACCUMULATE=mma`; the
+  default there is blocked, 3.5e-4).
 
 R rounded to float32 has a rel_F of at most 2.6e-8.
 
 **Since 2026-10-20 a kernel named `<name>_splitk<S>` splits K in S**
 (`docs/benchmarks/f16_splitk_2026-10-20/`): each split adds its mmas in
-float32 into an M x N float32 partial, and a second entry, `<name>_reduce`,
+float32 (above 32 rows, since 2026-10-25, in blocks: below) into an M x N
+float32 partial, and a second entry, `<name>_reduce`,
 adds the S partials in order with `add.rn.f32`, without atomics, so C's bits
 do not depend on which CTAs finish first. At 512 x 512 x K, on a contended
 GPU, against cuBLAS:
@@ -1117,6 +1163,15 @@ GPU, against cuBLAS:
   sign) whatever S is, so on same-sign inputs at K = 65536 SGEMM's rel_F is
   below split 4's (1.52e-7 against 2.62e-7); split 16's, 1.18e-7, is below
   SGEMM's, and split 16 runs at 0.92–0.93x cuBLAS's speed.
+
+**Since 2026-10-25 a split of more than 32 rows whose K is longer than a
+block is blocked,** where its block sums fit (`docs/benchmarks/f16_blocked_2026-10-25/`). At
+512 x 512 x 16384 and 65536 in 4 splits it runs at 1.02–1.06x the float32
+splits' speed and 1.01–1.04x cuBLAS's, so K = 65536 is faster than cuBLAS
+too. Its rel_F and max_norm are below cuBLAS's in all 18 cases: cuBLAS's
+rel_F is 6.6–26x its own on mixed signs, 9.3–39x on same signs and 2.6–21x
+under cancellation (the float32 splits': 11–23x, 164–404x and 1.5–12x).
+Splits of at most 32 rows or one block deep stay float32.
 
 **Since 2026-10-24 a GEMM of at most 32 rows compensates its float32 adds**
 outside split K, and `Y_F16_ACCUMULATE=kahan` does so for every shape

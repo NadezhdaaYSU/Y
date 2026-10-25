@@ -1,0 +1,9 @@
+512x512x16384 run 1 int exit 0
+512x512x16384 run 1 normal exit 0
+512x512x65536 run 1 int exit 0
+512x512x65536 run 1 normal exit 0
+512x512x16384 run 2 int exit 0
+512x512x16384 run 2 normal exit 0
+512x512x65536 run 2 int exit 0
+512x512x65536 run 2 normal exit 0
+DONE

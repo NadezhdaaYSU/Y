@@ -1,0 +1,10 @@
+          8192 Y {'new': '128x128 4x2', 'old': '128x128 4x2'} | exact {'new': True, 'old': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2475-2760 MHz
+      old       min   12321.3 median   12468.7 us  0.884x Triton
+      new       min   12421.6 median   12514.3 us  0.891x Triton
+      cuBLAS    min   12626.8 median   12811.2 us  0.906x Triton
+      Triton    min   13940.2 median   14159.9 us  1.000x Triton
+         16384 Y {'new': '128x128 4x2', 'old': '128x128 4x2'} | exact {'new': True, 'old': True, 'Triton': True, 'cuBLAS': True} | Triton BM: 128, BN: 256, BK: 32, num_warps: 8, num_ctas: 1, num_stages: 3, maxnreg: None | SM 2760-2760 MHz
+      old       min   97400.7 median   98544.5 us  0.903x Triton
+      new       min   98485.8 median   99125.3 us  0.913x Triton
+      cuBLAS    min   98902.5 median   99678.2 us  0.917x Triton
+      Triton    min  107844.4 median  109097.0 us  1.000x Triton

@@ -1,0 +1,6 @@
+  8192 Y {'mma': '128x128 4x2', 'blk128': '128x128 4x2', 'blk256': '128x128 4x2'} | exact {'mma': True, 'blk128': True, 'blk256': True, 'addmm32+relu': True, 'linear16+relu': True} | SM 2775-2775 MHz
+      blk256         min  12211.65 median  12657.10 us
+      mma            min  12291.07 median  12702.72 us
+      linear16+relu  min  12641.81 median  13171.20 us
+      blk128         min  12732.93 median  13044.22 us
+      addmm32+relu   min  13806.08 median  14118.70 us
