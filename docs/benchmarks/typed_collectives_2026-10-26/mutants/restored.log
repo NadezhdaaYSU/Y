@@ -1,0 +1,50 @@
+   Compiling Y-compiler v1.0.0 (/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/xbar)
+   Compiling y-gpu v0.1.0 (/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/35eca213-da5a-4f11-9ada-c7b8b4745295/scratchpad/xbar/crates/y-gpu)
+warning: unused import: `Path`
+ --> tests/common/ptxas.rs:3:17
+  |
+3 | use std::path::{Path, PathBuf};
+  |                 ^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `Y-compiler` (test "ptx_intrinsics_assemble") generated 1 warning (run `cargo fix --test "ptx_intrinsics_assemble" -p Y-compiler` to apply 1 suggestion)
+warning: `Y-compiler` (test "ptx_typed_collectives") generated 1 warning (1 duplicate)
+    Finished `release` profile [optimized] target(s) in 8.76s
+     Running tests/ptx_divergent_collectives.rs (target/release/deps/ptx_divergent_collectives-11c51293aaf511d4)
+
+running 2 tests
+test a_collective_some_threads_skip_is_refused ... ok
+test the_same_reductions_where_the_threads_agree_compile_and_are_exact ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+     Running tests/ptx_intrinsics_assemble.rs (target/release/deps/ptx_intrinsics_assemble-955a31f3f7efd8e4)
+
+running 5 tests
+test async_copy_is_committed_and_awaited ... ok
+test unlowerable_intrinsics_fail_the_build ... ok
+test short_intrinsic_calls_are_refused_not_guessed ... ok
+test cp_async_honours_its_byte_count_and_rejects_illegal_ones ... ok
+test supported_intrinsics_emit_assemblable_ptx ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+     Running tests/ptx_rmsnorm_v4.rs (target/release/deps/ptx_rmsnorm_v4-f1f161442db0d9e9)
+
+running 3 tests
+test the_row_length_and_epsilon_cannot_be_left_out ... ok
+test one_barrier_outside_a_loop_and_two_inside ... ok
+test every_row_shape_is_normalised_and_a_wrong_launch_traps ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+
+     Running tests/ptx_typed_collectives.rs (target/release/deps/ptx_typed_collectives-0bd14b0852cc37c7)
+
+running 3 tests
+test a_shuffle_refuses_what_it_cannot_move_and_takes_any_integer_offset ... ok
+test collectives_use_the_values_own_type ... ok
+test every_type_shuffles_and_reduces_exactly_on_the_gpu ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

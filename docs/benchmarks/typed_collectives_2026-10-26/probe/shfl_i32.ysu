@@ -1,0 +1,8 @@
+kernel shfl_i32(Out: GlobalMemory<I32>) {
+    let t: I32 = thread_idx_x();
+    let y: I32 = shfl_sync_bfly(t + 1000, 1);
+    Out[t] = y;
+}
+
+fn main() {
+}

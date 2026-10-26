@@ -4045,6 +4045,28 @@ the reduction in every warp instead. A `chisel` block's own PTX is not checked,
 and a `chisel` block that may branch or return counts as a `return` some
 threads take. `@divergence(uniform)` (§9.16) does not change any of this.
 
+**A shuffle or reduction works in its value's type.**
+- **What they take.** `shfl_sync_bfly(x, k)`, `warp_reduce_sum(x)` and
+  `warp_reduce_max(x)` take an `F32`, `F64`, `I32`, `U32`, `I64` or `U64` and
+  return the same type.
+- **64-bit values.** A 64-bit value moves as its two 32-bit halves, two
+  `shfl.sync.bfly.b32`.
+- **The arithmetic.** The reductions use the type's own instruction:
+  `add`/`max` `.f32`, `.f64`, `.s32`, `.u32`, `.s64` or `.u64`. An integer sum
+  wraps, as `+` does.
+- **The lane offset.** `k` is any integer, taken as the u32 lane index;
+  a float offset is refused.
+- **`shfl_sync_bfly_b32`.** It moves 32 bits, so it refuses a 64-bit value.
+
+Until 2026-10-26 all three wrote an f32 register whatever they were given, and
+the integer cases ran silently wrong. An `I32` came back as the float its bits
+spell, then converted to an integer: `shfl_sync_bfly(t + 1000, 1)` compiled,
+assembled and stored 0 on every lane. An integer sum added the bits as floats.
+A 64-bit value reached a `.b32` shuffle that ptxas rejects.
+`tests/ptx_typed_collectives.rs` runs every type through all three on the GPU,
+bit for bit against a CPU emulation of the same butterfly
+(`docs/benchmarks/typed_collectives_2026-10-26/`).
+
 ---
 
 ## 21. `SmemLayout` & `Pipeline` API Reference
