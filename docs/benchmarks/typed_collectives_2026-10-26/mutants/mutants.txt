@@ -1,0 +1,17 @@
+games: []
+bfly_dst_f32 killed
+wide_as_32_bits killed
+wide_halves_swapped killed
+wide_high_half_kept killed
+wide_low_half_kept killed
+reduce_op_f32 killed
+reduce_result_f32 killed
+sum_is_max killed
+max_is_add killed
+reduce_skips_offset_1 killed
+b32_takes_64_bits killed
+float_offset_taken killed
+offset_unconverted killed
+restored passes True
+exit 0
+src/ptx_emitter.rs: OK

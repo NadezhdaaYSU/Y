@@ -1,0 +1,9 @@
+kernel shfl_f64(Out: GlobalMemory<F64>) {
+    let t: I32 = thread_idx_x();
+    let x: F64 = 0.1;
+    let y: F64 = shfl_sync_bfly(x, 1);
+    Out[t] = y;
+}
+
+fn main() {
+}

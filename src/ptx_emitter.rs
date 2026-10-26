@@ -6257,10 +6257,35 @@ declare it as a Q format.\n{}",
                             "".into()
                         } else if fname == "shfl_sync_bfly" || fname == "shfl_sync_bfly_b32" {
                             let src_val = if !args.is_empty() { self.emit_expr(&args[0], cache_policy, hw_profile) } else { "%f0".to_string() };
-                            let offset_val = if args.len() >= 2 { self.emit_expr(&args[1], cache_policy, hw_profile) } else { "16".to_string() };
-                            let dst = self.alloc_regf32();
-                            writeln!(&mut self.ptx_buffer, "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;", dst, src_val, offset_val).unwrap();
-                            dst
+                            // The lane offset is a lane index: a float one would
+                            // reach `shfl` as its bits (1.0 as lane offset 0).
+                            let offset_val = if args.len() >= 2 {
+                                let o = self.emit_expr(&args[1], cache_policy, hw_profile);
+                                let oty = self.ty_of(&o);
+                                if oty.is_float() {
+                                    self.unsupported_intrinsic(
+                                        fname,
+                                        &format!("its lane offset is a lane index and this one is {}; give an integer", oty.name()),
+                                    );
+                                    return o;
+                                }
+                                self.emit_convert(&o, ScalarTy::U32)
+                            } else {
+                                "16".to_string()
+                            };
+                            let ty = self.ty_of(&src_val);
+                            if fname == "shfl_sync_bfly_b32" && ty.is_64() {
+                                self.unsupported_intrinsic(
+                                    fname,
+                                    &format!(
+                                        "it moves 32 bits and its argument is a 64-bit {}; \
+                                         `shfl_sync_bfly` moves a 64-bit value as its two halves",
+                                        ty.name()
+                                    ),
+                                );
+                                return src_val;
+                            }
+                            self.emit_bfly_typed(&src_val, &offset_val)
                         } else if fname == "warp_reduce_sum" {
                             let src_val = if !args.is_empty() { self.emit_expr(&args[0], cache_policy, hw_profile) } else { "%f0".to_string() };
                             self.emit_warp_reduce_sum(&src_val)
@@ -17058,37 +17083,54 @@ declare it as a Q format.\n{}",
 
     /// 2. Emits single-step Butterfly Warp Shuffle intrinsic (`shfl.sync.bfly.b32`).
     pub fn emit_warp_butterfly_shuffle(&mut self, src_reg: &str, offset: u32) -> String {
-        let dst = self.alloc_regf32();
-        writeln!(
-            &mut self.ptx_buffer,
-            "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;",
-            dst, src_reg, offset
-        )
-        .unwrap();
+        self.emit_bfly_typed(src_reg, &offset.to_string())
+    }
+
+    /// One butterfly step of a value of any register type, into a register of
+    /// that type: a 32-bit value as one `shfl.sync.bfly.b32`, a 64-bit one
+    /// (`F64`, `I64`, `U64`) as its two halves, which is what the hardware
+    /// moves. Until 2026-10-26 every shuffle wrote an f32 register, so an
+    /// `I32` came back as the float its bits spell and was then converted to
+    /// an integer (`shfl_sync_bfly(t + 1000, 1)` was 0 on every lane), and a
+    /// 64-bit value reached a `.b32` shuffle that ptxas rejects.
+    fn emit_bfly_typed(&mut self, src_reg: &str, offset: &str) -> String {
+        let ty = self.ty_of(src_reg);
+        let dst = self.alloc_ty(ty);
+        if ty.is_64() {
+            let (lo, hi) = (self.alloc_reg32(), self.alloc_reg32());
+            let (lo2, hi2) = (self.alloc_reg32(), self.alloc_reg32());
+            writeln!(&mut self.ptx_buffer, "    mov.b64 {{{}, {}}}, {};", lo, hi, src_reg).unwrap();
+            writeln!(&mut self.ptx_buffer, "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;", lo2, lo, offset).unwrap();
+            writeln!(&mut self.ptx_buffer, "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;", hi2, hi, offset).unwrap();
+            writeln!(&mut self.ptx_buffer, "    mov.b64 {}, {{{}, {}}};", dst, lo2, hi2).unwrap();
+        } else {
+            writeln!(&mut self.ptx_buffer, "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;", dst, src_reg, offset).unwrap();
+        }
         dst
     }
 
     /// Emits 5-step Warp Butterfly Shuffle Sum Reduction across 32 threads in 5 GPU cycles inside register space.
     pub fn emit_warp_reduce_sum(&mut self, val_reg: &str) -> String {
-        let mut curr = val_reg.to_string();
-        writeln!(&mut self.ptx_buffer, "    // [WARP-LEVEL SHUFFLE REDUCTION SUM - shfl.sync.bfly.b32]").unwrap();
-        for offset in &[16, 8, 4, 2, 1] {
-            let tmp = self.emit_warp_butterfly_shuffle(&curr, *offset);
-            let next = self.alloc_regf32();
-            writeln!(&mut self.ptx_buffer, "    add.f32 {}, {}, {};", next, curr, tmp).unwrap();
-            curr = next;
-        }
-        curr
+        self.emit_warp_reduce(val_reg, "add", "SUM")
     }
 
     /// Emits 5-step Warp Butterfly Shuffle Max Reduction across 32 threads.
     pub fn emit_warp_reduce_max(&mut self, val_reg: &str) -> String {
+        self.emit_warp_reduce(val_reg, "max", "MAX")
+    }
+
+    /// A butterfly reduction in the value's own type: `add`/`max` `.f32`,
+    /// `.f64`, `.s32`, `.u32`, `.s64` or `.u64`. An integer sum wraps, as `+`
+    /// does (`emit_binary`). It was `.f32` whatever the value, so an `I32`'s
+    /// bits were added as floats and the "sum" converted back to an integer.
+    fn emit_warp_reduce(&mut self, val_reg: &str, op: &str, label: &str) -> String {
+        let ty = self.ty_of(val_reg);
         let mut curr = val_reg.to_string();
-        writeln!(&mut self.ptx_buffer, "    // [WARP-LEVEL SHUFFLE REDUCTION MAX - shfl.sync.bfly.b32]").unwrap();
-        for offset in &[16, 8, 4, 2, 1] {
-            let tmp = self.emit_warp_butterfly_shuffle(&curr, *offset);
-            let next = self.alloc_regf32();
-            writeln!(&mut self.ptx_buffer, "    max.f32 {}, {}, {};", next, curr, tmp).unwrap();
+        writeln!(&mut self.ptx_buffer, "    // [WARP-LEVEL SHUFFLE REDUCTION {} - shfl.sync.bfly.b32]", label).unwrap();
+        for offset in [16u32, 8, 4, 2, 1] {
+            let tmp = self.emit_warp_butterfly_shuffle(&curr, offset);
+            let next = self.alloc_ty(ty);
+            writeln!(&mut self.ptx_buffer, "    {}.{} {}, {}, {};", op, ty.arith(), next, curr, tmp).unwrap();
             curr = next;
         }
         curr
