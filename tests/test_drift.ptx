@@ -4,70 +4,105 @@
 
 .visible .entry drift_demo(
 )
-    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 29
-    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 32 (to maximize SM occupancy)
-    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 100.00% (6 active blocks per SM)
-.maxnreg 32
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 77
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 128 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 33.33% (2 active blocks per SM)
+.maxnreg 128
 {
-    .reg .b32 %r<19>;
+    .reg .b32 %r<47>;
     .reg .f32 %f<2>;
-    .reg .b64 %rd<4>;
-    .reg .pred %p<7>;
-    .reg .f64 %fd<8>;
+    .reg .b64 %rd<14>;
+    .reg .pred %p<9>;
 
     // [Y ZERO DRIFT] acc: Q32.32 accumulated exactly as Q32.32
     mov.f32 %f0, 0.0;
-    cvt.f64.f32 %fd0, %f0;
-    mul.f64 %fd1, %fd0, 0d41F0000000000000;
-    setp.lt.f64 %p0, %fd1, 0d0000000000000000;
-    selp.f64 %fd2, 0dBFE0000000000000, 0d3FE0000000000000, %p0;
-    add.f64 %fd3, %fd1, %fd2;
-    setp.geu.f64 %p1, %fd3, 0d43E0000000000000;
+    mov.b32 %r0, %f0;
+    shr.u32 %r1, %r0, 23;
+    and.b32 %r1, %r1, 255;
+    and.b32 %r2, %r0, 8388607;
+    or.b32 %r3, %r2, 8388608;
+    setp.ne.u32 %p0, %r1, 0;
+    selp.u32 %r4, %r3, %r2, %p0;
+    max.u32 %r5, %r1, 1;
+    add.s32 %r6, %r5, -118;
+    setp.gt.s32 %p1, %r6, 39;
     @%p1 trap;
-    setp.ltu.f64 %p2, %fd3, 0dC3E0000000000000;
-    @%p2 trap;
-    cvt.rzi.s64.f64 %rd1, %fd3;
-    mov.s64 %rd0, %rd1;
+    max.s32 %r7, %r6, 0;
+    cvt.u64.u32 %rd1, %r4;
+    shl.b64 %rd2, %rd1, %r7;
+    neg.s32 %r8, %r6;
+    min.s32 %r8, %r8, 31;
+    max.s32 %r8, %r8, 1;
+    sub.s32 %r9, %r8, 1;
+    mov.u32 %r10, 1;
+    shl.b32 %r11, %r10, %r9;
+    add.u32 %r12, %r4, %r11;
+    shr.u32 %r13, %r12, %r8;
+    cvt.u64.u32 %rd3, %r13;
+    setp.lt.s32 %p2, %r6, 0;
+    selp.b64 %rd4, %rd3, %rd2, %p2;
+    setp.lt.s32 %p3, %r0, 0;
+    neg.s64 %rd5, %rd4;
+    selp.b64 %rd6, %rd5, %rd4, %p3;
+    mov.s64 %rd0, %rd6;
     // [Y ZERO DRIFT] fast_acc: F16 accumulated exactly as Q32.32
     mov.f32 %f1, 0.0;
-    cvt.f64.f32 %fd4, %f1;
-    mul.f64 %fd5, %fd4, 0d41F0000000000000;
-    setp.lt.f64 %p3, %fd5, 0d0000000000000000;
-    selp.f64 %fd6, 0dBFE0000000000000, 0d3FE0000000000000, %p3;
-    add.f64 %fd7, %fd5, %fd6;
-    setp.geu.f64 %p4, %fd7, 0d43E0000000000000;
-    @%p4 trap;
-    setp.ltu.f64 %p5, %fd7, 0dC3E0000000000000;
+    mov.b32 %r14, %f1;
+    shr.u32 %r15, %r14, 23;
+    and.b32 %r15, %r15, 255;
+    and.b32 %r16, %r14, 8388607;
+    or.b32 %r17, %r16, 8388608;
+    setp.ne.u32 %p4, %r15, 0;
+    selp.u32 %r18, %r17, %r16, %p4;
+    max.u32 %r19, %r15, 1;
+    add.s32 %r20, %r19, -118;
+    setp.gt.s32 %p5, %r20, 39;
     @%p5 trap;
-    cvt.rzi.s64.f64 %rd3, %fd7;
-    mov.s64 %rd2, %rd3;
-    mov.u32 %r0, 1;
-    // [HEURISTIC] Branch Divergence Penalty is 4.5 cycles.
+    max.s32 %r21, %r20, 0;
+    cvt.u64.u32 %rd8, %r18;
+    shl.b64 %rd9, %rd8, %r21;
+    neg.s32 %r22, %r20;
+    min.s32 %r22, %r22, 31;
+    max.s32 %r22, %r22, 1;
+    sub.s32 %r23, %r22, 1;
+    mov.u32 %r24, 1;
+    shl.b32 %r25, %r24, %r23;
+    add.u32 %r26, %r18, %r25;
+    shr.u32 %r27, %r26, %r22;
+    cvt.u64.u32 %rd10, %r27;
+    setp.lt.s32 %p6, %r20, 0;
+    selp.b64 %rd11, %rd10, %rd9, %p6;
+    setp.lt.s32 %p7, %r14, 0;
+    neg.s64 %rd12, %rd11;
+    selp.b64 %rd13, %rd12, %rd11, %p7;
+    mov.s64 %rd7, %rd13;
+    mov.u32 %r28, 1;
+    // [HEURISTIC] Branch Divergence Penalty is 4.53 cycles.
     // if: emitting BRANCH execution (block cost 3 cy).
-    setp.eq.u32 %p6, %r0, 0;
-    @%p6 bra $IF_ELSE_0;
-    mov.u32 %r1, 10;
-    mov.u32 %r2, %r1;
-    mov.u32 %r3, 20;
-    mov.u32 %r4, %r3;
+    setp.eq.u32 %p8, %r28, 0;
+    @%p8 bra $IF_ELSE_0;
+    mov.u32 %r29, 10;
+    mov.u32 %r30, %r29;
+    mov.u32 %r31, 20;
+    mov.u32 %r32, %r31;
     bra $IF_END_1;
     $IF_ELSE_0:
-    mov.u32 %r5, 30;
-    mov.u32 %r6, %r5;
+    mov.u32 %r33, 30;
+    mov.u32 %r34, %r33;
     $IF_END_1:
-    mov.u32 %r7, 10;
-    mov.u32 %r8, 20;
-    mul.lo.s32 %r9, %r7, %r8;
-    mov.u32 %r10, %r9;
-    // [BARRIER HOISTING] Found barrier stall of 205 cycles.
+    mov.u32 %r35, 10;
+    mov.u32 %r36, 20;
+    mul.lo.s32 %r37, %r35, %r36;
+    mov.u32 %r38, %r37;
+    // [BARRIER HOISTING] Found barrier stall of 205.25 cycles.
     // [BARRIER HOISTING] Hoisted 2 independent ALU instructions into the shadow.
-    mov.u32 %r11, 10;
-    mov.u32 %r12, 20;
-    add.s32 %r13, %r11, %r12;
-    mov.u32 %r14, %r13;
-    mov.u32 %r15, 30;
-    mov.u32 %r16, 40;
-    mul.lo.s32 %r17, %r15, %r16;
-    mov.u32 %r18, %r17;
+    mov.u32 %r39, 10;
+    mov.u32 %r40, 20;
+    add.s32 %r41, %r39, %r40;
+    mov.u32 %r42, %r41;
+    mov.u32 %r43, 30;
+    mov.u32 %r44, 40;
+    mul.lo.s32 %r45, %r43, %r44;
+    mov.u32 %r46, %r45;
     bar.sync 0;
 }

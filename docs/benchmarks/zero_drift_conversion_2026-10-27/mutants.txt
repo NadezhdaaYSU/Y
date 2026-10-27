@@ -1,0 +1,16 @@
+M1 exponent bias off by one: KILLED by zero_drift_f32_conversion: every_term_rounds_to_the_documented_value, opposite_orders_agree_where_f32_does_not, programs_stop_in_the_same_cases | zero_drift_runtime_checks: the_gpu_traps_where_the_host_stops
+M2 term limit 2^L -> 2^(L+1): KILLED by zero_drift_f32_conversion: the_conversion_uses_no_double_and_the_overflow_test_only_where_needed, programs_stop_in_the_same_cases
+M3 rounding bias 2^k not 2^(k-1): KILLED by zero_drift_f32_conversion: every_term_rounds_to_the_documented_value, opposite_orders_agree_where_f32_does_not, programs_stop_in_the_same_cases
+M4 shift arms swapped: KILLED by zero_drift_f32_conversion: opposite_orders_agree_where_f32_does_not, every_term_rounds_to_the_documented_value, programs_stop_in_the_same_cases | zero_drift_runtime_checks: the_gpu_traps_where_the_host_stops
+M5 sign test inverted: KILLED by zero_drift_f32_conversion: every_term_rounds_to_the_documented_value, opposite_orders_agree_where_f32_does_not, programs_stop_in_the_same_cases | zero_drift_runtime_checks: the_gpu_traps_where_the_host_stops
+M6 hidden bit dropped: KILLED by zero_drift_f32_conversion: every_term_rounds_to_the_documented_value, opposite_orders_agree_where_f32_does_not, programs_stop_in_the_same_cases | zero_drift_runtime_checks: the_gpu_traps_where_the_host_stops
+M7 k clamped at 32 (expected equivalent): SURVIVED
+M8 elide below 2^63: KILLED by zero_drift_f32_conversion: the_conversion_uses_no_double_and_the_overflow_test_only_where_needed, programs_stop_in_the_same_cases
+M9 never elide: KILLED by zero_drift_f32_conversion: the_conversion_uses_no_double_and_the_overflow_test_only_where_needed
+M10 range >= instead of >: KILLED by zero_drift_f32_conversion: the_conversion_uses_no_double_and_the_overflow_test_only_where_needed, programs_stop_in_the_same_cases
+M11 range from hi not lo: KILLED by zero_drift_f32_conversion: every_term_rounds_to_the_documented_value, opposite_orders_agree_where_f32_does_not, programs_stop_in_the_same_cases | zero_drift_runtime_checks: the_gpu_traps_where_the_host_stops
+M12 elided -= adds: KILLED by zero_drift_f32_conversion: programs_stop_in_the_same_cases
+M13 f32 path never taken: KILLED by zero_drift_f32_conversion: the_conversion_uses_no_double_and_the_overflow_test_only_where_needed
+M14 read-back scale inverted: KILLED by zero_drift_f32_conversion: every_term_rounds_to_the_documented_value, opposite_orders_agree_where_f32_does_not, programs_stop_in_the_same_cases | zero_drift_runtime_checks: the_gpu_traps_where_the_host_stops
+M15 Kahan probe without feedback: KILLED by zero_drift: zero_drift::tests::the_kahan_probe_compensates
+restored tree, zero_drift_f32_conversion: pass

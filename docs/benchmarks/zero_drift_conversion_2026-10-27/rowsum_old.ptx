@@ -1,0 +1,163 @@
+.version 7.8
+.target sm_89
+.address_size 64
+
+.visible .entry rowsum_f32(
+    .param .u64 ZT_0,
+    .param .u64 PERM_1,
+    .param .u64 OUT_2,
+    .param .b32 R_3,
+    .param .b32 N_4
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 39
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 64 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 66.67% (4 active blocks per SM)
+.maxnreg 64
+{
+    .reg .b32 %r<12>;
+    .reg .f32 %f<3>;
+    .reg .b64 %rd<12>;
+    .reg .pred %p<3>;
+
+    ld.param.u64 %rd0, [ZT_0];
+    ld.param.u64 %rd1, [PERM_1];
+    ld.param.u64 %rd2, [OUT_2];
+    ld.param.u32 %r0, [R_3];
+    ld.param.u32 %r1, [N_4];
+    mov.u32 %r2, %tid.x;
+    mov.u32 %r3, %ntid.x;
+    mov.u32 %r4, %ctaid.x;
+    mad.lo.s32 %r5, %r4, %r3, %r2;
+    setp.lt.s32 %p0, %r5, %r0;
+    selp.u32 %r6, 1, 0, %p0;
+    // [HEURISTIC] Branch Divergence Penalty is 4.53 cycles.
+    // if: emitting BRANCH execution (block cost 3 cy).
+    setp.eq.u32 %p1, %r6, 0;
+    @%p1 bra $IF_END_1;
+    mov.f32 %f0, 0.0;
+    // for j in ...
+    mov.u32 %r7, 0;
+    mov.u32 %r8, %r1;
+    $LOOP_START_2:
+    setp.ge.s32 %p2, %r7, %r8;
+    @%p2 bra $LOOP_END_3;
+    cvt.u64.u32 %rd3, %r7;
+    shl.b64 %rd4, %rd3, 2;
+    add.u64 %rd5, %rd1, %rd4;
+    ld.global.ca.u32 %r9, [%rd5];
+    mul.lo.s32 %r10, %r9, %r0;
+    add.s32 %r11, %r10, %r5;
+    cvt.u64.u32 %rd6, %r11;
+    shl.b64 %rd7, %rd6, 2;
+    add.u64 %rd8, %rd0, %rd7;
+    ld.global.ca.f32 %f1, [%rd8];
+    add.f32 %f2, %f0, %f1;
+    mov.f32 %f0, %f2;
+    add.u32 %r7, %r7, 1;
+    bra $LOOP_START_2;
+    $LOOP_END_3:
+    cvt.u64.u32 %rd9, %r5;
+    shl.b64 %rd10, %rd9, 2;
+    add.u64 %rd11, %rd2, %rd10;
+    st.global.f32 [%rd11], %f0;
+    $IF_END_1:
+}
+.visible .entry rowsum_zd(
+    .param .u64 ZT_0,
+    .param .u64 PERM_1,
+    .param .u64 OUT_2,
+    .param .b32 R_3,
+    .param .b32 N_4
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 53
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 64 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 66.67% (4 active blocks per SM)
+.maxnreg 64
+{
+    .reg .b32 %r<12>;
+    .reg .f32 %f<3>;
+    .reg .b64 %rd<19>;
+    .reg .pred %p<14>;
+    .reg .f64 %fd<10>;
+
+    ld.param.u64 %rd0, [ZT_0];
+    ld.param.u64 %rd1, [PERM_1];
+    ld.param.u64 %rd2, [OUT_2];
+    ld.param.u32 %r0, [R_3];
+    ld.param.u32 %r1, [N_4];
+    mov.u32 %r2, %tid.x;
+    mov.u32 %r3, %ntid.x;
+    mov.u32 %r4, %ctaid.x;
+    mad.lo.s32 %r5, %r4, %r3, %r2;
+    setp.lt.s32 %p0, %r5, %r0;
+    selp.u32 %r6, 1, 0, %p0;
+    // [HEURISTIC] Branch Divergence Penalty is 4.53 cycles.
+    // if: emitting BRANCH execution (block cost 3 cy).
+    setp.eq.u32 %p1, %r6, 0;
+    @%p1 bra $IF_END_1;
+    // [Y ZERO DRIFT] acc: F32 accumulated exactly as Q32.32
+    mov.f32 %f0, 0.0;
+    cvt.f64.f32 %fd0, %f0;
+    mul.f64 %fd1, %fd0, 0d41F0000000000000;
+    setp.lt.f64 %p2, %fd1, 0d0000000000000000;
+    selp.f64 %fd2, 0dBFE0000000000000, 0d3FE0000000000000, %p2;
+    add.f64 %fd3, %fd1, %fd2;
+    setp.geu.f64 %p3, %fd3, 0d43E0000000000000;
+    @%p3 trap;
+    setp.ltu.f64 %p4, %fd3, 0dC3E0000000000000;
+    @%p4 trap;
+    cvt.rzi.s64.f64 %rd4, %fd3;
+    mov.s64 %rd3, %rd4;
+    setp.lt.s64 %p5, %rd3, -42949672960000;
+    @%p5 trap;
+    setp.gt.s64 %p6, %rd3, 42949672960000;
+    @%p6 trap;
+    // for j in ...
+    mov.u32 %r7, 0;
+    mov.u32 %r8, %r1;
+    $LOOP_START_2:
+    setp.ge.s32 %p7, %r7, %r8;
+    @%p7 bra $LOOP_END_3;
+    cvt.u64.u32 %rd5, %r7;
+    shl.b64 %rd6, %rd5, 2;
+    add.u64 %rd7, %rd1, %rd6;
+    ld.global.ca.u32 %r9, [%rd7];
+    mul.lo.s32 %r10, %r9, %r0;
+    add.s32 %r11, %r10, %r5;
+    cvt.u64.u32 %rd8, %r11;
+    shl.b64 %rd9, %rd8, 2;
+    add.u64 %rd10, %rd0, %rd9;
+    ld.global.ca.f32 %f1, [%rd10];
+    cvt.f64.f32 %fd4, %f1;
+    mul.f64 %fd5, %fd4, 0d41F0000000000000;
+    setp.lt.f64 %p8, %fd5, 0d0000000000000000;
+    selp.f64 %fd6, 0dBFE0000000000000, 0d3FE0000000000000, %p8;
+    add.f64 %fd7, %fd5, %fd6;
+    setp.geu.f64 %p9, %fd7, 0d43E0000000000000;
+    @%p9 trap;
+    setp.ltu.f64 %p10, %fd7, 0dC3E0000000000000;
+    @%p10 trap;
+    cvt.rzi.s64.f64 %rd11, %fd7;
+    add.s64 %rd12, %rd3, %rd11;
+    xor.b64 %rd13, %rd11, %rd12;
+    xor.b64 %rd14, %rd3, %rd12;
+    and.b64 %rd15, %rd13, %rd14;
+    setp.lt.s64 %p11, %rd15, 0;
+    @%p11 trap;
+    mov.s64 %rd3, %rd12;
+    setp.lt.s64 %p12, %rd3, -42949672960000;
+    @%p12 trap;
+    setp.gt.s64 %p13, %rd3, 42949672960000;
+    @%p13 trap;
+    add.u32 %r7, %r7, 1;
+    bra $LOOP_START_2;
+    $LOOP_END_3:
+    cvt.rn.f64.s64 %fd8, %rd3;
+    div.rn.f64 %fd9, %fd8, 0d41F0000000000000;
+    cvt.rn.f32.f64 %f2, %fd9;
+    cvt.u64.u32 %rd16, %r5;
+    shl.b64 %rd17, %rd16, 2;
+    add.u64 %rd18, %rd2, %rd17;
+    st.global.f32 [%rd18], %f2;
+    $IF_END_1:
+}

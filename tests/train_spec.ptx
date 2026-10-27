@@ -6,66 +6,93 @@
     .param .u64 weights_0,
     .param .b32 size_1
 )
-    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 22
-    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 32 (to maximize SM occupancy)
-    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 100.00% (6 active blocks per SM)
-.maxnreg 32
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 66
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 128 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 33.33% (2 active blocks per SM)
+.maxnreg 128
 {
-    .reg .b32 %r<4>;
+    .reg .b32 %r<32>;
     .reg .f32 %f<2>;
-    .reg .b64 %rd<8>;
-    .reg .pred %p<12>;
-    .reg .f64 %fd<8>;
+    .reg .b64 %rd<16>;
+    .reg .pred %p<11>;
 
     ld.param.u64 %rd0, [weights_0];
     ld.param.u32 %r0, [size_1];
     ld.global.ca.f32 %f0, [%rd0];
     // [Y ZERO DRIFT] acc: F32 accumulated exactly as Q32.32
     mov.f32 %f1, 0.0;
-    cvt.f64.f32 %fd0, %f1;
-    mul.f64 %fd1, %fd0, 0d41F0000000000000;
-    setp.lt.f64 %p0, %fd1, 0d0000000000000000;
-    selp.f64 %fd2, 0dBFE0000000000000, 0d3FE0000000000000, %p0;
-    add.f64 %fd3, %fd1, %fd2;
-    setp.geu.f64 %p1, %fd3, 0d43E0000000000000;
+    mov.b32 %r1, %f1;
+    shr.u32 %r2, %r1, 23;
+    and.b32 %r2, %r2, 255;
+    and.b32 %r3, %r1, 8388607;
+    or.b32 %r4, %r3, 8388608;
+    setp.ne.u32 %p0, %r2, 0;
+    selp.u32 %r5, %r4, %r3, %p0;
+    max.u32 %r6, %r2, 1;
+    add.s32 %r7, %r6, -118;
+    setp.gt.s32 %p1, %r7, 39;
     @%p1 trap;
-    setp.ltu.f64 %p2, %fd3, 0dC3E0000000000000;
-    @%p2 trap;
-    cvt.rzi.s64.f64 %rd2, %fd3;
-    mov.s64 %rd1, %rd2;
-    setp.lt.s64 %p3, %rd1, -4503599627370496;
-    @%p3 trap;
-    setp.gt.s64 %p4, %rd1, 4503599627370496;
+    max.s32 %r8, %r7, 0;
+    cvt.u64.u32 %rd2, %r5;
+    shl.b64 %rd3, %rd2, %r8;
+    neg.s32 %r9, %r7;
+    min.s32 %r9, %r9, 31;
+    max.s32 %r9, %r9, 1;
+    sub.s32 %r10, %r9, 1;
+    mov.u32 %r11, 1;
+    shl.b32 %r12, %r11, %r10;
+    add.u32 %r13, %r5, %r12;
+    shr.u32 %r14, %r13, %r9;
+    cvt.u64.u32 %rd4, %r14;
+    setp.lt.s32 %p2, %r7, 0;
+    selp.b64 %rd5, %rd4, %rd3, %p2;
+    setp.lt.s32 %p3, %r1, 0;
+    neg.s64 %rd6, %rd5;
+    selp.b64 %rd7, %rd6, %rd5, %p3;
+    mov.s64 %rd1, %rd7;
+    sub.u64 %rd8, %rd1, -4503599627370496;
+    setp.gt.u64 %p4, %rd8, 9007199254740992;
     @%p4 trap;
     // for i in ...
-    mov.u32 %r1, 0;
-    mov.u32 %r2, 1024;
+    mov.u32 %r15, 0;
+    mov.u32 %r16, 1024;
     $LOOP_START_0:
-    setp.ge.s32 %p5, %r1, %r2;
+    setp.ge.s32 %p5, %r15, %r16;
     @%p5 bra $LOOP_END_1;
-    mov.u32 %r3, %r1;   // own register: `%r1` is another binding's
-    cvt.f64.f32 %fd4, %f0;
-    mul.f64 %fd5, %fd4, 0d41F0000000000000;
-    setp.lt.f64 %p6, %fd5, 0d0000000000000000;
-    selp.f64 %fd6, 0dBFE0000000000000, 0d3FE0000000000000, %p6;
-    add.f64 %fd7, %fd5, %fd6;
-    setp.geu.f64 %p7, %fd7, 0d43E0000000000000;
+    mov.u32 %r17, %r15;   // own register: `%r15` is another binding's
+    mov.b32 %r18, %f0;
+    shr.u32 %r19, %r18, 23;
+    and.b32 %r19, %r19, 255;
+    and.b32 %r20, %r18, 8388607;
+    or.b32 %r21, %r20, 8388608;
+    setp.ne.u32 %p6, %r19, 0;
+    selp.u32 %r22, %r21, %r20, %p6;
+    max.u32 %r23, %r19, 1;
+    add.s32 %r24, %r23, -118;
+    setp.gt.s32 %p7, %r24, 38;
     @%p7 trap;
-    setp.ltu.f64 %p8, %fd7, 0dC3E0000000000000;
-    @%p8 trap;
-    cvt.rzi.s64.f64 %rd3, %fd7;
-    add.s64 %rd4, %rd1, %rd3;
-    xor.b64 %rd5, %rd3, %rd4;
-    xor.b64 %rd6, %rd1, %rd4;
-    and.b64 %rd7, %rd5, %rd6;
-    setp.lt.s64 %p9, %rd7, 0;
-    @%p9 trap;
-    mov.s64 %rd1, %rd4;
-    setp.lt.s64 %p10, %rd1, -4503599627370496;
+    max.s32 %r25, %r24, 0;
+    cvt.u64.u32 %rd9, %r22;
+    shl.b64 %rd10, %rd9, %r25;
+    neg.s32 %r26, %r24;
+    min.s32 %r26, %r26, 31;
+    max.s32 %r26, %r26, 1;
+    sub.s32 %r27, %r26, 1;
+    mov.u32 %r28, 1;
+    shl.b32 %r29, %r28, %r27;
+    add.u32 %r30, %r22, %r29;
+    shr.u32 %r31, %r30, %r26;
+    cvt.u64.u32 %rd11, %r31;
+    setp.lt.s32 %p8, %r24, 0;
+    selp.b64 %rd12, %rd11, %rd10, %p8;
+    setp.lt.s32 %p9, %r18, 0;
+    neg.s64 %rd13, %rd12;
+    selp.b64 %rd14, %rd13, %rd12, %p9;
+    add.s64 %rd1, %rd1, %rd14;
+    sub.u64 %rd15, %rd1, -4503599627370496;
+    setp.gt.u64 %p10, %rd15, 9007199254740992;
     @%p10 trap;
-    setp.gt.s64 %p11, %rd1, 4503599627370496;
-    @%p11 trap;
-    add.u32 %r1, %r1, 1;
+    add.u32 %r15, %r15, 1;
     bra $LOOP_START_0;
     $LOOP_END_1:
 }

@@ -170,8 +170,10 @@ fn ptx_directives_are_local_to_each_kernel() {
 
 #[test]
 fn ptx_double_registers_start_fresh_in_each_kernel() {
-    // The fixed-point conversion path allocates actual double scratch
-    // registers, without an F64 value anywhere in the source.
+    // The fixed-point READ-BACK allocates actual double scratch registers,
+    // without an F64 value anywhere in the source. (This read the term's
+    // conversion until 2026-10-27, when an f32 term stopped going through f64;
+    // the read-back still converts the s64 total through one.)
     // With no branch in this fixture, label numbering cannot mask that check.
     let body = "(out: GlobalMemory<F32>, x: F32) { @bounds(min=0, max=1000) @ZeroDrift let mut acc: F32 = 0.0; acc += x; store(out[0], acc); }";
     let ordinary = format!("kernel ordinary{body}");
@@ -183,8 +185,8 @@ fn ptx_double_registers_start_fresh_in_each_kernel() {
         "fixture must allocate actual double scratch registers:\n{standalone_definition}"
     );
     assert!(
-        standalone_definition.contains("cvt.f64.f32 %fd0,"),
-        "the first conversion must start at double register zero:\n{standalone_definition}"
+        standalone_definition.contains("cvt.rn.f64.s64 %fd0,"),
+        "the first double register must be number zero:\n{standalone_definition}"
     );
     assert!(
         !standalone_definition.contains("bra "),

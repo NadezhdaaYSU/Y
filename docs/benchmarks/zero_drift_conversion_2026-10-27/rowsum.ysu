@@ -1,0 +1,32 @@
+// A row sum, one thread per row, over a gene-major matrix ZT[g * R + r], adding the
+// columns in the order PERM gives: plain f32 and @ZeroDrift.
+kernel rowsum_f32(ZT: GlobalMemory<F32>, PERM: GlobalMemory<I32>, OUT: GlobalMemory<F32>, R: I32, N: I32) {
+    let r: I32 = global_thread_id();
+    if r < R {
+        let mut acc: F32 = 0.0;
+        @invariant(j >= 0)
+        for j in 0..N step 1 {
+            let g: I32 = PERM[j];
+            acc = acc + ZT[g * R + r];
+        }
+        OUT[r] = acc;
+    }
+}
+
+kernel rowsum_zd(ZT: GlobalMemory<F32>, PERM: GlobalMemory<I32>, OUT: GlobalMemory<F32>, R: I32, N: I32) {
+    let r: I32 = global_thread_id();
+    if r < R {
+        @ZeroDrift
+        @bounds(min=-10000.0, max=10000.0)
+        let mut acc: F32 = 0.0;
+        @invariant(j >= 0)
+        for j in 0..N step 1 {
+            let g: I32 = PERM[j];
+            acc += ZT[g * R + r];
+        }
+        OUT[r] = acc;
+    }
+}
+
+fn main() {
+}

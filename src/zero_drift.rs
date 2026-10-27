@@ -490,10 +490,12 @@ pub fn select_repr(
 //
 // See `docs/deterministic_inference.md`, milestone M0, and
 // `docs/proof_carrying_kernels.md`'s Phase 0 measurement, which is what makes
-// this scheme worth licensing at all: exact `vpdpwssd` + int64 flush measured
-// 314.5 G MAC/s against f32 FMA's 166.9, i.e. **1.88x faster than float**,
-// verified exact against a scalar reference. Exactness here costs range, not
-// speed.
+// this scheme worth licensing at all: exact `vpdpwssd` + int64 flush runs
+// 1.10-1.15x f32 FMA, verified exact against a scalar reference. Exactness
+// here costs range, not speed. (This comment said 314.5 G MAC/s and "1.88x
+// faster than float" after that document had corrected it on 2026-08-17: the
+// flush block sat inside the k-loop and spilled the accumulators, and the
+// re-measured kernel ran 146.3 against f32's 172.7 until the flush was hoisted.)
 
 /// The exact `vpdpwssd` accumulation scheme: int16 operands, products
 /// accumulated in int32, flushed into an int64 accumulator every
@@ -773,13 +775,33 @@ pub fn accumulate_probe_ptx(repr: DriftRepr, iters: u32) -> String {
     // kernels cannot differ, so the difference was noise around a chain that
     // had been optimised to nothing. The seed is therefore loaded from device
     // memory, which the compiler cannot see through.
+    //
+    // `KahanF32` runs a COMPENSATED add per accumulate: y = x - c; t = s + y;
+    // c = (t - s) - y; s = t, with its own compensation register for each
+    // direction. It used to run the plain `add.f32` chain under that name, so
+    // the "Kahan" row of the cost table was the cost of an uncompensated f32
+    // add, a quarter of what compensation costs on a dependent chain.
+    let kahan = repr == DriftRepr::KahanF32;
     for i in 0..iters {
-        if i % 2 == 0 {
-            body.push_str(&format!("    {} {}, {}, {};\n", add, acc, acc, step));
+        let (dst, src) = if i % 2 == 0 { (&acc, &step) } else { (&step, &acc) };
+        if kahan {
+            let c = if i % 2 == 0 { "%f2" } else { "%f3" };
+            body.push_str(&format!("    sub.f32 %f4, {src}, {c};\n"));
+            body.push_str(&format!("    add.f32 %f5, {dst}, %f4;\n"));
+            body.push_str(&format!("    sub.f32 %f6, %f5, {dst};\n"));
+            body.push_str(&format!("    sub.f32 {c}, %f6, %f4;\n"));
+            body.push_str(&format!("    mov.f32 {dst}, %f5;\n"));
         } else {
-            body.push_str(&format!("    {} {}, {}, {};\n", add, step, step, acc));
+            body.push_str(&format!("    {} {}, {}, {};\n", add, dst, dst, src));
         }
     }
+    // The compensation registers start at zero; plain chains need no others.
+    let extra = if kahan {
+        "    .reg .f32 %f2;\n    .reg .f32 %f3;\n    .reg .f32 %f4;\n    .reg .f32 %f5;\n    .reg .f32 %f6;\n\
+         \x20   mov.f32 %f2, 0f00000000;\n    mov.f32 %f3, 0f00000000;\n"
+    } else {
+        ""
+    };
 
     // Loads the seed from [out] and stores the result to [out+8], so the seed
     // stays fixed across launches instead of drifting to infinity.
@@ -796,7 +818,7 @@ pub fn accumulate_probe_ptx(repr: DriftRepr, iters: u32) -> String {
          \x20   ld.param.u64 %out, [out];\n\
          \x20   {load} {step}, [%out];\n\
          \x20   mov.{ty} {acc}, {step};\n\
-{body}\
+{extra}{body}\
          \x20   add.u64 %dst, %out, 8;\n\
          \x20   {store} [%dst], {acc};\n\
          \x20   ret;\n}}\n",
@@ -805,6 +827,7 @@ pub fn accumulate_probe_ptx(repr: DriftRepr, iters: u32) -> String {
         step = step,
         load = load,
         body = body,
+        extra = extra,
         store = store
     )
 }
@@ -1201,6 +1224,20 @@ mod tests {
         assert!(ptx.contains("add.u64 %dst, %out, 8"), "result must not clobber the seed");
     }
 
+    /// The probe named Kahan must compensate. It was the plain `add.f32`
+    /// chain, so the table's "KahanF32" row timed an uncompensated add.
+    #[test]
+    fn the_kahan_probe_compensates() {
+        let ptx = accumulate_probe_ptx(DriftRepr::KahanF32, 6);
+        assert_eq!(ptx.matches("add.f32").count(), 6, "one compensated add per accumulate");
+        assert_eq!(ptx.matches("sub.f32").count(), 18, "y = x - c, (t - s), and c = (t - s) - y");
+        assert!(ptx.contains("sub.f32 %f2, %f6, %f4"), "the compensation feeds back: c = (t - s) - y");
+        assert!(ptx.contains("sub.f32 %f4, %f1, %f2"), "and is subtracted from the next term");
+        assert!(ptx.contains("mov.f32 %f2, 0f00000000"), "compensation starts at zero");
+        // The exact representations are untouched by it.
+        assert_eq!(accumulate_probe_ptx(DriftRepr::FixedQ32_32, 6).matches("sub.").count(), 0);
+    }
+
     #[test]
     fn probe_ptx_has_the_requested_chain_length() {
         let ptx = accumulate_probe_ptx(DriftRepr::FixedQ32_32, 16);
@@ -1371,7 +1408,7 @@ mod tests {
         let v = VnniExact::new(64).expect("the probe's FLUSH_T");
         assert!(
             v.license(1024.0).is_ok(),
-            "the configuration measured at 1.88x must be licensed by its own checker"
+            "the configuration measured on hardware must be licensed by its own checker"
         );
     }
 }
