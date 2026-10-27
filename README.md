@@ -2068,16 +2068,28 @@ drifts — so it is never selected, however fast it measures.
 serially dependent accumulate chain per candidate on the GPU actually present:
 
 ```
-      ->  KahanF32:      1455 ps/acc  not exact (never selected)
-      ->    Q16.16:      1790 ps/acc  exact
-      ->    Q32.32:      1922 ps/acc  exact
-      ->       I64:      2106 ps/acc  exact
-      ->       F64:     17726 ps/acc  not exact (never selected)
-      -> @ZeroDrift acc: F32 -> Q32.32 (measured 1922 ps/acc)
+      ->    Q16.16:      1814 ps/acc  exact
+      ->    Q32.32:      2141 ps/acc  exact
+      ->       I64:      2155 ps/acc  exact
+      ->  KahanF32:      6793 ps/acc  not exact (never selected)
+      ->       F64:     17537 ps/acc  not exact (never selected)
+      -> @ZeroDrift acc: F32 -> Q32.32 (measured 2141 ps/acc)
 ```
 
-Exact fixed-point is ~9x cheaper here than reaching for higher precision, and the
-GeForce FP64 penalty lands exactly where it should.
+Exact fixed-point is ~8x cheaper here than reaching for higher precision, and the
+GeForce FP64 penalty lands exactly where it should. Until 2026-10-27 the
+`KahanF32` row timed a plain `add.f32` chain (about 1440 ps): the probe now
+compensates, at about three fixed-point adds.
+
+**The probe times the accumulate, not the conversion of each term, and the
+conversion was the real cost.** It went through f64: five f64 instructions per
+term on a card that runs f64 at 1/64 rate, so a `@ZeroDrift` row sum took
+3.72x a plain f32 one, more than an f64 accumulator. The term is now converted
+with integer arithmetic on its bits, the same value bit for bit, and with
+narrow bounds the accumulate's overflow test, which can then never fire, is
+gone. The sum now takes 1.30x the f32 sum where memory bandwidth limits it. It
+takes 3.71x (was 7.27x) where only a few threads hide latency
+(`docs/benchmarks/zero_drift_conversion_2026-10-27/`).
 
 `tests/zero_drift_end_to_end.rs` compiles a program with clang and **runs it**,
 summing the same 4001 terms in opposite orders and requiring bit-identical

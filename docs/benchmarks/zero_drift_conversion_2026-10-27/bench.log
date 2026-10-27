@@ -1,0 +1,19 @@
+gpu: NVIDIA GeForce RTX 4070 Ti SUPER
+torch: 2.13.0+cu130
+sass_rowsum_zd_old: {'instructions': 176, 'fp64': 31}
+sass_rowsum_zd_new: {'instructions': 80, 'fp64': 3}
+rows: 46226
+orders: 10
+zd_new_equals_zd_old: 462260
+zd_new_equals_semantics: 462260
+rows_depending_on_order: {'f32': 46226, 'zd old': 0, 'zd new': 0}
+sums_compared: 462260
+state_before: {'games': '', 'nvidia_smi': '2 %, 2700 MHz'}
+state_after: {'games': '', 'nvidia_smi': '100 %, 2775 MHz'}
+46,226 rows (bandwidth-bound)    f32     min    304.3 us  median    324.6 us  x1.00 of f32
+46,226 rows (bandwidth-bound)    zd old  min   1131.7 us  median   1133.0 us  x3.72 of f32
+46,226 rows (bandwidth-bound)    zd new  min    395.7 us  median    416.4 us  x1.30 of f32
+4,096 rows (latency-bound)       f32     min     52.1 us  median     52.2 us  x1.00 of f32
+4,096 rows (latency-bound)       zd old  min    378.8 us  median    378.9 us  x7.27 of f32
+4,096 rows (latency-bound)       zd new  min    193.6 us  median    193.8 us  x3.71 of f32
+games after: []

@@ -259,7 +259,9 @@ fn the_drift_probe_loads_on_every_supported_card() {
     };
     use y::zero_drift::DriftRepr::*;
     let mut bad = Vec::new();
-    for repr in [FixedQ16_16, FixedQ32_32, Int64, Float64] {
+    // All five: `measure_accumulate_costs` loads every one, the Kahan chain
+    // included, and that one was missing here.
+    for repr in [FixedQ16_16, FixedQ32_32, Int64, Float64, KahanF32] {
         let ptx = y::zero_drift::accumulate_probe_ptx(repr, 8);
         let tag = format!("drift_{:?}", repr);
         if declared_target(&ptx).as_deref() != Some(FLOOR) {

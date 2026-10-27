@@ -1743,13 +1743,22 @@ impl PtxEmitter {
     /// register. An f32 term into an F32 accumulator keeps its exact
     /// instruction: that literal is an F32 in the type checker's eyes, so
     /// widening its f32 rounding is the declared meaning, not a precision loss.
+    ///
+    /// `limit_log2` is where a converted term traps: at 2^63 (it does not fit
+    /// an s64), or at 2^62 when the caller elides the accumulate's overflow
+    /// test (`drift_overflow_ruled_out`). Only the f32 path below honours 62;
+    /// the caller asks for it only on that path.
     fn emit_drift_to_fixed(
         &mut self,
         src: &str,
         repr: crate::zero_drift::DriftRepr,
         integer_domain: bool,
         value_ty: ScalarTy,
+        limit_log2: u32,
     ) -> String {
+        if self.drift_term_is_f32(src, repr, integer_domain, value_ty) {
+            return self.emit_drift_f32_to_fixed(src, repr.frac_bits(), limit_log2);
+        }
         if integer_domain {
             // A U64 term at or above 2^63 would be read as a negative I64.
             // Only a register known to hold a U64: an unrecorded `%rd` reads
@@ -1812,6 +1821,131 @@ impl PtxEmitter {
         out
     }
 
+    /// Whether a term takes the integer f32 path of `emit_drift_f32_to_fixed`:
+    /// an `f32` register going into a fixed-point accumulator declared F32 (or
+    /// F16). The one predicate both the conversion and the overflow-elision
+    /// decision read, so the two cannot disagree about which path ran.
+    fn drift_term_is_f32(
+        &self,
+        src: &str,
+        repr: crate::zero_drift::DriftRepr,
+        integer_domain: bool,
+        value_ty: ScalarTy,
+    ) -> bool {
+        !integer_domain && value_ty != ScalarTy::F64 && repr.frac_bits() > 0 && self.ty_of(src) == ScalarTy::F32
+    }
+
+    /// An `f32` term into a fixed-point accumulator, in integer arithmetic only.
+    ///
+    /// **Why not through `f64`.** This used to widen the term to f64, scale,
+    /// add ±0.5 and truncate: five f64 instructions per term. GeForce cards run
+    /// f64 at 1/64 of the f32 rate, so on an RTX 4070 Ti SUPER a `@ZeroDrift`
+    /// row sum cost several times a plain f32 one, more than an f64
+    /// accumulator does. Removing the f64 removed most of it; the cost was the
+    /// conversion, not the exactness. Before and after, measured, in
+    /// `docs/benchmarks/zero_drift_conversion_2026-10-27/`.
+    ///
+    /// **The arithmetic.** An f32 is `m * 2^(e - 150)` with `m` its 24-bit
+    /// significand (the hidden bit included for a normal number; a subnormal
+    /// has e = 1 and no hidden bit), so the scaled term is `y = m * 2^s` with
+    /// `s = e - 150 + frac_bits`:
+    /// - `s >= 0`: `y` is the integer `m << s`, exact;
+    /// - `s < 0`: `round_half_away(m * 2^-k)` with `k = -s` is
+    ///   `(m + 2^(k-1)) >> k` on the magnitude. `k` is clamped to 31, where
+    ///   that already gives 0 (`m + 2^30 < 2^31`), as it must for any
+    ///   `y < 2^-1`;
+    /// - then the sign bit negates it.
+    ///
+    /// That is the same value the f64 sequence produced, rounding half away
+    /// from zero like the LLVM backend, so CPU and GPU still agree bit for bit.
+    /// No float instruction is involved, so `fpgate` has nothing to model.
+    ///
+    /// **Traps.** `|y| >= 2^limit_log2` traps: a normal number has
+    /// `2^23 <= m < 2^24`, so that is exactly `s > limit_log2 - 24`, and a
+    /// subnormal never gets near it. NaN and infinity trap through the same
+    /// test, as the f64 path's unordered compares made them: their exponent
+    /// field is 255, so `s >= 105 + frac_bits`, far above any limit.
+    fn emit_drift_f32_to_fixed(&mut self, src: &str, frac_bits: u32, limit_log2: u32) -> String {
+        let b = self.alloc_reg32();
+        let e = self.alloc_reg32();
+        let mant = self.alloc_reg32();
+        let hid = self.alloc_reg32();
+        let m = self.alloc_reg32();
+        let e1 = self.alloc_reg32();
+        let s = self.alloc_reg32();
+        let (normal, big, neg_s, neg) = (self.alloc_pred(), self.alloc_pred(), self.alloc_pred(), self.alloc_pred());
+        let w = &mut self.ptx_buffer;
+        writeln!(w, "    mov.b32 {b}, {src};").unwrap();
+        writeln!(w, "    shr.u32 {e}, {b}, 23;").unwrap();
+        writeln!(w, "    and.b32 {e}, {e}, 255;").unwrap();
+        writeln!(w, "    and.b32 {mant}, {b}, 8388607;").unwrap();
+        writeln!(w, "    or.b32 {hid}, {mant}, 8388608;").unwrap();
+        writeln!(w, "    setp.ne.u32 {normal}, {e}, 0;").unwrap();
+        writeln!(w, "    selp.u32 {m}, {hid}, {mant}, {normal};").unwrap();
+        writeln!(w, "    max.u32 {e1}, {e}, 1;").unwrap();
+        writeln!(w, "    add.s32 {s}, {e1}, {};", frac_bits as i32 - 150).unwrap();
+        writeln!(w, "    setp.gt.s32 {big}, {s}, {};", limit_log2 as i32 - 24).unwrap();
+        writeln!(w, "    @{big} trap;").unwrap();
+        // s >= 0: m << s (the shift is clamped at 0 for the arm not taken).
+        let (s0, m64, left) = (self.alloc_reg32(), self.alloc_reg64(), self.alloc_reg64());
+        // s < 0: (m + 2^(k-1)) >> k, k = clamp(-s, 1, 31).
+        let (k, k1, one, half, sum, q32, right) = (
+            self.alloc_reg32(),
+            self.alloc_reg32(),
+            self.alloc_reg32(),
+            self.alloc_reg32(),
+            self.alloc_reg32(),
+            self.alloc_reg32(),
+            self.alloc_reg64(),
+        );
+        let (mag, negd, out) = (self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64());
+        let w = &mut self.ptx_buffer;
+        writeln!(w, "    max.s32 {s0}, {s}, 0;").unwrap();
+        writeln!(w, "    cvt.u64.u32 {m64}, {m};").unwrap();
+        writeln!(w, "    shl.b64 {left}, {m64}, {s0};").unwrap();
+        writeln!(w, "    neg.s32 {k}, {s};").unwrap();
+        writeln!(w, "    min.s32 {k}, {k}, 31;").unwrap();
+        writeln!(w, "    max.s32 {k}, {k}, 1;").unwrap();
+        writeln!(w, "    sub.s32 {k1}, {k}, 1;").unwrap();
+        writeln!(w, "    mov.u32 {one}, 1;").unwrap();
+        writeln!(w, "    shl.b32 {half}, {one}, {k1};").unwrap();
+        writeln!(w, "    add.u32 {sum}, {m}, {half};").unwrap();
+        writeln!(w, "    shr.u32 {q32}, {sum}, {k};").unwrap();
+        writeln!(w, "    cvt.u64.u32 {right}, {q32};").unwrap();
+        writeln!(w, "    setp.lt.s32 {neg_s}, {s}, 0;").unwrap();
+        writeln!(w, "    selp.b64 {mag}, {right}, {left}, {neg_s};").unwrap();
+        writeln!(w, "    setp.lt.s32 {neg}, {b}, 0;").unwrap();
+        writeln!(w, "    neg.s64 {negd}, {mag};").unwrap();
+        writeln!(w, "    selp.b64 {out}, {negd}, {mag}, {neg};").unwrap();
+        out
+    }
+
+    /// Whether an accumulate may skip its overflow test, with its term
+    /// trapping at 2^62 instead of 2^63.
+    ///
+    /// The declared range is tested after every store (`emit_drift_range_check`),
+    /// the initial one included, so `|acc| <= B` holds before each accumulate.
+    /// With `B < 2^61` and an untrapped term `|q| < 2^62`, `|acc ± q| < 2^63`:
+    /// the overflow test can never fire. And a term the tighter test traps,
+    /// `|q| >= 2^62`, would have stopped the program anyway: the old code
+    /// either trapped on the term (`>= 2^63`), on the overflow, or on the range,
+    /// since `|acc ± q| >= 2^62 - 2^61 > B`. So a program stops in exactly
+    /// the cases it stopped before, and otherwise computes the same bits.
+    ///
+    /// Only for the f32 path, the one conversion that takes `limit_log2`.
+    fn drift_overflow_ruled_out(
+        &self,
+        name: &str,
+        src: &str,
+        repr: crate::zero_drift::DriftRepr,
+        integer_domain: bool,
+        value_ty: ScalarTy,
+    ) -> bool {
+        self.drift_term_is_f32(src, repr, integer_domain, value_ty)
+            && matches!(self.drift_range.get(name),
+                Some(&(lo, hi)) if lo.abs().max(hi.abs()) < (1i128 << 61))
+    }
+
     /// Before `cvt.rzi.s64.f64`: a value outside the s64 range converts
     /// SATURATED and a NaN converts to 0 - one bad term made the accumulator a
     /// different number without a word. Unordered compares, so a NaN traps.
@@ -1825,7 +1959,13 @@ impl PtxEmitter {
 
     /// `acc += term` (or `-=`) on the s64 accumulator, trapping on signed
     /// overflow. It was a bare `add.s64`, which wraps.
-    fn emit_drift_accumulate(&mut self, acc: &str, term: &str, sub: bool) {
+    /// `overflow_check` is false only where `drift_overflow_ruled_out` proved
+    /// the test cannot fire.
+    fn emit_drift_accumulate(&mut self, acc: &str, term: &str, sub: bool, overflow_check: bool) {
+        if !overflow_check {
+            writeln!(&mut self.ptx_buffer, "    {}.s64 {acc}, {acc}, {term};", if sub { "sub" } else { "add" }).unwrap();
+            return;
+        }
         let (sum, x1, x2, both) = (self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64());
         writeln!(&mut self.ptx_buffer, "    {}.s64 {sum}, {acc}, {term};", if sub { "sub" } else { "add" }).unwrap();
         // Overflowed exactly when the sign bit of this is set: for a sum,
@@ -1846,8 +1986,21 @@ impl PtxEmitter {
 
     /// The accumulator's declared `@bounds`, tested after a store: the
     /// representation was sized for that range and nothing else.
+    ///
+    /// Both bounds in one unsigned compare where the range is narrower than
+    /// 2^63: `acc - lo`, read unsigned, exceeds `hi - lo` exactly when `acc`
+    /// is below `lo` (it wraps to at least 2^63) or above `hi`. That is one
+    /// trap per store instead of two, which mattered where few threads hide
+    /// latency.
     fn emit_drift_range_check(&mut self, name: &str, acc: &str) {
         let Some(&(lo, hi)) = self.drift_range.get(name) else { return };
+        if lo > i64::MIN as i128 && hi < i64::MAX as i128 && hi - lo < (1i128 << 63) {
+            let (d, pred) = (self.alloc_reg64(), self.alloc_pred());
+            writeln!(&mut self.ptx_buffer, "    sub.u64 {d}, {acc}, {lo};").unwrap();
+            writeln!(&mut self.ptx_buffer, "    setp.gt.u64 {pred}, {d}, {};", hi - lo).unwrap();
+            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+            return;
+        }
         if lo > i64::MIN as i128 {
             let pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {pred}, {acc}, {lo};").unwrap();
@@ -1894,14 +2047,8 @@ impl PtxEmitter {
                 return as_f64;
             }
             let unscaled = self.alloc_ty(ScalarTy::F64);
-            writeln!(
-                &mut self.ptx_buffer,
-                "    div.rn.f64 {}, {}, {};",
-                unscaled,
-                as_f64,
-                Self::ptx_f64(repr.scale())
-            )
-            .unwrap();
+            writeln!(&mut self.ptx_buffer, "    mul.f64 {}, {}, {};", unscaled, as_f64, Self::ptx_f64(1.0 / repr.scale()))
+                .unwrap();
             return unscaled;
         }
         let out = self.alloc_regf32();
@@ -1909,15 +2056,13 @@ impl PtxEmitter {
             writeln!(&mut self.ptx_buffer, "    cvt.rn.f32.f64 {}, {};", out, as_f64).unwrap();
             return out;
         }
+        // A multiply by 2^-f, not a division by 2^f: both are exact on an
+        // integer below 2^63, so the bits are the same, and the division
+        // expanded to a Newton sequence of nine f64 instructions plus a slow
+        // path where this is one `DMUL`.
         let unscaled = self.alloc_ty(ScalarTy::F64);
-        writeln!(
-            &mut self.ptx_buffer,
-            "    div.rn.f64 {}, {}, {};",
-            unscaled,
-            as_f64,
-            Self::ptx_f64(repr.scale())
-        )
-        .unwrap();
+        writeln!(&mut self.ptx_buffer, "    mul.f64 {}, {}, {};", unscaled, as_f64, Self::ptx_f64(1.0 / repr.scale()))
+            .unwrap();
         writeln!(&mut self.ptx_buffer, "    cvt.rn.f32.f64 {}, {};", out, unscaled).unwrap();
         out
     }
@@ -4995,7 +5140,7 @@ or `shared_alloc_u32` for a shared-memory array.",
                                 // failed the build.
                                 if !v.is_empty() {
                                     let fixed =
-                                        self.emit_drift_to_fixed(&v, repr, integer_domain, value_ty);
+                                        self.emit_drift_to_fixed(&v, repr, integer_domain, value_ty, 63);
                                     writeln!(&mut self.ptx_buffer, "    mov.s64 {}, {};", acc, fixed).unwrap();
                                     self.emit_drift_range_check(name, &acc);
                                 } else {
@@ -5273,8 +5418,10 @@ declare it as a Q format.\n{}",
                     ));
                 }
                 let rhs = self.emit_expr(value, None, hw_profile);
-                let fixed = self.emit_drift_to_fixed(&rhs, repr, integer_domain, value_ty);
-                self.emit_drift_accumulate(&acc, &fixed, matches!(op, BinaryOp::Sub));
+                let elide = self.drift_overflow_ruled_out(&name, &rhs, repr, integer_domain, value_ty);
+                let fixed =
+                    self.emit_drift_to_fixed(&rhs, repr, integer_domain, value_ty, if elide { 62 } else { 63 });
+                self.emit_drift_accumulate(&acc, &fixed, matches!(op, BinaryOp::Sub), !elide);
                 self.emit_drift_range_check(&name, &acc);
             }
             // Every OTHER compound assignment fell through every arm below
@@ -5365,8 +5512,10 @@ declare it as a Q format.\n{}",
                 match crate::zero_drift::running_sum(target, value) {
                     Some((op, term)) => {
                         let rhs = self.emit_expr(term, None, hw_profile);
-                        let fixed = self.emit_drift_to_fixed(&rhs, repr, integer_domain, value_ty);
-                        self.emit_drift_accumulate(&acc, &fixed, matches!(op, BinaryOp::Sub));
+                        let elide = self.drift_overflow_ruled_out(&name, &rhs, repr, integer_domain, value_ty);
+                        let limit = if elide { 62 } else { 63 };
+                        let fixed = self.emit_drift_to_fixed(&rhs, repr, integer_domain, value_ty, limit);
+                        self.emit_drift_accumulate(&acc, &fixed, matches!(op, BinaryOp::Sub), !elide);
                         self.emit_drift_range_check(&name, &acc);
                     }
                     None => {

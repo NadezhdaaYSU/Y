@@ -30,8 +30,11 @@ mod pinned;
 /// One large term followed by many tiny ones.
 ///
 /// Summed largest-first in `f32`, each tiny term is smaller than an ulp of the
-/// running total and vanishes entirely. Summed smallest-first they accumulate
-/// into something the large term cannot swallow. That gap is the drift.
+/// running total (2^-23 near 1.0) but larger than half of one, so every
+/// addition rounds UP to a whole ulp: 1.0 + 4000 x 1e-7 comes out 1.0004768.
+/// Summed smallest-first they accumulate first and the total is 1.0004. That
+/// gap is the drift. (This said the tiny terms "vanish entirely"; they would
+/// below half an ulp, and here they overshoot instead - a drift either way.)
 const BIG: f64 = 1.0;
 const SMALL: f64 = 1.0e-7;
 const N_SMALL: usize = 4000;

@@ -1,0 +1,18 @@
+[1;36m[*][0m Measured @ZeroDrift accumulate costs on NVIDIA GeForce RTX 4070 Ti SUPER
+      ->    Q16.16:      1814 ps/acc  exact
+      ->    Q32.32:      2141 ps/acc  exact
+      ->       I64:      2155 ps/acc  exact
+      ->  KahanF32:      6793 ps/acc  not exact (never selected)
+      ->       F64:     17537 ps/acc  not exact (never selected)
+[1;36m[*][0m Measured @ZeroDrift accumulate costs on NVIDIA GeForce RTX 4070 Ti SUPER
+      ->    Q16.16:      1816 ps/acc  exact
+      ->       I64:      2145 ps/acc  exact
+      ->    Q32.32:      2153 ps/acc  exact
+      ->  KahanF32:      6721 ps/acc  not exact (never selected)
+      ->       F64:     17813 ps/acc  not exact (never selected)
+[1;36m[*][0m Measured @ZeroDrift accumulate costs on NVIDIA GeForce RTX 4070 Ti SUPER
+      ->    Q16.16:      1811 ps/acc  exact
+      ->    Q32.32:      2138 ps/acc  exact
+      ->       I64:      2154 ps/acc  exact
+      ->  KahanF32:      6856 ps/acc  not exact (never selected)
+      ->       F64:     17843 ps/acc  not exact (never selected)
