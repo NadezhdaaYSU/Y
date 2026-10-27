@@ -880,6 +880,29 @@ reports that and exits 1.
   wrapped, the GPU's conversion saturated a term (a NaN became `i64::MIN`), and
   the LLVM backend's turned an oversized one into an arbitrary value (one term of
   1e12 gave a total of 0). `tests/zero_drift_runtime_checks.rs`.
+* **Across threads** (PTX only): `drift_add_to(ACC, OUT, acc)` adds every
+  thread's partial of `acc` into one exact total for the whole grid and stores
+  it in `OUT[0]`, as a read of `acc` produces it (`GlobalMemory<F32>` for an
+  `F32` accumulator, `<I64>` for an integer one). `ACC` is a
+  `GlobalMemory<I64>` of three words, zero before the first launch; the kernel
+  sets them back to zero, so it can be launched again at once. The total is
+  the same bits for every block and grid shape, because a partial is never
+  rounded: it is held in 128 bits, a full warp adds its 32 partials with
+  shuffles, one lane adds the result to `ACC` with a 64-bit atomic and carries
+  into the high word, and the last block to finish reads the total.
+  * A partial is not tested: whether it leaves the range depends on how the
+    launch divided the terms. The program stops when a term is out of range,
+    or when the total does not fit 64 bits or the `@bounds`, and then in every
+    launch shape. It also stops when `ACC` was not zero at the launch.
+  * The call is a statement of the kernel's body itself, once, after the
+    accumulator's `let`, with no `return` or `chisel` block before it: every
+    thread reaches it exactly once, which is how the last block knows it is
+    last. In a branch, a loop or an expression, a second time, or after a
+    `return` it is refused. So are an accumulator that does not start at zero
+    (its start would be counted once per thread), and reading or adding to it
+    besides (a partial is the launch's choice).
+  * One total per kernel. The LLVM backend, the JIT and `--emit-cpu` refuse it
+    by name. `tests/zero_drift_grid_sum.rs`.
 * **History**: this entry said `@ZeroDrift` inserted Kahan compensation. It
   never did: Kahan summation is not exact, and the representation selector
   refuses it.

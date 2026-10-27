@@ -1,0 +1,33 @@
+# Mutants of drift_add_to (src/ptx_emitter.rs), run against tests/zero_drift_grid_sum.rs
+M1 no carry into hi: KILLED ['every_launch_shape_gives_the_exact_total'] (28s)
+M2 hi never added: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (27s)
+M3 every warp treated as full: SURVIVED [] (28s)
+M4 every lane of a full warp adds: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (30s)
+M5 last ticket off by one: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (27s)
+M6 ACC not reset: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (28s)
+M7 no 64-bit fit test: KILLED ['programs_stop_in_every_launch_shape_or_in_none'] (27s)
+M8 no range test on the total: KILLED ['programs_stop_in_every_launch_shape_or_in_none'] (27s)
+M9 no sign extension of a term: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (31s)
+M10 stale-ticket trap removed: KILLED ['programs_stop_in_every_launch_shape_or_in_none'] (27s)
+M11 non-zero start allowed: KILLED ['what_would_make_the_total_depend_on_the_launch_is_refused'] (28s)
+M12 return before allowed: KILLED ['what_would_make_the_total_depend_on_the_launch_is_refused'] (28s)
+M13 any call site accepted: SURVIVED [] (28s)
+M14 partial term limit 62: KILLED ['a_partial_is_added_in_128_bits_with_only_the_term_test', 'every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (29s)
+M15 partial may be read: KILLED ['what_would_make_the_total_depend_on_the_launch_is_refused'] (28s)
+M16 adds after the call allowed: KILLED ['what_would_make_the_total_depend_on_the_launch_is_refused'] (28s)
+M17 one shuffle step short: KILLED ['a_partial_is_added_in_128_bits_with_only_the_term_test', 'every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (24s)
+M18 lane mask 15: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (28s)
+M19 grid accumulator keeps the checked add: KILLED ['a_partial_is_added_in_128_bits_with_only_the_term_test', 'every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (29s)
+M20 second call allowed: KILLED ['what_would_make_the_total_depend_on_the_launch_is_refused'] (27s)
+M21 flat thread id ignores z: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (27s)
+M22 blocks ignore z: KILLED ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none'] (28s)
+M23 first fence removed: KILLED ['a_partial_is_added_in_128_bits_with_only_the_term_test'] (28s)
+restored; rebuild 0
+restored source identical: True
+
+# After adding the nested-call refusal cases, the partial-warp PTX check and
+# python/y_lang/tests/test_drift_grid_sum.py (the CPU interpreter):
+M0 unmutated: build 0; rust rc 0 failed []; python rc 0 [OK]
+M3 every warp treated as full: build 0; rust rc 101 failed ['a_partial_is_added_in_128_bits_with_only_the_term_test']; python rc 1 [FAILED (failures=1, errors=1)]
+M13 any call site accepted: build 0; rust rc 101 failed ['what_would_make_the_total_depend_on_the_launch_is_refused']; python rc 0 [OK]
+restored; rebuild 0 identical True

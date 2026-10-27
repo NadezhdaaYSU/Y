@@ -636,6 +636,14 @@ pub fn last_line(block: &Block) -> usize {
     last
 }
 
+/// Every statement of `stmts` and every statement nested in them, as
+/// `for_each_stmt` walks a program.
+pub fn for_each_stmt_in(stmts: &[Stmt], f: &mut dyn FnMut(&Stmt)) {
+    for stmt in stmts {
+        walk_stmt(stmt, f);
+    }
+}
+
 fn walk_block(block: &Block, f: &mut dyn FnMut(&Stmt)) {
     for stmt in &block.stmts {
         walk_stmt(stmt, f);
