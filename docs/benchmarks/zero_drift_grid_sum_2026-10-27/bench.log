@@ -1,0 +1,15 @@
+games before: []
+n=  1048576     torch.sum: min      7.4 us  median      7.6 us  ( 568.9 GB/s)
+n=  1048576  f32 two-pass: min      9.7 us  median      9.9 us  ( 431.2 GB/s)
+n=  1048576        zd_sum: min      9.9 us  median     10.0 us  ( 422.3 GB/s)
+            exact -37.95335006713867  torch.sum -37.95336151123047  two-pass -37.95341491699219
+n= 16777216     torch.sum: min    107.3 us  median    107.9 us  ( 625.3 GB/s)
+n= 16777216  f32 two-pass: min    112.1 us  median    112.8 us  ( 598.8 GB/s)
+n= 16777216        zd_sum: min    128.9 us  median    130.3 us  ( 520.6 GB/s)
+            exact -2221.277587890625  torch.sum -2221.27734375  two-pass -2221.27783203125
+n= 67108864     torch.sum: min    425.6 us  median    439.2 us  ( 630.8 GB/s)
+n= 67108864  f32 two-pass: min    431.4 us  median    450.6 us  ( 622.2 GB/s)
+n= 67108864        zd_sum: min    508.0 us  median    532.9 us  ( 528.4 GB/s)
+            exact -2087.03369140625  torch.sum -2087.032958984375  two-pass -2087.033935546875
+util before 17 %, 225 MHz, 810 MHz after 100 %, 2775 MHz, 10251 MHz
+games after: []

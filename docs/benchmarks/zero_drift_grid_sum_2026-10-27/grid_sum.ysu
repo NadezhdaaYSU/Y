@@ -1,0 +1,39 @@
+// The exact grid-wide sum (`drift_add_to`) and, for comparison, the same
+// partition summed in plain f32, each thread's partial stored for a second pass.
+kernel zd_sum(X: GlobalMemory<F32>, ACC: GlobalMemory<I64>, OUT: GlobalMemory<F32>, P: GlobalMemory<I32>) {
+    @ZeroDrift
+    @bounds(min=-1000000.0, max=1000000.0)
+    let mut acc: F32 = 0.0;
+    let t: I32 = thread_idx_x() + block_dim_x() * (thread_idx_y() + block_dim_y() * thread_idx_z());
+    let threads: I32 = block_dim_x() * block_dim_y() * block_dim_z();
+    let b: I32 = block_idx_x() + grid_dim_x() * (block_idx_y() + grid_dim_y() * block_idx_z());
+    let stride: I32 = grid_dim_x() * grid_dim_y() * grid_dim_z() * threads;
+    let rounds: I32 = P[0];
+    let n: I32 = P[1];
+    @invariant(j >= 0)
+    for j in 0..rounds step 1 {
+        let i: I32 = b * threads + t + j * stride;
+        if i < n {
+            acc += X[i];
+        }
+    }
+    drift_add_to(ACC, OUT, acc);
+}
+
+kernel f32_partials(X: GlobalMemory<F32>, ACC: GlobalMemory<I64>, OUT: GlobalMemory<F32>, P: GlobalMemory<I32>) {
+    let mut acc: F32 = 0.0;
+    let t: I32 = thread_idx_x() + block_dim_x() * (thread_idx_y() + block_dim_y() * thread_idx_z());
+    let threads: I32 = block_dim_x() * block_dim_y() * block_dim_z();
+    let b: I32 = block_idx_x() + grid_dim_x() * (block_idx_y() + grid_dim_y() * block_idx_z());
+    let stride: I32 = grid_dim_x() * grid_dim_y() * grid_dim_z() * threads;
+    let rounds: I32 = P[0];
+    let n: I32 = P[1];
+    @invariant(j >= 0)
+    for j in 0..rounds step 1 {
+        let i: I32 = b * threads + t + j * stride;
+        if i < n {
+            acc += X[i];
+        }
+    }
+    OUT[b * threads + t] = acc;
+}

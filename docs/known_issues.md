@@ -39,10 +39,12 @@ source; each entry there now carries its status. What is still open:
 
 - `@ZeroDrift` makes ONE accumulator order-independent. Reading it rounds the
   exact fixed-point total to the declared type (an f32 for an `F32`
-  accumulator), and nothing reads or adds the raw value, so partial sums from
-  several threads combined through that read are not exact: a tree reduction
-  across threads is order-dependent again at the combine. Per-thread
-  sequential sums are covered; parallel reductions are not.
+  accumulator), so partial sums from several threads combined through that
+  read are not exact: a tree reduction across threads is order-dependent again
+  at the combine. `drift_add_to` (2026-10-27) adds the partials exactly, but
+  into ONE total per kernel, on the GPU only: several totals (a per-row or
+  split-K reduction, scattered force sums) are not covered yet, and the host
+  backends refuse it.
 - A `@ZeroDrift` row sum still takes 3.71x a plain f32 one where only a few
   threads hide latency (4,096 rows), against 1.30x where memory bandwidth
   limits it: the integer conversion of each term and its trap test form a

@@ -125,6 +125,7 @@ pub fn scalar_return_type(name: &str) -> Option<&'static str> {
         | "shared_store_v4"
         | "atomic_add"
         | "atomic_max"
+        | "drift_add_to"
         | "barrier_sync"
         | "membar"
         | "vec_add_v4"

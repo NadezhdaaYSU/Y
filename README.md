@@ -2091,6 +2091,18 @@ gone. The sum now takes 1.30x the f32 sum where memory bandwidth limits it. It
 takes 3.71x (was 7.27x) where only a few threads hide latency
 (`docs/benchmarks/zero_drift_conversion_2026-10-27/`).
 
+**Across threads, `drift_add_to(ACC, OUT, acc)` adds every thread's partial
+into one exact total for the whole grid.** A partial is held in 128 bits, a warp
+adds its partials with shuffles, one lane adds the sum to a 64-bit atomic total
+and carries into its high word, and the last block to finish checks and stores
+it. 98 launch shapes, from one thread to 1000 blocks of 1024 and
+three-dimensional ones, store the same bits. The same partitions summed in f32
+do not. A program stops on a bad term or an out-of-range total in every shape
+or in none (`tests/zero_drift_grid_sum.rs`). On an RTX 4070 Ti SUPER it takes
+1.19x `torch.sum` over 256 MB of f32, and 1.34x over 4 MB, which fits in L2
+(measured with other processes on the card;
+`docs/benchmarks/zero_drift_grid_sum_2026-10-27/`).
+
 `tests/zero_drift_end_to_end.rs` compiles a program with clang and **runs it**,
 summing the same 4001 terms in opposite orders and requiring bit-identical
 results — alongside a control asserting that sequence genuinely disagrees with
