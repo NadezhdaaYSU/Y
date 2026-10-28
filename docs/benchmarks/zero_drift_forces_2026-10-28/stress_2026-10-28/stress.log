@@ -1,0 +1,8 @@
+spacing 1.1: 785833 pairs, r_min 1.001, max|term| 23.6; Y exact 15/15 (!= f32(S) in 299); f64: 1 distinct (1 as f32), up to 0 components != S; f32: 15 distinct
+spacing 1.0: 1153901 pairs, r_min 0.901, max|term| 137; Y exact 15/15 (!= f32(S) in 63); f64: 2 distinct (1 as f32), up to 1 components != S; f32: 15 distinct
+spacing 0.95: 1194148 pairs, r_min 0.851, max|term| 317; Y exact 15/15 (!= f32(S) in 28); f64: 5 distinct (1 as f32), up to 7 components != S; f32: 15 distinct
+spacing 0.9: 1217314 pairs, r_min 0.801, max|term| 745; Y exact 15/15 (!= f32(S) in 9); f64: 9 distinct (1 as f32), up to 11 components != S; f32: 15 distinct
+spacing 0.85: 1413551 pairs, r_min 0.751, max|term| 1.81e+03; Y exact 15/15 (!= f32(S) in 5); f64: 14 distinct (1 as f32), up to 61 components != S; f32: 15 distinct
+spacing 0.8: 1871128 pairs, r_min 0.701, max|term| 4.56e+03; Y exact 15/15 (!= f32(S) in 4); f64: 15 distinct (1 as f32), up to 247 components != S; f32: 15 distinct
+spacing 0.75: 2340389 pairs, r_min 0.651, max|term| 1.22e+04; Y exact 15/15 (!= f32(S) in 1); f64: 15 distinct (1 as f32), up to 686 components != S; f32: 15 distinct
+spacing 0.7: 2669194 pairs, r_min 0.601, max|term| 3.49e+04; Y exact 15/15 (!= f32(S) in 0); f64: 15 distinct (1 as f32), up to 1343 components != S; f32: 15 distinct

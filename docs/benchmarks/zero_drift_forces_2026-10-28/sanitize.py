@@ -25,5 +25,18 @@ acc = torch.zeros(2 * nt + 1, dtype=torch.int64, device=dev)
 out = torch.empty(nt, dtype=torch.float32, device=dev)
 for block in [33, 64, 256, 1024]:
     k.launch(((npairs + block - 1) // block, 1, 1), (block, 1, 1), [pos, pi, pj, acc, out, npairs, nt])
+def load(name):
+    m = TorchKernel.__new__(TorchKernel)
+    m.source, m.kernel_name, m.target_sm, m.ptx = None, name, "sm_89", src
+    m._module = m._function = None
+    m._ensure_loaded()
+    return m
+closed, convert = load("lj_closed"), load("lj_convert")
+acc2 = torch.zeros(2 * nt + 7, dtype=torch.int64, device=dev)
+out2 = torch.empty(nt, dtype=torch.float32, device=dev)
+for block, (cg, cb) in zip([33, 64, 256, 1024], [(1, 1024), (7, 33), (12, 128), (2, 64)]):
+    closed.launch(((npairs + block - 1) // block, 1, 1), (block, 1, 1), [pos, pi, pj, acc2, npairs, nt])
+    convert.launch((cg, 1, 1), (cb, 1, 1), [acc2, out2, nt])
 torch.cuda.synchronize()
-print("acc zero:", acc.abs().sum().item() == 0)
+print("acc zero:", acc.abs().sum().item() == 0, "close/convert acc zero:", acc2.abs().sum().item() == 0,
+      "same forces:", torch.equal(out.view(torch.int32), out2.view(torch.int32)))

@@ -6,7 +6,8 @@ thread. Correctness first, for every variant and size:
 * `lj_terms` (the same Y arithmetic) stores each pair's three f32 terms; the host sums them exactly
   (each term rounded to Q32.32, ties away from zero, summed in integers, read back through f64).
   `lj_exact` must store those bits for every atom, for every block size and pair order (as built,
-  reversed, shuffled), and leave its buffer zero.
+  reversed, shuffled), and leave its buffer zero. So must `lj_closed` followed by `lj_convert`
+  (the second kernel converting at a shape of its own).
 * The CUDA baselines use Y's own instructions for the arithmetic (its fused multiply-adds and
   `div.approx.f32`): their `lj_terms_cuda` must store the same bits, so every variant sums the same
   terms. f32 and f64 atomics run the same configurations: how many different answers they give, and
@@ -102,7 +103,9 @@ def exact_forces(terms, pi, pj, atoms):
     return (s.astype(np.float64) * 2.0 ** -32).astype(np.float32).reshape(-1), s
 
 
-lj_exact, lj_terms = load(LJ, "lj_exact"), load(LJ, "lj_terms")
+lj_exact, lj_terms, lj_closed, lj_convert = (load(LJ, n) for n in ("lj_exact", "lj_terms", "lj_closed", "lj_convert"))
+SMS = torch.cuda.get_device_properties(0).multi_processor_count
+CONVERT = (SMS * 8, 256)  # blocks and threads of the timed `lj_convert`
 lj_f32, lj_f64, lj_fixed, fixed_to_f32, lj_terms_cuda = (load(BASE, n) for n in ("lj_f32", "lj_f64", "lj_fixed", "fixed_to_f32", "lj_terms_cuda"))
 res = {"device": torch.cuda.get_device_name(0), "torch": torch.__version__,
        "nvcc": subprocess.run(["nvcc", "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1],
@@ -151,6 +154,8 @@ for m in SIDES:
 
     acc = torch.zeros(2 * nt + 1, dtype=torch.int64, device=dev)
     out = torch.empty(nt, dtype=torch.float32, device=dev)
+    acc2 = torch.zeros(2 * nt + 7, dtype=torch.int64, device=dev)
+    out2 = torch.empty(nt, dtype=torch.float32, device=dev)
     f32 = torch.zeros(nt, dtype=torch.float32, device=dev)
     f64 = torch.zeros(nt, dtype=torch.float64, device=dev)
     fx = torch.zeros(nt, dtype=torch.int64, device=dev)
@@ -159,7 +164,8 @@ for m in SIDES:
     # Correctness: block sizes x pair orders.
     perm = np.random.default_rng(1).permutation(npairs)
     orders = {"built": (pi_h, pj_h), "reversed": (pi_h[::-1].copy(), pj_h[::-1].copy()), "shuffled": (pi_h[perm], pj_h[perm])}
-    exact_ok, f32_seen, f64_seen, f64_as_f32_seen, fixed_seen = 0, set(), set(), set(), set()
+    exact_ok, closed_ok, f32_seen, f64_seen, f64_as_f32_seen, fixed_seen = 0, 0, set(), set(), set(), set()
+    convert_shapes = [(1, 1024), (CONVERT[0], CONVERT[1]), ((nt + 255) // 256, 256), (7, 33), (SMS, 1024)]
     f32_max_abs, f32_differing, f64_not_rounded = 0.0, [], []
     configs = 0
     for oname, (a, b) in orders.items():
@@ -168,12 +174,17 @@ for m in SIDES:
             configs += 1
             out.fill_(7.0)
             lj_exact.launch(blocks(block), (block, 1, 1), [pos, pa, pb, acc, out, npairs, nt])
+            out2.fill_(7.0)
+            cg, cb = convert_shapes[configs % len(convert_shapes)]
+            lj_closed.launch(blocks(block), (block, 1, 1), [pos, pa, pb, acc2, npairs, nt])
+            lj_convert.launch((cg, 1, 1), (cb, 1, 1), [acc2, out2, nt])
             f32.zero_(); lj_f32.launch(blocks(block), (block, 1, 1), [pos, pa, pb, f32, npairs])
             f64.zero_(); lj_f64.launch(blocks(block), (block, 1, 1), [pos, pa, pb, f64, npairs])
             fx.zero_(); lj_fixed.launch(blocks(block), (block, 1, 1), [pos, pa, pb, fx, npairs])
             torch.cuda.synchronize()
             got = out.cpu().numpy().view(np.int32)
             exact_ok += bool(np.array_equal(got, want_bits)) and acc.abs().sum().item() == 0
+            closed_ok += bool(np.array_equal(out2.cpu().numpy().view(np.int32), want_bits)) and acc2.abs().sum().item() == 0
             g32 = f32.cpu().numpy()
             f32_seen.add(hash(g32.tobytes()))
             f32_max_abs = max(f32_max_abs, float(np.abs(g32.astype(np.float64) - S).max()))
@@ -184,6 +195,7 @@ for m in SIDES:
             f64_not_rounded.append(int((g64 != S).sum()))
             fixed_seen.add(hash(fx.cpu().numpy().tobytes()))
     assert exact_ok == configs, f"lj_exact matched the exact forces in {exact_ok} of {configs} configurations"
+    assert closed_ok == configs, f"lj_closed + lj_convert matched the exact forces in {closed_ok} of {configs} configurations"
     fixed_equals_exact = bool(np.array_equal(fx.cpu().numpy(), raw.reshape(-1)))
 
     # Timing, interleaved.
@@ -193,6 +205,13 @@ for m in SIDES:
     def run_tail():
         # No pairs: every block only takes its ticket, and the last converts 3N zero totals.
         lj_exact.launch(grid, (BLOCK, 1, 1), [pos, pi0, pj0, acc, out, 0, nt])
+    def run_closed():
+        lj_closed.launch(grid, (BLOCK, 1, 1), [pos, pi0, pj0, acc2, npairs, nt])
+        lj_convert.launch((CONVERT[0], 1, 1), (CONVERT[1], 1, 1), [acc2, out2, nt])
+    def run_closed_tail():
+        # No pairs: every block takes its ticket, and the second kernel converts 3N zero totals.
+        lj_closed.launch(grid, (BLOCK, 1, 1), [pos, pi0, pj0, acc2, 0, nt])
+        lj_convert.launch((CONVERT[0], 1, 1), (CONVERT[1], 1, 1), [acc2, out2, nt])
     def run_f32():
         f32.zero_(); lj_f32.launch(grid, (BLOCK, 1, 1), [pos, pi0, pj0, f32, npairs])
     def run_f32_kernel():
@@ -202,7 +221,7 @@ for m in SIDES:
     def run_fixed():
         fx.zero_(); lj_fixed.launch(grid, (BLOCK, 1, 1), [pos, pi0, pj0, fx, npairs])
         fixed_to_f32.launch(((nt + 255) // 256, 1, 1), (256, 1, 1), [fx, fx_out, nt])
-    variants = {"Y exact": run_exact, "Y finish only": run_tail, "f32 atomics": run_f32, "f32 atomics, kernel only": run_f32_kernel,
+    variants = {"Y exact": run_exact, "Y finish only": run_tail, "Y close + convert": run_closed, "Y close + convert, no pairs": run_closed_tail, "f32 atomics": run_f32, "f32 atomics, kernel only": run_f32_kernel,
                 "f64 atomics": run_f64, "fixed unchecked": run_fixed}
     times = {k: [] for k in variants}
     for _ in range(5):
@@ -223,8 +242,11 @@ for m in SIDES:
     # every timed launch left exact forces and a zero buffer behind
     run_exact(); torch.cuda.synchronize()
     assert np.array_equal(out.cpu().numpy().view(np.int32), want_bits) and acc.abs().sum().item() == 0
+    run_closed(); torch.cuda.synchronize()
+    assert np.array_equal(out2.cpu().numpy().view(np.int32), want_bits) and acc2.abs().sum().item() == 0
     row = {"atoms": atoms, "pairs": npairs, "totals": nt, "terms_host_equals_gpu": terms_agree,
-           "configs": configs, "exact_configs_matching": exact_ok,
+           "configs": configs, "exact_configs_matching": exact_ok, "closed_configs_matching": closed_ok,
+           "convert_shapes": convert_shapes, "convert_timed": CONVERT,
            "y_components_differing_from_f32_of_S": y_vs_rounded, "max_abs_S": float(np.abs(S).max()),
            "f32_distinct_results": len(f32_seen), "f32_max_abs_err": f32_max_abs,
            "f32_rel_max": f32_max_abs / float(np.abs(S).max()),
@@ -234,7 +256,7 @@ for m in SIDES:
            "fixed_distinct_results": len(fixed_seen), "fixed_raw_equals_exact_raw": fixed_equals_exact,
            "games_before_timing": g_before, "games_after_timing": g_after,
            "us": {k: {"min": min(v), "median": float(np.median(v)), "all": v} for k, v in times.items()}}
-    print(f"{m}^3 = {atoms} atoms, {npairs} pairs; exact in {exact_ok}/{configs} configurations; CUDA terms == Y terms: {terms_agree}; Y != f32(S_k) in {y_vs_rounded} of {nt} components")
+    print(f"{m}^3 = {atoms} atoms, {npairs} pairs; exact in {exact_ok}/{configs} configurations (close + convert {closed_ok}); CUDA terms == Y terms: {terms_agree}; Y != f32(S_k) in {y_vs_rounded} of {nt} components")
     print(f"   f32 atomics: {len(f32_seen)} distinct results; max_abs {f32_max_abs:.3g} (rel_max {f32_max_abs / np.abs(S).max():.3g}); components != f32(S_k): {min(f32_differing):.1%}-{max(f32_differing):.1%}")
     print(f"   f64 atomics: {len(f64_seen)} distinct ({len(f64_as_f32_seen)} after rounding to f32); components != S_k per configuration: max {max(f64_not_rounded)}; fixed: {len(fixed_seen)} distinct, raw == Y's raw sums: {fixed_equals_exact}")
     base = min(times["f32 atomics"])

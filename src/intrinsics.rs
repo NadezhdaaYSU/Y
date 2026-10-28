@@ -128,6 +128,8 @@ pub fn scalar_return_type(name: &str) -> Option<&'static str> {
         | "drift_add_to"
         | "drift_add_at"
         | "drift_finish"
+        | "drift_close"
+        | "drift_convert"
         | "barrier_sync"
         | "membar"
         | "vec_add_v4"

@@ -931,8 +931,21 @@ reports that and exits 1.
   * The last block converts all `n` totals alone: 0.85 ns per total on an RTX
     4070 Ti SUPER, 37% of a 262,144-atom force kernel's time
     (`docs/benchmarks/zero_drift_forces_2026-10-28/`).
+  * **In two kernels:** `drift_close(ACC, n)` ends the hand-overs instead of
+    `drift_finish`, under the same rules, and a later kernel's
+    `drift_convert(ACC, OUT, n)` converts the totals on every SM (57 us
+    instead of 668 for 786,432 totals). `ACC` then holds `2n + 7` words: the
+    totals, and a header at word `2n` that the closing kernel's last block
+    writes, with a tag last: the format and `@bounds` of the totals and `n`.
+    `drift_convert` stops unless the tag is there, matches `OUT`'s type
+    (`F32` for fixed-point accumulators, `I64` for integer ones) and `n` is
+    the same; so it stops when launched without the closing kernel, before it
+    has finished, twice, or with another `n`, and a second `drift_close`
+    before it stops too. Its last block clears the header. `drift_convert` is
+    a statement of its kernel's body itself, once, in a kernel that hands
+    nothing over.
   * Not together with `drift_add_to` in one kernel. The LLVM backend, the JIT
-    and `--emit-cpu` refuse both by name. `tests/zero_drift_scatter.rs`.
+    and `--emit-cpu` refuse all four by name. `tests/zero_drift_scatter.rs`.
 * **History**: this entry said `@ZeroDrift` inserted Kahan compensation. It
   never did: Kahan summation is not exact, and the representation selector
   refuses it.
