@@ -41,10 +41,14 @@ source; each entry there now carries its status. What is still open:
   exact fixed-point total to the declared type (an f32 for an `F32`
   accumulator), so partial sums from several threads combined through that
   read are not exact: a tree reduction across threads is order-dependent again
-  at the combine. `drift_add_to` (2026-10-27) adds the partials exactly, but
-  into ONE total per kernel, on the GPU only: several totals (a per-row or
-  split-K reduction, scattered force sums) are not covered yet, and the host
-  backends refuse it.
+  at the combine. `drift_add_to` (2026-10-27) adds the partials exactly into
+  one total per kernel, and `drift_add_at` / `drift_finish` (2026-10-28) into
+  many, on the GPU only; the host backends refuse them.
+- `drift_finish`'s last block converts every total alone, on one SM: 668 us
+  for 786,432 totals, 37% of a 262,144-atom force kernel that takes 4.02x
+  f32 atomics, 2.25x f64 atomics and 2.23x unchecked fixed-point atomics
+  (`docs/benchmarks/zero_drift_forces_2026-10-28/`). On that input the f64
+  atomics are order-independent too, because every sum fits 53 bits.
 - A `@ZeroDrift` row sum still takes 3.71x a plain f32 one where only a few
   threads hide latency (4,096 rows), against 1.30x where memory bandwidth
   limits it: the integer conversion of each term and its trap test form a

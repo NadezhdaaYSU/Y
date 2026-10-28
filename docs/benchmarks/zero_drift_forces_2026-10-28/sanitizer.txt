@@ -1,0 +1,5 @@
+# compute-sanitizer 2026-10-28 on lj_exact (lj.ptx): a 512-atom lattice, 4 launches (blocks of 33, 64, 256, 1024)
+racecheck:  RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings) acc zero: True
+synccheck:  ERROR SUMMARY: 0 errors acc zero: True
+memcheck:  ERROR SUMMARY: 0 errors acc zero: True
+initcheck:  ERROR SUMMARY: 0 errors acc zero: True
