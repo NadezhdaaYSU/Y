@@ -1,0 +1,19 @@
+32^3 = 32768 atoms, 785833 pairs; exact in 15/15 configurations; host terms == GPU terms: False
+   f32 atomics: 15 distinct results, worst 548816 ulp from exact; f64: 1 distinct (1 after rounding to f32); fixed: 1 distinct, equal to the exact raw sums: False
+                      Y exact: min     221.9 us  median     223.1 us  ( 3.87x f32 atomics)
+                Y finish only: min      84.5 us  median      85.8 us  ( 1.47x f32 atomics)
+                  f32 atomics: min      57.3 us  median      57.5 us  ( 1.00x f32 atomics)
+     f32 atomics, kernel only: min      55.8 us  median      56.1 us  ( 0.97x f32 atomics)
+                  f64 atomics: min      98.9 us  median      99.1 us  ( 1.72x f32 atomics)
+              fixed unchecked: min     101.1 us  median     101.4 us  ( 1.76x f32 atomics)
+64^3 = 262144 atoms, 6532504 pairs; exact in 15/15 configurations; host terms == GPU terms: False
+   f32 atomics: 15 distinct results, worst 3031040 ulp from exact; f64: 1 distinct (1 after rounding to f32); fixed: 1 distinct, equal to the exact raw sums: False
+                      Y exact: min    1798.2 us  median    1810.3 us  ( 4.02x f32 atomics)
+                Y finish only: min     667.9 us  median     677.7 us  ( 1.49x f32 atomics)
+                  f32 atomics: min     447.8 us  median     450.3 us  ( 1.00x f32 atomics)
+     f32 atomics, kernel only: min     445.0 us  median     447.1 us  ( 0.99x f32 atomics)
+                  f64 atomics: min     799.8 us  median     804.5 us  ( 1.79x f32 atomics)
+              fixed unchecked: min     808.4 us  median     813.0 us  ( 1.81x f32 atomics)
+games before none after none
+util before 29 %, 210 MHz, 405 MHz after 100 %, 2775 MHz, 10251 MHz
+SM % by process (max of 5 samples), before {'2112 kwin_wayland': 2, '2216 plasmashell': 6} after {'124563 python3': 99, '2112 kwin_wayland': 0, '2216 plasmashell': 1}

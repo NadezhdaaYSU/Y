@@ -459,16 +459,27 @@ enum DeclaredValue {
     Unknown(String),
 }
 
-/// Whether the kernel being emitted sums a `@ZeroDrift` accumulator over its
-/// whole grid with `drift_add_to`. See `PtxEmitter::plan_drift_grid`.
+/// Whether the kernel being emitted sums `@ZeroDrift` accumulators over its
+/// whole grid: into one total with `drift_add_to`, or into `n` with
+/// `drift_add_at` and `drift_finish`. See `PtxEmitter::plan_drift_grid`.
 #[derive(Clone, PartialEq)]
 enum DriftGrid {
-    /// No `drift_add_to` statement in the kernel's body.
+    /// No `drift_add_to` or `drift_finish` statement in the kernel's body.
     Absent,
     /// One, already refused: lowering it would only add a second error.
     Refused,
-    /// One, at this line and column, summing this accumulator.
+    /// One `drift_add_to`, at this line and column, summing this accumulator.
     Planned(String, (usize, usize)),
+    /// `drift_add_at(buffer, i, acc)` hands an accumulator of `accs` to total
+    /// `i` of `buffer` at each of `calls`, and `drift_finish(buffer, OUT,
+    /// count)` at `at` takes the ticket.
+    Scatter {
+        buffer: String,
+        count: Expr,
+        accs: std::collections::HashSet<String>,
+        calls: std::collections::HashSet<(usize, usize)>,
+        at: (usize, usize),
+    },
 }
 
 enum ZeroInitKind {
@@ -1202,14 +1213,21 @@ pub struct PtxEmitter {
     drift_range: std::collections::HashMap<String, (i128, i128)>,
     /// One line per `@ZeroDrift` binding.
     pub drift_report: Vec<String>,
-    /// The kernel's `drift_add_to`, if it has one (`plan_drift_grid`).
+    /// The kernel's `drift_add_to` or `drift_finish`, if it has one
+    /// (`plan_drift_grid`).
     drift_grid: DriftGrid,
-    /// The high word of each accumulator `drift_add_to` sums: its partial is
-    /// the 128-bit `hi:acc`, so it cannot overflow.
+    /// The high word of each accumulator `drift_add_to` sums or `drift_add_at`
+    /// hands over: its partial is the 128-bit `hi:acc`, so it cannot overflow.
     drift_grid_hi: std::collections::HashMap<String, String>,
-    /// Set once `drift_add_to` has handed the partial over: a later term
-    /// would be lost.
+    /// Set once `drift_add_to` or `drift_finish` has taken the ticket: a later
+    /// term would be lost.
     drift_grid_done: bool,
+    /// The first accumulator `drift_add_at` handed over, with its
+    /// representation, whether it is an integer, the type a read produces and
+    /// its `@bounds`: the last block converts every total that way, so every
+    /// other accumulator handed over must agree.
+    drift_scatter_format:
+        Option<(String, crate::zero_drift::DriftRepr, bool, ScalarTy, Option<(i128, i128)>)>,
     /// Anything the emitter was asked to lower and could not lower correctly -
     /// a `@ZeroDrift` binding it cannot honour, an intrinsic whose PTX form it
     /// does not know how to construct. `main` fails the build on a non-empty
@@ -1600,6 +1618,7 @@ impl PtxEmitter {
             drift_grid: DriftGrid::Absent,
             drift_grid_hi: std::collections::HashMap::new(),
             drift_grid_done: false,
+            drift_scatter_format: None,
             emit_errors: Vec::new(),
             uniformity: None,
             divergent_regions: Vec::new(),
@@ -2105,7 +2124,33 @@ impl PtxEmitter {
     /// * `acc` is a `@ZeroDrift` accumulator of the body, declared before the
     ///   call, starting at zero: every thread's partial includes its starting
     ///   value, so any other start would be counted once per thread.
+    ///
+    /// A kernel with `drift_add_at` or `drift_finish` instead is planned by
+    /// `plan_drift_scatter`; one with both kinds is refused.
     fn plan_drift_grid(&mut self, kernel: &KernelDecl) {
+        let (mut one, mut many) = (None, None);
+        crate::ast::for_each_stmt_in(&kernel.body.stmts, &mut |s: &Stmt| match Self::call_stmt(s) {
+            Some(("drift_add_to", _, span)) => {
+                one.get_or_insert(span.line);
+            }
+            Some(("drift_add_at" | "drift_finish", _, span)) => {
+                many.get_or_insert(span.line);
+            }
+            _ => {}
+        });
+        if let (Some(one), Some(many)) = (one, many) {
+            self.emit_errors.push(format!(
+                "[PTX] Line {many}: kernel `{}` calls `drift_add_to` on line {one} and `drift_add_at` or \
+                 `drift_finish` on line {many}. Each block takes one ticket, for one of them: sum one \
+                 total with `drift_add_to`, or several with `drift_add_at` and one `drift_finish`.",
+                kernel.name
+            ));
+            self.drift_grid = DriftGrid::Refused;
+            return;
+        }
+        if many.is_some() {
+            return self.plan_drift_scatter(kernel);
+        }
         let is_call = |s: &Stmt| {
             matches!(s, Stmt::Expr(Expr::Call { func, .. })
                 if matches!(&**func, Expr::Ident(f, _) if f == "drift_add_to"))
@@ -2167,6 +2212,247 @@ impl PtxEmitter {
         self.drift_grid = DriftGrid::Planned(acc.clone(), (span.line, span.col));
     }
 
+    /// The function a call statement `f(args);` calls, its arguments and its
+    /// span.
+    fn call_stmt(s: &Stmt) -> Option<(&str, &[Expr], &Span)> {
+        match s {
+            Stmt::Expr(Expr::Call { func, args, span }) => match &**func {
+                Expr::Ident(f, _) => Some((f.as_str(), args.as_slice(), span)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Finds the kernel's `drift_finish(ACC, OUT, n)` and every
+    /// `drift_add_at(ACC, i, acc)`, and checks the rules that make each of
+    /// the `n` totals exact and the same for every launch:
+    ///
+    /// * `drift_finish` is a statement of the kernel's body itself, once, with
+    ///   no `return` or `chisel` block before it, for `drift_add_to`'s
+    ///   reasons (`plan_drift_grid`).
+    /// * `n` is a non-negative integer literal or a scalar integer parameter
+    ///   the body never assigns, so it is the same in every thread: the ticket
+    ///   is word `2n` of `ACC`, and every hand-over is checked against `n`.
+    /// * Every `drift_add_at` comes before `drift_finish`, hands over to its
+    ///   `ACC`, and hands over a `@ZeroDrift` accumulator starting at zero.
+    /// * An accumulator is handed over only by statements of the block that
+    ///   declares it, and nothing is added to it after the last of them. The
+    ///   statements of a block run in order and none leaves it early, so
+    ///   every term reaches the total the next hand-over names. A hand-over
+    ///   inside a branch the terms are outside of would, when skipped, carry
+    ///   them into the next total the thread hands over to, or drop them.
+    fn plan_drift_scatter(&mut self, kernel: &KernelDecl) {
+        let stmts = &kernel.body.stmts;
+        let finishes: Vec<usize> =
+            (0..stmts.len()).filter(|&i| matches!(Self::call_stmt(&stmts[i]), Some(("drift_finish", ..)))).collect();
+        // Without one, each call is refused where it is lowered, with why.
+        let Some(&at) = finishes.first() else { return };
+        let Some((_, args, span)) = Self::call_stmt(&stmts[at]) else { unreachable!() };
+        let finish = (span.line, span.col);
+        let src = |n: &str| crate::lexical_scope::source_name(n).to_string();
+        let mut errors: Vec<(usize, &str, String)> = Vec::new();
+        if finishes.len() > 1 {
+            let again = stmts[finishes[1]].span().line;
+            errors.push((span.line, "drift_finish", format!(
+                "is called again on line {again}. Each block takes one ticket, and a second call would \
+                 count every block twice."
+            )));
+        }
+        let Some(Expr::Ident(buffer, _)) = args.first() else {
+            self.emit_errors.push(format!(
+                "[PTX] Line {}: kernel `{}`: `drift_finish` takes the buffer of totals as its first \
+                 argument, by name.",
+                span.line, kernel.name
+            ));
+            self.drift_grid = DriftGrid::Refused;
+            return;
+        };
+        let count = args.get(2).cloned().unwrap_or(Expr::IntLit(-1, span.clone()));
+        let uniform = match &count {
+            Expr::IntLit(v, _) => *v >= 0,
+            Expr::Ident(n, _) => {
+                let scalar = kernel.params.iter().any(|p| {
+                    p.name == *n
+                        && matches!(&p.ty, Type::Primitive(t, _) | Type::Ident(t, _)
+                            if matches!(t.as_str(), "I32" | "U32" | "I64" | "U64"))
+                });
+                let mut assigned = false;
+                crate::ast::for_each_stmt_in(stmts, &mut |s: &Stmt| {
+                    if let Stmt::Assign { target: Expr::Ident(t, _), .. }
+                    | Stmt::CompoundAssign { target: Expr::Ident(t, _), .. } = s
+                    {
+                        assigned |= t == n;
+                    }
+                });
+                scalar && !assigned
+            }
+            _ => false,
+        };
+        if !uniform {
+            errors.push((span.line, "drift_finish", "counts the totals with its third argument, which must be a \
+                 non-negative integer literal or a scalar integer parameter of the kernel that the body never \
+                 assigns, so that it is the same in every thread: each block takes its ticket at word 2n of \
+                 the buffer, and every hand-over is checked against n.".into()));
+        }
+
+        // Every block of the body, to find the one each accumulator is
+        // declared in.
+        fn blocks<'a>(b: &'a Block, out: &mut Vec<&'a Block>) {
+            out.push(b);
+            for s in &b.stmts {
+                match s {
+                    Stmt::For { body, .. }
+                    | Stmt::While { body, .. }
+                    | Stmt::HintBlock { body, .. }
+                    | Stmt::ClockDomainBlock { body, .. } => blocks(body, out),
+                    Stmt::Chisel(b, _) | Stmt::SafeBlock(b, _) | Stmt::GhostBlock(b, _) => blocks(b, out),
+                    Stmt::If { then_block, else_block, .. } => {
+                        blocks(then_block, out);
+                        if let Some(e) = else_block {
+                            blocks(e, out);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        let mut all = Vec::new();
+        blocks(&kernel.body, &mut all);
+        let mut anywhere = 0;
+        crate::ast::for_each_stmt_in(stmts, &mut |s: &Stmt| {
+            anywhere += matches!(Self::call_stmt(s), Some(("drift_add_at", ..))) as usize;
+        });
+        let is_drift_let = |s: &Stmt, acc: &str| matches!(s, Stmt::Let { name, zero_drift: Some(_), .. } if name == acc);
+        let (mut calls, mut accs) = (std::collections::HashSet::new(), std::collections::HashSet::new());
+        let mut placed = 0;
+        for b in &all {
+            for (k, s) in b.stmts.iter().enumerate() {
+                let Some(("drift_add_at", a, sp)) = Self::call_stmt(s) else { continue };
+                placed += 1;
+                let line = sp.line;
+                if (sp.line, sp.col) > finish {
+                    errors.push((line, "drift_add_at", format!(
+                        "hands a partial over after `drift_finish` on line {} took the ticket, so it would \
+                         never reach a total. Hand it over before.",
+                        span.line
+                    )));
+                    continue;
+                }
+                match a.first() {
+                    Some(Expr::Ident(to, _)) if to == buffer => {}
+                    Some(Expr::Ident(to, _)) => {
+                        errors.push((line, "drift_add_at", format!(
+                            "hands over to `{}`, and the kernel's `drift_finish` finishes `{}`: give every \
+                             `drift_add_at` the buffer `drift_finish` takes.",
+                            src(to),
+                            src(buffer)
+                        )));
+                        continue;
+                    }
+                    _ => {
+                        errors.push((line, "drift_add_at", "takes the buffer of totals as its first argument, by name.".into()));
+                        continue;
+                    }
+                }
+                let Some(Expr::Ident(acc, _)) = a.get(2) else {
+                    errors.push((line, "drift_add_at", "takes a `@ZeroDrift` accumulator as its third argument, by name.".into()));
+                    continue;
+                };
+                let here = b.stmts[..k].iter().find_map(|s| match s {
+                    Stmt::Let { init, .. } if is_drift_let(s, acc) => Some(init.clone()),
+                    _ => None,
+                });
+                let Some(init) = here else {
+                    let mut elsewhere = false;
+                    crate::ast::for_each_stmt_in(stmts, &mut |s: &Stmt| elsewhere |= is_drift_let(s, acc));
+                    errors.push((line, "drift_add_at", if elsewhere {
+                        format!(
+                            "hands `{0}` over inside a block that does not declare it. Where this call is \
+                             skipped, `{0}`'s terms would be carried into the next total the thread hands \
+                             over to, or lost. Declare `{0}` in the block of every `drift_add_at` that \
+                             hands it over.",
+                            src(acc)
+                        )
+                    } else {
+                        format!("hands over `{}`, which is not a `@ZeroDrift` accumulator of the kernel's body.", src(acc))
+                    }));
+                    continue;
+                };
+                let zero = match &init {
+                    None | Some(Expr::IntLit(0, _)) => true,
+                    Some(Expr::FloatLit(v, _)) => *v == 0.0,
+                    _ => false,
+                };
+                if !zero {
+                    errors.push((line, "drift_add_at", format!(
+                        "hands over `{}`, and it does not start at zero: its starting value would be counted \
+                         once per thread, so the total would depend on the launch. Start it at 0.",
+                        src(acc)
+                    )));
+                    continue;
+                }
+                calls.insert((sp.line, sp.col));
+                if accs.insert(acc.clone()) {
+                    // Nothing is added after the last hand-over in its block.
+                    let last = b.stmts.iter().rposition(|s| {
+                        matches!(Self::call_stmt(s), Some(("drift_add_at", a, _)) if matches!(a.get(2), Some(Expr::Ident(x, _)) if x == acc))
+                    });
+                    let mut late = None;
+                    crate::ast::for_each_stmt_in(&b.stmts[last.unwrap_or(k) + 1..], &mut |s: &Stmt| {
+                        if let Stmt::Assign { target: Expr::Ident(t, _), span, .. }
+                        | Stmt::CompoundAssign { target: Expr::Ident(t, _), span, .. } = s
+                        {
+                            if t == acc && late.is_none() {
+                                late = Some(span.line);
+                            }
+                        }
+                    });
+                    if let Some(l) = late {
+                        errors.push((l, "drift_add_at", format!(
+                            "is not called after this term is added to `{}`, so the term would never reach a \
+                             total. Hand `{}` over after its last term.",
+                            src(acc),
+                            src(acc)
+                        )));
+                    }
+                }
+            }
+        }
+        if placed != anywhere {
+            errors.push((span.line, "drift_add_at", "is called somewhere this backend does not place in a block \
+                 of the kernel's body, so its rules cannot be checked.".into()));
+        }
+        if calls.is_empty() && errors.is_empty() {
+            errors.push((span.line, "drift_finish", format!(
+                "finishes the totals of `{}`, and no `drift_add_at` before it hands anything over, so nothing \
+                 says how to convert them.",
+                src(buffer)
+            )));
+        }
+        let mut exit = None;
+        crate::ast::for_each_stmt_in(&stmts[..at], &mut |s: &Stmt| {
+            if matches!(s, Stmt::Return(..) | Stmt::Chisel(..)) && exit.is_none() {
+                exit = Some(s.span().line);
+            }
+        });
+        if let Some(line) = exit {
+            errors.push((span.line, "drift_finish", format!(
+                "must be reached by every thread, and the `return` or `chisel` block on line {line} can \
+                 take threads away first. A block whose threads left would take no ticket, and the \
+                 totals would never be written."
+            )));
+        }
+        if !errors.is_empty() {
+            for (line, call, why) in errors {
+                self.emit_errors.push(format!("[PTX] Line {line}: kernel `{}`: `{call}` {why}", kernel.name));
+            }
+            self.drift_grid = DriftGrid::Refused;
+            return;
+        }
+        self.drift_grid = DriftGrid::Scatter { buffer: buffer.clone(), count, accs, calls, at: finish };
+    }
+
     /// Adds (`sub`: subtracts) the term in `rhs` to the `@ZeroDrift`
     /// accumulator `name`, exactly: tested for overflow and against the
     /// declared range after the store, or, for a partial `drift_add_to` sums,
@@ -2175,8 +2461,9 @@ impl PtxEmitter {
         let (acc, repr, integer_domain, value_ty) = self.zero_drift[name].clone();
         if let Some(hi) = self.drift_grid_hi.get(name).cloned() {
             if self.drift_grid_done {
+                let call = if matches!(self.drift_grid, DriftGrid::Scatter { .. }) { "drift_finish" } else { "drift_add_to" };
                 self.emit_errors.push(format!(
-                    "Line {line}: `{}` is added to after `drift_add_to` handed it to the grid's total, \
+                    "Line {line}: `{}` is added to after `{call}` handed it to the grid's total, \
                      so this term would be lost. Accumulate before the call.",
                     crate::lexical_scope::source_name(name)
                 ));
@@ -2301,15 +2588,7 @@ impl PtxEmitter {
         b(self, format!("setp.ne.u32 {not_first}, {lane}, 0;"));
         b(self, format!("@{not_first} bra {joined};"));
         b(self, format!("{single}:"));
-        let [old, new, carry, high] = [(); 4].map(|_| self.alloc_ty(ScalarTy::U64));
-        let (carried, high_nonzero) = (self.alloc_pred(), self.alloc_pred());
-        b(self, format!("atom.global.add.u64 {old}, [{total}], {lo};"));
-        b(self, format!("add.u64 {new}, {old}, {lo};"));
-        b(self, format!("setp.lt.u64 {carried}, {new}, {old};"));
-        b(self, format!("selp.u64 {carry}, 1, 0, {carried};"));
-        b(self, format!("add.u64 {high}, {sum_hi}, {carry};"));
-        b(self, format!("setp.ne.u64 {high_nonzero}, {high}, 0;"));
-        b(self, format!("@{high_nonzero} red.global.add.u64 [{total}+8], {high};"));
+        self.emit_drift_hand_over(&total, &lo, &sum_hi);
         b(self, format!("{joined}:"));
         // The threadfence-reduction pattern: this block's additions are
         // visible GPU-wide before its ticket is, and the last block reads
@@ -2336,21 +2615,288 @@ impl PtxEmitter {
         b(self, format!("setp.ne.u64 {not_last}, {ticket}, {last};"));
         b(self, format!("@{not_last} bra {end};"));
         b(self, "membar.gl;".into());
-        let [sum_lo, sum_top, sign] = [(); 3].map(|_| self.alloc_ty(ScalarTy::I64));
-        b(self, format!("ld.volatile.global.u64 {sum_lo}, [{total}];"));
-        b(self, format!("ld.volatile.global.u64 {sum_top}, [{total}+8];"));
-        // The total fits 64 bits exactly when its high word is the sign
-        // extension of the low one.
-        let wide_total = self.alloc_pred();
-        b(self, format!("shr.s64 {sign}, {sum_lo}, 63;"));
-        b(self, format!("setp.ne.b64 {wide_total}, {sum_top}, {sign};"));
-        b(self, format!("@{wide_total} trap;"));
-        self.emit_drift_range_check(&name, &sum_lo);
-        let value = self.emit_drift_from_fixed(&sum_lo, repr, integer_domain, value_ty);
+        let value = self.emit_drift_read_total(&total, &name, repr, integer_domain, value_ty);
         b(self, format!("st.global.{} [{out}], {value};", value_ty.mem()));
         for word in 0..3 {
             b(self, format!("st.volatile.global.u64 [{total}+{}], 0;", 8 * word));
         }
+        b(self, format!("{end}:"));
+        self.drift_grid_done = true;
+        "".into()
+    }
+
+    /// Adds the 128-bit `hi:lo` to the total whose low word is at `addr` and
+    /// high word at `addr + 8`: one atomic on the low word, whose old value
+    /// gives the carry out of it, and one on the high word only when the
+    /// carry plus `hi` is not zero.
+    fn emit_drift_hand_over(&mut self, addr: &str, lo: &str, hi: &str) {
+        let [old, new, carry, high] = [(); 4].map(|_| self.alloc_ty(ScalarTy::U64));
+        let (carried, high_nonzero) = (self.alloc_pred(), self.alloc_pred());
+        for line in [
+            format!("atom.global.add.u64 {old}, [{addr}], {lo};"),
+            format!("add.u64 {new}, {old}, {lo};"),
+            format!("setp.lt.u64 {carried}, {new}, {old};"),
+            format!("selp.u64 {carry}, 1, 0, {carried};"),
+            format!("add.u64 {high}, {hi}, {carry};"),
+            format!("setp.ne.u64 {high_nonzero}, {high}, 0;"),
+            format!("@{high_nonzero} red.global.add.u64 [{addr}+8], {high};"),
+        ] {
+            writeln!(&mut self.ptx_buffer, "    {line}").unwrap();
+        }
+    }
+
+    /// Reads the total at `addr` (low word, then high word), stops the
+    /// program unless it fits 64 bits and the `@bounds` of the accumulator
+    /// `name`, and converts it to the type a read of `name` produces.
+    fn emit_drift_read_total(
+        &mut self,
+        addr: &str,
+        name: &str,
+        repr: crate::zero_drift::DriftRepr,
+        integer_domain: bool,
+        value_ty: ScalarTy,
+    ) -> String {
+        let [sum_lo, sum_top, sign] = [(); 3].map(|_| self.alloc_ty(ScalarTy::I64));
+        let wide_total = self.alloc_pred();
+        for line in [
+            format!("ld.volatile.global.u64 {sum_lo}, [{addr}];"),
+            format!("ld.volatile.global.u64 {sum_top}, [{addr}+8];"),
+            // The total fits 64 bits exactly when its high word is the sign
+            // extension of the low one.
+            format!("shr.s64 {sign}, {sum_lo}, 63;"),
+            format!("setp.ne.b64 {wide_total}, {sum_top}, {sign};"),
+            format!("@{wide_total} trap;"),
+        ] {
+            writeln!(&mut self.ptx_buffer, "    {line}").unwrap();
+        }
+        self.emit_drift_range_check(name, &sum_lo);
+        self.emit_drift_from_fixed(&sum_lo, repr, integer_domain, value_ty)
+    }
+
+    /// `e`, an integer, in a 64-bit signed register; `None` (refused) for a
+    /// float.
+    fn emit_drift_index(&mut self, e: &Expr, what: &str, hw_profile: &HardwareProfile) -> Option<String> {
+        let reg = self.emit_expr(e, None, hw_profile);
+        if reg.is_empty() {
+            return None;
+        }
+        if self.ty_of(&reg).is_float() {
+            self.unsupported_intrinsic(what, "its index and count are integers: give an integer, not a float");
+            return None;
+        }
+        Some(self.emit_convert(&reg, ScalarTy::I64))
+    }
+
+    /// `drift_add_at(ACC, i, acc)`: adds the partial `acc` exactly to total
+    /// `i` of `ACC`, and sets `acc` back to zero. `drift_finish` takes the
+    /// ticket once every hand-over is done.
+    ///
+    /// `ACC` holds `2n + 1` 64-bit words, zero before the first launch: total
+    /// `i` is words `2i` (low) and `2i + 1` (high), as `drift_add_to`'s one
+    /// total is, and word `2n` is the ticket. The program stops unless
+    /// `0 <= i < n`: this backend checks no other index, and a hand-over
+    /// outside the totals would silently change another one, or the ticket.
+    fn emit_drift_add_at(&mut self, args: &[Expr], span: &Span, hw_profile: &HardwareProfile) -> String {
+        let count = match &self.drift_grid {
+            DriftGrid::Scatter { calls, count, .. } if calls.contains(&(span.line, span.col)) => count.clone(),
+            DriftGrid::Refused => return "".into(),
+            _ => {
+                self.emit_errors.push(format!(
+                    "[PTX] Line {}: `drift_add_at` hands a partial to one of the totals a \
+                     `drift_finish(ACC, OUT, n)` statement of the kernel's body completes: it must be a \
+                     statement, before that one. Without `drift_finish` no block would know when the \
+                     totals are complete.",
+                    span.line
+                ));
+                return "".into();
+            }
+        };
+        let Some(Expr::Ident(name, _)) = args.get(2) else { unreachable!("planned by plan_drift_scatter") };
+        // Bound by its `let` unless that was refused, which is reported there.
+        let Some((acc, repr, integer_domain, value_ty)) = self.zero_drift.get(name).cloned() else {
+            return "".into();
+        };
+        let Some(hi) = self.drift_grid_hi.get(name).cloned() else {
+            self.emit_errors.push(format!(
+                "[PTX] Line {}: `drift_add_at` hands over `{}`, whose `let` did not make it a 128-bit \
+                 partial.",
+                span.line,
+                crate::lexical_scope::source_name(name)
+            ));
+            return "".into();
+        };
+        let range = self.drift_range.get(name).copied();
+        match &self.drift_scatter_format {
+            None => self.drift_scatter_format = Some((name.clone(), repr, integer_domain, value_ty, range)),
+            Some((_, r, i, v, b)) if (*r, *i, *v, *b) == (repr, integer_domain, value_ty, range) => {}
+            Some((first, ..)) => {
+                self.emit_errors.push(format!(
+                    "[PTX] Line {}: `drift_add_at` hands over `{}`, and `{}` was handed to the same totals \
+                     with another type, representation or `@bounds`. The last block converts every \
+                     total one way: declare them alike.",
+                    span.line,
+                    crate::lexical_scope::source_name(name),
+                    crate::lexical_scope::source_name(first)
+                ));
+                return "".into();
+            }
+        }
+        if !matches!(self.place_elem_ty(&args[0]), Some(ScalarTy::I64 | ScalarTy::U64)) {
+            self.unsupported_intrinsic(
+                "drift_add_at",
+                "its first argument holds the exact totals and a ticket, 2n + 1 64-bit words zero \
+                 before the first launch: give a GlobalMemory<I64>",
+            );
+            return "".into();
+        }
+        let Some(i) = self.emit_drift_index(&args[1], "drift_add_at", hw_profile) else { return "".into() };
+        let Some(n) = self.emit_drift_index(&count, "drift_add_at", hw_profile) else { return "".into() };
+        let base = self.emit_addr(&args[0], None, hw_profile);
+        let [offset, addr] = [(); 2].map(|_| self.alloc_ty(ScalarTy::U64));
+        let (negative, past, outside) = (self.alloc_pred(), self.alloc_pred(), self.alloc_pred());
+        let b = |this: &mut Self, line: String| writeln!(&mut this.ptx_buffer, "    {line}").unwrap();
+        b(self, format!("// [Y ZERO DRIFT] {name}: this thread's partial joins one of the grid's exact totals"));
+        b(self, format!("setp.lt.s64 {negative}, {i}, 0;"));
+        b(self, format!("setp.ge.s64 {past}, {i}, {n};"));
+        b(self, format!("or.pred {outside}, {negative}, {past};"));
+        b(self, format!("@{outside} trap;"));
+        b(self, format!("shl.b64 {offset}, {i}, 4;"));
+        b(self, format!("add.u64 {addr}, {base}, {offset};"));
+        self.emit_drift_hand_over(&addr, &acc, &hi);
+        b(self, format!("mov.u64 {acc}, 0;"));
+        b(self, format!("mov.u64 {hi}, 0;"));
+        "".into()
+    }
+
+    /// `drift_finish(ACC, OUT, n)`: once every block has handed its partials
+    /// over, writes each of the `n` totals of `ACC` to `OUT[i]`, as the type
+    /// a read of the accumulators produces, and sets `ACC` back to zero for
+    /// the next launch.
+    ///
+    /// Every block takes one ticket, at word `2n`, after its own hand-overs
+    /// are visible GPU-wide. The block that takes the last one tells its
+    /// threads through shared memory, and they read, check and convert the
+    /// totals together. So the program stops in exactly the launches with a
+    /// term or a total out of range: in all of them or in none.
+    fn emit_drift_finish(&mut self, args: &[Expr], span: &Span, hw_profile: &HardwareProfile) -> String {
+        let count = match &self.drift_grid {
+            DriftGrid::Scatter { count, at, .. } if *at == (span.line, span.col) => count.clone(),
+            DriftGrid::Refused => return "".into(),
+            _ => {
+                self.emit_errors.push(format!(
+                    "[PTX] Line {}: `drift_finish` must be a statement of the kernel's body itself, \
+                     outside every branch, loop and expression, so that every thread reaches it \
+                     exactly once: each block takes one ticket, and the last one writes the totals.",
+                    span.line
+                ));
+                return "".into();
+            }
+        };
+        // Set by the first `drift_add_at`; if none set it, each refusal is
+        // already reported.
+        let Some((name, repr, integer_domain, value_ty, _)) = self.drift_scatter_format.clone() else {
+            if self.emit_errors.is_empty() {
+                self.emit_errors.push(format!(
+                    "[PTX] Line {}: `drift_finish` has no `drift_add_at` lowered before it.",
+                    span.line
+                ));
+            }
+            return "".into();
+        };
+        if !matches!(self.place_elem_ty(&args[0]), Some(ScalarTy::I64 | ScalarTy::U64)) {
+            self.unsupported_intrinsic(
+                "drift_finish",
+                "its first argument holds the exact totals and a ticket, 2n + 1 64-bit words zero \
+                 before the first launch: give a GlobalMemory<I64>",
+            );
+            return "".into();
+        }
+        if self.place_elem_ty(&args[1]) != Some(value_ty) {
+            self.unsupported_intrinsic(
+                "drift_finish",
+                &format!(
+                    "its second argument receives the totals as a read of `{}` produces them, {}s: \
+                     give a GlobalMemory<{}>",
+                    crate::lexical_scope::source_name(&name),
+                    value_ty.name(),
+                    value_ty.name()
+                ),
+            );
+            return "".into();
+        }
+        let Some(n) = self.emit_drift_index(&count, "drift_finish", hw_profile) else { return "".into() };
+        let total = self.emit_addr(&args[0], None, hw_profile);
+        let out = self.emit_addr(&args[1], None, hw_profile);
+        let b = |this: &mut Self, line: String| writeln!(&mut this.ptx_buffer, "    {line}").unwrap();
+        b(self, format!("// [Y ZERO DRIFT] the grid's exact totals, once every block has handed its partials over"));
+        b(self, ".shared .align 4 .u32 drift_last;".into());
+        let [tx, ty, tz, nx, ny, nz, flat, threads, flag] = [(); 9].map(|_| self.alloc_ty(ScalarTy::U32));
+        for (reg, sreg) in [(&tx, "%tid.x"), (&ty, "%tid.y"), (&tz, "%tid.z"), (&nx, "%ntid.x"), (&ny, "%ntid.y"), (&nz, "%ntid.z")] {
+            b(self, format!("mov.u32 {reg}, {sreg};"));
+        }
+        b(self, format!("mad.lo.u32 {flat}, {tz}, {ny}, {ty};"));
+        b(self, format!("mad.lo.u32 {flat}, {flat}, {nx}, {tx};"));
+        b(self, format!("mul.lo.u32 {threads}, {nx}, {ny};"));
+        b(self, format!("mul.lo.u32 {threads}, {threads}, {nz};"));
+        // A negative count names no total, and its ticket would be before ACC.
+        let negative = self.alloc_pred();
+        b(self, format!("setp.lt.s64 {negative}, {n}, 0;"));
+        b(self, format!("@{negative} trap;"));
+        let [ticket_at, step] = [(); 2].map(|_| self.alloc_ty(ScalarTy::U64));
+        b(self, format!("shl.b64 {ticket_at}, {n}, 4;"));
+        b(self, format!("add.u64 {ticket_at}, {total}, {ticket_at};"));
+        let (ticketed, end) = (self.alloc_label("DRIFT_TICKETED"), self.alloc_label("DRIFT_END"));
+        // The threadfence-reduction pattern, as in `drift_add_to`.
+        b(self, "membar.gl;".into());
+        b(self, "bar.sync 0;".into());
+        let not_leader = self.alloc_pred();
+        b(self, format!("setp.ne.u32 {not_leader}, {flat}, 0;"));
+        b(self, format!("@{not_leader} bra {ticketed};"));
+        let [bx, by, bz] = [(); 3].map(|_| self.alloc_ty(ScalarTy::U32));
+        let [blocks, wide, ticket, last] = [(); 4].map(|_| self.alloc_ty(ScalarTy::U64));
+        for (reg, sreg) in [(&bx, "%nctaid.x"), (&by, "%nctaid.y"), (&bz, "%nctaid.z")] {
+            b(self, format!("mov.u32 {reg}, {sreg};"));
+        }
+        b(self, format!("mul.wide.u32 {blocks}, {bx}, {by};"));
+        b(self, format!("cvt.u64.u32 {wide}, {bz};"));
+        b(self, format!("mul.lo.u64 {blocks}, {blocks}, {wide};"));
+        b(self, format!("atom.global.add.u64 {ticket}, [{ticket_at}], 1;"));
+        // A ticket past the last is an ACC that was not zero at the launch.
+        let (stale, is_last) = (self.alloc_pred(), self.alloc_pred());
+        b(self, format!("setp.ge.u64 {stale}, {ticket}, {blocks};"));
+        b(self, format!("@{stale} trap;"));
+        b(self, format!("sub.u64 {last}, {blocks}, 1;"));
+        b(self, format!("setp.eq.u64 {is_last}, {ticket}, {last};"));
+        b(self, format!("selp.u32 {flag}, 1, 0, {is_last};"));
+        b(self, format!("st.shared.u32 [drift_last], {flag};"));
+        b(self, format!("{ticketed}:"));
+        b(self, "bar.sync 0;".into());
+        let not_last = self.alloc_pred();
+        b(self, format!("ld.shared.u32 {flag}, [drift_last];"));
+        b(self, format!("setp.eq.u32 {not_last}, {flag}, 0;"));
+        b(self, format!("@{not_last} bra {end};"));
+        b(self, "membar.gl;".into());
+        // The last block's threads convert totals flat, flat + threads, ...
+        let [i, offset, addr, out_at] = [(); 4].map(|_| self.alloc_ty(ScalarTy::I64));
+        let (top, done) = (self.alloc_label("DRIFT_TOTALS"), self.alloc_label("DRIFT_TOTALS_DONE"));
+        let finished = self.alloc_pred();
+        b(self, format!("cvt.u64.u32 {i}, {flat};"));
+        b(self, format!("cvt.u64.u32 {step}, {threads};"));
+        b(self, format!("{top}:"));
+        b(self, format!("setp.ge.s64 {finished}, {i}, {n};"));
+        b(self, format!("@{finished} bra {done};"));
+        b(self, format!("shl.b64 {offset}, {i}, 4;"));
+        b(self, format!("add.u64 {addr}, {total}, {offset};"));
+        let value = self.emit_drift_read_total(&addr, &name, repr, integer_domain, value_ty);
+        b(self, format!("mad.lo.u64 {out_at}, {i}, {}, {out};", value_ty.bytes()));
+        b(self, format!("st.global.{} [{out_at}], {value};", value_ty.mem()));
+        b(self, format!("st.volatile.global.u64 [{addr}], 0;"));
+        b(self, format!("st.volatile.global.u64 [{addr}+8], 0;"));
+        b(self, format!("add.u64 {i}, {i}, {step};"));
+        b(self, format!("bra {top};"));
+        b(self, format!("{done}:"));
+        b(self, format!("@{not_leader} bra {end};"));
+        b(self, format!("st.volatile.global.u64 [{ticket_at}], 0;"));
         b(self, format!("{end}:"));
         self.drift_grid_done = true;
         "".into()
@@ -3558,8 +4104,8 @@ impl PtxEmitter {
             "ld_global_v4_f32" | "load_v4" | "warp_reduce_sum" | "warp_reduce_max"
             | "u64_lo32" | "u64_hi32" | "shared_alloc_u32" => Arity::Exactly(1),
             "store" | "mul_wide_u32" | "mul_wide_s32" | "shared_load_v4" => Arity::Exactly(2),
-            "atomic_add" | "atomic_max" | "drift_add_to" | "swiglu_v4" | "swiglu_fast"
-            | "vec_add_unrolled4" => {
+            "atomic_add" | "atomic_max" | "drift_add_to" | "drift_add_at" | "drift_finish"
+            | "swiglu_v4" | "swiglu_fast" | "vec_add_unrolled4" => {
                 Arity::Exactly(3)
             }
             // `(x, w, out, hidden_dim, eps)`: the row length and epsilon were
@@ -4232,6 +4778,7 @@ or `shared_alloc_u32` for a shared-memory array.",
         self.drift_grid = DriftGrid::Absent;
         self.drift_grid_hi.clear();
         self.drift_grid_done = false;
+        self.drift_scatter_format = None;
         self.record_pointer_element_types(kernel);
 
         // Reset register counters
@@ -5421,12 +5968,17 @@ or `shared_alloc_u32` for a shared-memory array.",
                         } else {
                             ScalarTy::F32
                         };
-                        let grid = matches!(&self.drift_grid, DriftGrid::Planned(n, _) if n == name);
+                        let grid = match &self.drift_grid {
+                            DriftGrid::Planned(n, _) => n == name,
+                            DriftGrid::Scatter { accs, .. } => accs.contains(name),
+                            _ => false,
+                        };
                         if grid {
-                            // A partial of `drift_add_to`'s total: it starts
-                            // at zero (`plan_drift_grid` refused anything
-                            // else) and its range is the total's, tested once
-                            // at the end, not after every store.
+                            // A partial of `drift_add_to`'s total, or of the
+                            // totals `drift_add_at` hands it to: it starts at
+                            // zero (`plan_drift_grid` refused anything else)
+                            // and its range is the total's, tested once at
+                            // the end, not after every store.
                             let hi = self.alloc_ty(ScalarTy::I64);
                             writeln!(&mut self.ptx_buffer, "    // [Y ZERO DRIFT] {}: one thread's partial of the grid's total", name).unwrap();
                             writeln!(&mut self.ptx_buffer, "    mov.u64 {}, 0;", acc).unwrap();
@@ -6211,8 +6763,9 @@ declare it as a Q format.\n{}",
                         // launch decides.
                         self.emit_errors.push(format!(
                             "Line {}: `{}` is read, and it is one thread's share of the total \
-                             `drift_add_to` sums, so its value depends on how the launch divided the \
-                             terms among the threads. Read the total from `drift_add_to`'s output.",
+                             `drift_add_to` or `drift_add_at` sums, so its value depends on how the \
+                             launch divided the terms among the threads. Read the total from the \
+                             output.",
                             span.line,
                             crate::lexical_scope::source_name(name)
                         ));
@@ -7505,6 +8058,10 @@ declare it as a Q format.\n{}",
                         // property the backend then discards.
                         } else if fname == "drift_add_to" {
                             self.emit_drift_add_to(args, call_span, hw_profile)
+                        } else if fname == "drift_add_at" {
+                            self.emit_drift_add_at(args, call_span, hw_profile)
+                        } else if fname == "drift_finish" {
+                            self.emit_drift_finish(args, call_span, hw_profile)
                         } else if (fname == "atomic_add" || fname == "atomic_max")
                             && args.len() == 3
                         {

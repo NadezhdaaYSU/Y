@@ -903,6 +903,36 @@ reports that and exits 1.
     besides (a partial is the launch's choice).
   * One total per kernel. The LLVM backend, the JIT and `--emit-cpu` refuse it
     by name. `tests/zero_drift_grid_sum.rs`.
+* **Many totals across threads** (PTX only): `drift_add_at(ACC, i, acc)` adds
+  the partial `acc` exactly to total `i` and sets `acc` back to zero, and
+  `drift_finish(ACC, OUT, n)` stores all `n` totals in `OUT[0..n]` once every
+  block has handed its partials over. A scatter, such as the forces on atoms
+  from a list of pairs, is the case it is for: each total receives an unknown
+  number of hand-overs in an order that changes every launch, and gets the
+  same bits in every one.
+  * `ACC` is a `GlobalMemory<I64>` of `2n + 1` words, zero before the first
+    launch: total `i` is words `2i` and `2i + 1`, and word `2n` is the ticket.
+    The kernel sets them back to zero. Each hand-over is one 64-bit atomic
+    (and one on the high word when its carry or sign needs it).
+  * The program stops when a term is out of range, when a total does not fit
+    64 bits or the `@bounds`, when `i` is outside `0..n` (no other index is
+    checked, and a wrong one would change another total or the ticket), and
+    when `ACC` was not zero at the launch: in every launch shape or in none.
+  * `drift_add_at` may be called in loops and branches, any number of times,
+    but only in the block that declares the accumulator, and nothing may be
+    added to it after its last hand-over there. A hand-over skipped in a
+    branch would otherwise carry its terms into the next total, or lose them.
+    All accumulators handed to one `ACC` have the same type, format and
+    `@bounds`, start at zero, and are never read.
+  * `drift_finish` is a statement of the kernel's body itself, once, after
+    every `drift_add_at`, with no `return` or `chisel` block before it. `n`
+    is an integer literal or a scalar integer parameter the body never
+    assigns, so that every thread agrees on it.
+  * The last block converts all `n` totals alone: 0.85 ns per total on an RTX
+    4070 Ti SUPER, 37% of a 262,144-atom force kernel's time
+    (`docs/benchmarks/zero_drift_forces_2026-10-28/`).
+  * Not together with `drift_add_to` in one kernel. The LLVM backend, the JIT
+    and `--emit-cpu` refuse both by name. `tests/zero_drift_scatter.rs`.
 * **History**: this entry said `@ZeroDrift` inserted Kahan compensation. It
   never did: Kahan summation is not exact, and the representation selector
   refuses it.

@@ -1,0 +1,56 @@
+// E8: Lennard-Jones pair forces (sigma = epsilon = 1), one thread per pair.
+// Each pair adds +f*d to atom i and -f*d to atom j, per component: six
+// hand-overs of one exact partial, set back to zero by each. `drift_finish`
+// writes the 3 * atoms totals once every block has handed its partials over.
+kernel lj_exact(POS: GlobalMemory<F32>, PI: GlobalMemory<I32>, PJ: GlobalMemory<I32>, F: GlobalMemory<I64>, OUT: GlobalMemory<F32>, NP: I32, NT: I32) {
+    let p: I32 = block_idx_x() * block_dim_x() + thread_idx_x();
+    if p < NP {
+        let i: I32 = PI[p];
+        let j: I32 = PJ[p];
+        let dx: F32 = POS[3 * i] - POS[3 * j];
+        let dy: F32 = POS[3 * i + 1] - POS[3 * j + 1];
+        let dz: F32 = POS[3 * i + 2] - POS[3 * j + 2];
+        let r2: F32 = dx * dx + dy * dy + dz * dz;
+        let s2: F32 = 1.0 / r2;
+        let s6: F32 = s2 * s2 * s2;
+        let f: F32 = 24.0 * s6 * (2.0 * s6 - 1.0) * s2;
+        @ZeroDrift
+        @bounds(min=-1000000.0, max=1000000.0)
+        let mut a: F32 = 0.0;
+        a += f * dx;
+        drift_add_at(F, 3 * i, a);
+        a -= f * dx;
+        drift_add_at(F, 3 * j, a);
+        a += f * dy;
+        drift_add_at(F, 3 * i + 1, a);
+        a -= f * dy;
+        drift_add_at(F, 3 * j + 1, a);
+        a += f * dz;
+        drift_add_at(F, 3 * i + 2, a);
+        a -= f * dz;
+        drift_add_at(F, 3 * j + 2, a);
+    }
+    drift_finish(F, OUT, NT);
+}
+
+// The same arithmetic, storing each pair's three terms: the reference sums
+// these exactly on the host.
+kernel lj_terms(POS: GlobalMemory<F32>, PI: GlobalMemory<I32>, PJ: GlobalMemory<I32>, T: GlobalMemory<F32>, NP: I32) {
+    let p: I32 = block_idx_x() * block_dim_x() + thread_idx_x();
+    if p < NP {
+        let i: I32 = PI[p];
+        let j: I32 = PJ[p];
+        let dx: F32 = POS[3 * i] - POS[3 * j];
+        let dy: F32 = POS[3 * i + 1] - POS[3 * j + 1];
+        let dz: F32 = POS[3 * i + 2] - POS[3 * j + 2];
+        let r2: F32 = dx * dx + dy * dy + dz * dz;
+        let s2: F32 = 1.0 / r2;
+        let s6: F32 = s2 * s2 * s2;
+        let f: F32 = 24.0 * s6 * (2.0 * s6 - 1.0) * s2;
+        T[3 * p] = f * dx;
+        T[3 * p + 1] = f * dy;
+        T[3 * p + 2] = f * dz;
+    }
+}
+
+fn main() {}

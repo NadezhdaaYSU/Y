@@ -2103,6 +2103,18 @@ or in none (`tests/zero_drift_grid_sum.rs`). On an RTX 4070 Ti SUPER it takes
 (measured with the desktop sharing the card;
 `docs/benchmarks/zero_drift_grid_sum_2026-10-27/`).
 
+**Many totals: `drift_add_at(ACC, i, acc)` hands a partial to total `i`, and
+`drift_finish(ACC, OUT, n)` writes all `n` once every block is done.** It is
+for scatters, such as the forces on atoms from a list of pairs. A
+Lennard-Jones kernel on 262,144 atoms (6.5 million pairs) stores the exact
+forces, bit for bit, for 5 block sizes and 3 pair orders; f32 atomics give
+15 different results. It takes 4.02x the f32 atomics, 2.25x f64 atomics and
+2.23x unchecked fixed-point atomics, and 37% of that is the last block
+converting all 786,432 totals alone. On this input f64 atomics are
+order-independent too, because every sum fits 53 bits
+(`tests/zero_drift_scatter.rs`,
+`docs/benchmarks/zero_drift_forces_2026-10-28/`).
+
 `tests/zero_drift_end_to_end.rs` compiles a program with clang and **runs it**,
 summing the same 4001 terms in opposite orders and requiring bit-identical
 results — alongside a control asserting that sequence genuinely disagrees with

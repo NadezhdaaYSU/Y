@@ -1,0 +1,21 @@
+32^3 = 32768 atoms, 785833 pairs; exact in 15/15 configurations; CUDA terms == Y terms: True; Y != f32(S_k) in 299 of 98304 components
+   f32 atomics: 15 distinct results; max_abs 1.34e-05 (rel_max 5.41e-07); components != f32(S_k): 59.9%-78.5%
+   f64 atomics: 1 distinct (1 after rounding to f32); components != S_k per configuration: max 0; fixed: 1 distinct, raw == Y's raw sums: False
+                      Y exact: min     222.7 us  median     223.5 us  ( 3.90x f32 atomics)
+                Y finish only: min      84.9 us  median      85.9 us  ( 1.49x f32 atomics)
+                  f32 atomics: min      57.1 us  median      57.4 us  ( 1.00x f32 atomics)
+     f32 atomics, kernel only: min      55.8 us  median      56.0 us  ( 0.98x f32 atomics)
+                  f64 atomics: min      98.8 us  median      99.1 us  ( 1.73x f32 atomics)
+              fixed unchecked: min     101.1 us  median     101.3 us  ( 1.77x f32 atomics)
+64^3 = 262144 atoms, 6532504 pairs; exact in 15/15 configurations; CUDA terms == Y terms: True; Y != f32(S_k) in 2749 of 786432 components
+   f32 atomics: 15 distinct results; max_abs 1.52e-05 (rel_max 6.02e-07); components != f32(S_k): 59.3%-78.9%
+   f64 atomics: 1 distinct (1 after rounding to f32); components != S_k per configuration: max 0; fixed: 1 distinct, raw == Y's raw sums: False
+                      Y exact: min    1800.2 us  median    1811.3 us  ( 4.02x f32 atomics)
+                Y finish only: min     668.0 us  median     678.5 us  ( 1.49x f32 atomics)
+                  f32 atomics: min     448.2 us  median     450.0 us  ( 1.00x f32 atomics)
+     f32 atomics, kernel only: min     444.4 us  median     446.9 us  ( 0.99x f32 atomics)
+                  f64 atomics: min     801.2 us  median     805.5 us  ( 1.79x f32 atomics)
+              fixed unchecked: min     808.9 us  median     813.7 us  ( 1.80x f32 atomics)
+games before none after none
+util before 2 %, 210 MHz, 405 MHz after 100 %, 2775 MHz, 10251 MHz
+SM % by process (max of 5 samples), before {'2216 plasmashell': 44, '2830 --gpu-': 49} after {'124876 python3': 99, '2112 kwin_wayland': 1}

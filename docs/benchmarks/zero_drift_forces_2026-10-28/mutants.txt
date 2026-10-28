@@ -1,0 +1,44 @@
+# Mutants of drift_add_at / drift_finish (src/ptx_emitter.rs), run against tests/zero_drift_scatter.rs
+# and python/y_lang/tests/test_drift_scatter.py (the CPU interpreter); A7 and A8 change helpers
+# drift_add_to shares, so they also ran tests/zero_drift_grid_sum.rs and test_drift_grid_sum.py.
+# Harness: one textual change each, build, run; restored by writing the file back, touched, rebuilt.
+M0 unmutated: OK  py rc 0 OK; rust rc 0 []
+A1 no lower index bound: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+A2 no upper index bound: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+A3 index n accepted: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'programs_stop_in_every_launch_shape_or_in_none']
+A4 totals 8 bytes apart: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+A5 low word not reset: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals']
+A6 high word not reset: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals']
+A7 carry dropped: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; e7 rust rc 101 ['every_launch_shape_gives_the_exact_total']; e7 py rc 1 FAILED (errors=1)
+A8 high word never added: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; e7 rust rc 101 ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none']; e7 py rc 1 FAILED (errors=1)
+A9 float index converted: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+F1 negative count accepted: KILLED  py rc 0 OK; rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+F2 stale ticket accepted: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+F3 flag inverted: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+F4 flag never stored: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+F5 no barrier before the flag is read: KILLED  py rc 0 OK; rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals']
+F6 no fence before the ticket: SURVIVED  py rc 0 OK; rust rc 0 []
+F7 step 1: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+F8 every thread starts at 0: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+F9 low words not zeroed: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+F10 ticket not zeroed: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+F11 one total too many: KILLED  py rc 1 FAILED (errors=1); rust rc 0 []
+F12 OUT stride 8: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+F13 total not checked: KILLED  py rc 0 OK; rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+P1 count need not be uniform: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P2 declared anywhere: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P3 terms after the last hand-over: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P4 hand-over after the finish: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P5 any buffer: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P6 any start: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P7 both kinds in one kernel: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P8 formats may differ: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P9 two finishes: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P10 return before the finish: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P11 partial not 128 bits: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals', 'hand_overs_in_loops_and_branches_compile', 'programs_stop_in_every_launch_shape_or_in_none', 'what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+P12 finish without hand-overs: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+restored; rebuild 0; identical True
+# After adding the fence check to the shape test:
+M0 unmutated: OK  py rc 0 OK; rust rc 0 []
+F6 no fence before the ticket: KILLED  py rc 0 OK; rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word']
+restored; rebuild 0; identical True
