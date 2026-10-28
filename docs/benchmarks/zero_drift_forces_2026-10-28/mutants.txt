@@ -42,3 +42,44 @@ restored; rebuild 0; identical True
 M0 unmutated: OK  py rc 0 OK; rust rc 0 []
 F6 no fence before the ticket: KILLED  py rc 0 OK; rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word']
 restored; rebuild 0; identical True
+
+# Round 2: mutants of drift_close / drift_convert and their planners, same harness and tests
+M0 unmutated: OK  py rc 0 OK; rust rc 0 []
+C1 tag before the header's fence: KILLED  py rc 0 OK; rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word']
+C2 tag without its type: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+C3 second close accepted: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+C4 count not stored: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+C5 bounds not stored: KILLED  py rc 0 OK; rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+C6 close: negative count accepted: SURVIVED  py rc 0 OK; rust rc 0 []
+C7 close: no fence before the ticket: KILLED  py rc 0 OK; rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word']
+V1 tag not checked: KILLED  py rc 0 OK; rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+V2 count not checked: KILLED  py rc 1 FAILED (failures=1); rust rc 0 []
+V3 total range not checked: KILLED  py rc 0 OK; rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+V4 upper bound not checked: KILLED  py rc 0 OK; rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+V5 64-bit fit not checked: KILLED  py rc 0 OK; rust rc 101 ['programs_stop_in_every_launch_shape_or_in_none']
+V6 scale off by one: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+V7 stride one block: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals']
+V8 no block offset: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals']
+V9 totals not zeroed: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+V10 header not cleared: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+V11 converter's ticket not checked: KILLED  py rc 1 FAILED (failures=1); rust rc 0 []
+V12 any block clears: KILLED  py rc 0 OK; rust rc 101 ['every_launch_shape_gives_the_exact_totals']
+V13 header read before the fence: KILLED  py rc 0 OK; rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word']
+V14 convert: negative count accepted: SURVIVED  py rc 0 OK; rust rc 0 []
+V15 grid places ignore z: KILLED  py rc 1 FAILED (failures=1); rust rc 101 ['every_launch_shape_gives_the_exact_totals']
+Q1 convert beside hand-overs: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+Q2 convert count need not be uniform: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+Q3 two converts: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+Q4 close beside finish: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+Q5 close count from the wrong argument: KILLED  py rc 1 FAILED (errors=1); rust rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']
+Q6 return before convert: KILLED  py rc 0 OK; rust rc 101 ['what_would_make_a_total_wrong_or_launch_dependent_is_refused']
+restored; rebuild 0; identical True
+# After isolating each kernel's negative-count check in the interpreter test:
+M0 unmutated: OK  py rc 0 OK; rust rc 0 []
+C6 close: negative count accepted: SURVIVED  py rc 0 OK; rust rc 0 []
+V14 convert: negative count accepted: KILLED  py rc 1 FAILED (failures=1); rust rc 0 []
+restored; rebuild 0; identical True
+# After giving the close's negative count no elements:
+M0 unmutated: OK  py rc 0 OK; rust rc 0 []
+C6 close: negative count accepted: KILLED  py rc 1 FAILED (failures=1); rust rc 0 []
+restored; rebuild 0; identical True

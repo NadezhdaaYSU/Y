@@ -6,7 +6,7 @@
 // Based on NVVM 7.0.1
 //
 
-.version 9.4
+.version 7.8
 .target sm_89
 .address_size 64
 

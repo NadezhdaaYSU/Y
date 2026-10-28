@@ -471,15 +471,19 @@ enum DriftGrid {
     /// One `drift_add_to`, at this line and column, summing this accumulator.
     Planned(String, (usize, usize)),
     /// `drift_add_at(buffer, i, acc)` hands an accumulator of `accs` to total
-    /// `i` of `buffer` at each of `calls`, and `drift_finish(buffer, OUT,
-    /// count)` at `at` takes the ticket.
+    /// `i` of `buffer` at each of `calls`, and `finish` - `drift_finish(buffer,
+    /// OUT, count)` or `drift_close(buffer, count)` - at `at` takes the ticket.
     Scatter {
         buffer: String,
         count: Expr,
         accs: std::collections::HashSet<String>,
         calls: std::collections::HashSet<(usize, usize)>,
         at: (usize, usize),
+        finish: &'static str,
     },
+    /// `drift_convert(ACC, OUT, n)`, at this line and column: the totals a
+    /// `drift_close` of another kernel completed.
+    Convert((usize, usize)),
 }
 
 enum ZeroInitKind {
@@ -2125,19 +2129,36 @@ impl PtxEmitter {
     ///   call, starting at zero: every thread's partial includes its starting
     ///   value, so any other start would be counted once per thread.
     ///
-    /// A kernel with `drift_add_at` or `drift_finish` instead is planned by
-    /// `plan_drift_scatter`; one with both kinds is refused.
+    /// A kernel with `drift_add_at`, `drift_finish` or `drift_close` instead
+    /// is planned by `plan_drift_scatter`, one with `drift_convert` by
+    /// `plan_drift_convert`; one with two of the three kinds is refused.
     fn plan_drift_grid(&mut self, kernel: &KernelDecl) {
-        let (mut one, mut many) = (None, None);
+        let (mut one, mut many, mut convert) = (None, None, None);
         crate::ast::for_each_stmt_in(&kernel.body.stmts, &mut |s: &Stmt| match Self::call_stmt(s) {
             Some(("drift_add_to", _, span)) => {
                 one.get_or_insert(span.line);
             }
-            Some(("drift_add_at" | "drift_finish", _, span)) => {
+            Some(("drift_add_at" | "drift_finish" | "drift_close", _, span)) => {
                 many.get_or_insert(span.line);
+            }
+            Some(("drift_convert", _, span)) => {
+                convert.get_or_insert(span.line);
             }
             _ => {}
         });
+        if let (Some(c), Some(other)) = (convert, one.or(many)) {
+            self.emit_errors.push(format!(
+                "[PTX] Line {c}: kernel `{}` converts totals with `drift_convert` and hands partials \
+                 over on line {other}. A kernel that converts the totals runs after the one that \
+                 closes them, so it hands nothing over.",
+                kernel.name
+            ));
+            self.drift_grid = DriftGrid::Refused;
+            return;
+        }
+        if convert.is_some() {
+            return self.plan_drift_convert(kernel);
+        }
         if let (Some(one), Some(many)) = (one, many) {
             self.emit_errors.push(format!(
                 "[PTX] Line {many}: kernel `{}` calls `drift_add_to` on line {one} and `drift_add_at` or \
@@ -2244,56 +2265,45 @@ impl PtxEmitter {
     ///   them into the next total the thread hands over to, or drop them.
     fn plan_drift_scatter(&mut self, kernel: &KernelDecl) {
         let stmts = &kernel.body.stmts;
-        let finishes: Vec<usize> =
-            (0..stmts.len()).filter(|&i| matches!(Self::call_stmt(&stmts[i]), Some(("drift_finish", ..)))).collect();
+        let endings = |name: &str| -> Vec<usize> {
+            (0..stmts.len()).filter(|&i| matches!(Self::call_stmt(&stmts[i]), Some((f, ..)) if f == name)).collect()
+        };
+        let (finishes, closes) = (endings("drift_finish"), endings("drift_close"));
         // Without one, each call is refused where it is lowered, with why.
-        let Some(&at) = finishes.first() else { return };
+        let (fin, ends): (&'static str, &[usize]) =
+            if finishes.is_empty() { ("drift_close", &closes) } else { ("drift_finish", &finishes) };
+        let Some(&at) = ends.first() else { return };
         let Some((_, args, span)) = Self::call_stmt(&stmts[at]) else { unreachable!() };
         let finish = (span.line, span.col);
         let src = |n: &str| crate::lexical_scope::source_name(n).to_string();
         let mut errors: Vec<(usize, &str, String)> = Vec::new();
-        if finishes.len() > 1 {
-            let again = stmts[finishes[1]].span().line;
-            errors.push((span.line, "drift_finish", format!(
+        if let (Some(&f), Some(&c)) = (finishes.first(), closes.first()) {
+            errors.push((stmts[f.max(c)].span().line, "drift_close", format!(
+                "and `drift_finish` both end this kernel's hand-overs, on lines {} and {}. Each block takes \
+                 one ticket: convert the totals here with `drift_finish`, or close them for a later \
+                 kernel's `drift_convert` with `drift_close`.",
+                stmts[c].span().line,
+                stmts[f].span().line
+            )));
+        } else if ends.len() > 1 {
+            let again = stmts[ends[1]].span().line;
+            errors.push((span.line, fin, format!(
                 "is called again on line {again}. Each block takes one ticket, and a second call would \
                  count every block twice."
             )));
         }
         let Some(Expr::Ident(buffer, _)) = args.first() else {
             self.emit_errors.push(format!(
-                "[PTX] Line {}: kernel `{}`: `drift_finish` takes the buffer of totals as its first \
-                 argument, by name.",
+                "[PTX] Line {}: kernel `{}`: `{fin}` takes the buffer of totals as its first argument, by \
+                 name.",
                 span.line, kernel.name
             ));
             self.drift_grid = DriftGrid::Refused;
             return;
         };
-        let count = args.get(2).cloned().unwrap_or(Expr::IntLit(-1, span.clone()));
-        let uniform = match &count {
-            Expr::IntLit(v, _) => *v >= 0,
-            Expr::Ident(n, _) => {
-                let scalar = kernel.params.iter().any(|p| {
-                    p.name == *n
-                        && matches!(&p.ty, Type::Primitive(t, _) | Type::Ident(t, _)
-                            if matches!(t.as_str(), "I32" | "U32" | "I64" | "U64"))
-                });
-                let mut assigned = false;
-                crate::ast::for_each_stmt_in(stmts, &mut |s: &Stmt| {
-                    if let Stmt::Assign { target: Expr::Ident(t, _), .. }
-                    | Stmt::CompoundAssign { target: Expr::Ident(t, _), .. } = s
-                    {
-                        assigned |= t == n;
-                    }
-                });
-                scalar && !assigned
-            }
-            _ => false,
-        };
-        if !uniform {
-            errors.push((span.line, "drift_finish", "counts the totals with its third argument, which must be a \
-                 non-negative integer literal or a scalar integer parameter of the kernel that the body never \
-                 assigns, so that it is the same in every thread: each block takes its ticket at word 2n of \
-                 the buffer, and every hand-over is checked against n.".into()));
+        let count = args.get(if fin == "drift_close" { 1 } else { 2 }).cloned().unwrap_or(Expr::IntLit(-1, span.clone()));
+        if !Self::drift_count_is_uniform(kernel, &count) {
+            errors.push((span.line, fin, Self::DRIFT_COUNT_RULE.into()));
         }
 
         // Every block of the body, to find the one each accumulator is
@@ -2424,7 +2434,7 @@ impl PtxEmitter {
                  of the kernel's body, so its rules cannot be checked.".into()));
         }
         if calls.is_empty() && errors.is_empty() {
-            errors.push((span.line, "drift_finish", format!(
+            errors.push((span.line, fin, format!(
                 "finishes the totals of `{}`, and no `drift_add_at` before it hands anything over, so nothing \
                  says how to convert them.",
                 src(buffer)
@@ -2437,7 +2447,7 @@ impl PtxEmitter {
             }
         });
         if let Some(line) = exit {
-            errors.push((span.line, "drift_finish", format!(
+            errors.push((span.line, fin, format!(
                 "must be reached by every thread, and the `return` or `chisel` block on line {line} can \
                  take threads away first. A block whose threads left would take no ticket, and the \
                  totals would never be written."
@@ -2450,7 +2460,88 @@ impl PtxEmitter {
             self.drift_grid = DriftGrid::Refused;
             return;
         }
-        self.drift_grid = DriftGrid::Scatter { buffer: buffer.clone(), count, accs, calls, at: finish };
+        self.drift_grid = DriftGrid::Scatter { buffer: buffer.clone(), count, accs, calls, at: finish, finish: fin };
+    }
+
+    /// What the count of `drift_finish`, `drift_close` and `drift_convert`
+    /// must be.
+    const DRIFT_COUNT_RULE: &'static str = "counts the totals with an argument that must be a non-negative \
+         integer literal or a scalar integer parameter of the kernel that the body never assigns, so that it \
+         is the same in every thread: the ticket is at word 2n of the buffer, and every hand-over is checked \
+         against n.";
+
+    /// Whether `count` is the same in every thread of every block: a
+    /// non-negative integer literal, or a scalar integer parameter the body
+    /// never assigns.
+    fn drift_count_is_uniform(kernel: &KernelDecl, count: &Expr) -> bool {
+        match count {
+            Expr::IntLit(v, _) => *v >= 0,
+            Expr::Ident(n, _) => {
+                let scalar = kernel.params.iter().any(|p| {
+                    p.name == *n
+                        && matches!(&p.ty, Type::Primitive(t, _) | Type::Ident(t, _)
+                            if matches!(t.as_str(), "I32" | "U32" | "I64" | "U64"))
+                });
+                let mut assigned = false;
+                crate::ast::for_each_stmt_in(&kernel.body.stmts, &mut |s: &Stmt| {
+                    if let Stmt::Assign { target: Expr::Ident(t, _), .. }
+                    | Stmt::CompoundAssign { target: Expr::Ident(t, _), .. } = s
+                    {
+                        assigned |= t == n;
+                    }
+                });
+                scalar && !assigned
+            }
+            _ => false,
+        }
+    }
+
+    /// Finds the kernel's `drift_convert(ACC, OUT, n)` and checks it as
+    /// `drift_finish` is checked: a statement of the kernel's body itself,
+    /// once, with no `return` or `chisel` block before it (every block takes
+    /// one ticket, and the last clears `ACC`), and a count every thread agrees
+    /// on (the header is at word 2n).
+    fn plan_drift_convert(&mut self, kernel: &KernelDecl) {
+        let stmts = &kernel.body.stmts;
+        let calls: Vec<usize> =
+            (0..stmts.len()).filter(|&i| matches!(Self::call_stmt(&stmts[i]), Some(("drift_convert", ..)))).collect();
+        let Some(&at) = calls.first() else { return };
+        let Some((_, args, span)) = Self::call_stmt(&stmts[at]) else { unreachable!() };
+        let mut errors = Vec::new();
+        if calls.len() > 1 {
+            errors.push(format!(
+                "is called again on line {}. Each block takes one ticket, and a second call would count \
+                 every block twice.",
+                stmts[calls[1]].span().line
+            ));
+        }
+        if !matches!(args.first(), Some(Expr::Ident(..))) {
+            errors.push("takes the buffer of totals as its first argument, by name.".into());
+        }
+        if !Self::drift_count_is_uniform(kernel, args.get(2).unwrap_or(&Expr::IntLit(-1, span.clone()))) {
+            errors.push(Self::DRIFT_COUNT_RULE.into());
+        }
+        let mut exit = None;
+        crate::ast::for_each_stmt_in(&stmts[..at], &mut |s: &Stmt| {
+            if matches!(s, Stmt::Return(..) | Stmt::Chisel(..)) && exit.is_none() {
+                exit = Some(s.span().line);
+            }
+        });
+        if let Some(line) = exit {
+            errors.push(format!(
+                "must be reached by every thread, and the `return` or `chisel` block on line {line} can take \
+                 threads away first. A block whose threads left would take no ticket, and `ACC` would never \
+                 be cleared."
+            ));
+        }
+        if errors.is_empty() {
+            self.drift_grid = DriftGrid::Convert((span.line, span.col));
+            return;
+        }
+        for why in errors {
+            self.emit_errors.push(format!("[PTX] Line {}: kernel `{}`: `drift_convert` {why}", span.line, kernel.name));
+        }
+        self.drift_grid = DriftGrid::Refused;
     }
 
     /// Adds (`sub`: subtracts) the term in `rhs` to the `@ZeroDrift`
@@ -2461,7 +2552,10 @@ impl PtxEmitter {
         let (acc, repr, integer_domain, value_ty) = self.zero_drift[name].clone();
         if let Some(hi) = self.drift_grid_hi.get(name).cloned() {
             if self.drift_grid_done {
-                let call = if matches!(self.drift_grid, DriftGrid::Scatter { .. }) { "drift_finish" } else { "drift_add_to" };
+                let call = match &self.drift_grid {
+                    DriftGrid::Scatter { finish, .. } => *finish,
+                    _ => "drift_add_to",
+                };
                 self.emit_errors.push(format!(
                     "Line {line}: `{}` is added to after `{call}` handed it to the grid's total, \
                      so this term would be lost. Accumulate before the call.",
@@ -2780,7 +2874,7 @@ impl PtxEmitter {
     /// term or a total out of range: in all of them or in none.
     fn emit_drift_finish(&mut self, args: &[Expr], span: &Span, hw_profile: &HardwareProfile) -> String {
         let count = match &self.drift_grid {
-            DriftGrid::Scatter { count, at, .. } if *at == (span.line, span.col) => count.clone(),
+            DriftGrid::Scatter { count, at, finish: "drift_finish", .. } if *at == (span.line, span.col) => count.clone(),
             DriftGrid::Refused => return "".into(),
             _ => {
                 self.emit_errors.push(format!(
@@ -2899,6 +2993,287 @@ impl PtxEmitter {
         b(self, format!("st.volatile.global.u64 [{ticket_at}], 0;"));
         b(self, format!("{end}:"));
         self.drift_grid_done = true;
+        "".into()
+    }
+
+    /// The tag `drift_close` leaves after the totals once they are complete:
+    /// "YDRIFT", then the type a read of them produces (1: `F32` through
+    /// fixed point, 2: `I64`).
+    const DRIFT_CLOSED: u64 = 0x5944_5249_4654_0000;
+
+    /// The thread's place in its block, the block's size, and (`grid`) the
+    /// block's place in the grid and the grid's size, flattened over three
+    /// dimensions: `(flat, threads, block, blocks)`, the last two 64-bit.
+    fn emit_drift_places(&mut self, grid: bool) -> (String, String, String, String) {
+        let b = |this: &mut Self, line: String| writeln!(&mut this.ptx_buffer, "    {line}").unwrap();
+        let [tx, ty, tz, nx, ny, nz, flat, threads] = [(); 8].map(|_| self.alloc_ty(ScalarTy::U32));
+        for (reg, sreg) in [(&tx, "%tid.x"), (&ty, "%tid.y"), (&tz, "%tid.z"), (&nx, "%ntid.x"), (&ny, "%ntid.y"), (&nz, "%ntid.z")] {
+            b(self, format!("mov.u32 {reg}, {sreg};"));
+        }
+        b(self, format!("mad.lo.u32 {flat}, {tz}, {ny}, {ty};"));
+        b(self, format!("mad.lo.u32 {flat}, {flat}, {nx}, {tx};"));
+        b(self, format!("mul.lo.u32 {threads}, {nx}, {ny};"));
+        b(self, format!("mul.lo.u32 {threads}, {threads}, {nz};"));
+        if !grid {
+            return (flat, threads, String::new(), String::new());
+        }
+        let [bx, by, bz, gx, gy, gz] = [(); 6].map(|_| self.alloc_ty(ScalarTy::U32));
+        let [block, blocks, wide] = [(); 3].map(|_| self.alloc_ty(ScalarTy::U64));
+        for (reg, sreg) in [(&bx, "%ctaid.x"), (&by, "%ctaid.y"), (&bz, "%ctaid.z"), (&gx, "%nctaid.x"), (&gy, "%nctaid.y"), (&gz, "%nctaid.z")] {
+            b(self, format!("mov.u32 {reg}, {sreg};"));
+        }
+        b(self, format!("mad.lo.u32 {bz}, {bz}, {gy}, {by};"));
+        b(self, format!("mul.wide.u32 {block}, {bz}, {gx};"));
+        b(self, format!("cvt.u64.u32 {wide}, {bx};"));
+        b(self, format!("add.u64 {block}, {block}, {wide};"));
+        b(self, format!("mul.wide.u32 {blocks}, {gx}, {gy};"));
+        b(self, format!("cvt.u64.u32 {wide}, {gz};"));
+        b(self, format!("mul.lo.u64 {blocks}, {blocks}, {wide};"));
+        (flat, threads, block, blocks)
+    }
+
+    /// `drift_close(ACC, n)`: `drift_finish`, except that the totals are
+    /// converted by a later kernel's `drift_convert`, on every SM, instead of
+    /// by this kernel's last block alone.
+    ///
+    /// `ACC` holds `2n + 7` words, zero before the first launch: the totals,
+    /// then a header at word `2n`: this kernel's ticket, the tag, `n`, the
+    /// fraction bits, the lower and upper `@bounds` (raw), and
+    /// `drift_convert`'s ticket. The block that takes the last ticket writes
+    /// the header and, after a fence, the tag: the totals are complete and
+    /// this is how to convert them. The ticket stays at the block count, so a
+    /// second launch before `drift_convert` runs past it and stops.
+    fn emit_drift_close(&mut self, args: &[Expr], span: &Span, hw_profile: &HardwareProfile) -> String {
+        let count = match &self.drift_grid {
+            DriftGrid::Scatter { count, at, finish: "drift_close", .. } if *at == (span.line, span.col) => count.clone(),
+            DriftGrid::Refused => return "".into(),
+            _ => {
+                self.emit_errors.push(format!(
+                    "[PTX] Line {}: `drift_close` must be a statement of the kernel's body itself, outside \
+                     every branch, loop and expression, so that every thread reaches it exactly once: each \
+                     block takes one ticket, and the last one marks the totals complete.",
+                    span.line
+                ));
+                return "".into();
+            }
+        };
+        let Some((_, repr, integer_domain, value_ty, range)) = self.drift_scatter_format.clone() else {
+            if self.emit_errors.is_empty() {
+                self.emit_errors.push(format!("[PTX] Line {}: `drift_close` has no `drift_add_at` lowered before it.", span.line));
+            }
+            return "".into();
+        };
+        let code: u64 = match (value_ty, integer_domain) {
+            (ScalarTy::F32, false) => 1,
+            (ScalarTy::I64, true) => 2,
+            _ => {
+                self.unsupported_intrinsic(
+                    "drift_close",
+                    &format!("`drift_convert` writes totals as F32 or I64, and these read as {}", value_ty.name()),
+                );
+                return "".into();
+            }
+        };
+        if !matches!(self.place_elem_ty(&args[0]), Some(ScalarTy::I64 | ScalarTy::U64)) {
+            self.unsupported_intrinsic(
+                "drift_close",
+                "its first argument holds the exact totals and a header, 2n + 7 64-bit words zero before \
+                 the first launch: give a GlobalMemory<I64>",
+            );
+            return "".into();
+        }
+        let Some(n) = self.emit_drift_index(&count, "drift_close", hw_profile) else { return "".into() };
+        let total = self.emit_addr(&args[0], None, hw_profile);
+        let b = |this: &mut Self, line: String| writeln!(&mut this.ptx_buffer, "    {line}").unwrap();
+        b(self, "// [Y ZERO DRIFT] the grid's exact totals are complete once every block has handed its partials over".into());
+        let (flat, _, _, _) = self.emit_drift_places(false);
+        let negative = self.alloc_pred();
+        b(self, format!("setp.lt.s64 {negative}, {n}, 0;"));
+        b(self, format!("@{negative} trap;"));
+        let header = self.alloc_ty(ScalarTy::U64);
+        b(self, format!("shl.b64 {header}, {n}, 4;"));
+        b(self, format!("add.u64 {header}, {total}, {header};"));
+        let end = self.alloc_label("DRIFT_CLOSED");
+        b(self, "membar.gl;".into());
+        b(self, "bar.sync 0;".into());
+        let not_leader = self.alloc_pred();
+        b(self, format!("setp.ne.u32 {not_leader}, {flat}, 0;"));
+        b(self, format!("@{not_leader} bra {end};"));
+        let [bx, by, bz] = [(); 3].map(|_| self.alloc_ty(ScalarTy::U32));
+        let [blocks, wide, ticket, last] = [(); 4].map(|_| self.alloc_ty(ScalarTy::U64));
+        for (reg, sreg) in [(&bx, "%nctaid.x"), (&by, "%nctaid.y"), (&bz, "%nctaid.z")] {
+            b(self, format!("mov.u32 {reg}, {sreg};"));
+        }
+        b(self, format!("mul.wide.u32 {blocks}, {bx}, {by};"));
+        b(self, format!("cvt.u64.u32 {wide}, {bz};"));
+        b(self, format!("mul.lo.u64 {blocks}, {blocks}, {wide};"));
+        b(self, format!("atom.global.add.u64 {ticket}, [{header}], 1;"));
+        // A ticket past the last: ACC was not zero at the launch, or a second
+        // launch came before `drift_convert`.
+        let (stale, not_last) = (self.alloc_pred(), self.alloc_pred());
+        b(self, format!("setp.ge.u64 {stale}, {ticket}, {blocks};"));
+        b(self, format!("@{stale} trap;"));
+        b(self, format!("sub.u64 {last}, {blocks}, 1;"));
+        b(self, format!("setp.ne.u64 {not_last}, {ticket}, {last};"));
+        b(self, format!("@{not_last} bra {end};"));
+        b(self, "membar.gl;".into());
+        let (lo, hi) = range
+            .map(|(l, h)| (l.max(i64::MIN as i128) as i64, h.min(i64::MAX as i128) as i64))
+            .unwrap_or((i64::MIN, i64::MAX));
+        let [frac, low, high, tag] = [(); 4].map(|_| self.alloc_ty(ScalarTy::U64));
+        b(self, format!("mov.b64 {frac}, {};", repr.frac_bits()));
+        b(self, format!("mov.b64 {low}, 0x{:016x};", lo as u64));
+        b(self, format!("mov.b64 {high}, 0x{:016x};", hi as u64));
+        b(self, format!("mov.b64 {tag}, 0x{:016x};", Self::DRIFT_CLOSED | code));
+        b(self, format!("st.volatile.global.u64 [{header}+16], {n};"));
+        b(self, format!("st.volatile.global.u64 [{header}+24], {frac};"));
+        b(self, format!("st.volatile.global.u64 [{header}+32], {low};"));
+        b(self, format!("st.volatile.global.u64 [{header}+40], {high};"));
+        // The header before the tag that says it is there.
+        b(self, "membar.gl;".into());
+        b(self, format!("st.volatile.global.u64 [{header}+8], {tag};"));
+        b(self, format!("{end}:"));
+        self.drift_grid_done = true;
+        "".into()
+    }
+
+    /// `drift_convert(ACC, OUT, n)`: writes the `n` totals a `drift_close` of
+    /// an earlier kernel completed to `OUT[0..n]`, every thread of the grid
+    /// taking its share, and clears `ACC` for the next step.
+    ///
+    /// It stops unless the header says the totals are complete, in the type
+    /// `OUT` holds, for this `n`: so a launch without the closing kernel,
+    /// before it has finished, a second time, or with another `n` stops
+    /// instead of writing totals that are not there. Otherwise each total is
+    /// checked against 64 bits and the bounds the header carries, and
+    /// converted as `drift_finish` converts it. Every block then takes a
+    /// ticket, and the last clears the header.
+    fn emit_drift_convert(&mut self, args: &[Expr], span: &Span, hw_profile: &HardwareProfile) -> String {
+        match &self.drift_grid {
+            DriftGrid::Convert(at) if *at == (span.line, span.col) => {}
+            DriftGrid::Refused => return "".into(),
+            _ => {
+                self.emit_errors.push(format!(
+                    "[PTX] Line {}: `drift_convert` must be a statement of the kernel's body itself, outside \
+                     every branch, loop and expression, so that every thread reaches it exactly once: each \
+                     block takes one ticket, and the last one clears the totals' header.",
+                    span.line
+                ));
+                return "".into();
+            }
+        }
+        if !matches!(self.place_elem_ty(&args[0]), Some(ScalarTy::I64 | ScalarTy::U64)) {
+            self.unsupported_intrinsic(
+                "drift_convert",
+                "its first argument holds the exact totals and their header, 2n + 7 64-bit words: give \
+                 the GlobalMemory<I64> a `drift_close` completed",
+            );
+            return "".into();
+        }
+        let (code, value_ty) = match self.place_elem_ty(&args[1]) {
+            Some(ScalarTy::F32) => (1u64, ScalarTy::F32),
+            Some(ScalarTy::I64) => (2, ScalarTy::I64),
+            _ => {
+                self.unsupported_intrinsic(
+                    "drift_convert",
+                    "its second argument receives the totals as a read of the accumulators produces them: \
+                     give a GlobalMemory<F32> for fixed-point ones, or a GlobalMemory<I64> for integer ones",
+                );
+                return "".into();
+            }
+        };
+        let Some(n) = self.emit_drift_index(&args[2], "drift_convert", hw_profile) else { return "".into() };
+        let total = self.emit_addr(&args[0], None, hw_profile);
+        let out = self.emit_addr(&args[1], None, hw_profile);
+        let b = |this: &mut Self, line: String| writeln!(&mut this.ptx_buffer, "    {line}").unwrap();
+        b(self, "// [Y ZERO DRIFT] the totals a `drift_close` completed, converted by every thread of the grid".into());
+        let (flat, threads, block, blocks) = self.emit_drift_places(true);
+        let negative = self.alloc_pred();
+        b(self, format!("setp.lt.s64 {negative}, {n}, 0;"));
+        b(self, format!("@{negative} trap;"));
+        let [header, tag, want, stored, frac, low, high] = [(); 7].map(|_| self.alloc_ty(ScalarTy::U64));
+        b(self, format!("shl.b64 {header}, {n}, 4;"));
+        b(self, format!("add.u64 {header}, {total}, {header};"));
+        // Complete, for this type and this n.
+        let (open, other_n) = (self.alloc_pred(), self.alloc_pred());
+        b(self, format!("ld.volatile.global.u64 {tag}, [{header}+8];"));
+        b(self, format!("mov.b64 {want}, 0x{:016x};", Self::DRIFT_CLOSED | code));
+        b(self, format!("setp.ne.u64 {open}, {tag}, {want};"));
+        b(self, format!("@{open} trap;"));
+        b(self, format!("ld.volatile.global.u64 {stored}, [{header}+16];"));
+        b(self, format!("setp.ne.u64 {other_n}, {stored}, {n};"));
+        b(self, format!("@{other_n} trap;"));
+        b(self, "membar.gl;".into());
+        b(self, format!("ld.volatile.global.u64 {frac}, [{header}+24];"));
+        b(self, format!("ld.volatile.global.u64 {low}, [{header}+32];"));
+        b(self, format!("ld.volatile.global.u64 {high}, [{header}+40];"));
+        // 2^-frac as an f64: exponent 1023 - frac, no mantissa.
+        let scale = self.alloc_ty(ScalarTy::F64);
+        if value_ty == ScalarTy::F32 {
+            let exponent = self.alloc_ty(ScalarTy::U64);
+            b(self, format!("mov.u64 {exponent}, 1023;"));
+            b(self, format!("sub.u64 {exponent}, {exponent}, {frac};"));
+            b(self, format!("shl.b64 {exponent}, {exponent}, 52;"));
+            b(self, format!("mov.b64 {scale}, {exponent};"));
+        }
+        // Thread g of the grid converts totals g, g + all threads, ...
+        let [i, step, wide, addr, sum_lo, sum_top, sign, out_at] = [(); 8].map(|_| self.alloc_ty(ScalarTy::I64));
+        let (top, done) = (self.alloc_label("DRIFT_CONVERT"), self.alloc_label("DRIFT_CONVERT_DONE"));
+        let [finished, wide_total, below, above] = [(); 4].map(|_| self.alloc_pred());
+        b(self, format!("cvt.u64.u32 {wide}, {threads};"));
+        b(self, format!("mul.lo.u64 {step}, {blocks}, {wide};"));
+        b(self, format!("cvt.u64.u32 {i}, {flat};"));
+        b(self, format!("mad.lo.u64 {i}, {block}, {wide}, {i};"));
+        b(self, format!("{top}:"));
+        b(self, format!("setp.ge.s64 {finished}, {i}, {n};"));
+        b(self, format!("@{finished} bra {done};"));
+        b(self, format!("shl.b64 {addr}, {i}, 4;"));
+        b(self, format!("add.u64 {addr}, {total}, {addr};"));
+        b(self, format!("ld.volatile.global.u64 {sum_lo}, [{addr}];"));
+        b(self, format!("ld.volatile.global.u64 {sum_top}, [{addr}+8];"));
+        b(self, format!("shr.s64 {sign}, {sum_lo}, 63;"));
+        b(self, format!("setp.ne.b64 {wide_total}, {sum_top}, {sign};"));
+        b(self, format!("@{wide_total} trap;"));
+        b(self, format!("setp.lt.s64 {below}, {sum_lo}, {low};"));
+        b(self, format!("@{below} trap;"));
+        b(self, format!("setp.gt.s64 {above}, {sum_lo}, {high};"));
+        b(self, format!("@{above} trap;"));
+        let value = if value_ty == ScalarTy::F32 {
+            // As `emit_drift_from_fixed` converts it: through f64, times 2^-frac.
+            let (as_f64, unscaled, f) = (self.alloc_ty(ScalarTy::F64), self.alloc_ty(ScalarTy::F64), self.alloc_regf32());
+            b(self, format!("cvt.rn.f64.s64 {as_f64}, {sum_lo};"));
+            b(self, format!("mul.f64 {unscaled}, {as_f64}, {scale};"));
+            b(self, format!("cvt.rn.f32.f64 {f}, {unscaled};"));
+            f
+        } else {
+            sum_lo.clone()
+        };
+        b(self, format!("mad.lo.u64 {out_at}, {i}, {}, {out};", value_ty.bytes()));
+        b(self, format!("st.global.{} [{out_at}], {value};", value_ty.mem()));
+        b(self, format!("st.volatile.global.u64 [{addr}], 0;"));
+        b(self, format!("st.volatile.global.u64 [{addr}+8], 0;"));
+        b(self, format!("add.u64 {i}, {i}, {step};"));
+        b(self, format!("bra {top};"));
+        b(self, format!("{done}:"));
+        // Every block's checks of the header are done before its ticket, and
+        // the last ticket's block clears the header.
+        let end = self.alloc_label("DRIFT_CONVERTED");
+        b(self, "membar.gl;".into());
+        b(self, "bar.sync 0;".into());
+        let (not_leader, stale, not_last) = (self.alloc_pred(), self.alloc_pred(), self.alloc_pred());
+        let [ticket, last] = [(); 2].map(|_| self.alloc_ty(ScalarTy::U64));
+        b(self, format!("setp.ne.u32 {not_leader}, {flat}, 0;"));
+        b(self, format!("@{not_leader} bra {end};"));
+        b(self, format!("atom.global.add.u64 {ticket}, [{header}+48], 1;"));
+        b(self, format!("setp.ge.u64 {stale}, {ticket}, {blocks};"));
+        b(self, format!("@{stale} trap;"));
+        b(self, format!("sub.u64 {last}, {blocks}, 1;"));
+        b(self, format!("setp.ne.u64 {not_last}, {ticket}, {last};"));
+        b(self, format!("@{not_last} bra {end};"));
+        for word in 0..7 {
+            b(self, format!("st.volatile.global.u64 [{header}+{}], 0;", 8 * word));
+        }
+        b(self, format!("{end}:"));
         "".into()
     }
 
@@ -4103,8 +4478,8 @@ impl PtxEmitter {
             | "block_arange" => Arity::Exactly(0),
             "ld_global_v4_f32" | "load_v4" | "warp_reduce_sum" | "warp_reduce_max"
             | "u64_lo32" | "u64_hi32" | "shared_alloc_u32" => Arity::Exactly(1),
-            "store" | "mul_wide_u32" | "mul_wide_s32" | "shared_load_v4" => Arity::Exactly(2),
-            "atomic_add" | "atomic_max" | "drift_add_to" | "drift_add_at" | "drift_finish"
+            "store" | "mul_wide_u32" | "mul_wide_s32" | "shared_load_v4" | "drift_close" => Arity::Exactly(2),
+            "atomic_add" | "atomic_max" | "drift_add_to" | "drift_add_at" | "drift_finish" | "drift_convert"
             | "swiglu_v4" | "swiglu_fast" | "vec_add_unrolled4" => {
                 Arity::Exactly(3)
             }
@@ -8062,6 +8437,10 @@ declare it as a Q format.\n{}",
                             self.emit_drift_add_at(args, call_span, hw_profile)
                         } else if fname == "drift_finish" {
                             self.emit_drift_finish(args, call_span, hw_profile)
+                        } else if fname == "drift_close" {
+                            self.emit_drift_close(args, call_span, hw_profile)
+                        } else if fname == "drift_convert" {
+                            self.emit_drift_convert(args, call_span, hw_profile)
                         } else if (fname == "atomic_add" || fname == "atomic_max")
                             && args.len() == 3
                         {

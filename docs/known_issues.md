@@ -44,11 +44,13 @@ source; each entry there now carries its status. What is still open:
   at the combine. `drift_add_to` (2026-10-27) adds the partials exactly into
   one total per kernel, and `drift_add_at` / `drift_finish` (2026-10-28) into
   many, on the GPU only; the host backends refuse them.
-- `drift_finish`'s last block converts every total alone, on one SM: 668 us
-  for 786,432 totals, 37% of a 262,144-atom force kernel that takes 4.02x
-  f32 atomics, 2.25x f64 atomics and 2.23x unchecked fixed-point atomics
-  (`docs/benchmarks/zero_drift_forces_2026-10-28/`). On that input the f64
-  atomics are order-independent too, because every sum fits 53 bits.
+- Exact forces cost 2.67x f32 atomics and 1.49x f64 atomics on 262,144 atoms
+  with `drift_close` and a second kernel's `drift_convert`, and 4.01x and
+  2.24x with `drift_finish`, whose last block converts every total alone on
+  one SM (668 us of 1805). Each hand-over waits for its atomic's old value, for
+  the carry (`docs/benchmarks/zero_drift_forces_2026-10-28/`). On that input
+  f64 atomics are order-independent too, because every sum fits 53 bits; on
+  denser lattices they are not, but rounded to f32 they still agreed.
 - A `@ZeroDrift` row sum still takes 3.71x a plain f32 one where only a few
   threads hide latency (4,096 rows), against 1.30x where memory bandwidth
   limits it: the integer conversion of each term and its trap test form a

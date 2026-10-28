@@ -14,11 +14,16 @@
 //!   scatters the same input with `f32` atomics must give more than one
 //!   answer over the same shapes, or the input could not tell an exact sum
 //!   from a lucky one.
+//! * **Two kernels.** The scatter with `drift_close` and a second kernel's
+//!   `drift_convert`, the second at its own shape (one thread to 1000 blocks):
+//!   the same bits, and `ACC` zero after both.
 //! * **The stops.** A program stops when a term, an index or a total is out
 //!   of range, and then in every launch shape; otherwise in none, even where
-//!   one thread's partial leaves the declared range. Each launch runs in a
-//!   child process, because a trap leaves the device unusable for its
-//!   process.
+//!   one thread's partial leaves the declared range. With two kernels it also
+//!   stops when `drift_convert` runs without `drift_close` before it, twice,
+//!   with another count or into another type, and when `drift_close` runs
+//!   twice. Each launch runs in a child process, because a trap leaves the
+//!   device unusable for its process.
 //!
 //! Hermetic checks pin the refusals that keep every total exact and the
 //! emitted shape.
@@ -67,6 +72,20 @@ fn scatter(acc_ty: &str, bounds: &str) -> String {
     let elem = if acc_ty == "I64" { "I64" } else { "F32" };
     let body = format!("{}\n            acc += X[k];\n            drift_add_at(ACC, IDX[k], acc);", drift_let(acc_ty, bounds));
     kernel(elem, &body, "drift_finish(ACC, OUT, NT);")
+}
+
+/// `scatter` closing its totals with `drift_close`, and two kernels that
+/// convert them: `c` into `OUT`'s type and `ci` into `I64`.
+fn scatter_closed(acc_ty: &str, bounds: &str) -> String {
+    let elem = if acc_ty == "I64" { "I64" } else { "F32" };
+    let body = format!("{}\n            acc += X[k];\n            drift_add_at(ACC, IDX[k], acc);", drift_let(acc_ty, bounds));
+    kernel(elem, &body, "drift_close(ACC, NT);").replace(
+        "fn main() {}",
+        &format!(
+            "kernel c(ACC: GlobalMemory<I64>, OUT: GlobalMemory<{elem}>, NT: I32) {{\n    drift_convert(ACC, OUT, NT);\n}}\n\n\
+             kernel ci(ACC: GlobalMemory<I64>, OUT: GlobalMemory<I64>, NT: I32) {{\n    drift_convert(ACC, OUT, NT);\n}}\n\nfn main() {{}}"
+        ),
+    )
 }
 
 /// `+X[k]` to total `IDX[k]` and `-X[k]` to total `JDX[k]`, one partial
@@ -206,10 +225,15 @@ struct Case<'a> {
     /// The byte `OUT` starts as: 0x55 shows a total that was never written;
     /// the f32 control adds into it, so it starts at zero.
     out_fill: u8,
+    /// The launches per shape, in order: `k` (the PTX's kernel `k`), and for
+    /// a `drift_close` kernel `c` (`drift_convert` into `OUT`), `c-1` (the
+    /// same, told one total fewer) and `ci` (converting into `I64`s).
+    plan: &'a str,
 }
 
-/// The child: launch the PTX once per shape and print, for each, the digest
-/// of `OUT` and whether `ACC` is all zero afterwards; or `TRAPPED`.
+/// The child: run the plan's launches once per shape and print, for each,
+/// the digest of `OUT` and whether `ACC` is all zero afterwards; or
+/// `TRAPPED`.
 fn child_run() -> Option<()> {
     let dir = PathBuf::from(std::env::var("Y_ZD_SCATTER_CASE").ok()?);
     let read = |name: &str| std::fs::read(dir.join(name)).unwrap();
@@ -217,15 +241,22 @@ fn child_run() -> Option<()> {
     let m: Vec<&str> = meta.split('|').collect();
     let (elem, totals, ticket): (usize, i32, i64) = (m[0].parse().unwrap(), m[1].parse().unwrap(), m[2].parse().unwrap());
     let fill: u8 = m[4].parse().unwrap();
-    let shapes: Vec<[u32; 6]> = m[3]
-        .split(';')
-        .map(|s| s.split(',').map(|v| v.parse().unwrap()).collect::<Vec<u32>>().try_into().unwrap())
-        .collect();
+    let plan: Vec<&str> = m[5].split(',').collect();
+    let parse = |text: &str| -> Vec<[u32; 6]> {
+        text.split(';').map(|s| s.split(',').map(|v| v.parse().unwrap()).collect::<Vec<u32>>().try_into().unwrap()).collect()
+    };
+    let (shapes, cshapes) = (parse(m[3]), parse(m[6]));
     let (values, idx, jdx) = (read("values"), read("idx"), read("jdx"));
     let n = values.len() / elem;
-    let words = (2 * totals.max(0) as usize + 1).max(1);
+    // `drift_finish` keeps a ticket after the totals; `drift_close` a header
+    // of seven words.
+    let converts = plan.iter().any(|p| p.starts_with('c'));
+    let words = 2 * totals.max(0) as usize + if converts { 7 } else { 1 };
     let ctx = y::cuda_runtime::CudaContext::new().expect("a context");
-    let module = ctx.load_ptx(&String::from_utf8(read("k.ptx")).unwrap(), "k").expect("load");
+    let ptx = String::from_utf8(read("k.ptx")).unwrap();
+    let module = ctx.load_ptx(&ptx, "k").expect("load");
+    let convert = if converts { Some(ctx.load_ptx(&ptx, "c").expect("load c")) } else { None };
+    let convert_i64 = if plan.contains(&"ci") { Some(ctx.load_ptx(&ptx, "ci").expect("load ci")) } else { None };
     let upload = |bytes: &[u8]| {
         let b = ctx.alloc(bytes.len().max(8)).unwrap();
         ctx.memcpy_htod_at(&b, 0, bytes).unwrap();
@@ -233,19 +264,28 @@ fn child_run() -> Option<()> {
     };
     let (x, i, j) = (upload(&values), upload(&idx), upload(&jdx));
     let mut acc0 = vec![0i64; words];
-    acc0[words - 1] = ticket;
+    acc0[2 * totals.max(0) as usize] = ticket;
     let acc = upload(&acc0.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<u8>>());
-    let out_len = (totals.max(0) as usize * elem).max(8);
+    let out_len = (totals.max(0) as usize * 8).max(8);
     for (s, sh) in shapes.iter().enumerate() {
         let all = (sh[0] * sh[1] * sh[2] * sh[3] * sh[4] * sh[5]) as usize;
         let rounds = n.div_ceil(all);
         let out = upload(&vec![fill; out_len]);
         // A `u64` holding an `I32` argument: CUDA reads the parameter's four
         // bytes, which are its low ones.
-        let args = [x.device_ptr(), i.device_ptr(), j.device_ptr(), acc.device_ptr(), out.device_ptr(), n as u64, rounds as u64, totals as u32 as u64];
-        if let Err(e) = ctx.launch(&module, (sh[3], sh[4], sh[5]), (sh[0], sh[1], sh[2]), 0, &args).and_then(|_| ctx.synchronize()) {
-            println!("TRAPPED at shape {s} {sh:?}: {e}");
-            return Some(());
+        let nt = |less: i32| (totals - less) as u32 as u64;
+        for step in &plan {
+            let (kernel, args, sh) = match *step {
+                "k" => (&module, vec![x.device_ptr(), i.device_ptr(), j.device_ptr(), acc.device_ptr(), out.device_ptr(), n as u64, rounds as u64, nt(0)], *sh),
+                "c" => (convert.as_ref().unwrap(), vec![acc.device_ptr(), out.device_ptr(), nt(0)], cshapes[s]),
+                "c-1" => (convert.as_ref().unwrap(), vec![acc.device_ptr(), out.device_ptr(), nt(1)], cshapes[s]),
+                "ci" => (convert_i64.as_ref().unwrap(), vec![acc.device_ptr(), out.device_ptr(), nt(0)], cshapes[s]),
+                other => panic!("plan step {other}"),
+            };
+            if let Err(e) = ctx.launch(kernel, (sh[3], sh[4], sh[5]), (sh[0], sh[1], sh[2]), 0, &args).and_then(|_| ctx.synchronize()) {
+                println!("TRAPPED at shape {s} {sh:?}, step {step}: {e}");
+                return Some(());
+            }
         }
         let mut got = vec![0u8; out_len];
         ctx.memcpy_dtoh_at(&mut got, &out, 0).unwrap();
@@ -262,6 +302,13 @@ fn child_run() -> Option<()> {
 /// skip).
 type Launches = Result<Vec<(u64, bool)>, String>;
 
+/// The shapes `drift_convert` runs at, one per launch shape in turn: from one
+/// thread to more threads than there are totals.
+const CONVERT_SHAPES: [[u32; 6]; 7] = [
+    [1, 1, 1, 1, 1, 1], [33, 1, 1, 2, 1, 1], [256, 1, 1, 17, 1, 1], [1024, 1, 1, 1000, 1, 1],
+    [8, 4, 2, 4, 3, 2], [7, 1, 1, 1, 1, 1], [128, 1, 1, 64, 1, 1],
+];
+
 fn launch(test: &str, tag: &str, case: &Case, shapes: &[[u32; 6]]) -> Option<Launches> {
     if y::cuda_runtime::CudaContext::new().is_none() {
         eprintln!("SKIP: no CUDA device, so no kernel was run");
@@ -273,9 +320,13 @@ fn launch(test: &str, tag: &str, case: &Case, shapes: &[[u32; 6]]) -> Option<Lau
     std::fs::write(dir.join("values"), &case.values).unwrap();
     std::fs::write(dir.join("idx"), ints(&case.idx)).unwrap();
     std::fs::write(dir.join("jdx"), ints(&case.jdx)).unwrap();
-    let shapes_text: Vec<String> =
-        shapes.iter().map(|s| s.iter().map(u32::to_string).collect::<Vec<_>>().join(",")).collect();
-    std::fs::write(dir.join("meta"), format!("{}|{}|{}|{}|{}", case.elem, case.totals, case.ticket, shapes_text.join(";"), case.out_fill)).unwrap();
+    let text = |shapes: &mut dyn Iterator<Item = [u32; 6]>| {
+        shapes.map(|s| s.iter().map(u32::to_string).collect::<Vec<_>>().join(",")).collect::<Vec<_>>().join(";")
+    };
+    // One shape: the stop cases convert at the same shape; many: in turn.
+    let cshapes = if shapes.len() == 1 { text(&mut shapes.iter().copied()) } else { text(&mut (0..shapes.len()).map(|s| CONVERT_SHAPES[s % 7])) };
+    let meta = format!("{}|{}|{}|{}|{}|{}|{}", case.elem, case.totals, case.ticket, text(&mut shapes.iter().copied()), case.out_fill, case.plan, cshapes);
+    std::fs::write(dir.join("meta"), meta).unwrap();
     let child = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", test, "--nocapture"])
         .env("Y_ZD_SCATTER_CASE", &dir)
@@ -380,12 +431,21 @@ fn every_launch_shape_gives_the_exact_totals() {
     let two = compile("pairs", &pairs(NARROW));
     for totals in [3usize, 1000, 100_003] {
         let (idx, jdx) = (indices(n, totals, 7), indices(n, totals, 11));
-        let case = Case { ptx: &one, values: f32_bytes(&xs), elem: 4, idx: idx.clone(), jdx: jdx.clone(), totals: totals as i32, ticket: 0, out_fill: 0x55 };
+        let case = Case { ptx: &one, values: f32_bytes(&xs), elem: 4, idx: idx.clone(), jdx: jdx.clone(), totals: totals as i32, ticket: 0, out_fill: 0x55, plan: "k" };
         let Some(r) = launch(test, &format!("one_{totals}"), &case, &shapes) else { return };
         assert_every_shape(&format!("scatter, {totals} totals"), &r.expect("no trap"), reference(&xs, &idx, None, totals), &shapes);
         let case = Case { ptx: &two, ..case };
         let r = launch(test, &format!("two_{totals}"), &case, &shapes).unwrap();
         assert_every_shape(&format!("pairs, {totals} totals"), &r.expect("no trap"), reference(&xs, &idx, Some(&jdx), totals), &shapes);
+    }
+
+    // Two kernels: `drift_close`, then `drift_convert` at its own shape.
+    let closed = compile("closed", &scatter_closed("F32", NARROW));
+    for totals in [1000usize, 100_003] {
+        let idx = indices(n, totals, 7);
+        let case = Case { ptx: &closed, values: f32_bytes(&xs), elem: 4, idx: idx.clone(), jdx: vec![0; n], totals: totals as i32, ticket: 0, out_fill: 0x55, plan: "k,c" };
+        let r = launch(test, &format!("closed_{totals}"), &case, &shapes).unwrap();
+        assert_every_shape(&format!("close and convert, {totals} totals"), &r.expect("no trap"), reference(&xs, &idx, None, totals), &shapes);
     }
 
     // The control: f32 atomics on the same scatter do not agree, so the
@@ -394,7 +454,7 @@ fn every_launch_shape_gives_the_exact_totals() {
     let ctl = dir.join("control.ptx");
     std::fs::write(&ctl, F32_ATOMICS).unwrap();
     let ctl = ctl.display().to_string();
-    let case = Case { ptx: &ctl, values: f32_bytes(&xs), elem: 4, idx: indices(n, 1000, 7), jdx: vec![0; n], totals: 1000, ticket: 0, out_fill: 0 };
+    let case = Case { ptx: &ctl, values: f32_bytes(&xs), elem: 4, idx: indices(n, 1000, 7), jdx: vec![0; n], totals: 1000, ticket: 0, out_fill: 0, plan: "k" };
     let rows = launch(test, "control", &case, &shapes).unwrap().expect("no trap");
     let distinct: std::collections::BTreeSet<u64> = rows.iter().map(|r| r.0).collect();
     assert!(distinct.len() > 1, "the f32 control gave one answer over {} shapes: the input cannot fail the test", shapes.len());
@@ -404,7 +464,7 @@ fn every_launch_shape_gives_the_exact_totals() {
     let xs: Vec<f32> = [2.0e9f32, 2.0e9, 2.0e9, -2.0e9, -2.0e9, -2.0e9, 0.75, -1.5e9, 1.5e9].repeat(1000);
     let idx: Vec<i32> = (0..xs.len()).map(|k| (k / 9 % 4) as i32).collect();
     let wide = compile("wide", &scatter("F32", WIDE));
-    let case = Case { ptx: &wide, values: f32_bytes(&xs), elem: 4, idx: idx.clone(), jdx: vec![0; xs.len()], totals: 4, ticket: 0, out_fill: 0x55 };
+    let case = Case { ptx: &wide, values: f32_bytes(&xs), elem: 4, idx: idx.clone(), jdx: vec![0; xs.len()], totals: 4, ticket: 0, out_fill: 0x55, plan: "k" };
     let r = launch(test, "wide", &case, &shapes).unwrap();
     assert_every_shape("cancelling", &r.expect("no trap: every total is 187.5"), reference(&xs, &idx, None, 4), &shapes);
 
@@ -416,7 +476,7 @@ fn every_launch_shape_gives_the_exact_totals() {
         want[idx[k] as usize] += x;
     }
     let int = compile("int", &scatter("I64", ""));
-    let case = Case { ptx: &int, values: i64_bytes(&xs), elem: 8, idx, jdx: vec![0; xs.len()], totals: 5, ticket: 0, out_fill: 0x55 };
+    let case = Case { ptx: &int, values: i64_bytes(&xs), elem: 8, idx, jdx: vec![0; xs.len()], totals: 5, ticket: 0, out_fill: 0x55, plan: "k" };
     let r = launch(test, "int", &case, &shapes).unwrap();
     assert_every_shape("i64", &r.expect("no trap"), digest(&i64_bytes(&want)), &shapes);
 }
@@ -465,6 +525,8 @@ fn programs_stop_in_every_launch_shape_or_in_none() {
         (f(&first, &[6e5, 6e5], &[0; 2], 1), 0, None),
         // An ACC left non-zero by the host: its ticket is past the last.
         (f(&narrow, &[1.0], &[0], 2), 5, None),
+        // A total of 2^32 + 1 whose low word alone reads 1.0.
+        (f(&narrow, &[1073741824.0, 1073741824.0, 1073741824.0, 1073741824.0, 1.0], &[0; 5], 2), 0, None),
         // No elements: the totals are written, as zero.
         (f(&narrow, &[], &[], 2), 0, fw(&[], &[], 2)),
         // A negative count names no total.
@@ -476,9 +538,45 @@ fn programs_stop_in_every_launch_shape_or_in_none() {
         let want = want.map(|w| digest(&i64_bytes(&[0, w])));
         cases.push(((int.clone(), i64_bytes(&xs), 8, idx, 2), 0, want));
     }
+    // Two kernels: the same stops, and every misuse of the pair.
+    let closed = compile("stop_closed", &scatter_closed("F32", NARROW));
+    let two: Vec<(&str, Vec<f32>, Vec<i32>, i32, i64, Option<u64>)> = vec![
+        ("k,c", vec![1.5, -0.25, 3.0], vec![0, 1, 0], 2, 0, fw(&[1.5, -0.25, 3.0], &[0, 1, 0], 2)),
+        ("k,c", vec![5e5, 5e5, 1.0], vec![1, 1, 0], 2, 0, fw(&[5e5, 5e5, 1.0], &[1, 1, 0], 2)),
+        ("k,c", vec![6e5, 6e5, 1.0], vec![1, 1, 0], 2, 0, None),
+        ("k,c", vec![-6e5, -6e5, 1.0], vec![1, 1, 0], 2, 0, None),
+        ("k,c", vec![1.0, f32::NAN, 2.0], vec![0, 1, 0], 2, 0, None),
+        ("k,c", vec![1.0, 0.0], vec![0, 2], 2, 0, None),
+        ("k,c", vec![], vec![], 2, 0, fw(&[], &[], 2)),
+        // ACC left non-zero by the host.
+        ("k,c", vec![1.0], vec![0], 2, 5, None),
+        // Converted with nothing closed, twice, with one total fewer, or
+        // into I64; closed twice.
+        ("c", vec![1.0], vec![0], 2, 0, None),
+        ("k,c,c", vec![1.0], vec![0], 2, 0, None),
+        ("k,c-1", vec![1.0], vec![0], 2, 0, None),
+        ("k,ci", vec![1.0], vec![0], 2, 0, None),
+        ("k,k,c", vec![1.0], vec![0], 2, 0, None),
+        // A negative count names no total.
+        ("k,c", vec![], vec![], -1, 0, None),
+        // A total of 2^32 + 1 is past 64 bits in Q32.32, and its low word
+        // alone reads 1.0, inside the bounds: only the 64-bit test stops it.
+        ("k,c", vec![1073741824.0; 4].into_iter().chain([1.0]).collect(), vec![0; 5], 2, 0, None),
+    ];
     let mut bad = Vec::new();
+    for (c, (plan, xs, idx, totals, ticket, want)) in two.iter().enumerate() {
+        let case = Case { ptx: &closed, values: f32_bytes(xs), elem: 4, jdx: vec![0; idx.len()], idx: idx.clone(), totals: *totals, ticket: *ticket, out_fill: 0x55, plan: *plan };
+        for sh in &shapes {
+            let Some(r) = launch(test, &format!("stop_two_{c}"), &case, &[*sh]) else { return };
+            match (&r, want) {
+                (Ok(rows), Some(w)) if rows[0].0 == *w && rows[0].1 => {}
+                (Err(_), None) => {}
+                _ => bad.push(format!("  two kernels, case {c} ({plan}), block {:?} grid {:?}: got {r:?}, want {want:?}", &sh[..3], &sh[3..])),
+            }
+        }
+    }
     for (c, ((ptx, values, elem, idx, totals), ticket, want)) in cases.iter().enumerate() {
-        let case = Case { ptx, values: values.clone(), elem: *elem, jdx: vec![0; idx.len()], idx: idx.clone(), totals: *totals, ticket: *ticket, out_fill: 0x55 };
+        let case = Case { ptx, values: values.clone(), elem: *elem, jdx: vec![0; idx.len()], idx: idx.clone(), totals: *totals, ticket: *ticket, out_fill: 0x55, plan: "k" };
         for sh in &shapes {
             let Some(r) = launch(test, &format!("stop_{c}"), &case, &[*sh]) else { return };
             match (&r, want) {
@@ -534,6 +632,19 @@ fn main() {{}}
         ("out_type", k(&format!("{decl}\n    {hand}\n    drift_finish(ACC, ACC, NT);")), "give a GlobalMemory<F32>"),
         ("float_index", k(&format!("{decl}\n    drift_add_at(ACC, X[1], acc);\n    {fin}")), "its index and count are integers"),
         ("arity", k(&format!("{decl}\n    drift_add_at(ACC, acc);\n    {fin}")), "drift_add_at"),
+        ("close_branch", k(&format!("{decl}\n    {hand}\n    if P[0] > 0 {{ drift_close(ACC, NT); }}")), "`drift_close` must be a statement of the kernel's body itself"),
+        ("close_twice", k(&format!("{decl}\n    {hand}\n    drift_close(ACC, NT);\n    drift_close(ACC, NT);")), "is called again on line"),
+        ("close_and_finish", k(&format!("{decl}\n    {hand}\n    drift_close(ACC, NT);\n    {fin}")), "and `drift_finish` both end this kernel's hand-overs"),
+        ("close_count", k(&format!("{decl}\n    {hand}\n    drift_close(ACC, R);")), "scalar integer parameter of the kernel that the body never assigns"),
+        ("close_return", k(&format!("{decl}\n    {hand}\n    if P[0] > 3 {{ return; }}\n    drift_close(ACC, NT);")), "can take threads away first"),
+        ("close_arity", k(&format!("{decl}\n    {hand}\n    drift_close(ACC);")), "drift_close"),
+        ("convert_branch", k("if P[0] > 0 { drift_convert(ACC, OUT, NT); }"), "`drift_convert` must be a statement of the kernel's body itself"),
+        ("convert_twice", k("drift_convert(ACC, OUT, NT);\n    drift_convert(ACC, OUT, NT);"), "is called again on line"),
+        ("convert_with_hand_over", k(&format!("{decl}\n    {hand}\n    drift_convert(ACC, OUT, NT);")), "converts totals with `drift_convert` and hands partials"),
+        ("convert_count", k("drift_convert(ACC, OUT, R);"), "scalar integer parameter of the kernel that the body never assigns"),
+        ("convert_return", k("if P[0] > 3 { return; }\n    drift_convert(ACC, OUT, NT);"), "can take threads away first"),
+        ("convert_out_type", k("drift_convert(ACC, P, NT);"), "give a GlobalMemory<F32> for fixed-point ones"),
+        ("convert_acc_type", k("drift_convert(X, OUT, NT);"), "give the GlobalMemory<I64> a `drift_close` completed"),
     ];
     let mut bad = Vec::new();
     for (tag, src, want) in &cases {
@@ -546,12 +657,14 @@ fn main() {{}}
     // The host backends have no grid: refused by name, never compiled.
     let ok = scatter("F32", NARROW);
     for (tag, args, want) in [("llvm", &[][..], "has no host lowering"), ("cpu", &["--emit-cpu"][..], "has no CPU lowering")] {
-        match try_compile(&format!("host_{tag}"), &ok, args) {
-            Ok(_) => bad.push(format!("  {tag}: compiled")),
-            Err(text) if !text.contains(want) || !text.contains("drift_add_at") => {
-                bad.push(format!("  {tag}: refused without `{want}`:\n{text}"))
+        for (form, src) in [("finish", ok.clone()), ("close", scatter_closed("F32", NARROW))] {
+            match try_compile(&format!("host_{tag}_{form}"), &src, args) {
+                Ok(_) => bad.push(format!("  {tag} ({form}): compiled")),
+                Err(text) if !text.contains(want) || !text.contains("drift_") => {
+                    bad.push(format!("  {tag} ({form}): refused without `{want}`:\n{text}"))
+                }
+                Err(_) => {}
             }
-            Err(_) => {}
         }
     }
     // The JIT runs `main` on the CPU, and takes no `-o`.
@@ -563,7 +676,7 @@ fn main() {{}}
     if out.status.success() || !text.contains("has no host lowering") || !text.contains("drift_") {
         bad.push(format!("  jit: not refused by name:\n{text}"));
     }
-    assert!(bad.is_empty(), "{} of {} forms were not refused as they should be:\n{}", bad.len(), cases.len() + 3, bad.join("\n"));
+    assert!(bad.is_empty(), "{} of {} forms were not refused as they should be:\n{}", bad.len(), cases.len() + 5, bad.join("\n"));
 }
 
 /// Hand-overs in loops and branches, declared in the block that hands them
@@ -606,11 +719,27 @@ fn a_hand_over_checks_its_index_and_carries_into_the_high_word() {
         finish.matches("membar.gl;").count() == 2 && fence < finish.find("atom.global.add.u64").unwrap(),
         "the fences:\n{finish}"
     );
+    // Two kernels: the closing block writes the header, then after a fence
+    // the tag; the converter reads the tag and the count before any total,
+    // and the rest of the header after a fence.
+    let two = std::fs::read_to_string(compile("shape_closed", &scatter_closed("F32", NARROW))).unwrap();
+    let close = &two[two.find("are complete once every block").expect("the close")..two.find(".entry c(").expect("kernel c")];
+    let fence = close.rfind("membar.gl;").unwrap();
+    assert!(
+        close.matches("membar.gl;").count() == 3 && close[fence..].contains("+8], ") && close[..fence].contains("+40], "),
+        "the tag is not written after the header and a fence:\n{close}"
+    );
+    let convert = &two[two.find("converted by every thread of the grid").expect("the convert")..two.find(".entry ci(").expect("kernel ci")];
+    let loads: Vec<&str> = convert.lines().map(str::trim).filter(|l| l.starts_with("ld.volatile.global.u64")).collect();
+    assert!(loads.len() >= 7 && loads[0].ends_with("+8];") && loads[1].ends_with("+16];"), "the tag and the count are not read first:\n{convert}");
+    let first_total = convert.find("ld.volatile.global.u64").unwrap();
+    assert!(convert[..convert.find("+24];").unwrap()].contains("membar.gl;") && first_total < convert.find("+24];").unwrap(), "the header after a fence:\n{convert}");
+    assert!(convert.matches("bar.sync 0;").count() == 1 && convert.matches("atom.global.add.u64").count() == 1, "one ticket per block:\n{convert}");
     let Some(tool) = which("ptxas") else {
         eprintln!("SKIP: no ptxas, so the shape was not assembled");
         return;
     };
-    for path in [compile("asm_int", &scatter("I64", "")), compile("asm_pairs", &pairs(WIDE))] {
+    for path in [compile("asm_int", &scatter("I64", "")), compile("asm_pairs", &pairs(WIDE)), compile("asm_closed", &scatter_closed("I64", ""))] {
         let out = Command::new(&tool).args(["-arch=sm_80", &path, "-o", "/dev/null"]).output().unwrap();
         assert!(out.status.success(), "ptxas: {}", String::from_utf8_lossy(&out.stderr));
     }

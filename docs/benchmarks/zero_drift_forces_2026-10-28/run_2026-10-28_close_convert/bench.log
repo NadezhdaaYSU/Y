@@ -1,0 +1,25 @@
+32^3 = 32768 atoms, 785833 pairs; exact in 15/15 configurations (close + convert 15); CUDA terms == Y terms: True; Y != f32(S_k) in 299 of 98304 components
+   f32 atomics: 15 distinct results; max_abs 1.34e-05 (rel_max 5.41e-07); components != f32(S_k): 59.8%-78.5%
+   f64 atomics: 1 distinct (1 after rounding to f32); components != S_k per configuration: max 0; fixed: 1 distinct, raw == Y's raw sums: False
+                      Y exact: min     223.0 us  median     224.4 us  ( 3.87x f32 atomics)
+                Y finish only: min      85.4 us  median      86.4 us  ( 1.48x f32 atomics)
+            Y close + convert: min     157.6 us  median     157.9 us  ( 2.73x f32 atomics)
+   Y close + convert, no pairs: min      18.2 us  median      18.3 us  ( 0.32x f32 atomics)
+                  f32 atomics: min      57.7 us  median      57.9 us  ( 1.00x f32 atomics)
+     f32 atomics, kernel only: min      56.2 us  median      56.4 us  ( 0.97x f32 atomics)
+                  f64 atomics: min      99.4 us  median      99.7 us  ( 1.72x f32 atomics)
+              fixed unchecked: min     101.9 us  median     102.1 us  ( 1.77x f32 atomics)
+64^3 = 262144 atoms, 6532504 pairs; exact in 15/15 configurations (close + convert 15); CUDA terms == Y terms: True; Y != f32(S_k) in 2749 of 786432 components
+   f32 atomics: 15 distinct results; max_abs 1.52e-05 (rel_max 6.02e-07); components != f32(S_k): 59.3%-78.8%
+   f64 atomics: 1 distinct (1 after rounding to f32); components != S_k per configuration: max 0; fixed: 1 distinct, raw == Y's raw sums: False
+                      Y exact: min    1804.8 us  median    1813.4 us  ( 4.01x f32 atomics)
+                Y finish only: min     668.2 us  median     678.6 us  ( 1.48x f32 atomics)
+            Y close + convert: min    1202.7 us  median    1203.1 us  ( 2.67x f32 atomics)
+   Y close + convert, no pairs: min      57.1 us  median      57.4 us  ( 0.13x f32 atomics)
+                  f32 atomics: min     450.2 us  median     450.6 us  ( 1.00x f32 atomics)
+     f32 atomics, kernel only: min     447.3 us  median     447.6 us  ( 0.99x f32 atomics)
+                  f64 atomics: min     805.6 us  median     806.1 us  ( 1.79x f32 atomics)
+              fixed unchecked: min     813.5 us  median     814.2 us  ( 1.81x f32 atomics)
+games before none after none
+util before 0 %, 210 MHz, 405 MHz after 100 %, 2760 MHz, 10251 MHz
+SM % by process (max of 5 samples), before {} after {'254476 python3': 98}
