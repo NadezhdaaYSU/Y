@@ -1,0 +1,263 @@
+.version 7.8
+.target sm_89
+.address_size 64
+
+.visible .entry rowsum_zd_flag(
+    .param .u64 ZT_0,
+    .param .u64 PERM_1,
+    .param .u64 OUT_2,
+    .param .b32 R_3,
+    .param .b32 N_4
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 97
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 128 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 33.33% (2 active blocks per SM)
+.maxnreg 128
+{
+    .reg .b32 %r<40>;
+    .reg .f32 %f<3>;
+    .reg .b64 %rd<27>;
+    .reg .pred %p<13>;
+    .reg .pred %bad;
+    .reg .f64 %fd<2>;
+
+    ld.param.u64 %rd0, [ZT_0];
+    ld.param.u64 %rd1, [PERM_1];
+    ld.param.u64 %rd2, [OUT_2];
+    ld.param.u32 %r0, [R_3];
+    ld.param.u32 %r1, [N_4];
+    mov.u32 %r2, %tid.x;
+    mov.u32 %r3, %ntid.x;
+    mov.u32 %r4, %ctaid.x;
+    mad.lo.s32 %r5, %r4, %r3, %r2;
+    setp.lt.s32 %p0, %r5, %r0;
+    selp.u32 %r6, 1, 0, %p0;
+    // [HEURISTIC] Branch Divergence Penalty is 4.53 cycles.
+    // if: emitting BRANCH execution (block cost 3 cy).
+    setp.eq.u32 %p1, %r6, 0;
+    @%p1 bra $IF_END_1;
+    // [Y ZERO DRIFT] acc: F32 accumulated exactly as Q32.32
+    mov.f32 %f0, 0.0;
+    mov.b32 %r7, %f0;
+    shr.u32 %r8, %r7, 23;
+    and.b32 %r8, %r8, 255;
+    and.b32 %r9, %r7, 8388607;
+    or.b32 %r10, %r9, 8388608;
+    setp.ne.u32 %p2, %r8, 0;
+    selp.u32 %r11, %r10, %r9, %p2;
+    max.u32 %r12, %r8, 1;
+    add.s32 %r13, %r12, -118;
+    setp.gt.s32 %p3, %r13, 39;
+    @%p3 trap;
+    max.s32 %r14, %r13, 0;
+    cvt.u64.u32 %rd4, %r11;
+    shl.b64 %rd5, %rd4, %r14;
+    neg.s32 %r15, %r13;
+    min.s32 %r15, %r15, 31;
+    max.s32 %r15, %r15, 1;
+    sub.s32 %r16, %r15, 1;
+    mov.u32 %r17, 1;
+    shl.b32 %r18, %r17, %r16;
+    add.u32 %r19, %r11, %r18;
+    shr.u32 %r20, %r19, %r15;
+    cvt.u64.u32 %rd6, %r20;
+    setp.lt.s32 %p4, %r13, 0;
+    selp.b64 %rd7, %rd6, %rd5, %p4;
+    setp.lt.s32 %p5, %r7, 0;
+    neg.s64 %rd8, %rd7;
+    selp.b64 %rd9, %rd8, %rd7, %p5;
+    mov.s64 %rd3, %rd9;
+    sub.u64 %rd10, %rd3, -42949672960000;
+    setp.gt.u64 %p6, %rd10, 85899345920000;
+    @%p6 trap;
+    // for j in ...
+    setp.ne.u32 %bad, 0, 0;
+    mov.u32 %r21, 0;
+    mov.u32 %r22, %r1;
+    $LOOP_START_2:
+    setp.ge.s32 %p7, %r21, %r22;
+    @%p7 bra $LOOP_END_3;
+    cvt.u64.u32 %rd11, %r21;
+    shl.b64 %rd12, %rd11, 2;
+    add.u64 %rd13, %rd1, %rd12;
+    ld.global.ca.u32 %r23, [%rd13];
+    mul.lo.s32 %r24, %r23, %r0;
+    add.s32 %r25, %r24, %r5;
+    cvt.u64.u32 %rd14, %r25;
+    shl.b64 %rd15, %rd14, 2;
+    add.u64 %rd16, %rd0, %rd15;
+    ld.global.ca.f32 %f1, [%rd16];
+    mov.b32 %r26, %f1;
+    shr.u32 %r27, %r26, 23;
+    and.b32 %r27, %r27, 255;
+    and.b32 %r28, %r26, 8388607;
+    or.b32 %r29, %r28, 8388608;
+    setp.ne.u32 %p8, %r27, 0;
+    selp.u32 %r30, %r29, %r28, %p8;
+    max.u32 %r31, %r27, 1;
+    add.s32 %r32, %r31, -118;
+    setp.gt.s32 %p9, %r32, 38;
+    or.pred %bad, %bad, %p9;
+    max.s32 %r33, %r32, 0;
+    cvt.u64.u32 %rd17, %r30;
+    shl.b64 %rd18, %rd17, %r33;
+    neg.s32 %r34, %r32;
+    min.s32 %r34, %r34, 31;
+    max.s32 %r34, %r34, 1;
+    sub.s32 %r35, %r34, 1;
+    mov.u32 %r36, 1;
+    shl.b32 %r37, %r36, %r35;
+    add.u32 %r38, %r30, %r37;
+    shr.u32 %r39, %r38, %r34;
+    cvt.u64.u32 %rd19, %r39;
+    setp.lt.s32 %p10, %r32, 0;
+    selp.b64 %rd20, %rd19, %rd18, %p10;
+    setp.lt.s32 %p11, %r26, 0;
+    neg.s64 %rd21, %rd20;
+    selp.b64 %rd22, %rd21, %rd20, %p11;
+    add.s64 %rd3, %rd3, %rd22;
+    sub.u64 %rd23, %rd3, -42949672960000;
+    setp.gt.u64 %p12, %rd23, 85899345920000;
+    or.pred %bad, %bad, %p12;
+    add.u32 %r21, %r21, 1;
+    bra $LOOP_START_2;
+    $LOOP_END_3:
+    @%bad trap;
+    cvt.rn.f64.s64 %fd0, %rd3;
+    mul.f64 %fd1, %fd0, 0d3DF0000000000000;
+    cvt.rn.f32.f64 %f2, %fd1;
+    cvt.u64.u32 %rd24, %r5;
+    shl.b64 %rd25, %rd24, 2;
+    add.u64 %rd26, %rd2, %rd25;
+    st.global.f32 [%rd26], %f2;
+    $IF_END_1:
+}
+
+.visible .entry rowsum_zd_nocheck(
+    .param .u64 ZT_0,
+    .param .u64 PERM_1,
+    .param .u64 OUT_2,
+    .param .b32 R_3,
+    .param .b32 N_4
+)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: 97
+    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: 128 (to maximize SM occupancy)
+    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: 33.33% (2 active blocks per SM)
+.maxnreg 128
+{
+    .reg .b32 %r<40>;
+    .reg .f32 %f<3>;
+    .reg .b64 %rd<27>;
+    .reg .pred %p<13>;
+    .reg .f64 %fd<2>;
+
+    ld.param.u64 %rd0, [ZT_0];
+    ld.param.u64 %rd1, [PERM_1];
+    ld.param.u64 %rd2, [OUT_2];
+    ld.param.u32 %r0, [R_3];
+    ld.param.u32 %r1, [N_4];
+    mov.u32 %r2, %tid.x;
+    mov.u32 %r3, %ntid.x;
+    mov.u32 %r4, %ctaid.x;
+    mad.lo.s32 %r5, %r4, %r3, %r2;
+    setp.lt.s32 %p0, %r5, %r0;
+    selp.u32 %r6, 1, 0, %p0;
+    // [HEURISTIC] Branch Divergence Penalty is 4.53 cycles.
+    // if: emitting BRANCH execution (block cost 3 cy).
+    setp.eq.u32 %p1, %r6, 0;
+    @%p1 bra $IF_END_1;
+    // [Y ZERO DRIFT] acc: F32 accumulated exactly as Q32.32
+    mov.f32 %f0, 0.0;
+    mov.b32 %r7, %f0;
+    shr.u32 %r8, %r7, 23;
+    and.b32 %r8, %r8, 255;
+    and.b32 %r9, %r7, 8388607;
+    or.b32 %r10, %r9, 8388608;
+    setp.ne.u32 %p2, %r8, 0;
+    selp.u32 %r11, %r10, %r9, %p2;
+    max.u32 %r12, %r8, 1;
+    add.s32 %r13, %r12, -118;
+    setp.gt.s32 %p3, %r13, 39;
+    @%p3 trap;
+    max.s32 %r14, %r13, 0;
+    cvt.u64.u32 %rd4, %r11;
+    shl.b64 %rd5, %rd4, %r14;
+    neg.s32 %r15, %r13;
+    min.s32 %r15, %r15, 31;
+    max.s32 %r15, %r15, 1;
+    sub.s32 %r16, %r15, 1;
+    mov.u32 %r17, 1;
+    shl.b32 %r18, %r17, %r16;
+    add.u32 %r19, %r11, %r18;
+    shr.u32 %r20, %r19, %r15;
+    cvt.u64.u32 %rd6, %r20;
+    setp.lt.s32 %p4, %r13, 0;
+    selp.b64 %rd7, %rd6, %rd5, %p4;
+    setp.lt.s32 %p5, %r7, 0;
+    neg.s64 %rd8, %rd7;
+    selp.b64 %rd9, %rd8, %rd7, %p5;
+    mov.s64 %rd3, %rd9;
+    sub.u64 %rd10, %rd3, -42949672960000;
+    setp.gt.u64 %p6, %rd10, 85899345920000;
+    @%p6 trap;
+    // for j in ...
+    mov.u32 %r21, 0;
+    mov.u32 %r22, %r1;
+    $LOOP_START_2:
+    setp.ge.s32 %p7, %r21, %r22;
+    @%p7 bra $LOOP_END_3;
+    cvt.u64.u32 %rd11, %r21;
+    shl.b64 %rd12, %rd11, 2;
+    add.u64 %rd13, %rd1, %rd12;
+    ld.global.ca.u32 %r23, [%rd13];
+    mul.lo.s32 %r24, %r23, %r0;
+    add.s32 %r25, %r24, %r5;
+    cvt.u64.u32 %rd14, %r25;
+    shl.b64 %rd15, %rd14, 2;
+    add.u64 %rd16, %rd0, %rd15;
+    ld.global.ca.f32 %f1, [%rd16];
+    mov.b32 %r26, %f1;
+    shr.u32 %r27, %r26, 23;
+    and.b32 %r27, %r27, 255;
+    and.b32 %r28, %r26, 8388607;
+    or.b32 %r29, %r28, 8388608;
+    setp.ne.u32 %p8, %r27, 0;
+    selp.u32 %r30, %r29, %r28, %p8;
+    max.u32 %r31, %r27, 1;
+    add.s32 %r32, %r31, -118;
+    setp.gt.s32 %p9, %r32, 38;
+    
+    max.s32 %r33, %r32, 0;
+    cvt.u64.u32 %rd17, %r30;
+    shl.b64 %rd18, %rd17, %r33;
+    neg.s32 %r34, %r32;
+    min.s32 %r34, %r34, 31;
+    max.s32 %r34, %r34, 1;
+    sub.s32 %r35, %r34, 1;
+    mov.u32 %r36, 1;
+    shl.b32 %r37, %r36, %r35;
+    add.u32 %r38, %r30, %r37;
+    shr.u32 %r39, %r38, %r34;
+    cvt.u64.u32 %rd19, %r39;
+    setp.lt.s32 %p10, %r32, 0;
+    selp.b64 %rd20, %rd19, %rd18, %p10;
+    setp.lt.s32 %p11, %r26, 0;
+    neg.s64 %rd21, %rd20;
+    selp.b64 %rd22, %rd21, %rd20, %p11;
+    add.s64 %rd3, %rd3, %rd22;
+    sub.u64 %rd23, %rd3, -42949672960000;
+    setp.gt.u64 %p12, %rd23, 85899345920000;
+    
+    add.u32 %r21, %r21, 1;
+    bra $LOOP_START_2;
+    $LOOP_END_3:
+    cvt.rn.f64.s64 %fd0, %rd3;
+    mul.f64 %fd1, %fd0, 0d3DF0000000000000;
+    cvt.rn.f32.f64 %f2, %fd1;
+    cvt.u64.u32 %rd24, %r5;
+    shl.b64 %rd25, %rd24, 2;
+    add.u64 %rd26, %rd2, %rd25;
+    st.global.f32 [%rd26], %f2;
+    $IF_END_1:
+}
+

@@ -34,6 +34,8 @@ With narrow bounds (below 2^61 raw units, i.e. below 2^29 in Q32.32) two more th
 
 **What is left.** The loop now runs the conversion's integer instructions and one trap test for each term, plus one range test for each store, and no f64. In the bandwidth-bound case that costs 1.30x. Where few threads hide the latency of that chain it still costs 3.71x, which remains open (`docs/known_issues.md`).
 
+**Later (2026-10-28).** Most of the 3.71x was the trap test, not the conversion: its branch kept ptxas from unrolling the loop, so each term's loads waited for the previous term. With the stop moved to the loop's end it takes 1.64x (and 0.98x where bandwidth limits it): `../zero_drift_stop_point_2026-10-28/`.
+
 ## The probe
 
 The compiler's accumulate probe (`probe.log`, three fresh runs) now times a compensated chain for its Kahan row: 6721–6856 ps per accumulate. It used to time a plain `add.f32` chain under that name (about 1440 ps). The exact representations are unchanged:

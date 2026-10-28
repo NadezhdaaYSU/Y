@@ -38,6 +38,8 @@ Discord showed 0%.
 
 At 256 MB `torch.sum` reads 631 GB/s and `zd_sum` 530 GB/s.
 
+**Later (2026-10-28).** With the stop at the loop's end, `zd_sum` takes 1.16x `torch.sum` at 256 MB, and 1.08x written with its full rounds in a loop without `if i < n`: `../zero_drift_stop_point_2026-10-28/`.
+
 **Correctness, checked before timing.**
 - Every `zd_sum` launch, at three shapes (528 x 256, 37 x 1000, 330 x 64),
   stored the exact total: each term rounded to Q32.32, ties away from zero,
