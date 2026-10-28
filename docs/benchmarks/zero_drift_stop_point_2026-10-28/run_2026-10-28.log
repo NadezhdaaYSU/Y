@@ -1,0 +1,33 @@
+gpu: NVIDIA GeForce RTX 4070 Ti SUPER
+torch: 2.13.0+cu130
+sass: {'rowsum_f32 old': {'instructions': 93, 'LDG': 14, 'BPT.TRAP': 0}, 'rowsum_zd old': {'instructions': 71, 'LDG': 2, 'BPT.TRAP': 2}, 'zd_sum old': {'instructions': 339, 'LDG': 5, 'BPT.TRAP': 4}, 'zd_split old': {'instructions': 387, 'LDG': 7, 'BPT.TRAP': 5}, 'f32_partials old': {'instructions': 104, 'LDG': 9, 'BPT.TRAP': 0}, 'rowsum_f32 new': {'instructions': 93, 'LDG': 14, 'BPT.TRAP': 0}, 'rowsum_zd new': {'instructions': 312, 'LDG': 14, 'BPT.TRAP': 1}, 'zd_sum new': {'instructions': 585, 'LDG': 11, 'BPT.TRAP': 4}, 'zd_split new': {'instructions': 859, 'LDG': 19, 'BPT.TRAP': 5}, 'f32_partials new': {'instructions': 104, 'LDG': 9, 'BPT.TRAP': 0}}
+stops: {'rowsum_zd old term': 'STOPPED AcceleratorError', 'rowsum_zd old nan': 'STOPPED AcceleratorError', 'rowsum_zd old total': 'STOPPED AcceleratorError', 'rowsum_zd old inside': 'STOPPED AcceleratorError', 'rowsum_zd old good': 'RAN 489.0', 'zd_sum old nan': 'STOPPED AcceleratorError', 'zd_sum old good': 'RAN 25000.75', 'zd_split old nan': 'STOPPED AcceleratorError', 'zd_split old good': 'RAN 25000.75', 'rowsum_zd new term': 'STOPPED AcceleratorError', 'rowsum_zd new nan': 'STOPPED AcceleratorError', 'rowsum_zd new total': 'STOPPED AcceleratorError', 'rowsum_zd new inside': 'STOPPED AcceleratorError', 'rowsum_zd new good': 'RAN 489.0', 'zd_sum new nan': 'STOPPED AcceleratorError', 'zd_sum new good': 'RAN 25000.75', 'zd_split new nan': 'STOPPED AcceleratorError', 'zd_split new good': 'RAN 25000.75'}
+row sums equal to the semantics, zd old: 462260/462260
+row sums equal to the semantics, zd new: 462260/462260
+grid sums exact: {'1048576 zd_sum old': True, '1048576 zd_sum new': True, '1048576 zd_split old': True, '1048576 zd_split new': True, '16777216 zd_sum old': True, '16777216 zd_sum new': True, '16777216 zd_split old': True, '16777216 zd_split new': True, '67108864 zd_sum old': True, '67108864 zd_sum new': True, '67108864 zd_split old': True, '67108864 zd_split new': True}
+state_before: {'nvidia_smi': '22 %, 270 MHz, 810 MHz', 'sm_by_process': {'2112 kwin_wayland': 42, '2806 hom': 26}, 'games': ''}
+state_after: {'nvidia_smi': '5 %, 570 MHz, 5001 MHz', 'sm_by_process': {'2112 kwin_wayland': 3, '2806 hom': 13}, 'games': ''}
+46,226 rows (bandwidth-bound)    f32     min    305.6 us  median    315.9 us  x1.00 of f32
+46,226 rows (bandwidth-bound)    zd old  min    396.8 us  median    410.9 us  x1.30 of f32
+46,226 rows (bandwidth-bound)    zd new  min    299.5 us  median    308.4 us  x0.98 of f32
+4,096 rows (latency-bound)       f32     min     52.3 us  median     52.4 us  x1.00 of f32
+4,096 rows (latency-bound)       zd old  min    193.7 us  median    201.3 us  x3.70 of f32
+4,096 rows (latency-bound)       zd new  min     85.6 us  median     85.6 us  x1.64 of f32
+n=  1048576 torch.sum     min      5.8 us  median      5.9 us   718.6 GB/s  x1.00 of torch.sum
+n=  1048576 f32 two-pass  min      7.5 us  median      7.7 us   555.6 GB/s  x1.29 of torch.sum
+n=  1048576 zd_sum old    min      7.8 us  median      7.9 us   538.9 GB/s  x1.33 of torch.sum
+n=  1048576 zd_sum new    min      7.3 us  median      7.4 us   576.9 GB/s  x1.25 of torch.sum
+n=  1048576 zd_split old  min      7.3 us  median      7.4 us   576.9 GB/s  x1.25 of torch.sum
+n=  1048576 zd_split new  min      6.5 us  median      6.6 us   646.0 GB/s  x1.11 of torch.sum
+n= 16777216 torch.sum     min    107.3 us  median    107.6 us   625.3 GB/s  x1.00 of torch.sum
+n= 16777216 f32 two-pass  min    111.9 us  median    112.4 us   599.6 GB/s  x1.04 of torch.sum
+n= 16777216 zd_sum old    min    129.1 us  median    130.3 us   519.8 GB/s  x1.20 of torch.sum
+n= 16777216 zd_sum new    min    125.5 us  median    126.6 us   534.6 GB/s  x1.17 of torch.sum
+n= 16777216 zd_split old  min    125.2 us  median    126.5 us   535.8 GB/s  x1.17 of torch.sum
+n= 16777216 zd_split new  min    118.5 us  median    118.9 us   566.4 GB/s  x1.10 of torch.sum
+n= 67108864 torch.sum     min    425.1 us  median    453.2 us   631.5 GB/s  x1.00 of torch.sum
+n= 67108864 f32 two-pass  min    431.3 us  median    452.3 us   622.4 GB/s  x1.01 of torch.sum
+n= 67108864 zd_sum old    min    507.4 us  median    537.8 us   529.0 GB/s  x1.19 of torch.sum
+n= 67108864 zd_sum new    min    493.2 us  median    528.6 us   544.3 GB/s  x1.16 of torch.sum
+n= 67108864 zd_split old  min    492.2 us  median    526.8 us   545.3 GB/s  x1.16 of torch.sum
+n= 67108864 zd_split new  min    460.2 us  median    487.3 us   583.2 GB/s  x1.08 of torch.sum

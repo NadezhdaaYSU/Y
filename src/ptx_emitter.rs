@@ -1232,6 +1232,10 @@ pub struct PtxEmitter {
     /// other accumulator handed over must agree.
     drift_scatter_format:
         Option<(String, crate::zero_drift::DriftRepr, bool, ScalarTy, Option<(i128, i128)>)>,
+    /// Inside a `for` whose `@ZeroDrift` checks stop at its end
+    /// (`drift_loop_defers`): the predicate a failed check sets, trapped on
+    /// once after the loop.
+    drift_defer: Option<String>,
     /// Anything the emitter was asked to lower and could not lower correctly -
     /// a `@ZeroDrift` binding it cannot honour, an intrinsic whose PTX form it
     /// does not know how to construct. `main` fails the build on a non-empty
@@ -1623,6 +1627,7 @@ impl PtxEmitter {
             drift_grid_hi: std::collections::HashMap::new(),
             drift_grid_done: false,
             drift_scatter_format: None,
+            drift_defer: None,
             emit_errors: Vec::new(),
             uniformity: None,
             divergent_regions: Vec::new(),
@@ -1812,7 +1817,7 @@ impl PtxEmitter {
             if self.reg_ty.get(src) == Some(&ScalarTy::U64) {
                 let pred = self.alloc_pred();
                 writeln!(&mut self.ptx_buffer, "    setp.gt.u64 {pred}, {src}, {};", i64::MAX).unwrap();
-                writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+                self.emit_drift_stop(&pred);
             }
             return self.emit_convert(src, ScalarTy::I64);
         }
@@ -1931,7 +1936,7 @@ impl PtxEmitter {
         writeln!(w, "    max.u32 {e1}, {e}, 1;").unwrap();
         writeln!(w, "    add.s32 {s}, {e1}, {};", frac_bits as i32 - 150).unwrap();
         writeln!(w, "    setp.gt.s32 {big}, {s}, {};", limit_log2 as i32 - 24).unwrap();
-        writeln!(w, "    @{big} trap;").unwrap();
+        self.emit_drift_stop(&big);
         // s >= 0: m << s (the shift is clamped at 0 for the arm not taken).
         let (s0, m64, left) = (self.alloc_reg32(), self.alloc_reg64(), self.alloc_reg64());
         // s < 0: (m + 2^(k-1)) >> k, k = clamp(-s, 1, 31).
@@ -1999,7 +2004,7 @@ impl PtxEmitter {
         for (cmp, bound) in [("geu", 2f64.powi(63)), ("ltu", -(2f64.powi(63)))] {
             let pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.{cmp}.f64 {pred}, {value}, {};", Self::ptx_f64(bound)).unwrap();
-            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+            self.emit_drift_stop(&pred);
         }
     }
 
@@ -2026,7 +2031,7 @@ impl PtxEmitter {
         writeln!(&mut self.ptx_buffer, "    and.b64 {both}, {x1}, {x2};").unwrap();
         let pred = self.alloc_pred();
         writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {pred}, {both}, 0;").unwrap();
-        writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+        self.emit_drift_stop(&pred);
         writeln!(&mut self.ptx_buffer, "    mov.s64 {acc}, {sum};").unwrap();
     }
 
@@ -2044,18 +2049,134 @@ impl PtxEmitter {
             let (d, pred) = (self.alloc_reg64(), self.alloc_pred());
             writeln!(&mut self.ptx_buffer, "    sub.u64 {d}, {acc}, {lo};").unwrap();
             writeln!(&mut self.ptx_buffer, "    setp.gt.u64 {pred}, {d}, {};", hi - lo).unwrap();
-            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+            self.emit_drift_stop(&pred);
             return;
         }
         if lo > i64::MIN as i128 {
             let pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.lt.s64 {pred}, {acc}, {lo};").unwrap();
-            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+            self.emit_drift_stop(&pred);
         }
         if hi < i64::MAX as i128 {
             let pred = self.alloc_pred();
             writeln!(&mut self.ptx_buffer, "    setp.gt.s64 {pred}, {acc}, {hi};").unwrap();
-            writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap();
+            self.emit_drift_stop(&pred);
+        }
+    }
+
+    /// A `@ZeroDrift` check that failed when `pred` is true: a term that does
+    /// not fit, an accumulate that overflowed, a value outside its `@bounds`.
+    /// It traps at once, except inside a loop whose checks stop at its end
+    /// (`drift_loop_defers`), where it only sets that loop's flag.
+    fn emit_drift_stop(&mut self, pred: &str) {
+        match &self.drift_defer {
+            Some(flag) => writeln!(&mut self.ptx_buffer, "    or.pred {flag}, {flag}, {pred};").unwrap(),
+            None => writeln!(&mut self.ptx_buffer, "    @{pred} trap;").unwrap(),
+        }
+    }
+
+    /// Whether the `@ZeroDrift` checks in this `for` stop at its end instead
+    /// of at the term (decided 2026-10-28). Inside the loop a failed check then
+    /// only sets a flag, and the body has no branch out, so ptxas can unroll
+    /// it and overlap its loads. With a trap per term a row sum took 3.71x a
+    /// plain f32 one where few threads hide latency, and the trap was most of
+    /// it (`docs/benchmarks/zero_drift_stop_point_2026-10-28/`).
+    ///
+    /// The same inputs stop, and nothing the thread did after the failed
+    /// check can be seen, only if:
+    /// - the loop surely ends: its step is 1, so the counter meets the end
+    ///   without wrapping. A larger step could carry it past `i32::MAX` and
+    ///   loop for ever where a trap per term would have stopped it; the
+    ///   front end refuses such a loop today, and this rule does not lean on
+    ///   that;
+    /// - nothing in it leaves the thread: no store, call statement, `while`,
+    ///   `return`, `chisel` or other block, and of the built-ins only those
+    ///   that read the thread's position or multiply (`DRIFT_THREAD_LOCAL_CALLS`). A
+    ///   nested `for` follows the same rules and shares the flag, which this
+    ///   loop's end checks;
+    /// - it accumulates into a `@ZeroDrift` binding at all, so no other loop
+    ///   changes.
+    /// Stopping before each store instead would put the branch back in the
+    /// loop and gain nothing. Only these checks move: an index test, which
+    /// guards a memory access, still stops at once.
+    fn drift_loop_defers(&self, loop_var: &str, step: Option<&Expr>, body: &Block) -> bool {
+        let (mut loop_vars, mut drift) = (vec![loop_var.to_string()], false);
+        matches!(step, None | Some(Expr::IntLit(1, _)))
+            && self.drift_block_stays_in_thread(body, &mut loop_vars, &mut drift)
+            && drift
+    }
+
+    fn drift_block_stays_in_thread(&self, block: &Block, loop_vars: &mut Vec<String>, drift: &mut bool) -> bool {
+        block.stmts.iter().all(|s| self.drift_stmt_stays_in_thread(s, loop_vars, drift))
+    }
+
+    /// One statement of `drift_loop_defers`'s body; `loop_vars` are the
+    /// counters of the loops it is in, which it may not assign, and `drift`
+    /// becomes true at an accumulation into a `@ZeroDrift` binding.
+    fn drift_stmt_stays_in_thread(&self, s: &Stmt, loop_vars: &mut Vec<String>, drift: &mut bool) -> bool {
+        let local = Self::expr_stays_in_thread;
+        match s {
+            Stmt::Let { init, zero_drift, .. } => {
+                *drift |= zero_drift.is_some();
+                init.as_ref().map_or(true, local)
+            }
+            Stmt::TypeAlias { .. } | Stmt::CompileTimeAssert { .. } => true,
+            Stmt::Assign { target, value, .. } | Stmt::CompoundAssign { target, value, .. } => match target {
+                Expr::Ident(n, _) if !loop_vars.contains(n) => {
+                    *drift |= self.zero_drift.contains_key(n);
+                    local(value)
+                }
+                _ => false,
+            },
+            Stmt::If { condition, then_block, else_block, .. } => {
+                local(condition)
+                    && self.drift_block_stays_in_thread(then_block, loop_vars, drift)
+                    && else_block.as_ref().map_or(true, |b| self.drift_block_stays_in_thread(b, loop_vars, drift))
+            }
+            Stmt::For { loop_var, start, end, step, body, .. } => {
+                if !matches!(step, None | Some(Expr::IntLit(1, _))) || !local(start) || !local(end) {
+                    return false;
+                }
+                loop_vars.push(loop_var.clone());
+                let stays = self.drift_block_stays_in_thread(body, loop_vars, drift);
+                loop_vars.pop();
+                stays
+            }
+            Stmt::SafeBlock(block, _) => self.drift_block_stays_in_thread(block, loop_vars, drift),
+            Stmt::Expr(_)
+            | Stmt::Return(..)
+            | Stmt::Chisel(..)
+            | Stmt::While { .. }
+            | Stmt::Break { .. }
+            | Stmt::Match { .. }
+            | Stmt::GhostBlock(..)
+            | Stmt::HintBlock { .. }
+            | Stmt::ClockDomainBlock { .. } => false,
+        }
+    }
+
+    /// Built-ins this backend lowers that have no effect another thread or
+    /// the host could see.
+    const DRIFT_THREAD_LOCAL_CALLS: &'static [&'static str] = &[
+        "thread_id", "global_thread_id", "thread_idx", "thread_idx_x", "thread_idx_y", "thread_idx_z",
+        "block_idx_x", "block_idx_y", "block_idx_z", "block_dim_x", "block_dim_y", "block_dim_z",
+        "grid_dim_x", "grid_dim_y", "grid_dim_z", "mul_wide_u32", "mul_wide_s32", "u64_lo32", "u64_hi32",
+    ];
+
+    /// Loads, arithmetic and `DRIFT_THREAD_LOCAL_CALLS`; anything else may
+    /// have an effect.
+    fn expr_stays_in_thread(e: &Expr) -> bool {
+        let local = Self::expr_stays_in_thread;
+        match e {
+            Expr::Ident(..) | Expr::IntLit(..) | Expr::FloatLit(..) | Expr::BoolLit(..) => true,
+            Expr::Index { base, index, .. } => local(base) && local(index),
+            Expr::BinaryOp { left, right, .. } => local(left) && local(right),
+            Expr::UnaryOp { operand, .. } => local(operand),
+            Expr::Call { func, args, .. } => {
+                matches!(&**func, Expr::Ident(n, _) if Self::DRIFT_THREAD_LOCAL_CALLS.contains(&n.as_str()))
+                    && args.iter().all(local)
+            }
+            _ => false,
         }
     }
 
@@ -5154,6 +5275,7 @@ or `shared_alloc_u32` for a shared-memory array.",
         self.drift_grid_hi.clear();
         self.drift_grid_done = false;
         self.drift_scatter_format = None;
+        self.drift_defer = None;
         self.record_pointer_element_types(kernel);
 
         // Reset register counters
@@ -6597,6 +6719,14 @@ declare it as a Q format.\n{}",
                 }
                 self.refuse_divergent_collectives(header_from, span);
                 self.variables.insert(loop_var.clone(), loop_reg.clone());
+                // `@ZeroDrift`'s checks in this loop stop at its end; a loop
+                // inside one shares its flag.
+                let defer = self.drift_defer.is_none() && self.drift_loop_defers(loop_var, step.as_ref(), body);
+                if defer {
+                    let flag = self.alloc_pred();
+                    writeln!(&mut self.ptx_buffer, "    setp.ne.u32 {flag}, 0, 0;").unwrap();
+                    self.drift_defer = Some(flag);
+                }
 
                 writeln!(&mut self.ptx_buffer, "    {}:", loop_start).unwrap();
                 writeln!(
@@ -6632,6 +6762,10 @@ declare it as a Q format.\n{}",
                 .unwrap();
                 writeln!(&mut self.ptx_buffer, "    bra {};", loop_start).unwrap();
                 writeln!(&mut self.ptx_buffer, "    {}:", loop_end).unwrap();
+                if defer {
+                    let flag = self.drift_defer.take().unwrap();
+                    writeln!(&mut self.ptx_buffer, "    @{flag} trap;").unwrap();
+                }
             }
             // Accumulation into a `@ZeroDrift` binding. There is no general
             // `CompoundAssign` arm in this emitter, so this handles only the

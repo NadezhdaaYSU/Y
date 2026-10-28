@@ -2087,9 +2087,20 @@ term on a card that runs f64 at 1/64 rate, so a `@ZeroDrift` row sum took
 3.72x a plain f32 one, more than an f64 accumulator. The term is now converted
 with integer arithmetic on its bits, the same value bit for bit, and with
 narrow bounds the accumulate's overflow test, which can then never fire, is
-gone. The sum now takes 1.30x the f32 sum where memory bandwidth limits it. It
-takes 3.71x (was 7.27x) where only a few threads hide latency
+gone. The sum then took 1.30x the f32 sum where memory bandwidth limits it, and
+3.71x (was 7.27x) where only a few threads hide latency
 (`docs/benchmarks/zero_drift_conversion_2026-10-27/`).
+
+**Most of what remained was where the program stops, not the arithmetic.**
+Each check ended in a trap branch right after its term, and `ptxas` does not
+unroll a loop with such an exit, so every term waited for its loads before the
+next term's were issued. Inside a `for` with step 1 that nothing outside the
+thread can see (no store, call statement, `while`, `return` or `chisel`), a
+failed check now only sets a flag, and the program stops when the loop ends:
+the same inputs stop, and nothing after the loop runs. Other loops still stop
+at the term. The row sum now takes 0.98x the f32 sum where bandwidth limits
+it, and 1.64x where latency does
+(`docs/benchmarks/zero_drift_stop_point_2026-10-28/`).
 
 **Across threads, `drift_add_to(ACC, OUT, acc)` adds every thread's partial
 into one exact total for the whole grid.** A partial is held in 128 bits, a warp
@@ -2098,10 +2109,13 @@ and carries into its high word, and the last block to finish checks and stores
 it. 98 launch shapes, from one thread to 1000 blocks of 1024 and
 three-dimensional ones, store the same bits. The same partitions summed in f32
 do not. A program stops on a bad term or an out-of-range total in every shape
-or in none (`tests/zero_drift_grid_sum.rs`). On an RTX 4070 Ti SUPER it takes
+or in none (`tests/zero_drift_grid_sum.rs`). On an RTX 4070 Ti SUPER it took
 1.19x `torch.sum` over 256 MB of f32, and 1.37x over 4 MB, which fits in L2
 (measured with the desktop sharing the card;
-`docs/benchmarks/zero_drift_grid_sum_2026-10-27/`).
+`docs/benchmarks/zero_drift_grid_sum_2026-10-27/`). With the stop at the
+loop's end it takes 1.16x, and 1.08x when the loop's full rounds come first
+without an `if i < n`, as the manual shows (§9.6;
+`docs/benchmarks/zero_drift_stop_point_2026-10-28/`).
 
 **Many totals: `drift_add_at(ACC, i, acc)` hands a partial to total `i`, and
 `drift_finish(ACC, OUT, n)` writes all `n` once every block is done.** It is

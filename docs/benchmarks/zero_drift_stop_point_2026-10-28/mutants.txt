@@ -1,0 +1,67 @@
+Mutation test of the stop at the loop's end (2026-10-28).
+
+Each mutant changes one thing in `src/ptx_emitter.rs` (`emit_drift_stop`,
+`drift_loop_defers` and the `for` lowering), then the compiler is built and
+run against tests/zero_drift_stop_point.rs, python/y_lang/tests/
+test_drift_stop_point.py and tests/zero_drift_f32_conversion.rs. The source
+was written back and rebuilt after each run, and compared with the original.
+
+31 mutants: 30 fail a test; 1 is equivalent.
+
+- R10 (an inner loop's bounds not checked) is equivalent: a loop's bounds
+  can only be a name or a literal (`parse_loop_bound_expr`; even `(N)` does
+  not parse), so nothing with an effect can reach that check. It is kept in
+  case the grammar widens.
+- R4 and R5 first deleted `return` and `while` from the list of refused
+  statements, and the build failed: the `match` lists every statement kind,
+  so a removed one does not compile. R4b and R5b accept them instead.
+- R5b survived the first run: the only test `while` held the loop's sole
+  term, so no accumulation was seen and nothing deferred either way. The
+  test now also has a `while` beside a term, and kills it.
+- S3 (the flag not cleared) gives the right answers on the GPU and the
+  interpreter, where the uncleared predicate read as false; only the
+  emitted-shape test catches it.
+
+The log, in run order (the last three lines are the rerun with the added
+test):
+
+M0 unmutated: OK  rust rc 0 []; py rc 0 OK; f32conv rc 0 []
+S1 a check always traps: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops']; py rc 1 FAILED (failures=1); f32conv rc 0 []
+S2 the flag is and-ed: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops', 'the_same_inputs_stop_wherever_the_bad_term_is']; py rc 1 FAILED (failures=2); f32conv rc 101 ['programs_stop_in_the_same_cases']
+S3 the flag is not cleared: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops']; py rc 0 OK; f32conv rc 0 []
+S4 the flag starts set: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops', 'the_same_inputs_stop_wherever_the_bad_term_is']; py rc 1 FAILED (errors=1); f32conv rc 101 ['opposite_orders_agree_where_f32_does_not', 'programs_stop_in_the_same_cases']
+S5 no trap after the loop: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops', 'the_same_inputs_stop_wherever_the_bad_term_is']; py rc 1 FAILED (failures=1); f32conv rc 101 ['programs_stop_in_the_same_cases']
+S6 the trap after the loop ignores the flag: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops', 'the_same_inputs_stop_wherever_the_bad_term_is']; py rc 1 FAILED (errors=1); f32conv rc 101 ['opposite_orders_agree_where_f32_does_not', 'programs_stop_in_the_same_cases']
+S7 the flag outlives its loop: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end']; py rc 0 OK; f32conv rc 0 []
+S8 a nested loop takes its own flag: KILLED  rust rc 101 ['a_nested_loop_shares_the_flag_and_the_outer_end_stops', 'the_same_inputs_stop_wherever_the_bad_term_is']; py rc 0 OK; f32conv rc 0 []
+R1 any step: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R2 no accumulation needed: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R3 call statements pass: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R4 return passes: KILLED by the build
+R5 while passes: KILLED by the build
+R6 stores pass: KILLED  rust rc 101 ['a_nested_loop_shares_the_flag_and_the_outer_end_stops', 'loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 1 FAILED (failures=2); f32conv rc 0 []
+R7 the counter may be assigned: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R8 any built-in: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R9 an inner loop's step not checked: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R10 an inner loop's bounds not checked: SURVIVED  rust rc 0 []; py rc 0 OK; f32conv rc 0 []
+R11 an if's condition not checked: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R12 a let's value not checked: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R13 a @safe block not looked into: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R14 an else not looked into: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R15 a let of an accumulator not counted: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end']; py rc 0 OK; f32conv rc 0 []
+R16 an assigned accumulator not counted: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops']; py rc 1 FAILED (failures=1); f32conv rc 0 []
+C1 the f32 term test traps at once: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops']; py rc 1 FAILED (failures=1); f32conv rc 0 []
+C2 the overflow test traps at once: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end']; py rc 0 OK; f32conv rc 0 []
+C3 the one-compare range traps at once: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end', 'a_nested_loop_shares_the_flag_and_the_outer_end_stops']; py rc 1 FAILED (failures=1); f32conv rc 0 []
+C4 the low bound traps at once: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end']; py rc 0 OK; f32conv rc 0 []
+C5 the U64 term test traps at once: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end']; py rc 0 OK; f32conv rc 0 []
+C6 the f64 fit tests trap at once: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end']; py rc 0 OK; f32conv rc 0 []
+C7 the high bound sets no flag: KILLED  rust rc 101 ['a_loop_that_stays_in_its_thread_stops_at_its_end']; py rc 0 OK; f32conv rc 0 []
+restored; rebuild 0; identical True
+R4b return accepted: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R5b while accepted: SURVIVED  rust rc 0 []; py rc 0 OK; f32conv rc 0 []
+restored; rebuild 0; identical True
+M0 unmutated: OK  rust rc 0 []; py rc 0 OK; f32conv rc 0 []
+R4b return accepted: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+R5b while accepted: KILLED  rust rc 101 ['loops_that_can_be_seen_or_may_not_end_stop_at_the_term']; py rc 0 OK; f32conv rc 0 []
+restored; rebuild 0; identical True

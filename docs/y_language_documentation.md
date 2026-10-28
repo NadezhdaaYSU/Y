@@ -880,6 +880,19 @@ reports that and exits 1.
   wrapped, the GPU's conversion saturated a term (a NaN became `i64::MIN`), and
   the LLVM backend's turned an oversized one into an arbitrary value (one term of
   1e12 gave a total of 0). `tests/zero_drift_runtime_checks.rs`.
+* **Where the GPU stops** (since 2026-10-28): inside a `for` with step 1
+  whose body nothing outside the thread can see before the loop ends - no
+  store, call statement (an atomic, a hand-over, a barrier), `while`,
+  `return` or `chisel`, and of the built-ins only those that read the
+  thread's position or multiply - a failed check sets a flag, and the program
+  stops when the loop ends, before anything after it runs. The same inputs
+  stop. A nested `for` of the same kind shares the flag. In any other loop,
+  and outside loops, it stops at the term, as the LLVM backend and the JIT
+  always do. Only these checks move; an index test still stops at once. The
+  loop then has no branch out, so `ptxas` unrolls it and its loads overlap: a
+  row sum where few threads hide latency takes 1.64x a plain f32 one instead
+  of 3.70x (`docs/benchmarks/zero_drift_stop_point_2026-10-28/`,
+  `tests/zero_drift_stop_point.rs`).
 * **Across threads** (PTX only): `drift_add_to(ACC, OUT, acc)` adds every
   thread's partial of `acc` into one exact total for the whole grid and stores
   it in `OUT[0]`, as a read of `acc` produces it (`GlobalMemory<F32>` for an
@@ -903,6 +916,29 @@ reports that and exits 1.
     besides (a partial is the launch's choice).
   * One total per kernel. The LLVM backend, the JIT and `--emit-cpu` refuse it
     by name. `tests/zero_drift_grid_sum.rs`.
+  * **Write a grid-stride loop as its full rounds, then the rest.** With
+    `if i < n { acc += X[i]; }` in every round the conversion sits in a
+    branch, and the loop's loads go out one at a time. Loop over the rounds
+    every thread takes in full (`full` is `n / stride`, `stride` the number of
+    threads in the grid) with no test, then over the `rest` with it:
+
+    ```
+    @invariant(j >= 0)
+    for j in 0..full step 1 {
+        acc += X[b * threads + t + j * stride];
+    }
+    @invariant(r >= 0)
+    for r in 0..rest step 1 {
+        let i: I32 = b * threads + t + (full + r) * stride;
+        if i < n {
+            acc += X[i];
+        }
+    }
+    ```
+
+    Over 256 MB this takes 1.08x `torch.sum`, against 1.16x with the test in
+    every round (`zd_split` and `zd_sum` in
+    `docs/benchmarks/zero_drift_stop_point_2026-10-28/grid_sum.ysu`).
 * **Many totals across threads** (PTX only): `drift_add_at(ACC, i, acc)` adds
   the partial `acc` exactly to total `i` and sets `acc` back to zero, and
   `drift_finish(ACC, OUT, n)` stores all `n` totals in `OUT[0..n]` once every

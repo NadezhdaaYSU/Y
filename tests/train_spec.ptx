@@ -14,7 +14,7 @@
     .reg .b32 %r<32>;
     .reg .f32 %f<2>;
     .reg .b64 %rd<16>;
-    .reg .pred %p<11>;
+    .reg .pred %p<12>;
 
     ld.param.u64 %rd0, [weights_0];
     ld.param.u32 %r0, [size_1];
@@ -56,6 +56,7 @@
     // for i in ...
     mov.u32 %r15, 0;
     mov.u32 %r16, 1024;
+    setp.ne.u32 %p6, 0, 0;
     $LOOP_START_0:
     setp.ge.s32 %p5, %r15, %r16;
     @%p5 bra $LOOP_END_1;
@@ -65,12 +66,12 @@
     and.b32 %r19, %r19, 255;
     and.b32 %r20, %r18, 8388607;
     or.b32 %r21, %r20, 8388608;
-    setp.ne.u32 %p6, %r19, 0;
-    selp.u32 %r22, %r21, %r20, %p6;
+    setp.ne.u32 %p7, %r19, 0;
+    selp.u32 %r22, %r21, %r20, %p7;
     max.u32 %r23, %r19, 1;
     add.s32 %r24, %r23, -118;
-    setp.gt.s32 %p7, %r24, 38;
-    @%p7 trap;
+    setp.gt.s32 %p8, %r24, 38;
+    or.pred %p6, %p6, %p8;
     max.s32 %r25, %r24, 0;
     cvt.u64.u32 %rd9, %r22;
     shl.b64 %rd10, %rd9, %r25;
@@ -83,16 +84,17 @@
     add.u32 %r30, %r22, %r29;
     shr.u32 %r31, %r30, %r26;
     cvt.u64.u32 %rd11, %r31;
-    setp.lt.s32 %p8, %r24, 0;
-    selp.b64 %rd12, %rd11, %rd10, %p8;
-    setp.lt.s32 %p9, %r18, 0;
+    setp.lt.s32 %p9, %r24, 0;
+    selp.b64 %rd12, %rd11, %rd10, %p9;
+    setp.lt.s32 %p10, %r18, 0;
     neg.s64 %rd13, %rd12;
-    selp.b64 %rd14, %rd13, %rd12, %p9;
+    selp.b64 %rd14, %rd13, %rd12, %p10;
     add.s64 %rd1, %rd1, %rd14;
     sub.u64 %rd15, %rd1, -4503599627370496;
-    setp.gt.u64 %p10, %rd15, 9007199254740992;
-    @%p10 trap;
+    setp.gt.u64 %p11, %rd15, 9007199254740992;
+    or.pred %p6, %p6, %p11;
     add.u32 %r15, %r15, 1;
     bra $LOOP_START_0;
     $LOOP_END_1:
+    @%p6 trap;
 }
