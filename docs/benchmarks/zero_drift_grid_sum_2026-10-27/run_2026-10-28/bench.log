@@ -1,0 +1,16 @@
+start 01:40:26 games []
+n=  1048576     torch.sum: min      5.7 us  median      5.9 us  ( 731.4 GB/s)
+n=  1048576  f32 two-pass: min      7.5 us  median      7.6 us  ( 561.1 GB/s)
+n=  1048576        zd_sum: min      7.8 us  median      7.9 us  ( 538.9 GB/s)
+            exact -37.95335006713867  torch.sum -37.95336151123047  two-pass -37.95341491699219
+n= 16777216     torch.sum: min    107.3 us  median    107.8 us  ( 625.3 GB/s)
+n= 16777216  f32 two-pass: min    112.1 us  median    112.7 us  ( 598.5 GB/s)
+n= 16777216        zd_sum: min    129.5 us  median    130.3 us  ( 518.1 GB/s)
+            exact -2221.277587890625  torch.sum -2221.27734375  two-pass -2221.27783203125
+n= 67108864     torch.sum: min    425.1 us  median    428.1 us  ( 631.4 GB/s)
+n= 67108864  f32 two-pass: min    431.2 us  median    435.0 us  ( 622.5 GB/s)
+n= 67108864        zd_sum: min    506.9 us  median    515.0 us  ( 529.5 GB/s)
+            exact -2087.03369140625  torch.sum -2087.032958984375  two-pass -2087.033935546875
+util before 16 %, 210 MHz, 405 MHz after 100 %, 2775 MHz, 10251 MHz
+SM % by process (max of 5 samples), before {'2127 kwin_wayland': 14, '2230 plasmashell': 21, '2840 hom': 17} after {'2127 kwin_wayland': 11, '2840 hom': 5, '590491 python3': 42}
+end 01:40:43 games []

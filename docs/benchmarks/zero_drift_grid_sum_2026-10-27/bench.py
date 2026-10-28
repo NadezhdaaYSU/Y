@@ -38,6 +38,17 @@ def util():
                           capture_output=True, text=True).stdout.strip()
 
 
+def who():
+    """Per-process SM use over 5 samples (`nvidia-smi pmon`): which process loads the GPU."""
+    out = subprocess.run(["nvidia-smi", "pmon", "-c", "5", "-s", "u"], capture_output=True, text=True).stdout
+    rows = {}
+    for line in out.splitlines():
+        w = line.split()
+        if len(w) >= 10 and not line.startswith("#") and w[3] != "-":
+            rows.setdefault(f"{w[1]} {w[-1]}", []).append(int(w[3]))
+    return {k: max(v) for k, v in sorted(rows.items())}
+
+
 def exact(x):
     y = x.double() * 2.0 ** 32
     q = (torch.sign(y) * torch.floor(y.abs() + 0.5)).to(torch.int64)
@@ -48,7 +59,16 @@ def exact(x):
 zd, part = load("zd_sum"), load("f32_partials")
 acc = torch.zeros(3, dtype=torch.int64, device=dev)
 res = {"device": torch.cuda.get_device_name(0), "torch": torch.__version__, "block": BLOCK, "grid": GRID,
-       "reps": REPS, "inner": INNER, "util_before": util(), "sizes": {}}
+       "reps": REPS, "inner": INNER, "util_before": util(), "sm_by_process_before": who(), "sizes": {}}
+# Bring the clocks up first: the first size used to be timed while they were still ramping
+# (run_2026-10-28 first attempt: torch.sum took 28.9 us on 4 MB where it takes 7.4).
+warm = torch.empty(1 << 26, device=dev)
+t_warm = time.time()
+while time.time() - t_warm < 1.5:
+    warm.sum()
+torch.cuda.synchronize()
+del warm
+res["clocks_after_warmup"] = util()
 g = torch.Generator(device="cpu").manual_seed(7)
 for n in SIZES:
     x = (torch.randn(n, generator=g) * 0.3).float().to(dev)
@@ -106,6 +126,8 @@ for n in SIZES:
     print(f"            exact {float(want)!r}  torch.sum {ts!r}  two-pass {tp!r}", flush=True)
     res["sizes"][str(n)] = row
 res["util_after"] = util()
+res["sm_by_process_after"] = who()
 print("util before", res["util_before"], "after", res["util_after"])
+print("SM % by process (max of 5 samples), before", res["sm_by_process_before"], "after", res["sm_by_process_after"])
 os.makedirs(OUT, exist_ok=True)
 json.dump(res, open(f"{OUT}/results.json", "w"), indent=1)
