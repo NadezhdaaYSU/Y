@@ -1098,18 +1098,18 @@ structural instead of incidental, and closes one constant that had none" — not
 **`proofs/ExactGemmSchedule.v` is generated from `cpu_gemm.rs`'s own constants,
 committed, and gated on byte-identity** by `tests/exact_gemm_schedule_proof.rs`.
 Every sibling proof takes its constants and index maps from it. Same shape as
-`tools/extract_poseidon.py` → `src/zk_poseidon_constants.rs`, and as
+`tools/gen_poseidon_constants.py` → `src/zk_poseidon_constants.rs`, and as
 `tests/committed_ptx_artifacts.rs` for the `.ptx` corpus.
 
 **The generator LINKS rather than PARSES, and that is the whole design.** A
 `tools/` script would have to recover `VNNI_MR` with a regex over `cpu_gemm.rs`
 — a fourth copy of the value, living in the generator, which is the bug and not
-the fix. `extract_poseidon.py` parses because its input is *foreign*
-(circomlib's `.circom`); this input is our own Rust and can be `use`d. That
-leaves `[[bin]]` or `#[test]`; a fifth `[[bin]]` is a permanent user surface
-(`tests/source_surface.rs` gates those) bought for a file regenerated twice a
-year, so it is a `#[test]` with `Y_REWRITE_SCHEDULE_PROOF=1`. There is no
-`build.rs`.
+the fix. `gen_poseidon_constants.py` is a script because its input is
+*foreign* (the Poseidon paper's procedure); this input is our own Rust and can
+be `use`d. That leaves `[[bin]]` or `#[test]`; a fifth `[[bin]]` is a permanent
+user surface (`tests/source_surface.rs` gates those) bought for a file
+regenerated twice a year, so it is a `#[test]` with `Y_REWRITE_SCHEDULE_PROOF=1`.
+There is no `build.rs`.
 
 **The content-control collision was a real design decision, not an obstacle.**
 `tests/proofs_are_checked.rs::every_proof_has_a_content_control` rejects a `.v`

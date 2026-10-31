@@ -235,8 +235,8 @@ is our own Rust, so it can be `use`d. There is no `build.rs`, and a fifth
 `[[bin]]` is a permanent user surface bought for a file regenerated twice a
 year — so the generator is a `#[test]` with `Y_REWRITE_SCHEDULE_PROOF=1`.
 
-(`tools/extract_poseidon.py` parses, because *its* input is foreign circomlib.
-That is the distinction.)
+(`tools/gen_poseidon_constants.py` is a script, because *its* input is the
+foreign Poseidon procedure. That is the distinction.)
 
 ### One implementation, and it must be the one that ships
 
