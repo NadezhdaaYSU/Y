@@ -947,9 +947,16 @@ reports that and exits 1.
   number of hand-overs in an order that changes every launch, and gets the
   same bits in every one.
   * `ACC` is a `GlobalMemory<I64>` of `2n + 1` words, zero before the first
-    launch: total `i` is words `2i` and `2i + 1`, and word `2n` is the ticket.
-    The kernel sets them back to zero. Each hand-over is one 64-bit atomic
-    (and one on the high word when its carry or sign needs it).
+    launch: total `i`'s low word is word `i`, its high word word `n + i`, and
+    word `2n` is the ticket. The kernel sets them back to zero. Each hand-over
+    is one 64-bit atomic on the low word (and one on the high word when its
+    carry or sign needs it).
+  * The low words sit side by side because a scatter is limited by L2:
+    until 2026-10-31 total `i` was words `2i` and `2i + 1`, 16 bytes per
+    total, and a warp's hand-overs touched about twice as many cache lines.
+    Split, a 262,144-atom force kernel takes 1.09x fixed-point atomics
+    without checks and 1.10x f64 atomics, instead of 1.49x and 1.51x
+    (`docs/benchmarks/zero_drift_layout_2026-10-31/`).
   * The program stops when a term is out of range, when a total does not fit
     64 bits or the `@bounds`, when `i` is outside `0..n` (no other index is
     checked, and a wrong one would change another total or the ticket), and
@@ -964,13 +971,16 @@ reports that and exits 1.
     every `drift_add_at`, with no `return` or `chisel` block before it. `n`
     is an integer literal or a scalar integer parameter the body never
     assigns, so that every thread agrees on it.
-  * The last block converts all `n` totals alone: 0.85 ns per total on an RTX
-    4070 Ti SUPER, 37% of a 262,144-atom force kernel's time
-    (`docs/benchmarks/zero_drift_forces_2026-10-28/`).
+  * The last block converts all `n` totals alone. In a 262,144-atom force
+    kernel that was 0.85 ns per total and 37% of the time on an RTX 4070 Ti
+    SUPER, with the old layout (`docs/benchmarks/zero_drift_forces_2026-10-28/`);
+    with the split one the whole kernel takes 1467 us against 884 for the two
+    kernels below.
   * **In two kernels:** `drift_close(ACC, n)` ends the hand-overs instead of
     `drift_finish`, under the same rules, and a later kernel's
     `drift_convert(ACC, OUT, n)` converts the totals on every SM (57 us
-    instead of 668 for 786,432 totals). `ACC` then holds `2n + 7` words: the
+    instead of 668 for 786,432 totals, with the old layout). `ACC` then holds
+    `2n + 7` words: the
     totals, and a header at word `2n` that the closing kernel's last block
     writes, with a tag last: the format and `@bounds` of the totals and `n`.
     `drift_convert` stops unless the tag is there, matches `OUT`'s type

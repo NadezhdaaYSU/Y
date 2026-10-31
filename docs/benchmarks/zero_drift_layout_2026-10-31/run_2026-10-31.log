@@ -1,0 +1,18 @@
+32768 atoms, 785833 pairs; exact (3 block sizes x 3 orders): {'old finish': '9/9', 'old close + convert': '9/9', 'new finish': '9/9', 'new close + convert': '9/9'}
+  Y finish, old              min    222.6 us  median    226.5  x3.90 f32  x2.25 f64  x2.20 unchecked
+  Y close + convert, old     min    157.0 us  median    157.5  x2.75 f32  x1.59 f64  x1.55 unchecked
+  Y finish, new              min    179.1 us  median    180.6  x3.13 f32  x1.81 f64  x1.77 unchecked
+  Y close + convert, new     min    118.3 us  median    118.6  x2.07 f32  x1.20 f64  x1.17 unchecked
+  fixed unchecked            min    101.3 us  median    101.6  x1.77 f32  x1.02 f64  x1.00 unchecked
+  f64 atomics                min     98.8 us  median     99.1  x1.73 f32  x1.00 f64  x0.98 unchecked
+  f32 atomics                min     57.1 us  median     57.3  x1.00 f32  x0.58 f64  x0.56 unchecked
+262144 atoms, 6532504 pairs; exact (3 block sizes x 3 orders): {'old finish': '9/9', 'old close + convert': '9/9', 'new finish': '9/9', 'new close + convert': '9/9'}
+  Y finish, old              min   1831.8 us  median   1858.8  x4.09 f32  x2.27 f64  x2.25 unchecked
+  Y close + convert, old     min   1215.0 us  median   1238.3  x2.71 f32  x1.51 f64  x1.49 unchecked
+  Y finish, new              min   1467.4 us  median   1507.2  x3.28 f32  x1.82 f64  x1.80 unchecked
+  Y close + convert, new     min    883.8 us  median    905.5  x1.97 f32  x1.10 f64  x1.09 unchecked
+  fixed unchecked            min    813.1 us  median    837.3  x1.82 f32  x1.01 f64  x1.00 unchecked
+  f64 atomics                min    805.4 us  median    827.8  x1.80 f32  x1.00 f64  x0.99 unchecked
+  f32 atomics                min    447.6 us  median    469.0  x1.00 f32  x0.56 f64  x0.55 unchecked
+before: {'nvidia_smi': '26 %, 555 MHz, 810 MHz', 'sm_by_process': {'2136 kwin_wayland': 22, '2788 --cr': 23}, 'games': ''}
+after: {'nvidia_smi': '10 %, 480 MHz, 5001 MHz', 'sm_by_process': {'2136 kwin_wayland': 7, '2788 --cr': 8, '2811 --gpu-': 2, '5150 hom': 2, '99555 python3': 98}, 'games': ''}

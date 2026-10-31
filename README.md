@@ -2122,11 +2122,15 @@ without an `if i < n`, as the manual shows (§9.6;
 for scatters, such as the forces on atoms from a list of pairs. A
 Lennard-Jones kernel on 262,144 atoms (6.5 million pairs) stores the exact
 forces, bit for bit, for 5 block sizes and 3 pair orders; f32 atomics give
-15 different results. It takes 4.01x the f32 atomics and 2.24x f64 atomics,
-37% of it the last block converting all 786,432 totals alone. Ending with
-`drift_close` instead and converting in a second kernel with
-`drift_convert`, which stops unless the first marked the totals complete,
-takes 2.67x and 1.49x. On this input f64 atomics are order-independent too,
+15 different results. Ending with `drift_close` and converting in a second
+kernel with `drift_convert`, which stops unless the first marked the totals
+complete, it takes 1.97x the f32 atomics, 1.10x f64 atomics and 1.09x
+fixed-point atomics without checks; ending with `drift_finish`, whose last
+block converts all 786,432 totals alone, 3.28x f32. The 2.67x it took at
+first was not the atomics' wait for their old value, as guessed, but L2:
+each total's two words took 16 bytes, and its atomics made 1.84x the L2
+requests of 8-byte ones. The low words are now side by side, apart from the
+high ones (`docs/benchmarks/zero_drift_layout_2026-10-31/`). On this input f64 atomics are order-independent too,
 because every sum fits 53 bits; on denser lattices they give a different
 result for each block size and pair order, and Y the same
 (`tests/zero_drift_scatter.rs`,

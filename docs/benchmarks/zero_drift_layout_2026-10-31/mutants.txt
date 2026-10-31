@@ -1,0 +1,31 @@
+Mutation test of the split ACC layout (2026-10-31).
+
+Each mutant changes one address or store in `src/ptx_emitter.rs` (the
+hand-over, `emit_drift_read_total`, `drift_finish`, `drift_convert`, and the
+two `drift_add_to` calls that keep its single total at words 0 and 1). The
+compiler is then built and run against tests/zero_drift_scatter.rs,
+tests/zero_drift_grid_sum.rs, python/y_lang/tests/test_drift_scatter.py and
+python/y_lang/tests/test_drift_grid_sum.py. The source was written back and
+rebuilt after each run, and compared with the original.
+
+15 mutants: 15 fail a test.
+
+The log:
+
+M0 unmutated: OK  zero_drift_scatter rc 0 []; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 0 OK; test_drift_grid_sum.py rc 0 OK
+L1 hand-over: totals 16 bytes apart: KILLED  zero_drift_scatter rc 101 ['a_hand_over_checks_its_index_and_carries_into_the_high_word', 'every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (failures=1, errors=3); test_drift_grid_sum.py rc 0 OK
+L2 hand-over: high word next to the low: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (failures=1, errors=2); test_drift_grid_sum.py rc 0 OK
+L3 hand-over: high words offset by i, not n: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (failures=1, errors=2); test_drift_grid_sum.py rc 0 OK
+L4 carry added to the low word: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 101 ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none']; test_drift_scatter.py rc 1 FAILED (failures=1, errors=2); test_drift_grid_sum.py rc 1 FAILED (errors=1)
+L5 read: the high word read from the low: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 101 ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none']; test_drift_scatter.py rc 1 FAILED (errors=1); test_drift_grid_sum.py rc 1 FAILED (errors=1)
+L6 finish: totals 16 bytes apart: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (errors=1); test_drift_grid_sum.py rc 0 OK
+L7 finish: high word next to the low: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (errors=1); test_drift_grid_sum.py rc 0 OK
+L8 finish: high word not cleared: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (failures=1); test_drift_grid_sum.py rc 0 OK
+L9 convert: totals 16 bytes apart: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (failures=2, errors=2); test_drift_grid_sum.py rc 0 OK
+L10 convert: high word next to the low: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (errors=2); test_drift_grid_sum.py rc 0 OK
+L11 convert: high word not cleared: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (failures=2); test_drift_grid_sum.py rc 0 OK
+L12 add_to: carry into the ticket: KILLED  zero_drift_scatter rc 0 []; zero_drift_grid_sum rc 101 ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none']; test_drift_scatter.py rc 0 OK; test_drift_grid_sum.py rc 1 FAILED (errors=1)
+L13 add_to: high word read from the low: KILLED  zero_drift_scatter rc 0 []; zero_drift_grid_sum rc 101 ['every_launch_shape_gives_the_exact_total', 'programs_stop_in_every_launch_shape_or_in_none']; test_drift_scatter.py rc 0 OK; test_drift_grid_sum.py rc 1 FAILED (errors=1)
+L14 finish: high words n/2 on: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (errors=1); test_drift_grid_sum.py rc 0 OK
+L15 convert: high words n/2 on: KILLED  zero_drift_scatter rc 101 ['every_launch_shape_gives_the_exact_totals', 'programs_stop_in_every_launch_shape_or_in_none']; zero_drift_grid_sum rc 0 []; test_drift_scatter.py rc 1 FAILED (failures=2, errors=2); test_drift_grid_sum.py rc 0 OK
+restored; rebuild 0; identical True

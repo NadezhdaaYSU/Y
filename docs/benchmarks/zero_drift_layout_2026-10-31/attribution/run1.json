@@ -1,0 +1,183 @@
+{
+ "stops": {
+  "lj_closed_flags index": "STOPPED AcceleratorError",
+  "lj_closed_flags nan": "STOPPED AcceleratorError",
+  "lj_closed_flags good": "RAN",
+  "lj_closed_defer index": "STOPPED AcceleratorError",
+  "lj_closed_defer nan": "STOPPED AcceleratorError",
+  "lj_closed_defer good": "RAN",
+  "lj_closed_both index": "STOPPED AcceleratorError",
+  "lj_closed_both nan": "STOPPED AcceleratorError",
+  "lj_closed_both good": "RAN"
+ },
+ "state_before": {
+  "games": "",
+  "sm_by_process": {
+   "2136 kwin_wayland": 3,
+   "2147 plasmashell": 0,
+   "2811 --gpu-": 3
+  }
+ },
+ "32768": {
+  "pairs": 785833,
+  "exact": {
+   "lj_closed": [
+    true,
+    true,
+    true
+   ],
+   "lj_closed_flags": [
+    true,
+    true,
+    true
+   ],
+   "lj_closed_defer": [
+    true,
+    true,
+    true
+   ],
+   "lj_closed_both": [
+    true,
+    true,
+    true
+   ]
+  },
+  "us": {
+   "lj_closed": {
+    "min": 157.69599676132202,
+    "median": 158.00319910049438,
+    "x_fixed": 1.547835896269421
+   },
+   "lj_closed_flags": {
+    "min": 157.79839754104614,
+    "median": 158.00319910049438,
+    "x_fixed": 1.5488409921876316
+   },
+   "lj_closed_defer": {
+    "min": 159.7440004348755,
+    "median": 159.94880199432373,
+    "x_fixed": 1.5679376976259611
+   },
+   "lj_closed_both": {
+    "min": 161.6320013999939,
+    "median": 161.88960075378418,
+    "x_fixed": 1.5864690219843378
+   },
+   "lj_closed (zero + kernel)": {
+    "min": 147.14879989624023,
+    "median": 147.42239713668823,
+    "x_fixed": 1.4443118357474356
+   },
+   "lj_closed_both (zero + kernel)": {
+    "min": 150.73280334472656,
+    "median": 151.1423945426941,
+    "x_fixed": 1.4794899588694626
+   },
+   "lj_closed_red (zero + kernel)": {
+    "min": 142.02560186386108,
+    "median": 142.2335982322693,
+    "x_fixed": 1.3940260328033354
+   },
+   "fixed unchecked": {
+    "min": 101.88159942626953,
+    "median": 102.09280252456665,
+    "x_fixed": 1.0
+   },
+   "f64 atomics": {
+    "min": 99.53280091285706,
+    "median": 99.7376024723053,
+    "x_fixed": 0.976945802513512
+   },
+   "f32 atomics": {
+    "min": 57.631999254226685,
+    "median": 57.75359869003296,
+    "x_fixed": 0.565676231809987
+   }
+  }
+ },
+ "262144": {
+  "pairs": 6532504,
+  "exact": {
+   "lj_closed": [
+    true,
+    true,
+    true
+   ],
+   "lj_closed_flags": [
+    true,
+    true,
+    true
+   ],
+   "lj_closed_defer": [
+    true,
+    true,
+    true
+   ],
+   "lj_closed_both": [
+    true,
+    true,
+    true
+   ]
+  },
+  "us": {
+   "lj_closed": {
+    "min": 1202.5856018066406,
+    "median": 1236.0703945159912,
+    "x_fixed": 1.4777904110452729
+   },
+   "lj_closed_flags": {
+    "min": 1202.3455619812012,
+    "median": 1237.5344276428223,
+    "x_fixed": 1.4774954394841877
+   },
+   "lj_closed_defer": {
+    "min": 1219.5712089538574,
+    "median": 1255.0992012023926,
+    "x_fixed": 1.4986630768498772
+   },
+   "lj_closed_both": {
+    "min": 1237.2991561889648,
+    "median": 1273.6032009124756,
+    "x_fixed": 1.5204479630086678
+   },
+   "lj_closed (zero + kernel)": {
+    "min": 1186.0896110534668,
+    "median": 1220.9951877593994,
+    "x_fixed": 1.457519407534912
+   },
+   "lj_closed_both (zero + kernel)": {
+    "min": 1219.3856239318848,
+    "median": 1255.521583557129,
+    "x_fixed": 1.4984350217613307
+   },
+   "lj_closed_red (zero + kernel)": {
+    "min": 1150.5663871765137,
+    "median": 1185.8751773834229,
+    "x_fixed": 1.4138668978624933
+   },
+   "fixed unchecked": {
+    "min": 813.7727737426758,
+    "median": 818.612813949585,
+    "x_fixed": 1.0
+   },
+   "f64 atomics": {
+    "min": 805.7791709899902,
+    "median": 812.718391418457,
+    "x_fixed": 0.9901771071598751
+   },
+   "f32 atomics": {
+    "min": 451.0752201080322,
+    "median": 452.4944067001343,
+    "x_fixed": 0.5543011939726892
+   }
+  }
+ },
+ "state_after": {
+  "games": "",
+  "sm_by_process": {
+   "86149 python3": 98,
+   "2147 plasmashell": 0,
+   "2811 --gpu-": 0
+  }
+ }
+}

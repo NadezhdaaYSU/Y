@@ -1,0 +1,5 @@
+Kernel Name,gpu__time_duration.sum,lts__t_requests_srcunit_tex_op_atom_dot_alu.sum,lts__t_requests_srcunit_tex_op_red.sum,lts__t_sectors_srcunit_tex_op_atom_dot_alu.sum,lts__t_sectors_srcunit_tex_op_red.sum,lts__throughput.avg.pct_of_peak_sustained_elapsed,smsp__issue_active.avg.pct_of_peak_sustained_active
+,ms,request,request,sector,sector,%,%
+lj_closed,1.237696,16670816.000000,1792451.000000,39220542.000000,2379784.000000,98.162032,7.595067
+lj_closed_red,1.203328,25518.000000,16645298.000000,25518.000000,39195024.000000,95.790371,6.023298
+lj_fixed,0.878880,0.000000,9055782.000000,0.000000,30375287.000000,89.602472,2.307208

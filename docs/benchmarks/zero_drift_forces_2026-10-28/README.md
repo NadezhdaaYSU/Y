@@ -52,6 +52,8 @@ At 262,144 atoms:
   57 us instead of 668. What remains is the hand-overs: each needs the atomic's
   old value for its carry, and an index test.
 
+**Later (2026-10-31).** The hand-overs' wait for the old value was not the cost: L2 was. With each total's two words split (low words side by side, high words after them), `drift_close` + `drift_convert` takes 884 us instead of 1215, 1.10x f64 atomics: `../zero_drift_layout_2026-10-31/`.
+
 **Correctness, checked before timing.** Over 5 block sizes (64 to 1024) and
 3 pair orders (as built, reversed, shuffled):
 - `lj_exact`, and `lj_closed` followed by `lj_convert` (converting at 1 x 1024,
