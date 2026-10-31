@@ -38,15 +38,16 @@
 //! and committed. Every sibling proof takes its constants and index maps from
 //! it. This gate regenerates the file and fails on byte-identity, exactly like
 //! `tests/committed_ptx_artifacts.rs` for `.ptx` and
-//! `tools/extract_poseidon.py` for `src/zk_poseidon_constants.rs`.
+//! `tests/zk_poseidon_constants.rs` for `src/zk_poseidon_constants.rs`.
 //!
 //! # Why a `#[test]` and not a `[[bin]]` or a `tools/` script
 //!
 //! **The generator must LINK, not PARSE.** A `tools/` Python script would have
 //! to recover `VNNI_MR` with a regex over `cpu_gemm.rs` - a fourth copy of the
 //! value, living in the generator, which is the bug rather than the fix. The
-//! `extract_poseidon.py` precedent parses because its input is FOREIGN
-//! (circomlib's `.circom`); this input is our own Rust and can be `use`d.
+//! `gen_poseidon_constants.py` precedent is a script because its input is
+//! FOREIGN (the Poseidon paper's procedure); this input is our own Rust and
+//! can be `use`d.
 //!
 //! That leaves `[[bin]]` or `#[test]`. A fifth `[[bin]]` is a permanent user
 //! surface - `tests/source_surface.rs` gates those, and the README documents

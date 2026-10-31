@@ -8,9 +8,10 @@
 //!
 //! The expected values below come from circomlib 2.0.5's own `Poseidon(2)`
 //! template, compiled with `circom --wasm` and evaluated through its witness
-//! calculator. `tools/extract_poseidon.py` regenerates the constant table from
-//! the same source. `poseidon(1,2)` is additionally the test vector published
-//! in circomlibjs, so it can be checked against a third party by eye.
+//! calculator. `tools/gen_poseidon_constants.py` derives the constant table
+//! from the Poseidon reference procedure and checks it against these digests.
+//! `poseidon(1,2)` is additionally the test vector published in circomlibjs,
+//! so it can be checked against a third party by eye.
 //!
 //! Run with:  cargo test --features zk --test zk_poseidon_interop
 #![cfg(feature = "zk")]

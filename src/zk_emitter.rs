@@ -3500,10 +3500,10 @@ impl ZkEmitter {
     /// assumes you do not have. A Merkle proof built by circomlib could not be
     /// verified here, nor the reverse.
     ///
-    /// Now it transcribes circomlib's parameters (see
-    /// `zk_poseidon_constants.rs`) and follows the same optimized round
-    /// structure, so the digests are equal. `poseidon_matches_circomlib` pins
-    /// that against the published test vector.
+    /// Now it uses circomlib's parameters, derived from the Poseidon reference
+    /// procedure (see `zk_poseidon_constants.rs`), and follows the same
+    /// optimized round structure, so the digests are equal.
+    /// `tests/zk_poseidon_interop.rs` pins that against the published vectors.
     ///
     /// Costs 243 constraints: 81 S-boxes (`t*R_F + R_P = 3*8 + 57`) at 3 each.
     /// Every mix is a linear combination and therefore free.
