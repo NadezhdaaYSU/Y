@@ -3,7 +3,9 @@ Business Source License 1.1
 Parameters
 
 Licensor:             Umut Korkmaz
-Licensed Work:        Y (the "Y" compiler and language, including all source files in this repository)
+Licensed Work:        Y (the "Y" compiler and language, including all source files in this
+                       repository except the third-party files listed in NOTICE, which keep
+                       their own licenses)
                        The Licensed Work is (c) 2026 Umut Korkmaz
 Additional Use Grant: You may use the Licensed Work for personal, educational,
                        research, and internal evaluation purposes. You may not
@@ -15,7 +17,7 @@ Change Date:           2030-01-01
 Change License:        Apache License, Version 2.0
 
 For information about alternative licensing arrangements for the Licensed Work,
-please contact UmutYSUKorkmaz.com
+please contact umutysukorkmaz@gmail.com
 
 Notice
 

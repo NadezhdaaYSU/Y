@@ -1,0 +1,13 @@
+Third-party material in this repository
+
+The files below are not part of the Licensed Work named in LICENSE. They keep
+their own licenses, and a commercial license for Y does not cover them.
+
+circomlib/
+    Source:     https://github.com/iden3/circomlib
+    Copyright:  0KIMS association (see each file's header)
+    License:    GNU General Public License, version 3 or (at your option) any
+                later version. The full text is in circomlib/COPYING.
+    Use:        test fixtures for the circom front end (tests/circom_*.rs,
+                tests/zk_constant_propagation.rs). The compiler does not
+                include or read these files when it is built.
