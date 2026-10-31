@@ -706,8 +706,10 @@ fn a_hand_over_checks_its_index_and_carries_into_the_high_word() {
     let atom = lines.iter().position(|l| l.starts_with("atom.global.add.u64")).expect("the atomic");
     assert!(trap < atom, "the index is tested after the atomic:\n{hand}");
     assert!(lines[..trap].iter().any(|l| l.starts_with("setp.lt.s64")) && lines[..trap].iter().any(|l| l.starts_with("setp.ge.s64")), "the index is not tested against both ends:\n{hand}");
-    assert!(hand.contains("shl.b64") && hand.contains(", 4;"), "a total is not 16 bytes:\n{hand}");
+    // The low words 8 bytes apart, the high words n words further on.
+    assert!(hand.matches("shl.b64").count() == 2 && hand.matches(", 3;").count() >= 2 && !hand.contains(", 4;"), "the low words are not 8 bytes apart:\n{hand}");
     assert_eq!(hand.matches("red.global.add.u64").count(), 1, "the high word:\n{hand}");
+    assert!(!hand.contains("+8]"), "the high word next to the low one:\n{hand}");
     assert!(lines.iter().filter(|l| l.starts_with("mov.u64") && l.ends_with(", 0;")).count() == 2, "the partial is not set back to zero:\n{hand}");
     let finish = &ptx[fin..];
     assert!(finish.contains(".shared .align 4 .u32 drift_last;") && finish.matches("bar.sync 0;").count() == 2, "the last block's flag:\n{finish}");

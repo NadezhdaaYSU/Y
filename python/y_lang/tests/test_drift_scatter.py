@@ -162,6 +162,42 @@ class CloseAndConvertUnderTheInterpreter(unittest.TestCase):
             self.assertEqual(out.view(torch.int32).tolist(), want, f"close {block} {grid}, convert {cblock} {cgrid}")
             self.assertEqual(acc.tolist(), [0] * (2 * self.totals + 7), f"close {block} {grid}: ACC not left zero")
 
+    def test_between_the_kernels_acc_holds_the_low_words_then_the_high_words(self):
+        # The documented layout, which a host reading ACC relies on: total i's
+        # low word is word i, its high word word n + i, the header at 2n.
+        s = [0] * self.totals
+        for v, i in zip(self.x.tolist(), self.idx.tolist()):
+            s[i] += q(v)
+        self.assertTrue(any(t < 0 for t in s) and any(t > 0 for t in s), "both signs, or the high words prove nothing")
+        acc = torch.zeros(2 * self.totals + 7, dtype=torch.int64)
+        self.close(acc, (33, 1, 1), (3, 1, 1))
+        n = self.totals
+        self.assertEqual(acc[:n].tolist(), s)
+        self.assertEqual(acc[n:2 * n].tolist(), [-1 if t < 0 else 0 for t in s])
+        self.assertEqual(acc[2 * n + 1].item(), 0x5944524946540001, "the tag")
+
+    def test_the_converter_reads_the_high_word_at_n_plus_i(self):
+        n, h = self.totals, 2 * self.totals
+        def header(acc):
+            for k, v in {h + 1: 0x5944524946540001, h + 2: n, h + 3: 32, h + 4: -(2 ** 63), h + 5: 2 ** 63 - 1}.items():
+                acc[k] = v
+        acc = torch.zeros(h + 7, dtype=torch.int64)
+        totals = [(5 + 3 * i) * 2 ** 32 * (-1) ** i for i in range(n)]
+        for i, t in enumerate(totals):
+            acc[i], acc[n + i] = t, -1 if t < 0 else 0
+        header(acc)
+        out = torch.full((n,), 7.0, dtype=torch.float32)
+        self.convert(acc, out, (4, 1, 1), (2, 1, 1))
+        self.assertEqual(out.tolist(), [t / 2 ** 32 for t in totals])
+        self.assertEqual(acc.tolist(), [0] * (h + 7))
+        # A high word that is not the low word's sign: the total does not fit
+        # 64 bits, and only a converter reading word n + i sees it.
+        acc = torch.zeros(h + 7, dtype=torch.int64)
+        acc[3], acc[n + 3] = 2 ** 32, 1
+        header(acc)
+        with self.assertRaisesRegex(CPUInterpreterError, "trap"):
+            self.convert(acc, out, (4, 1, 1), (2, 1, 1))
+
     def test_every_misuse_of_the_pair_stops(self):
         out = torch.zeros(self.totals, dtype=torch.float32)
         fresh = lambda: torch.zeros(2 * self.totals + 7, dtype=torch.int64)

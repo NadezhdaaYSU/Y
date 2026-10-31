@@ -2803,7 +2803,7 @@ impl PtxEmitter {
         b(self, format!("setp.ne.u32 {not_first}, {lane}, 0;"));
         b(self, format!("@{not_first} bra {joined};"));
         b(self, format!("{single}:"));
-        self.emit_drift_hand_over(&total, &lo, &sum_hi);
+        self.emit_drift_hand_over(&total, &format!("{total}+8"), &lo, &sum_hi);
         b(self, format!("{joined}:"));
         // The threadfence-reduction pattern: this block's additions are
         // visible GPU-wide before its ticket is, and the last block reads
@@ -2830,7 +2830,7 @@ impl PtxEmitter {
         b(self, format!("setp.ne.u64 {not_last}, {ticket}, {last};"));
         b(self, format!("@{not_last} bra {end};"));
         b(self, "membar.gl;".into());
-        let value = self.emit_drift_read_total(&total, &name, repr, integer_domain, value_ty);
+        let value = self.emit_drift_read_total(&total, &format!("{total}+8"), &name, repr, integer_domain, value_ty);
         b(self, format!("st.global.{} [{out}], {value};", value_ty.mem()));
         for word in 0..3 {
             b(self, format!("st.volatile.global.u64 [{total}+{}], 0;", 8 * word));
@@ -2841,10 +2841,10 @@ impl PtxEmitter {
     }
 
     /// Adds the 128-bit `hi:lo` to the total whose low word is at `addr` and
-    /// high word at `addr + 8`: one atomic on the low word, whose old value
+    /// high word at `high_addr`: one atomic on the low word, whose old value
     /// gives the carry out of it, and one on the high word only when the
     /// carry plus `hi` is not zero.
-    fn emit_drift_hand_over(&mut self, addr: &str, lo: &str, hi: &str) {
+    fn emit_drift_hand_over(&mut self, addr: &str, high_addr: &str, lo: &str, hi: &str) {
         let [old, new, carry, high] = [(); 4].map(|_| self.alloc_ty(ScalarTy::U64));
         let (carried, high_nonzero) = (self.alloc_pred(), self.alloc_pred());
         for line in [
@@ -2854,18 +2854,20 @@ impl PtxEmitter {
             format!("selp.u64 {carry}, 1, 0, {carried};"),
             format!("add.u64 {high}, {hi}, {carry};"),
             format!("setp.ne.u64 {high_nonzero}, {high}, 0;"),
-            format!("@{high_nonzero} red.global.add.u64 [{addr}+8], {high};"),
+            format!("@{high_nonzero} red.global.add.u64 [{high_addr}], {high};"),
         ] {
             writeln!(&mut self.ptx_buffer, "    {line}").unwrap();
         }
     }
 
-    /// Reads the total at `addr` (low word, then high word), stops the
-    /// program unless it fits 64 bits and the `@bounds` of the accumulator
-    /// `name`, and converts it to the type a read of `name` produces.
+    /// Reads the total whose low word is at `addr` and high word at
+    /// `high_addr`, stops the program unless it fits 64 bits and the `@bounds`
+    /// of the accumulator `name`, and converts it to the type a read of
+    /// `name` produces.
     fn emit_drift_read_total(
         &mut self,
         addr: &str,
+        high_addr: &str,
         name: &str,
         repr: crate::zero_drift::DriftRepr,
         integer_domain: bool,
@@ -2875,7 +2877,7 @@ impl PtxEmitter {
         let wide_total = self.alloc_pred();
         for line in [
             format!("ld.volatile.global.u64 {sum_lo}, [{addr}];"),
-            format!("ld.volatile.global.u64 {sum_top}, [{addr}+8];"),
+            format!("ld.volatile.global.u64 {sum_top}, [{high_addr}];"),
             // The total fits 64 bits exactly when its high word is the sign
             // extension of the low one.
             format!("shr.s64 {sign}, {sum_lo}, 63;"),
@@ -2907,10 +2909,16 @@ impl PtxEmitter {
     /// ticket once every hand-over is done.
     ///
     /// `ACC` holds `2n + 1` 64-bit words, zero before the first launch: total
-    /// `i` is words `2i` (low) and `2i + 1` (high), as `drift_add_to`'s one
-    /// total is, and word `2n` is the ticket. The program stops unless
-    /// `0 <= i < n`: this backend checks no other index, and a hand-over
-    /// outside the totals would silently change another one, or the ticket.
+    /// `i`'s low word is word `i` and its high word word `n + i`, and word
+    /// `2n` is the ticket (with `n = 1`, `drift_add_to`'s layout). The low
+    /// words sit side by side, 8 bytes apart, because L2 is what limits a
+    /// scatter: with each total's two words together, 16 bytes apart, a
+    /// warp's hand-overs touched about twice the cache lines, and a force
+    /// kernel took 1.50x fixed-point atomics without checks instead of 1.08x
+    /// (`docs/benchmarks/zero_drift_layout_2026-10-31/`). The program stops
+    /// unless `0 <= i < n`: this backend checks no other index, and a
+    /// hand-over outside the totals would silently change another one, or the
+    /// ticket.
     fn emit_drift_add_at(&mut self, args: &[Expr], span: &Span, hw_profile: &HardwareProfile) -> String {
         let count = match &self.drift_grid {
             DriftGrid::Scatter { calls, count, .. } if calls.contains(&(span.line, span.col)) => count.clone(),
@@ -2967,7 +2975,7 @@ impl PtxEmitter {
         let Some(i) = self.emit_drift_index(&args[1], "drift_add_at", hw_profile) else { return "".into() };
         let Some(n) = self.emit_drift_index(&count, "drift_add_at", hw_profile) else { return "".into() };
         let base = self.emit_addr(&args[0], None, hw_profile);
-        let [offset, addr] = [(); 2].map(|_| self.alloc_ty(ScalarTy::U64));
+        let [offset, addr, highs, high_addr] = [(); 4].map(|_| self.alloc_ty(ScalarTy::U64));
         let (negative, past, outside) = (self.alloc_pred(), self.alloc_pred(), self.alloc_pred());
         let b = |this: &mut Self, line: String| writeln!(&mut this.ptx_buffer, "    {line}").unwrap();
         b(self, format!("// [Y ZERO DRIFT] {name}: this thread's partial joins one of the grid's exact totals"));
@@ -2975,9 +2983,11 @@ impl PtxEmitter {
         b(self, format!("setp.ge.s64 {past}, {i}, {n};"));
         b(self, format!("or.pred {outside}, {negative}, {past};"));
         b(self, format!("@{outside} trap;"));
-        b(self, format!("shl.b64 {offset}, {i}, 4;"));
+        b(self, format!("shl.b64 {offset}, {i}, 3;"));
         b(self, format!("add.u64 {addr}, {base}, {offset};"));
-        self.emit_drift_hand_over(&addr, &acc, &hi);
+        b(self, format!("shl.b64 {highs}, {n}, 3;"));
+        b(self, format!("add.u64 {high_addr}, {addr}, {highs};"));
+        self.emit_drift_hand_over(&addr, &high_addr, &acc, &hi);
         b(self, format!("mov.u64 {acc}, 0;"));
         b(self, format!("mov.u64 {hi}, 0;"));
         "".into()
@@ -3092,21 +3102,23 @@ impl PtxEmitter {
         b(self, format!("@{not_last} bra {end};"));
         b(self, "membar.gl;".into());
         // The last block's threads convert totals flat, flat + threads, ...
-        let [i, offset, addr, out_at] = [(); 4].map(|_| self.alloc_ty(ScalarTy::I64));
+        let [i, offset, addr, highs, high_addr, out_at] = [(); 6].map(|_| self.alloc_ty(ScalarTy::I64));
         let (top, done) = (self.alloc_label("DRIFT_TOTALS"), self.alloc_label("DRIFT_TOTALS_DONE"));
         let finished = self.alloc_pred();
         b(self, format!("cvt.u64.u32 {i}, {flat};"));
         b(self, format!("cvt.u64.u32 {step}, {threads};"));
+        b(self, format!("shl.b64 {highs}, {n}, 3;"));
         b(self, format!("{top}:"));
         b(self, format!("setp.ge.s64 {finished}, {i}, {n};"));
         b(self, format!("@{finished} bra {done};"));
-        b(self, format!("shl.b64 {offset}, {i}, 4;"));
+        b(self, format!("shl.b64 {offset}, {i}, 3;"));
         b(self, format!("add.u64 {addr}, {total}, {offset};"));
-        let value = self.emit_drift_read_total(&addr, &name, repr, integer_domain, value_ty);
+        b(self, format!("add.u64 {high_addr}, {addr}, {highs};"));
+        let value = self.emit_drift_read_total(&addr, &high_addr, &name, repr, integer_domain, value_ty);
         b(self, format!("mad.lo.u64 {out_at}, {i}, {}, {out};", value_ty.bytes()));
         b(self, format!("st.global.{} [{out_at}], {value};", value_ty.mem()));
         b(self, format!("st.volatile.global.u64 [{addr}], 0;"));
-        b(self, format!("st.volatile.global.u64 [{addr}+8], 0;"));
+        b(self, format!("st.volatile.global.u64 [{high_addr}], 0;"));
         b(self, format!("add.u64 {i}, {i}, {step};"));
         b(self, format!("bra {top};"));
         b(self, format!("{done}:"));
@@ -3338,20 +3350,22 @@ impl PtxEmitter {
             b(self, format!("mov.b64 {scale}, {exponent};"));
         }
         // Thread g of the grid converts totals g, g + all threads, ...
-        let [i, step, wide, addr, sum_lo, sum_top, sign, out_at] = [(); 8].map(|_| self.alloc_ty(ScalarTy::I64));
+        let [i, step, wide, addr, highs, high_addr, sum_lo, sum_top, sign, out_at] = [(); 10].map(|_| self.alloc_ty(ScalarTy::I64));
         let (top, done) = (self.alloc_label("DRIFT_CONVERT"), self.alloc_label("DRIFT_CONVERT_DONE"));
         let [finished, wide_total, below, above] = [(); 4].map(|_| self.alloc_pred());
         b(self, format!("cvt.u64.u32 {wide}, {threads};"));
         b(self, format!("mul.lo.u64 {step}, {blocks}, {wide};"));
         b(self, format!("cvt.u64.u32 {i}, {flat};"));
         b(self, format!("mad.lo.u64 {i}, {block}, {wide}, {i};"));
+        b(self, format!("shl.b64 {highs}, {n}, 3;"));
         b(self, format!("{top}:"));
         b(self, format!("setp.ge.s64 {finished}, {i}, {n};"));
         b(self, format!("@{finished} bra {done};"));
-        b(self, format!("shl.b64 {addr}, {i}, 4;"));
+        b(self, format!("shl.b64 {addr}, {i}, 3;"));
         b(self, format!("add.u64 {addr}, {total}, {addr};"));
+        b(self, format!("add.u64 {high_addr}, {addr}, {highs};"));
         b(self, format!("ld.volatile.global.u64 {sum_lo}, [{addr}];"));
-        b(self, format!("ld.volatile.global.u64 {sum_top}, [{addr}+8];"));
+        b(self, format!("ld.volatile.global.u64 {sum_top}, [{high_addr}];"));
         b(self, format!("shr.s64 {sign}, {sum_lo}, 63;"));
         b(self, format!("setp.ne.b64 {wide_total}, {sum_top}, {sign};"));
         b(self, format!("@{wide_total} trap;"));
@@ -3372,7 +3386,7 @@ impl PtxEmitter {
         b(self, format!("mad.lo.u64 {out_at}, {i}, {}, {out};", value_ty.bytes()));
         b(self, format!("st.global.{} [{out_at}], {value};", value_ty.mem()));
         b(self, format!("st.volatile.global.u64 [{addr}], 0;"));
-        b(self, format!("st.volatile.global.u64 [{addr}+8], 0;"));
+        b(self, format!("st.volatile.global.u64 [{high_addr}], 0;"));
         b(self, format!("add.u64 {i}, {i}, {step};"));
         b(self, format!("bra {top};"));
         b(self, format!("{done}:"));
