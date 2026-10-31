@@ -471,10 +471,12 @@ fn every_launch_shape_gives_the_exact_totals() {
     // The integer path: terms near 2^62, totals small.
     let xs: Vec<i64> = [4_000_000_000_000_000_000i64, 4e18 as i64, 3e18 as i64, -4e18 as i64, -4e18 as i64, -3e18 as i64, 12345].repeat(500);
     let idx: Vec<i32> = (0..xs.len()).map(|k| (k / 7 % 5) as i32).collect();
-    let mut want = vec![0i64; 5];
+    // Summed exactly, as in the kernel: an i64 running total overflows partway.
+    let mut exact = vec![0i128; 5];
     for (k, &x) in xs.iter().enumerate() {
-        want[idx[k] as usize] += x;
+        exact[idx[k] as usize] += x as i128;
     }
+    let want: Vec<i64> = exact.into_iter().map(|t| i64::try_from(t).expect("each exact total fits an I64")).collect();
     let int = compile("int", &scatter("I64", ""));
     let case = Case { ptx: &int, values: i64_bytes(&xs), elem: 8, idx, jdx: vec![0; xs.len()], totals: 5, ticket: 0, out_fill: 0x55, plan: "k" };
     let r = launch(test, "int", &case, &shapes).unwrap();
