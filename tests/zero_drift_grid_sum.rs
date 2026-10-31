@@ -294,7 +294,11 @@ fn every_launch_shape_gives_the_exact_total() {
     let xs: Vec<i64> = [4_000_000_000_000_000_000i64, 4e18 as i64, 3e18 as i64, -4e18 as i64, -4e18 as i64, -3e18 as i64, 12345].repeat(500);
     let ptx = compile("int", &sum_kernel("I64", ""));
     let r = launch(test, &ptx, "total", &i64_bytes(&xs), 8, [0; 3], &shapes).unwrap();
-    assert_every_shape("i64", &r.expect("no trap"), xs.iter().sum::<i64>() as u64, &shapes);
+    // The reference sums exactly too: an i64 running sum overflows on the third
+    // term, which a debug build traps and a release build happens to wrap back.
+    let total: i128 = xs.iter().map(|&x| x as i128).sum();
+    let total = i64::try_from(total).expect("the exact total fits an I64");
+    assert_every_shape("i64", &r.expect("no trap"), total as u64, &shapes);
 }
 
 #[test]
