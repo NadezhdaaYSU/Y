@@ -14,8 +14,8 @@ as it stood *before* the optimisation - float64 everywhere, K/V widened with
 
 ## It runs without a GPU, partially
 
-Ten of the thirteen checks need only torch, so `python3 tools/exact_selftest.py`
-on a CPU box runs those and says which four it skipped. It used to print
+Nine of the fourteen checks need only torch, so `python3 tools/exact_selftest.py`
+on a CPU box runs those and says which five it skipped. It used to print
 "SKIP: no CUDA" and exit 0 having checked nothing - a green exit that is exactly
 the failure the next paragraph is about.
 
@@ -98,7 +98,7 @@ def ref_attention(query, key, value, mask, scaling=None):
         # function, computed in float64", so hardcoding 127 here would make the
         # test pass only at the default width and report a *width change* as a
         # correctness failure.
-        s = x.abs().amax(dim=dims, keepdim=True) / float(levels)
+        s = x.abs().amax(dim=dims, keepdim=True) / x.new_tensor(float(levels))
         s = torch.where(s == 0, torch.ones_like(s), s)
         return torch.round(x / s).clamp(-levels, levels), s
 
@@ -141,11 +141,11 @@ def ref_attention(query, key, value, mask, scaling=None):
 def ref_linear(lin, x):
     """Pre-optimisation ExactLinear: float64 matmul, no padding, no int_mm."""
     w = lin.weight.data
-    sw = w.abs().amax(-1, keepdim=True) / 127.0
+    sw = w.abs().amax(-1, keepdim=True) / w.new_tensor(127.0)
     sw = torch.where(sw == 0, torch.ones_like(sw), sw)
     w8 = torch.round(w / sw).clamp(-127, 127).to(torch.int8)
     xf = x.reshape(-1, x.shape[-1])
-    s = xf.abs().amax(-1, keepdim=True) / 127.0
+    s = xf.abs().amax(-1, keepdim=True) / xf.new_tensor(127.0)
     s = torch.where(s == 0, torch.ones_like(s), s)
     x8 = torch.round(xf / s).clamp(-127, 127).to(torch.int8)
     acc = torch.matmul(x8.double(), w8.double().t()).float()
@@ -411,6 +411,48 @@ def check_digit_split_is_exact(dev, fail):
             f"(a_levels {lv}, hi in [{int(hi.min())}, {int(hi.max())}])")
 
 
+def check_quantisers_are_device_independent(dev, fail):
+    """Every float op the exact path keeps gives the same bits on CPU and GPU.
+
+    A CPU decode diverged from a GPU decode at token 13 because torch on CUDA
+    computes `tensor / python_float` as a multiply by the reciprocal: the int8
+    weights built on the two devices differed. The control below proves that
+    hazard is live on this torch, so the equalities after it are not vacuous.
+    """
+    bits = lambda t: t.detach().cpu().contiguous().view(torch.uint8)
+    same = lambda a, b: a.shape == b.shape and torch.equal(bits(a), bits(b))
+    x = torch.randn(4096, 896) * 3
+    if same(x.cuda() / 127.0, x / 127.0):
+        fail("control did not fire: CUDA `/ 127.0` now matches the CPU, so this "
+             "check no longer distinguishes a tensor divisor from a scalar one")
+    for lv in (127, EM.act_levels_for(4864, requested=511)):
+        qc, sc = EM._q_per_row(x, lv)
+        qg, sg = EM._q_per_row(x.cuda(), lv)
+        if not (same(qc, qg) and same(sc, sg)):
+            fail(f"_q_per_row(levels={lv}) differs between CPU and GPU")
+    qc, sc = exact_kv.quantize_rows(x, exact_kv.K_LEVELS)
+    qg, sg = exact_kv.quantize_rows(x.cuda(), exact_kv.K_LEVELS)
+    if not (same(qc, qg) and same(sc, sg)):
+        fail("exact_kv.quantize_rows differs between CPU and GPU")
+    lin = nn.Linear(896, 4864, bias=True)
+    lc, lg = EM.ExactLinear(lin), EM.ExactLinear(lin.cuda())
+    for name in ("w8t", "sw", "bias"):
+        if not same(getattr(lc, name), getattr(lg, name)):
+            fail(f"ExactLinear.{name} built on CPU differs from GPU")
+    norm = types.SimpleNamespace(weight=nn.Parameter(torch.rand(896) + 0.5),
+                                 variance_epsilon=1e-6)
+    nc = EM.ExactRMSNorm(norm)
+    if not same(nc(x), nc.cuda()(x.cuda())):
+        fail("ExactRMSNorm differs between CPU and GPU")
+    s = torch.randn(1 << 18) * 6
+    if not same(EM.ExactSiLU()(s), EM.ExactSiLU()(s.cuda())):
+        n = int((bits(EM.ExactSiLU()(s)).view(torch.int32) !=
+                 bits(EM.ExactSiLU()(s.cuda())).view(torch.int32)).sum())
+        fail(f"ExactSiLU differs between CPU and GPU on {n} of {s.numel()} values")
+    return ("activation, KV and weight quantisers, RMSNorm and SiLU give the "
+            "same bits on CPU and GPU (control: CUDA `/ 127.0` does not)")
+
+
 def check_hilo_gemm_configs_agree(dev, fail):
     """The wide-activation path must be config-invariant too, and match int32.
 
@@ -614,20 +656,22 @@ def check_batch_invariance(dev, fail):
 #
 # This file used to print "SKIP: no CUDA" and `return 0` -- a GREEN EXIT that
 # checked nothing, on every machine without a GPU. That is the same failure the
-# header warns about two paragraphs up: a check that cannot fail. Ten of the
-# thirteen run on CPU, including `check_batch_invariance`, which is the property
+# header warns about two paragraphs up: a check that cannot fail. Nine of the
+# fourteen run on CPU, including `check_batch_invariance`, which is the property
 # the whole project is about.
 #
-# The four that genuinely cannot: three launch Triton kernels, and
+# The five that genuinely cannot: three launch Triton kernels,
 # `check_pad_is_load_bearing` asserts that `torch._int_mm` REFUSES M=1 -- a
 # CUDA-specific restriction the padding exists to work around. On CPU it does
 # not refuse, so running it there reports a failure that says nothing about the
-# GPU path.
+# GPU path -- and `check_quantisers_are_device_independent` compares a CPU
+# against a GPU, so it needs both.
 NEEDS_GPU = {
     "check_quantiser_at_volume",
     "check_all_gemm_configs_agree",
     "check_hilo_gemm_configs_agree",
     "check_pad_is_load_bearing",
+    "check_quantisers_are_device_independent",
 }
 
 
@@ -647,7 +691,7 @@ def main():
               check_linear, check_bias_is_not_fused, check_quantiser_at_volume,
               check_pad_is_load_bearing, check_all_gemm_configs_agree,
               check_digit_split_is_exact, check_hilo_gemm_configs_agree,
-              check_attention,
+              check_quantisers_are_device_independent, check_attention,
               check_kv_cache_matches_stateless, check_batch_invariance]
     skipped = 0
     if not have_cuda:

@@ -566,7 +566,47 @@ Mutation-verified: flipping a single host value out of 1,966,085 fails it.
 
 What is still unmeasured is the **pipeline**, not the exp — the whole decode path
 producing identical tokens on two different cards. That needs a second GPU and
-stays the headline claim without a measurement.
+stayed the headline claim without a measurement until the section below.
+
+### Finding 12, the pipeline: measured on a CPU and a GPU, and it failed first
+
+The argument above already says x86-64 against sm_89 is a wider gap than two
+NVIDIA cards, and one machine has both. `tools/exact_cross_device.py --device
+cpu` records the same cases on the CPU (2026-11-01, Zen 5 against the RTX 4070
+Ti SUPER, Qwen2.5-0.5B, 5 cases x 160 tokens, gates and self-checks passing,
+weights fingerprints equal).
+
+**At ce4ed3e the exact arm changed 5/5 cases, every one at token 13.** The
+integer exp was identical, as Finding 12 says; the plumbing was not. Hooking
+every module and comparing in execution order found three device-dependent
+float ops, each with identical inputs and different outputs:
+
+1. **`tensor / python_float` on CUDA is a multiply by the reciprocal**, not an
+   IEEE divide: on a million random float32 values it differs from the CPU's
+   divide on 4.6%. Every quantiser's scale was written that way (`/ 127.0`, `/ lv`),
+   so the int8 *weights* built on the GPU were not the ones built on the CPU.
+   A tensor divisor is a real divide on both.
+2. **RoPE's float32 cos/sin** (Hugging Face's module) differ by an ulp between
+   libm and CUDA.
+3. **SiLU's float32 sigmoid** differs the same way.
+
+Fixed by dividing by a tensor (all four quantisers, and RMSNorm, which also
+moved from `rsqrt`, unspecified in its last bit, to `x / sqrt`, which is
+correctly rounded), by reading cos/sin from a table built once on the host in
+float64 (`ExactRotary`), and by a float64 sigmoid rounded once (`ExactSiLU`).
+**After the fix the exact arm changes 0/5 cases across CPU and GPU; stock bf16
+changes 5/5**, and the ragged-batch test is still 0/16 against stock's 16/16.
+
+The division and RMSNorm fixes are exact on any IEEE device. The cos/sin table
+and the sigmoid are *near* certain, not guaranteed: two float64 results can
+still straddle a float32 rounding boundary, with probability around 2^-29 per
+value. `exact_selftest.check_quantisers_are_device_independent` compares the
+quantisers, RMSNorm and SiLU bit for bit on CPU and GPU; its control asserts
+that CUDA `/ 127.0` still differs, so it cannot pass vacuously, and restoring
+the weight scale's `/ 127.0` fails it.
+
+What this does not cover: a second GPU architecture, a larger model, and the
+`torch.compile` path, whose generated code divides on its own terms.
 
 ## Finding 13 — `0/16` is also what a broken arm scores
 
