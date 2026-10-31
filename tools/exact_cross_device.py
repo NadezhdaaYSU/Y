@@ -7,6 +7,11 @@
     # anywhere, no GPU and no torch needed
     python3 tools/exact_cross_device.py --compare a.json b.json
 
+One machine is already a pair: `--record cpu.json --device cpu` decodes on the
+host, and x86-64 against an NVIDIA SM is a wider gap than two NVIDIA cards.
+That pair found three device-dependent float ops the exp argument did not
+cover (docs/bit_identical_decode.md, Finding 12, the pipeline).
+
 This is the one headline claim in `docs/bit_identical_decode.md` with no
 measurement behind it, and Finding 11 is what made it the load-bearing one.
 Once `tools/fixed_order_float.py` measured **0/16 as well**, batch invariance on

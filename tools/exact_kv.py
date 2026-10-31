@@ -237,8 +237,11 @@ def quantize_rows(x, levels):
     270,336** (0.0004%), from the same divide-boundary effect as the Triton
     `div_rn` bug, and `tools/exact_accuracy.py` re-measures the whole scheme
     against an fp64 oracle. Determinism is untouched either way: an elementwise
-    divide in any single precision is reproducible; it is *reassociation* and
-    *unspecified* operations that break batch invariance, not narrowness.
+    IEEE divide in any single precision is reproducible; it is *reassociation*
+    and *unspecified* operations that break batch invariance, not narrowness.
+    One such unspecified operation hid here: torch on CUDA does not divide by a
+    Python float, it multiplies by the reciprocal, so `/ lv` was reproducible on
+    one device and different from a CPU. The divisor is a tensor for that reason.
     """
     if not isinstance(levels, int) or levels < 1:
         raise ValueError(
@@ -248,7 +251,9 @@ def quantize_rows(x, levels):
             f"-- both silently"
         )
     lv = float(levels)
-    s = x.abs().amax(dim=-1, keepdim=True) / lv
+    # A tensor divisor: torch-CUDA's `/ python_float` is a reciprocal multiply,
+    # not an IEEE divide, and differs from the CPU (see exact_model._q_per_row).
+    s = x.abs().amax(dim=-1, keepdim=True) / x.new_tensor(lv)
     s = torch.where(s == 0, torch.ones_like(s), s)
     q = torch.round(x / s).clamp(-lv, lv)
     return q, s

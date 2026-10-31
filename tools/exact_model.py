@@ -18,6 +18,11 @@ This module swaps all three for order-independent versions:
                       length does not depend on the batch.
   * exact attention - imported from `batch_invariance_demo`.
 
+and, so the same tokens come out of a CPU and a GPU, the two float ops left:
+
+  * `ExactSiLU`     - the sigmoid in float64, rounded once.
+  * `ExactRotary`   - RoPE cos/sin from a host-built float64 table.
+
 Accuracy is a separate question from invariance and is reported separately:
 W8A8 with per-channel weights and per-token activations is a standard scheme,
 but it is still int8, and `tools/attention_real_activations.py` measured that
@@ -135,7 +140,10 @@ def _q_per_row(x, levels=127):
     assumed in another has been the cause of six bugs in this code.
     """
     lv = float(levels)
-    s = x.abs().amax(dim=-1, keepdim=True) / lv
+    # Divided by a TENSOR. torch on CUDA computes `tensor / python_float` as a
+    # multiply by the reciprocal, which differs from the CPU's IEEE divide on
+    # 4.6% of float32 inputs; tensor/tensor is an IEEE divide on both.
+    s = x.abs().amax(dim=-1, keepdim=True) / x.new_tensor(lv)
     s = torch.where(s == 0, torch.ones_like(s), s)
     return torch.round(x / s).clamp(-lv, lv), s
 
@@ -154,7 +162,10 @@ class ExactLinear(nn.Module):
         w = lin.weight.data
         # Per-OUTPUT-CHANNEL weight scales: one bad channel must not set the
         # scale for all of them.
-        sw = w.abs().amax(dim=-1, keepdim=True) / 127.0
+        # A tensor divisor, for the reason in `_q_per_row`: with `/ 127.0` the
+        # int8 weights built on a GPU differed from the ones built on a CPU,
+        # and decoding diverged across the two at token 13.
+        sw = w.abs().amax(dim=-1, keepdim=True) / w.new_tensor(127.0)
         sw = torch.where(sw == 0, torch.ones_like(sw), sw)
         w8 = torch.round(w / sw).clamp(-127, 127).to(torch.int8)
         # PRE-TRANSPOSED, once, at construction. The first version of this
@@ -305,15 +316,61 @@ class ExactRMSNorm(nn.Module):
 
     def forward(self, x):
         xd = x.to(torch.float64)
-        var = xd.pow(2).sum(dim=-1, keepdim=True) / xd.shape[-1]
-        y = xd * torch.rsqrt(var + self.eps)
+        var = xd.pow(2).sum(dim=-1, keepdim=True) / xd.new_tensor(xd.shape[-1])
+        # sqrt and a tensor/tensor divide are correctly rounded on every IEEE
+        # device; `rsqrt` is not specified to the last bit, so x / sqrt(v)
+        # gives the same float64 on a CPU and a GPU where x * rsqrt(v) may not.
+        y = xd / torch.sqrt(var + self.eps)
         return (y.to(torch.float32) * self.weight).to(x.dtype)
 
 
-def convert(model, linears=True, norms=True):
-    """Replace every Linear / RMSNorm in place. Returns counts."""
+class ExactSiLU(nn.Module):
+    """SiLU with the sigmoid in float64, rounded once to the input dtype.
+
+    A float32 `exp` differs by an ulp between libm and CUDA, and that alone
+    moved a CPU decode off a GPU decode. In float64 the two still need not
+    agree in the last bit, but the rounding to float32 hides the difference
+    unless the true value sits within ~2^-29 of a rounding boundary: near
+    certain, not guaranteed. `tools/exact_cross_device.py` is what checks it.
+    """
+
+    def forward(self, x):
+        return x * torch.sigmoid(x.to(torch.float64)).to(x.dtype)
+
+
+class ExactRotary(nn.Module):
+    """RoPE cos/sin read from a table built once, on the host, in float64.
+
+    The stock module evaluates cos/sin in float32 on whatever device runs the
+    model, and libm and CUDA differ there by an ulp. The table is computed from
+    the module's own float32 `inv_freq`, rounded once to float32, and indexed
+    by position, so no device evaluates a transcendental function at all.
+    """
+
+    def __init__(self, rot, max_positions):
+        super().__init__()
+        inv = rot.inv_freq.detach().to("cpu", torch.float64)
+        pos = torch.arange(max_positions, dtype=torch.float64)
+        emb = torch.cat((pos[:, None] * inv[None, :],) * 2, dim=-1)
+        scale = float(getattr(rot, "attention_scaling", 1.0))
+        self.register_buffer("cos", (emb.cos() * scale).to(torch.float32), persistent=False)
+        self.register_buffer("sin", (emb.sin() * scale).to(torch.float32), persistent=False)
+
+    def forward(self, x, position_ids):
+        return self.cos[position_ids].to(x.dtype), self.sin[position_ids].to(x.dtype)
+
+
+def convert(model, linears=True, norms=True, floats=None):
+    """Replace every Linear / RMSNorm in place. Returns counts.
+
+    `floats` (default: follow `norms`) also swaps the SiLU activations and the
+    rotary embedding for `ExactSiLU` / `ExactRotary`, the two remaining float
+    ops that made a CPU decode differ from a GPU one.
+    """
+    floats = norms if floats is None else floats
     n_lin = n_norm = 0
     shapes, dev = [], None
+    max_pos = getattr(getattr(model, "config", None), "max_position_embeddings", 32768)
     for name, mod in list(model.named_modules()):
         for child_name, child in list(mod.named_children()):
             if linears and isinstance(child, nn.Linear):
@@ -325,6 +382,11 @@ def convert(model, linears=True, norms=True):
             elif norms and child.__class__.__name__.endswith("RMSNorm"):
                 setattr(mod, child_name, ExactRMSNorm(child).to(child.weight.device))
                 n_norm += 1
+            elif floats and child.__class__.__name__ in ("SiLUActivation", "SiLU"):
+                setattr(mod, child_name, ExactSiLU())
+            elif floats and child.__class__.__name__.endswith("RotaryEmbedding"):
+                setattr(mod, child_name,
+                        ExactRotary(child, max_pos).to(child.inv_freq.device))
     # Choose each GEMM's tile now, eagerly, while shapes are concrete ints and
     # nothing is being traced. Doing it lazily on first call put the benchmark
     # inside `torch.compile`, where N and K are SymInts and the kernel cannot
