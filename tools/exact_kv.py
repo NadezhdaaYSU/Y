@@ -56,6 +56,8 @@ import os
 
 import torch
 
+from exact_model import divisor
+
 # DEFAULT OFF, and the measurement below is the whole reason. The cache does
 # asymptotically LESS work - O(1) per decode step instead of O(T) - and under
 # `torch.compile` every way of wiring it in loses badly, because it is stateful
@@ -241,7 +243,9 @@ def quantize_rows(x, levels):
     and *unspecified* operations that break batch invariance, not narrowness.
     One such unspecified operation hid here: torch on CUDA does not divide by a
     Python float, it multiplies by the reciprocal, so `/ lv` was reproducible on
-    one device and different from a CPU. The divisor is a tensor for that reason.
+    one device and different from a CPU. The divisor is a tensor for that reason,
+    and comes from `exact_model.divisor` because torch.compile does the same
+    thing to a divide by a tensor it can see is constant.
     """
     if not isinstance(levels, int) or levels < 1:
         raise ValueError(
@@ -252,8 +256,9 @@ def quantize_rows(x, levels):
         )
     lv = float(levels)
     # A tensor divisor: torch-CUDA's `/ python_float` is a reciprocal multiply,
-    # not an IEEE divide, and differs from the CPU (see exact_model._q_per_row).
-    s = x.abs().amax(dim=-1, keepdim=True) / x.new_tensor(lv)
+    # not an IEEE divide, and differs from the CPU, and so is a compiled divide
+    # by `x.new_tensor(lv)` (see exact_model.divisor).
+    s = x.abs().amax(dim=-1, keepdim=True) / divisor(lv, x)
     s = torch.where(s == 0, torch.ones_like(s), s)
     q = torch.round(x / s).clamp(-lv, lv)
     return q, s

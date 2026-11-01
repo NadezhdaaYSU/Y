@@ -389,8 +389,9 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
 
     def q8_per_tensor(x, dims):
         # A tensor divisor: torch-CUDA's `/ python_float` is a reciprocal
-        # multiply, not the CPU's IEEE divide (see exact_model._q_per_row).
-        s = x.abs().amax(dim=dims, keepdim=True) / x.new_tensor(float(Q_LEVELS))
+        # multiply, not the CPU's IEEE divide, and so is a compiled divide by
+        # `x.new_tensor(...)` (see exact_model.divisor).
+        s = x.abs().amax(dim=dims, keepdim=True) / exact_model.divisor(Q_LEVELS, x)
         s = torch.where(s == 0, torch.ones_like(s), s)
         return torch.round(x / s).clamp(-Q_LEVELS, Q_LEVELS), s
 
