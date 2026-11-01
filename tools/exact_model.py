@@ -20,7 +20,7 @@ This module swaps all three for order-independent versions:
 
 and, so the same tokens come out of a CPU and a GPU, the two float ops left:
 
-  * `ExactSiLU`     - the sigmoid in float64, rounded once.
+  * `ExactSiLU`     - the sigmoid as integer interpolation in a host table.
   * `ExactRotary`   - RoPE cos/sin from a host-built float64 table.
 
 Accuracy is a separate question from invariance and is reported separately:
@@ -41,6 +41,56 @@ except Exception:                                    # noqa: BLE001
 # `Y_EXACT_TRITON=0` forces the torch fallback, so the two paths can be A/B'd
 # against each other rather than only against the float64 reference.
 USE_TRITON = os.environ.get("Y_EXACT_TRITON", "1") != "0"
+
+# Under torch.compile, Inductor rounds differently from eager PyTorch in three
+# ways, and each one moved a compiled GPU decode off the CPU's tokens:
+#   * a float32 `/` in Triton lowers to `div.full`, an approximate divide,
+#     unless `eager_numerics.division_rounding` asks for `div_rn`;
+#   * a divide by a CONSTANT becomes a multiply by its reciprocal on every
+#     device but the CPU (`torch/_inductor/lowering.py`, `div_prim`), whatever
+#     that flag says. `x.new_tensor(lv)` is a constant once traced - see
+#     `divisor` below;
+#   * a multiply feeding an add in one fused kernel becomes an FMA, rounding
+#     once where the CPU rounds twice. Inductor passes Triton
+#     `enable_fp_fusion = not emulate_precision_casts`, so TRITON_DEFAULT_FP_FUSION
+#     has no effect on it. Measured in exact attention (one layer in 24 on one
+#     prompt), from `round(m - logit)` with `logit` a product.
+# Measured on 3.67M activations at levels 127: either divide hazard alone moved
+# 194 of 4,096 scales off the CPU's; with both fixed, 0. These flags are global
+# to the process, which is the point: nothing compiled next to the exact path
+# should round differently from it.
+import torch._inductor.config as _inductor_config  # noqa: E402
+
+_inductor_config.eager_numerics.division_rounding = True
+_inductor_config.emulate_precision_casts = True
+_DIVISORS = {}
+
+
+def divisor(value, like):
+    """`value` as a 0-d tensor of `like`'s dtype and device, for dividing by.
+
+    Eager, `x / divisor(v, x)` is `x / x.new_tensor(v)`. Compiled, the tensor
+    was created OUTSIDE the traced code, so it is a graph input rather than a
+    constant, and the divide stays a divide. Creating it while tracing would
+    make it a constant again, so that raises instead: dynamo breaks the graph
+    there, runs this call eagerly and traces on with the tensor as an input.
+    Measured: without the guard the first compiled call differed from the CPU
+    on 1.59M of 3.67M values, with it on none. So a divisor missing at compile
+    time costs a graph break, never bits; `convert` creates the ones it can name
+    ahead of time. (The flags above are not guarded here - a graph break would
+    not stop the rest of the graph using them - `exact_selftest` checks them.)
+    """
+    key = (float(value), like.device, like.dtype)
+    t = _DIVISORS.get(key)
+    if t is None:
+        if torch.compiler.is_compiling():
+            raise RuntimeError(
+                f"exact divisor {key} requested while compiling: creating it "
+                f"here would make it a constant that Inductor folds into a "
+                f"reciprocal multiply")
+        t = _DIVISORS[key] = torch.tensor(float(value), dtype=like.dtype,
+                                          device=like.device)
+    return t
 
 # Requested activation width, as `2^n - 1`. 127 is plain int8 (one `tl.dot`);
 # anything larger carries the activation as two int8 digits and costs a second
@@ -142,8 +192,9 @@ def _q_per_row(x, levels=127):
     lv = float(levels)
     # Divided by a TENSOR. torch on CUDA computes `tensor / python_float` as a
     # multiply by the reciprocal, which differs from the CPU's IEEE divide on
-    # 4.6% of float32 inputs; tensor/tensor is an IEEE divide on both.
-    s = x.abs().amax(dim=-1, keepdim=True) / x.new_tensor(lv)
+    # 4.6% of float32 inputs; tensor/tensor is an IEEE divide on both. And not
+    # by `x.new_tensor(lv)`, which torch.compile folds back into a reciprocal.
+    s = x.abs().amax(dim=-1, keepdim=True) / divisor(lv, x)
     s = torch.where(s == 0, torch.ones_like(s), s)
     return torch.round(x / s).clamp(-lv, lv), s
 
@@ -191,6 +242,7 @@ class ExactLinear(nn.Module):
         # `exact_kv.quantize_kv` arrived at by getting it wrong six times.
         self.a_levels = act_levels_for(lin.in_features)
         self.split_act = self.a_levels > 127
+        divisor(self.a_levels if self.split_act else 127, self.sw)
         # Refuse rather than wrap. Both paths accumulate in int32, and neither
         # said so out loud until `tools/exact_bounds_check.py` asked: the plain
         # int8 path is bounded by `K*127^2` and **silently wraps at K >= 133,153**
@@ -313,10 +365,11 @@ class ExactRMSNorm(nn.Module):
         super().__init__()
         self.register_buffer("weight", norm.weight.data.clone())
         self.eps = getattr(norm, "variance_epsilon", getattr(norm, "eps", 1e-6))
+        divisor(norm.weight.numel(), self.weight.to(torch.float64))
 
     def forward(self, x):
         xd = x.to(torch.float64)
-        var = xd.pow(2).sum(dim=-1, keepdim=True) / xd.new_tensor(xd.shape[-1])
+        var = xd.pow(2).sum(dim=-1, keepdim=True) / divisor(xd.shape[-1], xd)
         # sqrt and a tensor/tensor divide are correctly rounded on every IEEE
         # device; `rsqrt` is not specified to the last bit, so x / sqrt(v)
         # gives the same float64 on a CPU and a GPU where x * rsqrt(v) may not.
@@ -324,18 +377,63 @@ class ExactRMSNorm(nn.Module):
         return (y.to(torch.float32) * self.weight).to(x.dtype)
 
 
+SILU_LIM = 16          # sigmoid is 0 / 1 past +-16, to within 2^-24 of the table
+SILU_KNOT = 8         # table knots every 2^-8
+SILU_QX = 20          # x quantised to 2^-20 between knots
+SILU_QS = 24          # sigmoid in fixed point 2^-24
+
+
+def silu_table():
+    """sigmoid at every knot of [-16, 16], fixed point 2^-24, built on the HOST.
+
+    Built in float64 on the CPU and copied, never computed on the device: a
+    table a GPU builds with its own `exp` is the problem this replaces.
+    Returns (values, differences to the next knot), both int32.
+    """
+    n = 2 * SILU_LIM * (1 << SILU_KNOT)
+    xs = torch.arange(n + 2, dtype=torch.float64) / (1 << SILU_KNOT) - SILU_LIM
+    t = torch.round(torch.sigmoid(xs) * (1 << SILU_QS)).to(torch.int64)
+    return t[:-1].to(torch.int32), (t[1:] - t[:-1]).to(torch.int32)
+
+
 class ExactSiLU(nn.Module):
-    """SiLU with the sigmoid in float64, rounded once to the input dtype.
+    """SiLU whose sigmoid is integer interpolation in a host-built table.
 
     A float32 `exp` differs by an ulp between libm and CUDA, and that alone
-    moved a CPU decode off a GPU decode. In float64 the two still need not
-    agree in the last bit, but the rounding to float32 hides the difference
-    unless the true value sits within ~2^-29 of a rounding boundary: near
-    certain, not guaranteed. `tools/exact_cross_device.py` is what checks it.
+    moved a CPU decode off a GPU decode. The first fix took the sigmoid in
+    float64 and rounded once, which is only near-certain (two float64 `exp`s
+    can still straddle a float32 rounding boundary) and cost 1.46x end to end
+    compiled, because float64 runs at 1/64 rate on a GeForce part.
+
+    Here nothing device-dependent is left. `q = round(x * 2^20)` after a clamp
+    is exact (a power-of-two scale and round-half-even); the interpolation
+    `T[i] + (D[i] * f) >> 12` is int32 and cannot overflow (D <= 2^14, f <
+    2^12); the sum is at most 2^24, so its conversion to float32 and the 2^-24
+    scale are exact; the one rounding is `x * sigmoid`, an IEEE multiply with no
+    add after it for an FMA to absorb. Error against float64 SiLU: <= 2e-6
+    absolute, <= 7.3e-4 relative where |SiLU| > 1e-3 (bf16 rounds at 2e-3);
+    `exact_selftest.check_silu_table` holds it to that.
     """
 
+    def __init__(self):
+        super().__init__()
+        t, d = silu_table()
+        self.register_buffer("t", t, persistent=False)
+        self.register_buffer("d", d, persistent=False)
+
     def forward(self, x):
-        return x * torch.sigmoid(x.to(torch.float64)).to(x.dtype)
+        sub = SILU_QX - SILU_KNOT
+        # NaN would convert to a device-dependent int32 and index out of range
+        # (a trap on a GPU); it is zeroed here and put back by the final multiply.
+        xf = torch.nan_to_num(x.to(torch.float32), nan=0.0).clamp(-SILU_LIM, SILU_LIM)
+        q = (torch.round(xf * float(1 << SILU_QX)).to(torch.int32)
+             + (SILU_LIM << SILU_QX))
+        i = (q >> sub).clamp_max(self.t.numel() - 1)
+        s = self.t[i] + ((self.d[i] * (q & ((1 << sub) - 1))) >> sub)
+        sig = s.to(torch.float32) * (1.0 / (1 << SILU_QS))
+        sig = torch.where(xf <= -SILU_LIM, torch.zeros_like(sig), sig)
+        sig = torch.where(xf >= SILU_LIM, torch.ones_like(sig), sig)
+        return (x.to(torch.float32) * sig).to(x.dtype)
 
 
 class ExactRotary(nn.Module):
@@ -383,10 +481,22 @@ def convert(model, linears=True, norms=True, floats=None):
                 setattr(mod, child_name, ExactRMSNorm(child).to(child.weight.device))
                 n_norm += 1
             elif floats and child.__class__.__name__ in ("SiLUActivation", "SiLU"):
-                setattr(mod, child_name, ExactSiLU())
+                dev_ = next(model.parameters()).device
+                setattr(mod, child_name, ExactSiLU().to(dev_))
             elif floats and child.__class__.__name__.endswith("RotaryEmbedding"):
                 setattr(mod, child_name,
                         ExactRotary(child, max_pos).to(child.inv_freq.device))
+    # The attention's quantiser widths, created now so a compiled forward finds
+    # them as graph inputs (see `divisor`; a miss would cost a fallback to eager,
+    # not bits). Imported here: exact_kv imports `divisor` from this module.
+    cfg = getattr(model, "config", None)
+    params = list(model.parameters())
+    if cfg is not None and params and hasattr(cfg, "num_attention_heads"):
+        import exact_kv
+        head_dim = getattr(cfg, "head_dim", None) or cfg.hidden_size // cfg.num_attention_heads
+        like = torch.empty((), dtype=torch.float32, device=params[0].device)
+        for lv in (127, exact_kv.k_levels_for(head_dim, 127), exact_kv.V_LEVELS):
+            divisor(lv, like)
     # Choose each GEMM's tile now, eagerly, while shapes are concrete ints and
     # nothing is being traced. Doing it lazily on first call put the benchmark
     # inside `torch.compile`, where N and K are SymInts and the kernel cannot

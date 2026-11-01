@@ -593,20 +593,81 @@ float ops, each with identical inputs and different outputs:
 Fixed by dividing by a tensor (all four quantisers, and RMSNorm, which also
 moved from `rsqrt`, unspecified in its last bit, to `x / sqrt`, which is
 correctly rounded), by reading cos/sin from a table built once on the host in
-float64 (`ExactRotary`), and by a float64 sigmoid rounded once (`ExactSiLU`).
-**After the fix the exact arm changes 0/5 cases across CPU and GPU; stock bf16
-changes 5/5**, and the ragged-batch test is still 0/16 against stock's 16/16.
+float64 (`ExactRotary`), and by a float64 sigmoid rounded once (`ExactSiLU`,
+since replaced, below). **After the fix the exact arm changes 0/5 cases across
+CPU and GPU; stock bf16 changes 5/5**, and the ragged-batch test is still 0/16
+against stock's 16/16.
 
-The division and RMSNorm fixes are exact on any IEEE device. The cos/sin table
-and the sigmoid are *near* certain, not guaranteed: two float64 results can
-still straddle a float32 rounding boundary, with probability around 2^-29 per
-value. `exact_selftest.check_quantisers_are_device_independent` compares the
-quantisers, RMSNorm and SiLU bit for bit on CPU and GPU; its control asserts
-that CUDA `/ 127.0` still differs, so it cannot pass vacuously, and restoring
-the weight scale's `/ 127.0` fails it.
+`exact_selftest.check_quantisers_are_device_independent` compares the
+quantisers, RMSNorm and SiLU bit for bit on CPU and GPU; its controls assert
+that CUDA `/ 127.0` and float32 SiLU still differ, so it cannot pass vacuously,
+and restoring the weight scale's `/ 127.0` fails it.
+
+#### Compiled, it failed again, three ways
+
+Every number above is eager. The configuration anyone would ship is
+`torch.compile`, and compiled on the GPU against the eager CPU record **the
+exact arm changed 5/5 cases, each at token 10**. Compiling one kind of
+submodule at a time (hooks on the compiled wrappers, so they do not split the
+graphs they watch) localised it to `ExactLinear` and exact attention, with
+inputs equal to the CPU's. Inductor rounds unlike eager PyTorch in three ways:
+
+1. **A divide by a constant becomes a multiply by its reciprocal** on every
+   device but the CPU (`torch/_inductor/lowering.py`, `div_prim`). Traced,
+   `x.new_tensor(lv)` *is* a constant, so the compiler undid fix 1 above.
+2. **A float32 `/` lowers to Triton's `div.full`**, an approximate divide,
+   unless `eager_numerics.division_rounding` selects `div_rn`. On 3.67M
+   quantised activations either hazard alone moved 194 of 4,096 scales.
+3. **A multiply feeding a subtract becomes an FMA** - in exact attention's
+   `round(m - logit)`, one layer in 24 on the prompt that found it. Inductor
+   passes Triton `enable_fp_fusion = not emulate_precision_casts`, so
+   `TRITON_DEFAULT_FP_FUSION=0` has no effect on it; the first A/B of that
+   variable measured nothing.
+
+`exact_model` now sets `division_rounding` and `emulate_precision_casts` at
+import, and every quantiser divides by `exact_model.divisor(v, x)`: a 0-d
+tensor created outside the traced code, so it is a graph input, not a
+constant. Created *while* tracing it would be a constant again, so that raises,
+dynamo breaks the graph there and creates it eagerly - without the guard the
+first compiled call differed from the CPU on 1.59M of 3.67M values, with it on
+none. `exact_selftest.check_quantisers_survive_compile` compiles the
+quantisers, `ExactLinear`, RMSNorm and SiLU on the GPU against eager CPU, with
+one control per hazard (a folded divisor, `division_rounding` off, FMA
+contraction on - each must differ). Restoring `x.new_tensor(lv)` fails 3 of
+its comparisons, switching either flag off fails 2-4.
+
+#### And the float64 sigmoid cost 1.46x
+
+Compiled, batch 32, 64 tokens, best of 5, idle GPU, the arms interleaved:
+
+| arm | tok/s/seq | vs stock |
+|---|---:|---:|
+| stock bf16 + SDPA, Inductor defaults | 239.2 | - |
+| stock, with the two flags above | 241.6 | 0.99x |
+| exact, before the CPU==GPU fixes (separate run) | 227.4-230.1 | 1.06-1.07x slower |
+| + RoPE table only (separate run) | 229.0 | 1.08x slower |
+| + float64 sigmoid only (separate run) | 159.3 | 1.55x slower |
+| **exact, CPU==GPU, integer sigmoid, flags** | **215.8** | **1.11x slower** |
+
+The table is free and the flags cost stock nothing; the float64 sigmoid was
+all of it, because float64 is 1/64 rate on a GeForce part. `ExactSiLU` is now
+integer interpolation in a host-built table: `q = round(x * 2^20)` after a
+clamp to [-16, 16], `T[i] + (D[i] * f) >> 12` in int32 (it cannot overflow),
+an exact conversion back (the sum is at most 2^24) and one IEEE multiply by
+`x`. Nothing in it is device-dependent, so unlike the float64 version it is
+exact rather than near certain: on 5.2M values CPU, GPU and compiled GPU agree
+on every bit, where float32 SiLU differs on 724k of them. Its error against
+float64 SiLU is 1.8e-6 absolute, 7.1e-4 relative where |SiLU| > 1e-3 (bf16
+rounds at 2e-3); `exact_selftest.check_silu_table` holds it to 2e-6 / 7.3e-4,
+and dropping the interpolation term fails it.
+
+**Re-measured end to end with all of it (2026-11-02):** CPU eager against GPU
+eager, exact 0/5 and stock 5/5; CPU eager against GPU **compiled**, exact 0/5
+(the same token digest) and stock 5/5; ragged batch, exact 0/16 and stock 16/16.
 
 What this does not cover: a second GPU architecture, a larger model, and the
-`torch.compile` path, whose generated code divides on its own terms.
+cos/sin table, which is still float64 rounded once and so near certain (around
+2^-29 per value), not exact.
 
 ## Finding 13 — `0/16` is also what a broken arm scores
 

@@ -14,8 +14,8 @@ as it stood *before* the optimisation - float64 everywhere, K/V widened with
 
 ## It runs without a GPU, partially
 
-Nine of the fourteen checks need only torch, so `python3 tools/exact_selftest.py`
-on a CPU box runs those and says which five it skipped. It used to print
+Ten of the sixteen checks need only torch, so `python3 tools/exact_selftest.py`
+on a CPU box runs those and says which six it skipped. It used to print
 "SKIP: no CUDA" and exit 0 having checked nothing - a green exit that is exactly
 the failure the next paragraph is about.
 
@@ -444,13 +444,121 @@ def check_quantisers_are_device_independent(dev, fail):
     nc = EM.ExactRMSNorm(norm)
     if not same(nc(x), nc.cuda()(x.cuda())):
         fail("ExactRMSNorm differs between CPU and GPU")
-    s = torch.randn(1 << 18) * 6
-    if not same(EM.ExactSiLU()(s), EM.ExactSiLU()(s.cuda())):
-        n = int((bits(EM.ExactSiLU()(s)).view(torch.int32) !=
-                 bits(EM.ExactSiLU()(s.cuda())).view(torch.int32)).sum())
+    s = torch.cat([torch.randn(1 << 18) * 6, torch.tensor(
+        [0.0, -0.0, 16.0, -16.0, 15.999999, -15.999999, 1e-45, 3e38, -3e38])])
+    if same(nn.functional.silu(s), nn.functional.silu(s.cuda())):
+        fail("control did not fire: float32 SiLU now matches between CPU and GPU, "
+             "so the ExactSiLU comparison below cannot tell a fix from no-op")
+    sc, sg = EM.ExactSiLU()(s), EM.ExactSiLU().cuda()(s.cuda())
+    if not same(sc, sg):
+        n = int((bits(sc).view(torch.int32) != bits(sg).view(torch.int32)).sum())
         fail(f"ExactSiLU differs between CPU and GPU on {n} of {s.numel()} values")
     return ("activation, KV and weight quantisers, RMSNorm and SiLU give the "
-            "same bits on CPU and GPU (control: CUDA `/ 127.0` does not)")
+            "same bits on CPU and GPU (controls: CUDA `/ 127.0` and float32 "
+            "SiLU do not)")
+
+
+def check_silu_table(dev, fail):
+    """ExactSiLU is within its stated error of float64 SiLU, and NaN survives.
+
+    The docstring's bounds are checked here rather than trusted. The control
+    is the same table without the interpolation (nearest knot): it must break
+    the absolute bound, or the bound is too loose to notice a lost term.
+    """
+    x = torch.cat([torch.randn(1 << 21) * 4, torch.randn(1 << 18) * 30,
+                   torch.linspace(-17, 17, 1 << 20)])
+    ref = x.double() * torch.sigmoid(x.double())
+    got = EM.ExactSiLU()(x).double()
+    err = (got - ref).abs()
+    big = ref.abs() > 1e-3
+    worst_abs, worst_rel = float(err.max()), float((err[big] / ref[big].abs()).max())
+    if worst_abs > 2e-6 or worst_rel > 7.3e-4:
+        fail(f"ExactSiLU error {worst_abs:.3g} abs / {worst_rel:.3g} rel, past "
+             f"the documented 2e-6 / 7.3e-4")
+    t, _ = EM.silu_table()
+    knot = torch.round((x.clamp(-EM.SILU_LIM, EM.SILU_LIM) + EM.SILU_LIM)
+                       * (1 << EM.SILU_KNOT)).long().clamp_max(t.numel() - 1)
+    nearest = x.double() * t[knot].double() / (1 << EM.SILU_QS)
+    if float((nearest - ref).abs().max()) <= 2e-6:
+        fail("control did not fire: dropping the interpolation stays inside the "
+             "2e-6 bound, so the bound cannot see the interpolation term")
+    special = EM.ExactSiLU()(torch.tensor([float("nan"), float("inf"), 0.0]))
+    if not (torch.isnan(special[0]) and special[1] == float("inf") and special[2] == 0):
+        fail(f"ExactSiLU(nan, inf, 0) = {special.tolist()}, expected (nan, inf, 0)")
+    return (f"ExactSiLU within {worst_abs:.2g} abs / {worst_rel:.2g} rel of float64 "
+            f"SiLU on {x.numel():,} values; NaN propagates (control: no "
+            f"interpolation misses the bound)")
+
+
+def check_quantisers_survive_compile(dev, fail):
+    """The same, with the GPU side under torch.compile and the CPU side eager.
+
+    A compiled decode left the CPU's tokens at token 10 although the eager one
+    matched: Inductor folds a divide by a constant into a reciprocal multiply,
+    lowers float32 `/` to an approximate divide, and contracts a multiply
+    feeding a subtract into an FMA (see the comment above exact_model.divisor).
+    Every control must fire, or the equalities after it prove nothing.
+    """
+    import torch._dynamo
+    import torch._inductor.config as ic
+    bits = lambda t: t.detach().cpu().contiguous().view(torch.uint8)
+    same = lambda a, b: a.shape == b.shape and torch.equal(bits(a), bits(b))
+
+    def compiled(fn, *args):
+        torch._dynamo.reset()
+        return torch.compile(fn, dynamic=False)(*args)
+
+    x = torch.randn(4096, 896) * torch.rand(4096, 1) * 7
+    xg = x.cuda()
+    if same(compiled(lambda t: t / t.new_tensor(127.0), xg), x / x.new_tensor(127.0)):
+        fail("control did not fire: a compiled divide by a constant tensor now "
+             "matches the CPU, so this check no longer tests `divisor`")
+    lv = EM.divisor(127, xg)
+    with ic.patch({"eager_numerics.division_rounding": False}):
+        approx = compiled(lambda t, d: t / d, xg, lv)
+    if same(approx, x / EM.divisor(127, x)):
+        fail("control did not fire: with division_rounding off a compiled "
+             "float32 divide still matches the CPU, so the flag is untested")
+    # Exact attention's `round(m - logit)`, `logit` a product, at the mechanism:
+    # the round hides a contraction except near a .5, so test the subtract.
+    fms = lambda m, a, c: m - a * c
+    for dt in (torch.float64, torch.float32):
+        m, a, c = (torch.randn(1 << 20, dtype=dt) * s for s in (1e3, 1e2, 1e1))
+        mg, ag, cg = m.cuda(), a.cuda(), c.cuda()
+        with ic.patch({"emulate_precision_casts": False}):
+            fused = compiled(fms, mg, ag, cg)
+        if same(fused, fms(m, a, c)):
+            fail(f"control did not fire: a compiled {dt} multiply-subtract "
+                 f"matches the CPU with FMA contraction allowed")
+        if not same(compiled(fms, mg, ag, cg), fms(m, a, c)):
+            fail(f"a compiled {dt} multiply-subtract is contracted into an FMA: "
+                 f"emulate_precision_casts is off")
+    for levels in (127, EM.act_levels_for(4864, requested=511)):
+        EM.divisor(levels, xg)
+        if not all(same(a, b) for a, b in zip(compiled(EM._q_per_row, xg, levels),
+                                               EM._q_per_row(x, levels))):
+            fail(f"compiled _q_per_row(levels={levels}) differs from the CPU")
+    EM.divisor(exact_kv.K_LEVELS, xg)
+    if not all(same(a, b) for a, b in zip(
+            compiled(exact_kv.quantize_rows, xg, exact_kv.K_LEVELS),
+            exact_kv.quantize_rows(x, exact_kv.K_LEVELS))):
+        fail("compiled exact_kv.quantize_rows differs from the CPU")
+    lin = nn.Linear(896, 4864, bias=True)
+    lc, lg = EM.ExactLinear(lin), EM.ExactLinear(lin.cuda())
+    xs = x[:32]
+    if not same(compiled(lg, xs.cuda()), lc(xs)):
+        fail("compiled ExactLinear differs from the eager CPU one")
+    norm = types.SimpleNamespace(weight=nn.Parameter(torch.rand(896) + 0.5),
+                                 variance_epsilon=1e-6)
+    nc = EM.ExactRMSNorm(norm)
+    if not same(compiled(EM.ExactRMSNorm(norm).cuda(), xg), nc(x)):
+        fail("compiled ExactRMSNorm differs from the eager CPU one")
+    if not same(compiled(EM.ExactSiLU().cuda(), xg), EM.ExactSiLU()(x)):
+        fail("compiled ExactSiLU differs from the eager CPU one")
+    torch._dynamo.reset()
+    return ("quantisers, ExactLinear, RMSNorm, SiLU and a multiply-subtract "
+            "compiled on the GPU give the CPU's bits (controls: a folded constant divisor, an "
+            "approximate divide and an FMA contraction all differ)")
 
 
 def check_hilo_gemm_configs_agree(dev, fail):
@@ -656,22 +764,24 @@ def check_batch_invariance(dev, fail):
 #
 # This file used to print "SKIP: no CUDA" and `return 0` -- a GREEN EXIT that
 # checked nothing, on every machine without a GPU. That is the same failure the
-# header warns about two paragraphs up: a check that cannot fail. Nine of the
-# fourteen run on CPU, including `check_batch_invariance`, which is the property
+# header warns about two paragraphs up: a check that cannot fail. Ten of the
+# sixteen run on CPU, including `check_batch_invariance`, which is the property
 # the whole project is about.
 #
-# The five that genuinely cannot: three launch Triton kernels,
+# The six that genuinely cannot: three launch Triton kernels,
 # `check_pad_is_load_bearing` asserts that `torch._int_mm` REFUSES M=1 -- a
 # CUDA-specific restriction the padding exists to work around. On CPU it does
 # not refuse, so running it there reports a failure that says nothing about the
-# GPU path -- and `check_quantisers_are_device_independent` compares a CPU
-# against a GPU, so it needs both.
+# GPU path -- and `check_quantisers_are_device_independent` and
+# `check_quantisers_survive_compile` compare a CPU against a GPU, so they need
+# both.
 NEEDS_GPU = {
     "check_quantiser_at_volume",
     "check_all_gemm_configs_agree",
     "check_hilo_gemm_configs_agree",
     "check_pad_is_load_bearing",
     "check_quantisers_are_device_independent",
+    "check_quantisers_survive_compile",
 }
 
 
@@ -691,7 +801,9 @@ def main():
               check_linear, check_bias_is_not_fused, check_quantiser_at_volume,
               check_pad_is_load_bearing, check_all_gemm_configs_agree,
               check_digit_split_is_exact, check_hilo_gemm_configs_agree,
-              check_quantisers_are_device_independent, check_attention,
+              check_quantisers_are_device_independent,
+              check_quantisers_survive_compile, check_silu_table,
+              check_attention,
               check_kv_cache_matches_stateless, check_batch_invariance]
     skipped = 0
     if not have_cuda:
