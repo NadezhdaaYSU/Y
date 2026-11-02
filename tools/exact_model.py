@@ -13,7 +13,8 @@ This module swaps all three for order-independent versions:
                       (tensor cores; integer addition, so any tile order gives
                       the same bits). Falls back to float64, which represents
                       every integer below 2^53 exactly, when `_int_mm` will not
-                      take the shape.
+                      take the shape, or on a CPU whose int8 GEMM fails
+                      `cpu_int_mm_is_exact`.
   * `ExactRMSNorm`  - the sum of squares in float64 over a dimension whose
                       length does not depend on the batch.
   * exact attention - imported from `batch_invariance_demo`.
@@ -91,6 +92,37 @@ def divisor(value, like):
         t = _DIVISORS[key] = torch.tensor(float(value), dtype=like.dtype,
                                           device=like.device)
     return t
+
+
+def cpu_int_mm_is_exact(mm=None):
+    """Does `torch._int_mm` on this CPU accumulate int8 products exactly?
+
+    It is 50-100x faster than the float64 fallback on the CPU (measured at the
+    7B MLP shapes, Zen 5), and exact where the hardware is: an int32 sum of
+    int8 products. Not everywhere, though. x86 int8 GEMMs without VNNI multiply
+    with `vpmaddubsw`, whose 16-bit pair sum SATURATES, and an s8 x s8 GEMM
+    built on it shifts one operand by 128 - after which two products of 127s
+    pass 32767. So this is measured, on exactly those inputs and on random
+    ones, against float64; a mismatch or a refusal keeps the CPU on float64.
+    """
+    mm = mm or torch._int_mm
+    k = 4096
+    g = torch.Generator().manual_seed(0)
+    full = lambda shape, v: torch.full(shape, v, dtype=torch.int8)
+    cases = [(full((4, k), 127), full((k, 8), 127)),
+             (full((4, k), -128), full((k, 8), -128)),
+             (full((4, k), -127), full((k, 8), 127)),
+             (torch.randint(-128, 128, (4, k), generator=g, dtype=torch.int8),
+              torch.randint(-128, 128, (k, 8), generator=g, dtype=torch.int8))]
+    try:
+        return all(torch.equal(mm(a, b).to(torch.float64),
+                               a.to(torch.float64) @ b.to(torch.float64))
+                   for a, b in cases)
+    except Exception:                                # noqa: BLE001
+        return False
+
+
+_CPU_INT_MM_EXACT = cpu_int_mm_is_exact()
 
 # Requested activation width, as `2^n - 1`. 127 is plain int8 (one `tl.dot`);
 # anything larger carries the activation as two int8 digits and costs a second
@@ -280,16 +312,17 @@ class ExactLinear(nn.Module):
             return y.reshape(*shape[:-1], self.out_features).to(x.dtype)
         m = x8.shape[0]
         acc = None
-        if x.is_cuda:
-            # `torch._int_mm` accepts only M divisible by 32 (measured: 32, 64,
+        if x.is_cuda or _CPU_INT_MM_EXACT:
+            # On CUDA `torch._int_mm` accepts only M divisible by 32 (measured: 32, 64,
             # 96, 128, 256 succeed; 1..31, 33..47, 48 and 56 are refused). At
             # decode M is the batch size, so the *original* guard - `M % 8 == 0`
             # - never once fired and every linear layer fell through to float64,
             # which runs at 1/64 rate on a GeForce part. Padding the row count
             # is exact: a zero row of x produces a zero row of the product and
             # rows of a matmul are independent, so the surviving rows are
-            # untouched.
-            pad = (-m) % 32
+            # untouched. The CPU takes any M (`cpu_int_mm_is_exact` decides
+            # whether it may be used at all).
+            pad = (-m) % 32 if x.is_cuda else 0
             try:
                 xp = x8 if pad == 0 else torch.nn.functional.pad(x8, (0, 0, 0, pad))
                 acc = torch._int_mm(xp, self.w8t)[:m].to(torch.float32)
@@ -333,8 +366,8 @@ class ExactLinear(nn.Module):
         # would round even though each half is fine.
         m = hi.shape[0]
         acc = None
-        if x.is_cuda:
-            pad = (-m) % 32
+        if x.is_cuda or _CPU_INT_MM_EXACT:
+            pad = (-m) % 32 if x.is_cuda else 0
             try:
                 def mm(t):
                     tp = t if pad == 0 else torch.nn.functional.pad(t, (0, 0, 0, pad))

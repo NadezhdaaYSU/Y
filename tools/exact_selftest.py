@@ -14,7 +14,7 @@ as it stood *before* the optimisation - float64 everywhere, K/V widened with
 
 ## It runs without a GPU, partially
 
-Ten of the sixteen checks need only torch, so `python3 tools/exact_selftest.py`
+Eleven of the seventeen checks need only torch, so `python3 tools/exact_selftest.py`
 on a CPU box runs those and says which six it skipped. It used to print
 "SKIP: no CUDA" and exit 0 having checked nothing - a green exit that is exactly
 the failure the next paragraph is about.
@@ -458,6 +458,29 @@ def check_quantisers_are_device_independent(dev, fail):
             "SiLU do not)")
 
 
+def check_cpu_int_mm_probe(dev, fail):
+    """The CPU's int8 GEMM is used only if it measured exact, and the probe bites.
+
+    `ExactLinear` runs `torch._int_mm` on a CPU when `cpu_int_mm_is_exact()`
+    said so at import. The controls are GEMMs that are wrong the way a non-VNNI
+    `vpmaddubsw` kernel is (a saturated sum) and one that refuses: the probe
+    must reject both, or it would wave a saturating CPU through.
+    """
+    sat = lambda a, b: torch._int_mm(a, b).clamp(-32768, 32767)
+
+    def refuses(a, b):
+        raise RuntimeError("no int8 GEMM here")
+
+    if EM.cpu_int_mm_is_exact(sat):
+        fail("control did not fire: the probe accepted a saturating int8 GEMM")
+    if EM.cpu_int_mm_is_exact(refuses):
+        fail("control did not fire: the probe accepted a GEMM that raises")
+    used = EM._CPU_INT_MM_EXACT
+    if used and not EM.cpu_int_mm_is_exact():
+        fail("_CPU_INT_MM_EXACT is set but the probe now fails on this CPU")
+    return (f"CPU int8 GEMM {'probed exact and used' if used else 'not exact here: float64 fallback'}"
+            f" (controls: a saturating and a refusing GEMM are both rejected)")
+
 def check_silu_table(dev, fail):
     """ExactSiLU is within its stated error of float64 SiLU, and NaN survives.
 
@@ -764,8 +787,8 @@ def check_batch_invariance(dev, fail):
 #
 # This file used to print "SKIP: no CUDA" and `return 0` -- a GREEN EXIT that
 # checked nothing, on every machine without a GPU. That is the same failure the
-# header warns about two paragraphs up: a check that cannot fail. Ten of the
-# sixteen run on CPU, including `check_batch_invariance`, which is the property
+# header warns about two paragraphs up: a check that cannot fail. Eleven of the
+# seventeen run on CPU, including `check_batch_invariance`, which is the property
 # the whole project is about.
 #
 # The six that genuinely cannot: three launch Triton kernels,
@@ -802,7 +825,8 @@ def main():
               check_pad_is_load_bearing, check_all_gemm_configs_agree,
               check_digit_split_is_exact, check_hilo_gemm_configs_agree,
               check_quantisers_are_device_independent,
-              check_quantisers_survive_compile, check_silu_table,
+              check_quantisers_survive_compile, check_cpu_int_mm_probe,
+              check_silu_table,
               check_attention,
               check_kv_cache_matches_stateless, check_batch_invariance]
     skipped = 0
