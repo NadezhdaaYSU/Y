@@ -10,7 +10,10 @@
 One machine is already a pair: `--record cpu.json --device cpu` decodes on the
 host, and x86-64 against an NVIDIA SM is a wider gap than two NVIDIA cards.
 That pair found three device-dependent float ops the exp argument did not
-cover (docs/bit_identical_decode.md, Finding 12, the pipeline).
+cover (docs/bit_identical_decode.md, Finding 12, the pipeline). `--compile`
+records the compiled path, to compare against an eager record; `--model X
+--low-memory` builds a model the float32 builders cannot hold
+(`tools/exact_large_model.py`).
 
 This is the one headline claim in `docs/bit_identical_decode.md` with no
 measurement behind it, and Finding 11 is what made it the load-bearing one.
@@ -432,8 +435,11 @@ def record(args):
     from transformers import AutoTokenizer
 
     import batch_invariance_demo as D
+    import exact_model
     import exact_ragged_batch as R
 
+    if args.model:
+        R.MODEL = args.model
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
 
@@ -474,6 +480,11 @@ def record(args):
         "device": _device_block(args.device),
         "config": {"model": R.MODEL, "tokens": args.tokens,
                    "case_labels": wanted, "workload_hash": workload_hash},
+        # How the arms were built, which legitimately differs between the two
+        # records (eager CPU against compiled GPU is the comparison that
+        # matters), so it is recorded rather than compared.
+        "build": {"low_memory": args.low_memory, "compiled": args.compile,
+                  "stock_lm_head_on_host": args.stock_lm_head_on_host},
         "arms": {},
     }
     print(f"\nRecording on {_fmt_dev(art['device'])}")
@@ -492,7 +503,14 @@ def record(args):
 
     for arm in args.arms:
         print(f"\n--- {arm} ---")
-        model = R.build(arm, args.device)
+        if args.low_memory:
+            import exact_large_model
+            model = exact_large_model.build(arm, R.MODEL, args.device,
+                                            args.stock_lm_head_on_host)
+        else:
+            model = R.build(arm, args.device)
+        if args.compile:
+            exact_model.compile_forward(model)
         canary = D.canary_text(model, tok, args.device)
         cases_out, gate = {}, None
         for label in wanted:
@@ -564,6 +582,21 @@ def main():
                     help="160 by default: at 24 the bf16 control does not "
                          "diverge, which makes a broken comparison look clean")
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--model", help="Hugging Face id; default "
+                    "exact_ragged_batch.MODEL (Qwen2.5-0.5B-Instruct). Part of "
+                    "the workload hash")
+    ap.add_argument("--low-memory", action="store_true",
+                    help="load bf16 and quantise layer by layer on the device "
+                         "(tools/exact_large_model.py); stock and exact only")
+    ap.add_argument("--stock-lm-head-on-host", action="store_true",
+                    help="with --low-memory: compute stock's lm_head on the "
+                         "host, so a 7B control fits a 16 GB card")
+    ap.add_argument("--compile", action="store_true",
+                    help="torch.compile(dynamic=True) every arm's forward; "
+                         "compare against an eager record. GPU only for the "
+                         "exact arm: torch 2.13's CPU Inductor emits C++ for "
+                         "exact attention that does not compile (an index "
+                         "check before the index is declared)")
     ap.add_argument("--cases", metavar="'a|b'",
                     help="pipe-separated case labels from "
                          "exact_ragged_batch.cases(); the workload hash covers "
@@ -604,6 +637,13 @@ def main():
         return code
     if a.record:
         a.arms = [s.strip() for s in a.arms.split(",") if s.strip()]
+        if a.low_memory and set(a.arms) - {"stock", "exact"}:
+            print(f"  *** --low-memory builds only stock and exact, not "
+                  f"{sorted(set(a.arms) - {'stock', 'exact'})}")
+            return 2
+        if a.stock_lm_head_on_host and not a.low_memory:
+            print("  *** --stock-lm-head-on-host needs --low-memory")
+            return 2
         return record(a)
     ap.print_help()
     return 2
