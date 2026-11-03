@@ -94,6 +94,30 @@ def divisor(value, like):
     return t
 
 
+def fail_closed_recompiles():
+    """Make dynamo's recompile limit an error, not a silent eager fallback.
+
+    Every model's bound `forward` shares Hugging Face's one code object, so each
+    model compiled in a process spends recompiles from the same budget. Past
+    `recompile_limit` (8) dynamo silently runs that frame EAGERLY: three compiled
+    arms in one process measured one of them uncompiled, under a "compiled"
+    label. The limit is raised for the arms the harnesses build, and hitting it
+    raises instead of falling back.
+    """
+    import torch._dynamo
+    cfg = torch._dynamo.config
+    cfg.recompile_limit = max(cfg.recompile_limit, 64)
+    cfg.accumulated_recompile_limit = max(cfg.accumulated_recompile_limit, 1024)
+    cfg.fail_on_recompile_limit_hit = True
+
+
+def compile_forward(model):
+    """`torch.compile(model.forward, dynamic=True)`, under `fail_closed_recompiles`."""
+    fail_closed_recompiles()
+    model.forward = torch.compile(model.forward, dynamic=True)
+    return model
+
+
 def cpu_int_mm_is_exact(mm=None):
     """Does `torch._int_mm` on this CPU accumulate int8 products exactly?
 

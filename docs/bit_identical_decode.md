@@ -687,7 +687,10 @@ batch-32 case; compiled fits.
 
 The 7B builds do not hold a float32 copy anywhere: the checkpoint loads in
 bf16 on the host and each `nn.Linear` is upcast (exact) and quantised on the
-target device, layer by layer. The script is not in the repository yet.
+target device, layer by layer (`exact_cross_device.py --model
+Qwen/Qwen2.5-7B-Instruct --low-memory`, `--compile` for the GPU record;
+`tools/exact_large_model.py` refuses a checkpoint not stored in bf16, for which
+this would not be the same model).
 
 Throughput, exact compiled only (two interleaved repeats, best of 5 each):
 47.0 and 47.4 tok/s/seq at batch 32 x 64 tokens, 58.4 and 57.0 at batch 8.
