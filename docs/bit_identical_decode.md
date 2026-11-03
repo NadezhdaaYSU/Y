@@ -665,9 +665,39 @@ and dropping the interpolation term fails it.
 eager, exact 0/5 and stock 5/5; CPU eager against GPU **compiled**, exact 0/5
 (the same token digest) and stock 5/5; ragged batch, exact 0/16 and stock 16/16.
 
-What this does not cover: a second GPU architecture, a larger model, and the
-cos/sin table, which is still float64 rounded once and so near certain (around
-2^-29 per value), not exact.
+#### At 7B: the exact arm agrees, and the control could not be run
+
+Qwen2.5-7B-Instruct (2026-11-03; 28 layers, head dimension 128, so the first
+real model at that width), the same 5 cases x 160 tokens, CPU eager (the int8
+`_int_mm` path) against GPU **compiled** (`torch.compile(dynamic=True)`):
+**exact changed 0/5 cases**. Both records carry token digest `7700e3e28f1d21d1`,
+weights fingerprint `fa21999abf0abea9`, workload hash `da1abea028b779a8` and
+the same integer-exp domain digest; both pass the sanity gate (canary ok, 94
+distinct tokens) and reproduce themselves on a second run.
+
+That is not yet the result the 0.5B row is, because **the stock control is
+missing**. Stock bf16 is 14.2 GiB of weights; the 16 GB card also drives the
+desktop (2.9 GB held by the compositor, Discord, Chromium and the editor when
+checked), and every stock GPU run ran out of memory: with the embedding on the
+host, and then with `lm_head` too (a game held 0.8 GB of the card by then).
+Closing the desktop applications should free enough. The CPU stock record exists (digest
+`228b3b0c2bc95115`, gate ok); without its GPU half nothing shows this workload
+separates stock at 7B. Eager exact on the GPU also ran out of memory, on the
+batch-32 case; compiled fits.
+
+The 7B builds do not hold a float32 copy anywhere: the checkpoint loads in
+bf16 on the host and each `nn.Linear` is upcast (exact) and quantised on the
+target device, layer by layer. The script is not in the repository yet.
+
+Throughput, exact compiled only (two interleaved repeats, best of 5 each):
+47.0 and 47.4 tok/s/seq at batch 32 x 64 tokens, 58.4 and 57.0 at batch 8.
+There is no stock figure to divide by, for the same memory reason, and a game
+was running on the same GPU by the end of the batch-8 run, so these are not
+verified idle-GPU numbers and not a ratio.
+
+What this does not cover: a second GPU architecture, the 7B stock control and
+speed ratio, and the cos/sin table, which is still float64 rounded once and so
+near certain (around 2^-29 per value), not exact.
 
 ## Finding 13 — `0/16` is also what a broken arm scores
 
@@ -1003,9 +1033,10 @@ forfeits autotuning and split-K; but this project's record on predictions is one
 ### One model, one GPU, one stack — narrow evidence
 
 Qwen2.5-0.5B-Instruct on an RTX 4070 Ti SUPER, in a PyTorch prototype rather
-than the compiler's own PTX kernels. Head dimension 64 here; at 128 and 256 the
-exactness budget forces narrower K, which is derived correctly but untested on a
-real model. The cross-GPU claim — the strongest thing exactness buys over
+than the compiler's own PTX kernels. Head dimension 64 here. At 128 the
+exactness budget (1032) still admits the default 1023 K levels, and Qwen2.5-7B
+has run at that width on a CPU and a GPU (Finding 12), though only for agreement,
+not accuracy; at 256 it forces 511, untested on a real model. The cross-GPU claim — the strongest thing exactness buys over
 pinning the order — has never been run on a second GPU.
 
 `tools/exact_cross_device.py` is the harness for it, built and self-tested but
