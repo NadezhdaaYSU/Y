@@ -62,6 +62,13 @@ USE_TRITON = os.environ.get("Y_EXACT_TRITON", "1") != "0"
 # should round differently from it.
 import torch._inductor.config as _inductor_config  # noqa: E402
 
+# What the process had before this import, so a baseline that should compile
+# the way PyTorch ships can patch them back (exact_throughput's stock arm).
+INDUCTOR_DEFAULTS = {
+    "eager_numerics.division_rounding":
+        _inductor_config.eager_numerics.division_rounding,
+    "emulate_precision_casts": _inductor_config.emulate_precision_casts,
+}
 _inductor_config.eager_numerics.division_rounding = True
 _inductor_config.emulate_precision_casts = True
 _DIVISORS = {}
