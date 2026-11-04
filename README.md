@@ -3486,8 +3486,9 @@ Things to know:
   block after a `let`, the way rustc describes shadowing.
 - The runtime is built **without** debug information, so `step` stays in Y code
   rather than descending into the allocator behind `print_int`.
-- **The LLVM backend only.** `--emit-ptx`, `--emit-cpu`, `--emit-native`, the
-  ZK and co-processor backends refuse `-g` by name rather than ignore it.
+- **The LLVM and PTX backends only.** `--emit-cpu`, `--emit-native`, the ZK
+  and co-processor backends refuse `-g` by name rather than ignore it;
+  `--emit-ptx -g` is for cuda-gdb (below), and `--debug --emit-ptx` is refused.
 - **`-g` builds at `-O0` unless told otherwise; `-g -O1` .. `-O3` is an
   optimised debuggable build.** There the optimiser keeps values in registers,
   folds them away and inlines calls: gdb shows `<optimized out>` for a value
@@ -3714,6 +3715,29 @@ The code the GPU runs (Y --emit-ptx for sm_89, then ptxas):
 - Building it found that strict mode did not bounds-check an array reached
   through a reference (`a: &mut [I16; 4]`): `a[9] = 1` compiled and wrote past
   the array. Fixed in `034b19f`.
+
+#### GPU kernels on the GPU: `--emit-ptx -g`, `ydb --gpu`
+
+`Y prog.ysu --emit-ptx -g` writes PTX that cuda-gdb debugs as Y: a kernel
+stops at a Y line on the GPU, and every thread's bindings print by Y name and
+type from that thread's registers. `ydb --gpu` runs one launch under
+cuda-gdb, with no host program to write:
+
+```text
+$ python3 tools/ydb/ydb saxpy.ysu --gpu 'saxpy<<<1, 32>>>(arange(32), ones(32), 20)'
+(ydb) break saxpy:7
+(ydb) run
+(ydb) lanes x
+x in warp 0 of block (0,0,0), at saxpy.ysu:7:
+  [0] 0    [1] 1    [2] 2    [3] 3    [4] 4    [5] 5    [6] 6    [7] 7
+  ...
+  lanes 20-31: not here (exited, or the block has no such thread)
+```
+
+`-g` changes no PTX instruction (checked over the corpus); the SASS is
+unoptimised debug code, and `verify` says the evidence about SASS is about the
+build without it. A value ptxas keeps no location for prints as
+`<optimized out>`, never as a wrong value. Manual §38.10.
 
 ---
 

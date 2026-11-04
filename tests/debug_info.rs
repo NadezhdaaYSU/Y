@@ -707,15 +707,18 @@ fn every_backend_without_debug_information_refuses_g_by_name() {
     let dir = scratch("refuse");
     let path = dir.join("fixture.ysu");
     fs::write(&path, FIXTURE).expect("write source");
-    for backend in [
-        "--emit-ptx",
-        "--emit-cpu",
-        "--emit-native",
-        "--emit-coprocessor",
-        "--target=r1cs",
-        "--emit-zk-ptx",
+    // `--emit-ptx -g` is debug information for cuda-gdb
+    // (`tests/ptx_debug_info.rs`); `--debug`, which starts gdb on a host
+    // program, is still refused there.
+    for (backend, flags) in [
+        ("--emit-ptx", &["--debug"][..]),
+        ("--emit-cpu", &["-g", "--debug"][..]),
+        ("--emit-native", &["-g", "--debug"][..]),
+        ("--emit-coprocessor", &["-g", "--debug"][..]),
+        ("--target=r1cs", &["-g", "--debug"][..]),
+        ("--emit-zk-ptx", &["-g", "--debug"][..]),
     ] {
-        for flag in ["-g", "--debug"] {
+        for &flag in flags {
             let out = y(&dir).arg(&path).arg(backend).arg(flag).output().expect("run Y");
             let t = text(&out);
             assert!(!out.status.success(), "{} {} was accepted", backend, flag);

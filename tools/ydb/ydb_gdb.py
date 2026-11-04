@@ -8,7 +8,8 @@
 # The launcher passes the program's source and the compiler in the
 # environment: YDB_PROGRAM (the .ysu), YDB_Y (the compiler), YDB_CWD (the
 # directory to compile in, for its .ysu_hw_profile), and YDB_HOST (how the
-# binary was built, `clang -O0`; absent when there is no binary).
+# binary was built, `clang -O0`; absent when there is no binary). Under
+# `ydb --gpu`, YDB_GPU_PTX is the `-g` PTX the kernel being debugged runs.
 
 import math
 import os
@@ -33,7 +34,11 @@ def _sources():
     try:
         text = gdb.execute("info sources", to_string=True)
     except gdb.error:
-        return out
+        # No symbols yet - under `--gpu`, until the kernel's module loads.
+        # The program's own file is still known, and returning without it
+        # sent `break saxpy:7` to gdb, which reads it as the function
+        # `saxpy` and drops the 7.
+        text = ""
     for tok in re.split(r"[,\s]+", text):
         if tok.endswith(".ysu"):
             out.setdefault(os.path.basename(tok), tok)
@@ -435,8 +440,111 @@ class YVerify(gdb.Command):
         ptx, why = (None, None)
         if item is not None and item["kind"] == "kernel":
             ptx, why = _gpu_ptx()
+        debug_ptx = None
+        if os.environ.get("YDB_GPU_PTX") and item is not None and item["kind"] == "kernel":
+            try:
+                with open(os.environ["YDB_GPU_PTX"]) as f:
+                    debug_ptx = f.read()
+            except OSError as e:
+                raise gdb.GdbError("the -g PTX this session runs is gone: %s" % e)
         print(yverify.report(_program(), line, g, source, file=filename,
-                             host=os.environ.get("YDB_HOST"), gpu_ptx=ptx, gpu_error=why))
+                             host=os.environ.get("YDB_HOST"), gpu_ptx=ptx, gpu_error=why,
+                             gpu_debug_ptx=debug_ptx))
+
+
+def _lane_rows():
+    """(lane, state, pc, threadIdx) for each lane of the focused warp that
+    `info cuda lanes` lists: the ones running, at this pc or another."""
+    try:
+        text = gdb.execute("info cuda lanes", to_string=True)
+    except gdb.error as e:
+        raise gdb.GdbError("lanes needs a CUDA thread in focus (ydb --gpu, stopped in a kernel): %s" % e)
+    rows = []
+    for line in text.splitlines():
+        m = re.match(r"^\s*\*?\s*(\d+)\s+(\w+)\s+(0x[0-9a-fA-F]+)\s+\(([^)]*)\)", line)
+        if m:
+            rows.append((int(m.group(1)), m.group(2), int(m.group(3), 16), m.group(4).replace(" ", "")))
+    if not rows:
+        raise gdb.GdbError("no CUDA lane is in focus: stop in a kernel first")
+    return rows
+
+
+def _focus(what):
+    """`cuda lane` -> 7, `cuda warp` -> 0, `cuda block` -> '(0,0,0)'."""
+    text = gdb.execute("cuda " + what, to_string=True).strip()
+    return text.split(None, 1)[1] if " " in text else text
+
+
+def _ranges(nums):
+    out, start, prev = [], None, None
+    for n in nums:
+        if start is None:
+            start = prev = n
+        elif n == prev + 1:
+            prev = n
+        else:
+            out.append((start, prev))
+            start = prev = n
+    if start is not None:
+        out.append((start, prev))
+    return ", ".join(str(a) if a == b else "%d-%d" % (a, b) for a, b in out)
+
+
+class YLanes(gdb.Command):
+    """An expression's value in every lane of the focused warp.
+
+    lanes EXPR
+
+    Each lane is one thread, with its own registers: `lanes i` shows the 32
+    values of `i` at once, where `print i` shows the focused thread's. A lane
+    stopped at another point of the kernel is evaluated there, and says so; a
+    lane that is not running (it exited, or the block has fewer threads) is
+    listed as not here. The focus is left where it was."""
+
+    def __init__(self):
+        super().__init__("lanes", gdb.COMMAND_DATA)
+
+    def invoke(self, arg, from_tty):
+        expr = arg.strip()
+        if not expr:
+            raise gdb.GdbError("lanes EXPR")
+        rows = _lane_rows()
+        here = int(gdb.selected_frame().pc())
+        focus = int(_focus("lane"))
+        block, warp = _focus("block"), _focus("warp")
+        sal = gdb.selected_frame().find_sal()
+        where = "%s:%d" % (os.path.basename(sal.symtab.filename), sal.line) if sal.symtab else "%#x" % here
+        values = {}
+        try:
+            for lane, state, pc, tid in rows:
+                gdb.execute("cuda lane %d" % lane, to_string=True)
+                try:
+                    v = gdb.parse_and_eval(expr)
+                    text = "<optimized out>" if v.is_optimized_out else v.format_string()
+                except gdb.error as e:
+                    text = "<%s>" % str(e).rstrip(".")
+                if pc != here:
+                    s2 = gdb.selected_frame().find_sal()
+                    text += " (at line %d)" % s2.line if s2.symtab else " (at %#x)" % pc
+                values[lane] = (tid, text)
+        finally:
+            gdb.execute("cuda lane %d" % focus, to_string=True)
+        print("%s in warp %s of block %s, at %s:" % (expr, warp, block, where))
+        lanes = sorted(values)
+        cells = ["[%d] %s" % (l, values[l][1]) for l in lanes]
+        width = max(len(c) for c in cells)
+        per = max(1, min(8, 96 // (width + 2)))
+        for k in range(0, len(cells), per):
+            print("  " + "  ".join(c.ljust(width) for c in cells[k:k + per]).rstrip())
+        absent = [l for l in range(32) if l not in values]
+        if absent:
+            print("  lanes %s: not here (exited, or the block has no such thread)" % _ranges(absent))
+        tids = [values[l][0] for l in lanes]
+        if any(t.split(",")[1:] != ["0", "0"] for t in tids):
+            print("  threads: " + ", ".join("[%d] (%s)" % (l, values[l][0]) for l in lanes))
+        distinct = sorted(set(values[l][1] for l in lanes))
+        if len(distinct) == 1 and len(lanes) > 1:
+            print("  the same in all %d lanes" % len(lanes))
 
 
 YBreak()
@@ -444,3 +552,4 @@ YLocals()
 YTensor()
 YAsm()
 YVerify()
+YLanes()

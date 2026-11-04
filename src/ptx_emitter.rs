@@ -1351,6 +1351,14 @@ pub struct PtxEmitter {
     /// a predicated load is not a merge candidate. One `v4` instruction moves
     /// 16 bytes and keeps the predicate.
     vec_vars: std::collections::HashMap<String, [String; 4]>,
+    /// The names the kernel being emitted assigns (`x = ..`, `x += ..`),
+    /// as renamed apart. See `copy_if_lane_assigned`.
+    assigned_names: std::collections::HashSet<String>,
+    /// How often each name is referenced in the kernel's body, and its
+    /// `let n = v.x`-style lane bindings `(vector, lane)`. See
+    /// `copy_if_lane_assigned`.
+    ident_refs: std::collections::HashMap<String, usize>,
+    lane_lets: Vec<(String, usize)>,
     /// Element type of each `GlobalMemory<T>` parameter, by parameter name.
     /// Absent means f32, which is what every load site assumed unconditionally
     /// before the integer datapath existed.
@@ -1456,6 +1464,10 @@ pub struct PtxEmitter {
     /// the dead-code lint, which is how a documented feature that did not
     /// exist went unnoticed.
     line_info: Option<LineInfo>,
+    /// `-g`: DWARF describing each kernel's parameters and bindings, so
+    /// `cuda-gdb` shows them as Y (`crate::ptx_debug_info`). Implies
+    /// `line_info`. `None` writes none.
+    ptx_debug: Option<crate::ptx_debug_info::PtxDebugInfo>,
     /// Module-scope declarations (currently just `.extern .shared` arrays for
     /// cp.async-pipelined GEMM kernels - see `emit_tensor_core_gemm_kernel`)
     /// that a kernel body emitter discovers a need for but cannot write
@@ -1792,6 +1804,9 @@ impl PtxEmitter {
             variables: std::collections::HashMap::new(),
             reg_ty: std::collections::HashMap::new(),
             vec_vars: std::collections::HashMap::new(),
+            assigned_names: std::collections::HashSet::new(),
+            ident_refs: std::collections::HashMap::new(),
+            lane_lets: Vec::new(),
             ptr_elem: std::collections::HashMap::new(),
             float_lit: std::collections::HashMap::new(),
             element_value_regs: std::collections::HashSet::new(),
@@ -1813,6 +1828,7 @@ impl PtxEmitter {
             sm_target: target,
             target_assumed: decided.assumed,
             line_info: None,
+            ptx_debug: None,
             pending_extern_decls: Vec::new(),
             f16_mma_zero: None,
             f16_kahan: Vec::new(),
@@ -1851,6 +1867,144 @@ impl PtxEmitter {
             item_file.insert(name.clone(), index);
         }
         self.line_info = Some(LineInfo { files, item_file, file: 1, stack: Vec::new(), last: None });
+    }
+
+    /// `-g`: debug information for `cuda-gdb` - the line table of
+    /// `enable_line_info`, which must be called first, and each kernel's
+    /// variables (`crate::ptx_debug_info`). The module is debug code:
+    /// `.target <arch>, debug`, which `ptxas` and the driver compile without
+    /// optimisation.
+    pub fn enable_debug_info(&mut self) {
+        assert!(self.line_info.is_some(), "enable_debug_info needs enable_line_info first");
+        self.ptx_debug = Some(Default::default());
+    }
+
+    /// Under `-g`, a fresh label here, for the debug information to refer to.
+    /// Placed BEFORE a `.loc` that nothing follows yet, so `loc_write` can
+    /// still take that `.loc` back: the line table is the one `--lineinfo`
+    /// writes, label or not.
+    fn dbg_mark(&mut self) -> Option<String> {
+        let label = self.ptx_debug.as_mut()?.fresh_label();
+        let text = format!("    {}:\n", label);
+        match self.line_info.as_ref().and_then(|li| li.last.as_ref()) {
+            Some(last) if self.ptx_buffer.ends_with(last.as_str()) => {
+                let at = self.ptx_buffer.len() - last.len();
+                self.ptx_buffer.insert_str(at, &text);
+            }
+            _ => self.ptx_buffer.push_str(&text),
+        }
+        Some(label)
+    }
+
+    /// The DWARF type of a value in `reg`, as the emitter computes with it.
+    fn dbg_reg_type(&self, reg: &str) -> Option<crate::ptx_debug_info::DbgType> {
+        use crate::ptx_debug_info::{BaseTy, DbgType, DW_ATE_FLOAT, DW_ATE_SIGNED, DW_ATE_UNSIGNED};
+        // A predicate is not a register `cuda-gdb` reads through DWARF, and
+        // a `%h` or vector register is no binding's.
+        let class_ok = reg.starts_with("%r") || reg.starts_with("%f");
+        if !class_ok {
+            return None;
+        }
+        let b = match self.ty_of(reg) {
+            ScalarTy::I32 => BaseTy::new("I32", DW_ATE_SIGNED, 4),
+            ScalarTy::U32 => BaseTy::new("U32", DW_ATE_UNSIGNED, 4),
+            ScalarTy::I64 => BaseTy::new("I64", DW_ATE_SIGNED, 8),
+            ScalarTy::U64 => BaseTy::new("U64", DW_ATE_UNSIGNED, 8),
+            ScalarTy::F32 => BaseTy::new("F32", DW_ATE_FLOAT, 4),
+            ScalarTy::F64 => BaseTy::new("F64", DW_ATE_FLOAT, 8),
+            _ => return None,
+        };
+        Some(DbgType::Base(b))
+    }
+
+    /// The DWARF type of a `GlobalMemory<T>` element: what one element of the
+    /// buffer is in memory.
+    fn dbg_elem_type(name: &str) -> Option<crate::ptx_debug_info::BaseTy> {
+        use crate::ptx_debug_info::{BaseTy, DW_ATE_FLOAT, DW_ATE_SIGNED, DW_ATE_UNSIGNED};
+        Some(match name {
+            "F32" => BaseTy::new("F32", DW_ATE_FLOAT, 4),
+            "F64" => BaseTy::new("F64", DW_ATE_FLOAT, 8),
+            "F16" => BaseTy::new("F16", DW_ATE_FLOAT, 2),
+            "I32" => BaseTy::new("I32", DW_ATE_SIGNED, 4),
+            "U32" => BaseTy::new("U32", DW_ATE_UNSIGNED, 4),
+            "I64" => BaseTy::new("I64", DW_ATE_SIGNED, 8),
+            "U64" => BaseTy::new("U64", DW_ATE_UNSIGNED, 8),
+            "I16" => BaseTy::new("I16", DW_ATE_SIGNED, 2),
+            "U16" => BaseTy::new("U16", DW_ATE_UNSIGNED, 2),
+            "I8" => BaseTy::new("I8", DW_ATE_SIGNED, 1),
+            "U8" => BaseTy::new("U8", DW_ATE_UNSIGNED, 1),
+            // FP8 has no DWARF encoding gdb decodes; its bits, named so.
+            "E4M3" => BaseTy::new("E4M3_bits", DW_ATE_UNSIGNED, 1),
+            _ => return None,
+        })
+    }
+
+    /// Under `-g`, the binding `name` (as renamed apart) is visible from
+    /// here to the end of the innermost block. `declared` is its annotation.
+    fn dbg_bind(&mut self, name: &str, line: usize, declared: Option<&Type>) {
+        use crate::ptx_debug_info::{BaseTy, DbgType, Var, DW_ATE_SIGNED};
+        if !self.ptx_debug.as_ref().is_some_and(|d| d.in_kernel()) {
+            return;
+        }
+        let shown = Self::type_display_opt(declared);
+        let (ty, regs) = if let Some((acc, repr, integer_domain, _)) = self.zero_drift.get(name) {
+            // The register holds the accumulator's exact representation: the
+            // integer itself, or the value times 2^frac, which the Y
+            // extension's `Q<w>.<f>_raw` printer reads back.
+            let split = self.drift_grid_hi.contains_key(name);
+            if split || !repr.is_exact() || !acc.starts_with("%rd") {
+                (DbgType::Unknown(shown), vec![])
+            } else {
+                let tname = if *integer_domain || repr.frac_bits() == 0 {
+                    "I64".to_string()
+                } else {
+                    format!("{}_raw", repr.name())
+                };
+                (DbgType::Base(BaseTy::new(&tname, DW_ATE_SIGNED, 8)), vec![acc.clone()])
+            }
+        } else if let Some(reg) = self.variables.get(name).cloned() {
+            match self.dbg_reg_type(&reg) {
+                Some(t) => (t, vec![reg]),
+                None => (DbgType::Unknown(shown), vec![]),
+            }
+        } else if let Some(regs) = self.vec_vars.get(name).cloned() {
+            // `U32x4`: four registers of one type, read in Y as v.x .. v.w.
+            let elem = match self.dbg_reg_type(&regs[0]) {
+                Some(DbgType::Base(b)) if regs.iter().all(|r| self.dbg_reg_type(r) == Some(DbgType::Base(b.clone()))) => Some(b),
+                _ => None,
+            };
+            match elem {
+                Some(elem) => {
+                    let name = format!("{}x4", elem.name);
+                    let fields = ["x", "y", "z", "w"].iter().map(|f| f.to_string()).collect();
+                    (DbgType::Vector { name, elem, fields }, regs.to_vec())
+                }
+                None => (DbgType::Unknown(shown), vec![]),
+            }
+        } else {
+            // Bound to no value at all (a tile declaration, a linear token).
+            return;
+        };
+        let Some(at) = self.dbg_mark() else { return };
+        let var = Var { name: crate::lexical_scope::source_name(name).to_string(), line, ty, regs };
+        self.ptx_debug.as_mut().unwrap().bind(var, at);
+    }
+
+    fn type_display_opt(t: Option<&Type>) -> String {
+        t.map(Self::type_display).unwrap_or_else(|| "?".to_string())
+    }
+
+    fn dbg_enter_block(&mut self) {
+        if let Some(d) = self.ptx_debug.as_mut() {
+            d.enter_block();
+        }
+    }
+
+    fn dbg_leave_block(&mut self) {
+        if self.ptx_debug.as_ref().is_some_and(|d| d.in_kernel()) {
+            let at = self.dbg_mark().unwrap();
+            self.ptx_debug.as_mut().unwrap().leave_block(&at);
+        }
     }
 
     /// Write `.loc` for `(line, col)` unless it is the one already in effect.
@@ -3834,6 +3988,64 @@ impl PtxEmitter {
         dst
     }
 
+    /// Give a binding its own register when it would share one with a lane
+    /// of a `U32x4` and the kernel assigns it.
+    ///
+    /// `let v0: U32 = v.x;` binds `v0` to `v.x`'s own register: a vector lives
+    /// in `vec_vars`, which `copy_if_aliased` does not look at. That is the
+    /// same value under two names, harmless while neither changes - and a
+    /// `U32x4` cannot be assigned. But `v0 = v0 + 1;` then wrote `v.x` too:
+    ///
+    /// ```text
+    ///     ld.shared.v4.u32 {%r12, %r13, %r14, %r15}, [%rd7];
+    ///     add.u32 %r18, %r12, %r17;
+    ///     mov.u32 %r12, %r18;      // v0 = v0 + 1   <- and v.x
+    ///     mov.u32 %r19, %r12;      // let w = v.x;  reads 11, not 10
+    /// ```
+    ///
+    /// Found 2026-11-04 by the `-g` debugger work, where `v0` and `v.x` showed
+    /// one register. Copied only when it matters - the name is assigned AND
+    /// the lane is read anywhere else in the kernel (by another expression,
+    /// or another binding of the same lane) - so a kernel that assigns a
+    /// lane's copy and never reads the vector again keeps its PTX
+    /// (`bn254_msm_bucket`, whose committed artifact the validator checks).
+    /// "Anywhere", not "after": in a loop a read written before the
+    /// assignment runs after it on the next iteration.
+    fn copy_if_lane_assigned(&mut self, name: &str, reg: String) -> String {
+        if !self.assigned_names.contains(name) {
+            return reg;
+        }
+        let Some((vector, lane)) = self
+            .vec_vars
+            .iter()
+            .find_map(|(v, lanes)| lanes.iter().position(|r| *r == reg).map(|i| (v.clone(), i)))
+        else {
+            return reg;
+        };
+        let refs = self.ident_refs.get(&vector).copied().unwrap_or(0);
+        let other_lanes = self.lane_lets.iter().filter(|(v, l)| *v == vector && *l != lane).count();
+        let same_lane = self.lane_lets.iter().filter(|(v, l)| *v == vector && *l == lane).count();
+        // Each lane binding is itself a reference: fewer means the count
+        // above did not see them, and the copy is made rather than skipped.
+        let counted = refs >= other_lanes + same_lane && same_lane >= 1;
+        if counted && refs - other_lanes - 1 == 0 {
+            return reg;
+        }
+        let ty = self.ty_of(&reg);
+        let dst = self.alloc_ty(ty);
+        writeln!(
+            &mut self.ptx_buffer,
+            "    mov.{} {}, {};   // own register: `{}` is a vector lane, and `{}` is assigned",
+            ty.reg_mem(),
+            dst,
+            reg,
+            reg,
+            crate::lexical_scope::source_name(name)
+        )
+        .unwrap();
+        dst
+    }
+
     /// The full f64 value of an untyped float literal held in `reg`, if `reg`
     /// is one and no name owns it. See `float_lit` for why ownership matters.
     fn unowned_float_lit(&self, reg: &str) -> Option<f64> {
@@ -5406,7 +5618,58 @@ or `shared_alloc_u32` for a shared-memory array.",
         // Last, over the whole module, so every emitter site and every entry
         // point (the split-K reduction included) gets it alike.
         self.ptx_buffer = strength_reduce_constant_division(&self.ptx_buffer);
+        self.finish_debug_info();
         self.ptx_buffer.clone()
+    }
+
+    /// Under `-g`: `.target <arch>, debug`, and the DWARF sections at the end
+    /// of the module, after everything that rewrites instructions.
+    fn finish_debug_info(&mut self) {
+        let Some(d) = self.ptx_debug.as_ref() else { return };
+        let Some(source) = self.line_info.as_ref().and_then(|li| li.files.first().cloned()) else { return };
+        let comp_dir = std::env::current_dir().unwrap_or_default();
+        if let Some(line) = self.ptx_buffer.lines().find(|l| l.starts_with(".target ")).map(str::to_string) {
+            if !line.contains("debug") {
+                self.ptx_buffer = self.ptx_buffer.replacen(&line, &format!("{}, debug", line), 1);
+            }
+        }
+        if let Some(sections) = d.sections(&source, &comp_dir) {
+            if !self.ptx_buffer.ends_with('\n') {
+                self.ptx_buffer.push('\n');
+            }
+            self.ptx_buffer.push_str(&sections);
+        }
+    }
+
+    /// Under `-g`, the kernel's parameters, each in the register it was loaded
+    /// into: the body reads (and may assign) that register, not the slot.
+    fn dbg_params(&mut self, kernel: &KernelDecl) {
+        use crate::ptx_debug_info::{DbgType, Var};
+        for param in &kernel.params {
+            let Some(reg) = self.variables.get(&param.name).cloned() else { continue };
+            let ty = match &param.ty {
+                Type::Generic { base, args, .. } if base == "GlobalMemory" => {
+                    let elem = match args.first() {
+                        Some(GenericArg::Type(Type::Primitive(n, _) | Type::Ident(n, _))) => {
+                            Self::dbg_elem_type(n)
+                        }
+                        _ => None,
+                    };
+                    Some(DbgType::Pointer(elem))
+                }
+                _ => self.dbg_reg_type(&reg),
+            };
+            let var = match ty {
+                Some(ty) => Var { name: param.name.clone(), line: kernel.span.line, ty, regs: vec![reg] },
+                None => Var {
+                    name: param.name.clone(),
+                    line: kernel.span.line,
+                    ty: DbgType::Unknown(Self::type_display(&param.ty)),
+                    regs: vec![],
+                },
+            };
+            self.ptx_debug.as_mut().unwrap().param(var);
+        }
     }
 
     /// Raise the module's `.version` if something emitted needed more than the
@@ -5461,6 +5724,32 @@ or `shared_alloc_u32` for a shared-memory array.",
         self.variables.clear();
         self.reg_ty.clear();
         self.vec_vars.clear();
+        self.assigned_names.clear();
+        self.lane_lets.clear();
+        crate::ast::for_each_stmt_in(&kernel.body.stmts, &mut |st| match st {
+            Stmt::Assign { target: Expr::Ident(n, _), .. } | Stmt::CompoundAssign { target: Expr::Ident(n, _), .. } => {
+                self.assigned_names.insert(n.clone());
+            }
+            Stmt::Let { init: Some(Expr::MemberAccess { base, member, .. }), .. } => {
+                if let (Expr::Ident(v, _), Some(lane)) = (&**base, ["x", "y", "z", "w"].iter().position(|m| m == member)) {
+                    self.lane_lets.push((v.clone(), lane));
+                }
+            }
+            _ => {}
+        });
+        // Every reference to every name, wherever it is nested: the AST's
+        // `Debug` text spells each one `Ident("name", ..)`. Only consulted
+        // for a name some lane binding names (`copy_if_lane_assigned`).
+        self.ident_refs.clear();
+        if !self.lane_lets.is_empty() {
+            let text = format!("{:?}", kernel.body);
+            for (v, _) in &self.lane_lets {
+                if !self.ident_refs.contains_key(v) {
+                    let n = text.matches(&format!("Ident({:?}, ", v)).count();
+                    self.ident_refs.insert(v.clone(), n);
+                }
+            }
+        }
         self.ptr_elem.clear();
         self.float_lit.clear();
         self.element_value_regs.clear();
@@ -5533,6 +5822,18 @@ or `shared_alloc_u32` for a shared-memory array.",
                     self.variables.insert(param.name.clone(), r);
                 }
             }
+        }
+
+        // The kernel's described range starts HERE, after the parameter
+        // loads: before them the registers its parameters are described in
+        // do not hold them yet, and a stop there (`set cuda break_on_launch`
+        // stops at the first instruction) would show whatever they held.
+        // Outside the range the debugger shows no variables, which is true.
+        if self.ptx_debug.is_some() {
+            let begin = self.dbg_mark().unwrap();
+            let file = self.line_info.as_ref().map_or(1, |li| li.file);
+            self.ptx_debug.as_mut().unwrap().begin_kernel(&kernel.name, file, kernel.span.line, begin);
+            self.dbg_params(kernel);
         }
 
         // Emit body: a validated kernel-level `@tile(M, N, K)` dispatches to
@@ -5665,6 +5966,10 @@ or `shared_alloc_u32` for a shared-memory array.",
         };
 
         self.loc_end_kernel();
+        if self.ptx_debug.is_some() {
+            let end = self.dbg_mark().unwrap();
+            self.ptx_debug.as_mut().unwrap().end_kernel(end);
+        }
         // Take back the body_buffer and restore the original self.ptx_buffer
         let body_code = std::mem::replace(&mut self.ptx_buffer, saved_buffer);
         self.check_element_values_are_not_addresses(&kernel.name, &body_code);
@@ -6249,6 +6554,12 @@ or `shared_alloc_u32` for a shared-memory array.",
     }
 
     fn emit_block(&mut self, block: &Block, hw_profile: &HardwareProfile) {
+        self.dbg_enter_block();
+        self.emit_block_stmts(block, hw_profile);
+        self.dbg_leave_block();
+    }
+
+    fn emit_block_stmts(&mut self, block: &Block, hw_profile: &HardwareProfile) {
         let mut stmts = block.stmts.clone();
 
         let mut i = 0;
@@ -6481,7 +6792,15 @@ or `shared_alloc_u32` for a shared-memory array.",
     fn emit_stmt(&mut self, stmt: &Stmt, hw_profile: &HardwareProfile) {
         self.loc_enter(&stmt.span());
         let from = self.ptx_buffer.len();
+        // A `for` loop's variable is visible over the loop, and only there.
+        let loop_scope = matches!(stmt, Stmt::For { .. });
+        if loop_scope {
+            self.dbg_enter_block();
+        }
         self.emit_stmt_inner(stmt, hw_profile);
+        if loop_scope {
+            self.dbg_leave_block();
+        }
         // A compound statement's own code (a condition, a loop header) is
         // checked where it is emitted, and its body statement by statement.
         // A `chisel` block's PTX is the programmer's and is not checked.
@@ -6506,6 +6825,9 @@ or `shared_alloc_u32` for a shared-memory array.",
             if let (Some((lo, hi)), false) = (checked, self.drift_range.contains_key(name)) {
                 self.emit_let_bounds_check(name, span.line, lo, hi);
             }
+        }
+        if let Stmt::Let { name, span, ty, .. } = stmt {
+            self.dbg_bind(name, span.line, ty.as_ref());
         }
         self.loc_leave();
     }
@@ -6798,6 +7120,15 @@ declare it as a Q format.\n{}",
                         // one that can make two names share one - which makes
                         // it the only one that needs the copy.
                         let reg = self.copy_if_aliased(reg);
+                        let reg = self.copy_if_lane_assigned(name, reg);
+                        // Still a lane's register, and assigned: the vector's
+                        // description must stop claiming that lane, or the
+                        // debugger shows the new value as the vector's.
+                        if self.assigned_names.contains(name) {
+                            if let Some(d) = self.ptx_debug.as_mut() {
+                                d.forget_lane(&reg);
+                            }
+                        }
                         self.variables.insert(name.clone(), reg);
                     } else if Self::binds_a_linear_token(expr) {
                         // `cp_async` yields a LINEAR TOKEN, not a value: the
@@ -6915,6 +7246,7 @@ declare it as a Q format.\n{}",
                 }
                 self.refuse_divergent_collectives(header_from, span);
                 self.variables.insert(loop_var.clone(), loop_reg.clone());
+                self.dbg_bind(loop_var, span.line, None);
                 // `@ZeroDrift`'s checks in this loop stop at its end; a loop
                 // inside one shares its flag.
                 let defer = self.drift_defer.is_none() && self.drift_loop_defers(loop_var, step.as_ref(), body);

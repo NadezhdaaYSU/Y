@@ -5,6 +5,8 @@
     ydb prog.ysu -O2                  an optimised debuggable build
     ydb prog.ysu -- arg1 arg2         arguments for the program
     ydb prog.ysu --batch -ex "break scale" -ex run -ex locals
+    ydb prog.ysu --gpu 'saxpy<<<1, 32>>>(arange(32), ones(32), 20)'
+                                      run a kernel on the GPU, under cuda-gdb
 
 ydb is not a second debugger. It builds the program with `Y -g` - next to its
 source, as `Y prog.ysu --debug` does - and starts gdb on it with:
@@ -29,6 +31,19 @@ Everything gdb does still works. ydb adds:
   verify [LINE]         what covers a line: what the compiler proved, checked
                         or took on trust there, and what checks the code it
                         became (Rocq proofs, tools/ptxas_tval)
+
+With `--gpu LAUNCH`, ydb debugs a kernel on the GPU instead: it compiles the
+program with `Y --emit-ptx -g` (PTX that carries each kernel's variables) and
+starts cuda-gdb on `ylaunch.py`, which runs that one launch - see `ylaunch.py`
+for LAUNCH's syntax - and prints the buffers afterwards. `break kernel:42`
+stops every thread that reaches the line; `locals` and `print` show the
+focused thread's values, `cuda thread (5,0,0)` moves the focus, and
+
+  lanes EXPR            EXPR in every lane of the focused warp
+
+shows one value across the warp. The code that runs is the debug build: the
+driver compiles `.target ..., debug` PTX without optimisation, so a kernel is
+slower than it is without -g, and `verify` says which evidence is about it.
 
 The compiler is this checkout's `target/release/Y` unless `--y` or `$Y_BIN`
 names another. It runs in the current directory, so it reads the same
@@ -60,7 +75,14 @@ def main(argv=None):
     ap.add_argument("-ex", dest="ex", action="append", default=[], help="a gdb/ydb command to run (repeatable)")
     ap.add_argument("--batch", action="store_true", help="run the -ex commands and exit")
     ap.add_argument("--nx", action="store_true", help="do not read gdb's init files (~/.gdbinit)")
+    ap.add_argument("--gpu", metavar="LAUNCH",
+                    help="debug a kernel on the GPU under cuda-gdb: KERNEL<<<GRID, BLOCK>>>(ARG, ...)")
     a = ap.parse_args(argv)
+    if a.gpu is not None:
+        if a.opt is not None or rest:
+            print("ydb: --gpu runs one kernel launch: -O and program arguments do not apply", file=sys.stderr)
+            return 1
+        return gpu(a)
 
     y = ymap.find_y(a.y)
     if not y:
@@ -114,6 +136,76 @@ def main(argv=None):
         cmd += ["--args", binary] + rest
     code = subprocess.call(cmd, env=env)
     return 1 if static and code == 0 and not a.ex else code
+
+
+def find_cuda_gdb():
+    """cuda-gdb: on PATH, or in the CUDA toolkit."""
+    found = shutil.which("cuda-gdb")
+    if found:
+        return found
+    for d in (os.environ.get("CUDA_HOME"), os.environ.get("CUDA_PATH"), "/opt/cuda", "/usr/local/cuda"):
+        if d and os.path.isfile(os.path.join(d, "bin", "cuda-gdb")):
+            return os.path.join(d, "bin", "cuda-gdb")
+    return None
+
+
+def gpu(a):
+    """`--gpu LAUNCH`: the kernel's -g PTX, run by ylaunch.py under cuda-gdb."""
+    import tempfile
+
+    import ylaunch
+
+    y = ymap.find_y(a.y)
+    if not y:
+        print("ydb: no Y compiler: build it (cargo build --release) or pass --y", file=sys.stderr)
+        return 1
+    cgdb = find_cuda_gdb()
+    if not cgdb:
+        print("ydb: --gpu needs cuda-gdb (the CUDA toolkit's debugger); none on PATH or in "
+              "$CUDA_HOME, /opt/cuda, /usr/local/cuda", file=sys.stderr)
+        return 1
+    program = os.path.abspath(a.program)
+    work = tempfile.mkdtemp(prefix="ydb_gpu_")
+    try:
+        ptx_path = os.path.join(work, os.path.splitext(os.path.basename(program))[0] + ".ptx")
+        run = subprocess.run([y, program, "--emit-ptx", "-g", "-o", ptx_path], capture_output=True, text=True)
+        if run.returncode != 0 or not os.path.isfile(ptx_path):
+            out = (run.stdout + run.stderr).splitlines()
+            errors = [l for l in out if "[!]" in l or "[Error]" in l or "rror" in l]
+            for l in errors or out[-10:]:
+                print(l, file=sys.stderr)
+            print("ydb: %s does not compile for the GPU with -g" % os.path.basename(program), file=sys.stderr)
+            return 1
+        with open(ptx_path) as f:
+            ptx = f.read()
+        # Checked here, before cuda-gdb starts, so a typo is one line of
+        # error rather than a debugging session that launches nothing.
+        try:
+            ylaunch.parse_launch(a.gpu, ptx)
+        except ylaunch.LaunchError as e:
+            print("ydb: %s" % e, file=sys.stderr)
+            return 1
+        env = dict(os.environ)
+        env["YDB_PROGRAM"] = program
+        env["YDB_Y"] = y
+        env["YDB_CWD"] = os.getcwd()
+        env["YDB_GPU_PTX"] = ptx_path
+        env.pop("YDB_HOST", None)
+        cmd = [cgdb, "-q"] + (["-nx"] if a.nx else []) + [
+            "-iex", "set debuginfod enabled off",
+            "-iex", "set prompt (ydb) ",
+            "-iex", "set breakpoint pending on",
+            "-x", os.path.join(REPO, "src", "debug_info_gdb.py"),
+            "-x", os.path.join(HERE, "ydb_gdb.py"),
+        ]
+        if a.batch:
+            cmd.append("-batch")
+        for e in a.ex:
+            cmd += ["-ex", e]
+        cmd += ["--args", sys.executable, os.path.join(HERE, "ylaunch.py"), ptx_path, a.gpu]
+        return subprocess.call(cmd, env=env)
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 if __name__ == "__main__":

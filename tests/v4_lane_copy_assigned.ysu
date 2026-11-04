@@ -1,0 +1,23 @@
+// A copy of a vector lane that is then ASSIGNED must not change the vector.
+//
+// `let v0: U32 = v.x;` bound `v0` to `v.x`'s own register: a `U32x4` lives in
+// `vec_vars`, which the let-aliasing guard (`copy_if_aliased`) did not look
+// at. `v0 = v0 + 1;` then wrote `v.x` as well, and `let w: U32 = v.x;` read 11
+// where the program says 10. Found 2026-11-04 by the `-g` debugger work,
+// where `v0` and `v.x` were described as one register.
+//
+// Every thread stores (v0, w, v.y, v.z): (11, 10, 20, 30) is right; a `w` of 11
+// is the defect. `tests/ptx_debug_info.rs` runs it.
+kernel v4_lane_copy_assigned(Out: GlobalMemory<U32>, N: I32) {
+    let smem: U64 = shared_alloc_u32(2048);
+    let t: I32 = thread_idx_x();
+    shared_store_v4(smem, t, 10, 20, 30, 40);
+    barrier_sync();
+    let v: U32x4 = shared_load_v4(smem, t);
+    let v0: U32 = v.x;
+    v0 = v0 + 1;
+    let w: U32 = v.x;
+    block_ptr2d_store_v4(Out, 0, t * 4, 4 * N, 1, 4 * N, v0, w, v.y, v.z);
+}
+
+fn main() {}
