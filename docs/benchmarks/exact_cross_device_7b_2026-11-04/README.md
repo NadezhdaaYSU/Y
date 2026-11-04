@@ -22,9 +22,10 @@ tokens, both arms. The two CPU arms and the GPU exact arm were recorded on
   integer-exp digests. These records predate the `build` field
   `exact_cross_device` now writes, so how each arm was built is stated here.
 
-Both 7B builds use `--low-memory` (`tools/exact_large_model.py`): bf16 loaded
-on the host, each Linear upcast and quantised on the target device. The stock
-GPU record fitted the 16 GB card only after Discord was closed; with it open
+Every arm is built by `tools/exact_large_model.py` (`--low-memory`): exact
+loads bf16 on the host and upcasts and quantises each Linear on the target
+device; stock on the GPU keeps its embedding (and, here, `lm_head`) on the
+host. The stock GPU record fitted the 16 GB card only after Discord was closed; with it open
 the batch-32 case ran out of memory.
 
 ## `throughput/`
