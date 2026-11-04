@@ -7,6 +7,8 @@
     ydb prog.ysu --batch -ex "break scale" -ex run -ex locals
     ydb prog.ysu --gpu 'saxpy<<<1, 32>>>(arange(32), ones(32), 20)'
                                       run a kernel on the GPU, under cuda-gdb
+    ydb prog.ysu --gpu LAUNCH --check memcheck
+                                      the same launch under compute-sanitizer
 
 ydb is not a second debugger. It builds the program with `Y -g` - next to its
 source, as `Y prog.ysu --debug` does - and starts gdb on it with:
@@ -45,6 +47,10 @@ shows one value across the warp. The code that runs is the debug build: the
 driver compiles `.target ..., debug` PTX without optimisation, so a kernel is
 slower than it is without -g, and `verify` says which evidence is about it.
 
+`--check TOOL` runs the launch under compute-sanitizer instead (memcheck,
+racecheck, initcheck or synccheck) and reports each problem once per Y line,
+with the buffer element a bad access touched - see `ycheck.py`.
+
 The compiler is this checkout's `target/release/Y` unless `--y` or `$Y_BIN`
 names another. It runs in the current directory, so it reads the same
 `.ysu_hw_profile` a plain compile there would.
@@ -77,7 +83,12 @@ def main(argv=None):
     ap.add_argument("--nx", action="store_true", help="do not read gdb's init files (~/.gdbinit)")
     ap.add_argument("--gpu", metavar="LAUNCH",
                     help="debug a kernel on the GPU under cuda-gdb: KERNEL<<<GRID, BLOCK>>>(ARG, ...)")
+    ap.add_argument("--check", metavar="TOOL", choices=["memcheck", "racecheck", "initcheck", "synccheck"],
+                    help="with --gpu: run the launch under compute-sanitizer's TOOL instead of cuda-gdb")
     a = ap.parse_args(argv)
+    if a.check and a.gpu is None:
+        print("ydb: --check runs a kernel launch: give it with --gpu LAUNCH", file=sys.stderr)
+        return 1
     if a.gpu is not None:
         if a.opt is not None or rest:
             print("ydb: --gpu runs one kernel launch: -O and program arguments do not apply", file=sys.stderr)
@@ -159,7 +170,15 @@ def gpu(a):
     if not y:
         print("ydb: no Y compiler: build it (cargo build --release) or pass --y", file=sys.stderr)
         return 1
-    cgdb = find_cuda_gdb()
+    if a.check:
+        import ycheck
+        cgdb = ycheck.find_sanitizer()
+        if not cgdb:
+            print("ydb: --check needs compute-sanitizer (the CUDA toolkit's); none on PATH or in "
+                  "$CUDA_HOME, /opt/cuda, /usr/local/cuda", file=sys.stderr)
+            return 1
+    else:
+        cgdb = find_cuda_gdb()
     if not cgdb:
         print("ydb: --gpu needs cuda-gdb (the CUDA toolkit's debugger); none on PATH or in "
               "$CUDA_HOME, /opt/cuda, /usr/local/cuda", file=sys.stderr)
@@ -185,6 +204,10 @@ def gpu(a):
         except ylaunch.LaunchError as e:
             print("ydb: %s" % e, file=sys.stderr)
             return 1
+        if a.check:
+            text, status = ycheck.run(cgdb, a.check, ptx_path, a.gpu, work)
+            print(text)
+            return status
         env = dict(os.environ)
         env["YDB_PROGRAM"] = program
         env["YDB_Y"] = y

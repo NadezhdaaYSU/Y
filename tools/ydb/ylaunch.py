@@ -25,6 +25,13 @@ every buffer is printed, so a run outside the debugger shows what it computed.
 The kernel runs in the device's primary context, through the CUDA driver API
 (libcuda), with nothing compiled: the driver JIT-compiles the PTX, and for a
 `.target ..., debug` module that is debug code cuda-gdb can stop in.
+
+    --plain          run the module without its debug information - the
+                     `--lineinfo` build, optimised, which `-g` adds nothing to
+                     but the description (ydwarf.strip_debug); what
+                     compute-sanitizer reports Y lines for
+    --buffers FILE   write each buffer's device address, length and element
+                     type to FILE, as JSON, before the kernel runs
 """
 import ast
 import ctypes
@@ -255,7 +262,7 @@ def _show(x):
     return ("%.9g" % x) if isinstance(x, float) else str(x)
 
 
-def run(ptx_path, spec, out=sys.stdout):
+def run(ptx_path, spec, out=sys.stdout, plain=False, buffers_to=None):
     with open(ptx_path) as f:
         ptx = f.read()
     kernel, grid, block, shared, args = parse_launch(spec, ptx)
@@ -269,7 +276,12 @@ def run(ptx_path, spec, out=sys.stdout):
             buffers.append((p, ptr, len(v), code))
         else:
             slots.append(_TYPES[p["type"]["name"]][2](v))
-    drv.launch(ptx, kernel, grid, block, shared, slots)
+    if buffers_to:
+        import json
+        with open(buffers_to, "w") as f:
+            json.dump([{"name": p["name"], "address": ptr.value, "count": n, "type": p["type"]["target"]["name"],
+                        "size": struct.calcsize(code)} for p, ptr, n, code in buffers], f)
+    drv.launch(ydwarf.strip_debug(ptx) if plain else ptx, kernel, grid, block, shared, slots)
     print("%s<<<(%d,%d,%d), (%d,%d,%d)>>> finished" % ((kernel,) + grid + block), file=out)
     for p, ptr, n, code in buffers:
         vals = struct.unpack("<%d%s" % (n, code), drv.read(ptr, n * struct.calcsize(code)))
@@ -279,12 +291,15 @@ def run(ptx_path, spec, out=sys.stdout):
 
 
 def main(argv=None):
-    argv = sys.argv[1:] if argv is None else argv
-    if len(argv) != 2:
-        print(__doc__.strip().split("\n\n")[1], file=sys.stderr)
-        return 2
+    import argparse
+    ap = argparse.ArgumentParser(prog="ylaunch.py", description="Launch one Y kernel.")
+    ap.add_argument("--plain", action="store_true", help="run the module without its debug information")
+    ap.add_argument("--buffers", metavar="FILE", help="write the buffers' addresses to FILE as JSON")
+    ap.add_argument("ptx", help="the `Y --emit-ptx -g` module")
+    ap.add_argument("launch", help="KERNEL<<<GRID, BLOCK>>>(ARG, ...)")
+    a = ap.parse_args(sys.argv[1:] if argv is None else argv)
     try:
-        run(argv[0], argv[1])
+        run(a.ptx, a.launch, plain=a.plain, buffers_to=a.buffers)
     except (LaunchError, OSError) as e:
         print("ylaunch: %s" % e, file=sys.stderr)
         return 1
