@@ -19,6 +19,14 @@ measured against a handicapped control is not a speedup.
 
 The stock arm is bf16 + SDPA, which is what production serves, and is therefore
 the *harder* comparison: it is also the arm that is allowed to be wrong.
+Compiled, it compiles with Inductor's defaults: `exact_model` switches two
+rounding flags on for the whole process, and stock is what ships without them.
+
+`--model X --low-memory` builds both arms layer by layer
+(`tools/exact_large_model.py`). At 7B the two arms do not fit one 16 GB card
+together, so run one per process (`Y_THR_ARMS=exact`, then `Y_THR_ARMS=stock`)
+and alternate them; that is interleaving at process granularity, coarser than
+round-robin within one.
 """
 import _nospace
 
@@ -33,6 +41,8 @@ import torch  # noqa: E402
 import transformers.models.qwen2.modeling_qwen2 as qwen2  # noqa: E402
 from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
 
+import torch._inductor.config as _inductor_config  # noqa: E402
+
 import batch_invariance_demo as D  # noqa: E402
 import exact_model  # noqa: E402
 
@@ -41,8 +51,11 @@ PROMPT = ("Explain, step by step and in detail, how a suspension bridge carries 
           "the load of the traffic crossing it down into the ground. ")
 
 
-def build(arm, device, compile_it, graphs=False):
-    if arm == "fixedfloat":
+def build(arm, device, compile_it, graphs=False, low_memory=False):
+    if low_memory:
+        import exact_large_model
+        m = exact_large_model.build(arm, MODEL, device)
+    elif arm == "fixedfloat":
         # The control the project's thesis rests on: float32 with the reduction
         # ORDER pinned instead of the arithmetic made exact. It is
         # batch-invariant too (0/16, `exact_ragged_batch.py`), so what it costs
@@ -53,8 +66,10 @@ def build(arm, device, compile_it, graphs=False):
             MODEL, dtype=torch.float32, attn_implementation="eager"
         ).to(device).eval()
         fixed_order_float.convert(m)
+        if compile_it:
+            exact_model.fail_closed_recompiles()
         return torch.compile(m) if compile_it else m
-    if arm == "exact":
+    elif arm == "exact":
         qwen2.eager_attention_forward = D.exact_attention
         m = AutoModelForCausalLM.from_pretrained(
             MODEL, dtype=torch.float32, attn_implementation="eager"
@@ -75,6 +90,7 @@ def build(arm, device, compile_it, graphs=False):
         # HF's 241.9), so the question is whether the same feature is available
         # to the deterministic path.
         if graphs:
+            exact_model.fail_closed_recompiles()
             compiled = torch.compile(m.forward, dynamic=False,
                                      mode="reduce-overhead")
 
@@ -89,7 +105,17 @@ def build(arm, device, compile_it, graphs=False):
 
             m.forward = fwd
         else:
-            m.forward = torch.compile(m.forward, dynamic=True)
+            exact_model.compile_forward(m)
+        if arm == "stock":
+            # Inductor reads its config when it compiles, which is inside the
+            # first call, so the defaults are patched back around every call.
+            inner = m.forward
+
+            def stock_defaults(*args, _f=inner, **kw):
+                with _inductor_config.patch(exact_model.INDUCTOR_DEFAULTS):
+                    return _f(*args, **kw)
+
+            m.forward = stock_defaults
     return m
 
 
@@ -163,6 +189,7 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
 
 
 def main():
+    global MODEL
     ap = argparse.ArgumentParser()
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--tokens", type=int, default=64)
@@ -173,12 +200,17 @@ def main():
     ap.add_argument("--static-cache", action="store_true",
                     help="static cache WITHOUT graphs: prices the padding alone")
     ap.add_argument("--device", default="cuda")
+    ap.add_argument("--model", default=MODEL)
+    ap.add_argument("--low-memory", action="store_true",
+                    help="build layer by layer (tools/exact_large_model.py); "
+                         "stock and exact only")
     a = ap.parse_args()
+    MODEL = a.model
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     tok = AutoTokenizer.from_pretrained(MODEL)
 
-    print(f"\nQwen2.5-0.5B  batch {a.batch}  {a.tokens} new tokens  "
+    print(f"\n{MODEL.split('/')[-1]}  batch {a.batch}  {a.tokens} new tokens  "
           f"compile={'on (BOTH arms)' if a.compile else 'off'}"
           f"{'  cuda-graphs=on (BOTH arms)' if a.graphs else ''}"
           f"{'  static-cache=on (BOTH arms)' if a.static_cache else ''}  "
@@ -190,9 +222,13 @@ def main():
     # they capture it at call time, which is why the hook is left pointing at
     # the exact path afterwards and restored at the end.
     arms = os.environ.get("Y_THR_ARMS", "stock,exact").split(",")
+    if a.low_memory and set(arms) - {"stock", "exact"}:
+        print(f"  *** --low-memory builds only stock and exact, not "
+              f"{sorted(set(arms) - {'stock', 'exact'})}")
+        return 2
     models = {}
     for name in arms:
-        models[name] = build(name, a.device, a.compile, a.graphs)
+        models[name] = build(name, a.device, a.compile, a.graphs, a.low_memory)
     if not gate(models, tok, a.device):
         qwen2.eager_attention_forward = D._orig
         return 1
