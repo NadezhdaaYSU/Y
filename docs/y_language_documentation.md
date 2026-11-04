@@ -3517,7 +3517,7 @@ let frag: Fragment<Shape, Role, Precision> = ...;
 
 | Parameter | Options | Notes |
 | :--- | :--- | :--- |
-| `Shape` | `MMA_m16n8k16`, `MMA_m16n8k8`, `MMA_m16n16k16` | Tile dimensions: M×N output, K reduction depth |
+| `Shape` | `MMA_m16n8k16` | Tile dimensions: M×N output, K reduction depth. The only shape implemented: `MMA_m16n8k8` and `MMA_m16n16k16` are refused by the type checker (as "Invalid assignment, types do not match", checked 2026-11-04) |
 | `Role` | `A`, `B`, `C`, `D` | Matrix role in the MMA operation |
 | `Precision` | `F16`, `BF16`, `TF32`, `F32` | Numeric type stored in the fragment |
 
@@ -3527,11 +3527,11 @@ let frag: Fragment<Shape, Role, Precision> = ...;
 | :--- | :---: | :---: | :---: | :--- |
 | `MMA_m16n8k16` | `F16` | `F16` | `F32` | `mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32` |
 | `MMA_m16n8k16` | `F16` | `F16` | `F16` | `mma.sync.aligned.m16n8k16.row.col.f16.f16.f16.f16` |
-| `MMA_m16n8k8` | `TF32` | `TF32` | `F32` | `mma.sync.aligned.m16n8k8.row.col.f32.tf32.tf32.f32` |
+| `MMA_m16n8k8` | `TF32` | `TF32` | `F32` | not implemented (would be `mma.sync.aligned.m16n8k8.row.col.f32.tf32.tf32.f32`) |
 | `MMA_m16n8k16` | `BF16` | `BF16` | `F32` | `mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32` |
-| `MMA_m16n16k16` | `F16` | `F16` | `F32` | `mma.sync.aligned.m16n16k16.row.col.f32.f16.f16.f32` (Ampere+) |
+| `MMA_m16n16k16` | `F16` | `F16` | `F32` | not implemented, and not an `mma.sync` shape on any architecture (`ptxas`: "Illegal matrix shape '.m16n16k16' for instruction 'mma'"); 16x16x16 is a `wmma` shape |
 
-> **Hardware compatibility:** `MMA_m16n8k16` with F16 is supported on all Volta+ GPUs (SM 7.0+). `BF16` requires Ampere+ (SM 8.0+). `TF32` requires Ampere+ (SM 8.0+). `MMA_m16n16k16` requires Ampere+ (SM 8.0+).
+> **Hardware compatibility:** `MMA_m16n8k16` needs Ampere (SM 8.0) or later with every input type, F16 included (`ptxas`: "Feature '.m16n8k16' requires .target sm_80 or higher"; Volta has m8n8k4, Turing m16n8k8). `BF16` and `TF32` need SM 8.0+. Compiled for an older card, a kernel using them is refused by name (`check_target_features`; see the README's portability section).
 
 ### 15.3 Register Usage Per Fragment
 
@@ -5287,6 +5287,7 @@ This section documents the technical implementation and empirical benchmarks for
     - `sm_80` (Ampere A100) $\rightarrow$ `.version 7.0`
   - Stored resolved `sm_target` in `PtxEmitter` to dynamically emit optimal PTX ISA headers for GPU PTX Witness Generators.
 * **Impact**: Ensures 100% PTX ISA compliance across NVIDIA GPU microarchitectures from Volta (`sm_70`) to Blackwell (`sm_100`).
+  **Superseded 2026-11-04:** this covered the `.version` line only. Below sm_80 the instructions were not checked: every f16 and int8 GEMM in `tests/` compiled for sm_61, sm_70 and sm_75 and was rejected by `ptxas` at all three. `check_target_features` now refuses such a module by name.
 
 ### 32.5 Optimization Pass 5: Portable Solver Path Resolution & SMT Diagnostics (`src/type_checker.rs`)
 
