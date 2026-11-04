@@ -671,7 +671,8 @@ Qwen2.5-7B-Instruct (2026-11-03/04; 28 layers, head dimension 128, so the first
 real model at that width), the same 5 cases x 160 tokens, CPU eager (the int8
 `_int_mm` path) against GPU: **exact changed 0/5 cases, stock bf16 5/5** (first
 differing at token 47 on the batch-1 case and 104 on the other four), and
-`--compare` accepts the pair. The exact records carry token digest
+`--compare` accepts the pair (records in
+`docs/benchmarks/exact_cross_device_7b_2026-11-04/`). The exact records carry token digest
 `7700e3e28f1d21d1` on both devices, weights fingerprint `fa21999abf0abea9`,
 workload hash `da1abea028b779a8` and the same integer-exp domain digest; every
 arm passes the sanity gate and reproduces itself on a second run.
