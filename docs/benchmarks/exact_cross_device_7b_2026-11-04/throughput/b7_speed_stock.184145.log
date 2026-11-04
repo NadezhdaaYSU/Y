@@ -1,0 +1,6 @@
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Qwen2.5-7B-Instruct  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          2.028        31.6       1009.7     0.2%

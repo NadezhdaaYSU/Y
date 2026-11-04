@@ -146,9 +146,18 @@ def one_run(model, inp, att, kw):
     torch.cuda.synchronize()
     t = time.perf_counter()
     with torch.no_grad():
-        model.generate(input_ids=inp, attention_mask=att, **kw)
+        out = model.generate(input_ids=inp, attention_mask=att, **kw)
     torch.cuda.synchronize()
-    return time.perf_counter() - t
+    dt = time.perf_counter() - t
+    # tok/s divides by max_new_tokens, so an arm that hit EOS early would be
+    # credited with work it did not do. Rows that finish early are still
+    # computed (padded) until every row has, so the shape is the work done.
+    new = out.shape[1] - inp.shape[1]
+    if new != kw["max_new_tokens"]:
+        raise RuntimeError(
+            f"generate stopped after {new} of {kw['max_new_tokens']} tokens; "
+            f"this run's time is not comparable with the others")
+    return dt
 
 
 def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,

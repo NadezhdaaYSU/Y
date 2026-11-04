@@ -694,15 +694,35 @@ Qwen/Qwen2.5-7B-Instruct --low-memory`, `--compile` for the GPU record;
 `tools/exact_large_model.py` refuses a checkpoint not stored in bf16, for which
 this would not be the same model).
 
-Throughput, exact compiled only (two interleaved repeats, best of 5 each):
-47.0 and 47.4 tok/s/seq at batch 32 x 64 tokens, 58.4 and 57.0 at batch 8.
-There is no stock figure to divide by, for the same memory reason, and a game
-was running on the same GPU by the end of the batch-8 run, so these are not
-verified idle-GPU numbers and not a ratio.
+**Throughput at 7B (2026-11-04):** both arms compiled, batch 32 x 64 tokens,
+best of 5, every run checked to have generated all 64 tokens. The two arms do
+not fit the card together, so each ran in its own process, in ABBA order, with
+nothing open but the desktop and the editor (at most 12% busy at idle clocks
+between processes). Raw logs: `docs/benchmarks/exact_cross_device_7b_2026-11-04/throughput/`.
 
-What this does not cover: a second GPU architecture, the 7B speed ratio, and
-the cos/sin table, which is still float64 rounded once and so
-near certain (around 2^-29 per value), not exact.
+| arm | tok/s/seq | vs stock |
+|---|---:|---:|
+| stock bf16 + SDPA, Inductor defaults, embedding on the host | 31.5, 31.6, 31.5 | - |
+| exact | 47.4, 47.5, 47.4 | **1.50x faster** |
+
+**That is int8, not exactness.** At batch 32 a 7B decode step is bound by
+streaming the weights: stock reads 14.1 GB of bf16 a step (31.7 ms, 445 GB/s,
+66% of the card's 672 GB/s), exact about 7.1 GB of int8 (21.1 ms). At 0.5B,
+where the weights are 1 GB and overheads dominate, the same exact path is
+1.11x *slower*. What prices determinism at 7B is a non-deterministic int8
+engine on the same card, which has not been measured; nor has int8's accuracy
+cost at 7B (Finding 02 measures it at 0.5B). So this row says exactness at 7B
+is not slower than what ships, not that it is faster than an equal-precision
+alternative.
+
+Stock's embedding is on the host because with it on the device stock ran out
+of memory in the timed batch. That costs stock 1.9% at 0.5B, measured both ways
+interleaved (`hostemb_cost.py` beside the logs: 78 us a step), which is 0.25%
+of a 7B step, inside the third digit of the ratio.
+
+What this does not cover: a second GPU architecture, a non-deterministic int8
+baseline and int8 accuracy at 7B, and the cos/sin table, which is still float64
+rounded once and so near certain (around 2^-29 per value), not exact.
 
 ## Finding 13 — `0/16` is also what a broken arm scores
 
