@@ -1706,6 +1706,20 @@ and an `E4M3` buffer's conversions (`cvt.rn.satfinite.e4m3x2.f32`) to 8.1.
 sm_90 keeps 8.0 although `ptxas` 13.3 accepts 7.8, because sm_90 arrived in CUDA
 12.0 and this assembler is merely being lenient — guess down, but not below spec.
 
+**Below the floor, the instructions were never checked (2026-11-04).** A profile
+naming sm_61 (GTX 10xx), sm_70 (V100) or sm_75 (RTX 20xx) was accepted and given
+sm_80 code: all 25 f16 and int8 GEMMs in `tests/` compiled to `cp.async`,
+`ldmatrix` and m16n8k16 `mma.sync`, exit 0, and `ptxas` rejected every one at
+every one of the three. Nobody saw it because CUDA 13's `ptxas` no longer knows
+sm_61 or sm_70 (Triton bundles a CUDA 12 one that does). Every finished module is
+now checked against its own `.target` (`check_target_features`, at all three
+places that write PTX): an instruction the target lacks is refused by name, one
+that needs a newer ISA raises `.version`. A table of instruction families holds
+each floor, and `tests/ptx_target_features.rs` holds each row to `ptxas` both
+ways. The 36 programs those cards can run still compile, and sm_80 and newer
+output is byte-identical. Pascal declares `.version 6.0` (measured: `shfl.sync`)
+where it fell through to the 7.8 default.
+
 **Fixing the artifacts is not fixing the compiler, and this took three passes to
 learn.** The first corrected the committed `.ptx` files; the emitter still
 over-stated. The second fixed the emitter; `--emit-coprocessor`, which builds its

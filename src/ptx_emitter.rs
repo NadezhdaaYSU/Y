@@ -604,8 +604,185 @@ pub fn ptx_version_for_sm(sm: &str) -> &'static str {
             "sm_75" => ".version 6.3",
             "sm_72" => ".version 6.2",
             "sm_70" => ".version 6.3",
+            // Pascal (GTX 10xx) fell through to the 7.8 default below, which
+            // asks a driver from late 2022 of a card most of whose machines
+            // run older ones. Measured as the others were: all 37 modules this
+            // compiler emits that Pascal can run (36 of `tests/*.ysu` and the
+            // @ZeroDrift second-GPU kernels) assemble at sm_60, sm_61 and sm_62
+            // from 6.0, which `shfl.sync` needs; at 5.0 six do not. An
+            // instruction needing more raises it (`check_target_features`).
+            "sm_60" | "sm_61" | "sm_62" => ".version 6.0",
             _ => ".version 7.8", // Safe default for CUDA 12+ targets
         }
+    }
+}
+
+/// An instruction family with a hardware floor: `ptxas` rejects it below
+/// `min_sm` ("Feature 'cp.async' requires .target sm_80 or higher"), and on an
+/// arch that has it, below `min_ptx`.
+struct ArchFeature {
+    what: &'static str,
+    min_sm: u32,
+    min_ptx: &'static str,
+    matches: fn(&str) -> bool,
+}
+
+fn is_mma(op: &str) -> bool {
+    op.starts_with("mma.")
+}
+fn names_fp8(op: &str) -> bool {
+    op.contains(".e4m3") || op.contains(".e5m2")
+}
+fn names_bf16_or_tf32(op: &str) -> bool {
+    op.contains(".bf16") || op.contains(".tf32")
+}
+fn names_sub_byte_int(op: &str) -> bool {
+    [".s8", ".u8", ".s4", ".u4", ".b1"].iter().any(|t| op.contains(t))
+}
+
+/// What `check_target_features` knows, matched against each instruction's
+/// opcode. Every row is checked against `ptxas` both ways by
+/// `tests/ptx_target_features.rs`: its instruction assembles at
+/// (`min_sm`, `min_ptx`), and is rejected one arch below and one ISA version
+/// below. Two rows are deliberately conservative (a wider family than the
+/// instruction the floor was measured on) and only need the first; they can
+/// refuse a module a card would run, never pass one it would not.
+///
+/// The families are the ones this compiler emits for some target (every
+/// architecture `ptxas` names when the 127 modules of `tests/` are assembled
+/// at sm_75, sm_70 and sm_61) and a few it has emitted or nearly does. An
+/// instruction in no row is not checked.
+const ARCH_FEATURES: &[ArchFeature] = &[
+    ArchFeature { what: "`cp.async.bulk` (TMA)", min_sm: 90, min_ptx: "8.0", matches: |op| op.starts_with("cp.async.bulk") },
+    ArchFeature { what: "`cp.async`", min_sm: 80, min_ptx: "7.0", matches: |op| op.starts_with("cp.async") && !op.starts_with("cp.async.bulk") },
+    ArchFeature { what: "`ldmatrix`", min_sm: 75, min_ptx: "6.5", matches: |op| op.starts_with("ldmatrix") },
+    ArchFeature { what: "FP8 `mma.sync`", min_sm: 89, min_ptx: "8.4", matches: |op| is_mma(op) && names_fp8(op) },
+    ArchFeature { what: "`mma.sync` m16n8k8 on bf16 or tf32", min_sm: 80, min_ptx: "7.0", matches: |op| is_mma(op) && op.contains(".m16n8k8.") && names_bf16_or_tf32(op) },
+    ArchFeature { what: "`mma.sync` m16n8k8", min_sm: 75, min_ptx: "6.5", matches: |op| is_mma(op) && op.contains(".m16n8k8.") && !names_bf16_or_tf32(op) },
+    ArchFeature { what: "`mma.sync` m8n8k4", min_sm: 70, min_ptx: "6.4", matches: |op| is_mma(op) && op.contains(".m8n8k4.") },
+    // m16n8k16 and m16n8k32, measured; any other shape conservatively with them.
+    ArchFeature { what: "`mma.sync` m16n8k16 / m16n8k32", min_sm: 80, min_ptx: "7.0", matches: |op| is_mma(op) && !names_fp8(op) && !op.contains(".m16n8k8.") && !op.contains(".m8n8k4.") },
+    ArchFeature { what: "`wmma` on bf16 or tf32", min_sm: 80, min_ptx: "7.0", matches: |op| op.starts_with("wmma.") && names_bf16_or_tf32(op) },
+    // Conservative: int8 `wmma` is sm_72.
+    ArchFeature { what: "integer `wmma`", min_sm: 75, min_ptx: "6.3", matches: |op| op.starts_with("wmma.") && names_sub_byte_int(op) && !names_bf16_or_tf32(op) },
+    ArchFeature { what: "`wmma`", min_sm: 70, min_ptx: "6.3", matches: |op| op.starts_with("wmma.") && !names_bf16_or_tf32(op) && !names_sub_byte_int(op) },
+    ArchFeature { what: "packed `cvt` to f16x2/bf16x2", min_sm: 80, min_ptx: "7.0", matches: |op| op.starts_with("cvt.") && (op.contains(".f16x2.f32") || op.contains(".bf16x2.f32")) },
+    ArchFeature { what: "FP8 `cvt`", min_sm: 89, min_ptx: "8.1", matches: |op| op.starts_with("cvt.") && (op.contains(".e4m3x2") || op.contains(".e5m2x2")) },
+    ArchFeature { what: "`createpolicy`", min_sm: 80, min_ptx: "7.4", matches: |op| op.starts_with("createpolicy") },
+    ArchFeature { what: "an `.L2::cache_hint` access", min_sm: 80, min_ptx: "7.4", matches: |op| op.contains(".L2::cache_hint") },
+    ArchFeature { what: "`redux.sync`", min_sm: 80, min_ptx: "7.0", matches: |op| op.starts_with("redux.sync") },
+    ArchFeature { what: "`mbarrier`", min_sm: 80, min_ptx: "7.0", matches: |op| op.starts_with("mbarrier") },
+    ArchFeature { what: "`tanh.approx`", min_sm: 75, min_ptx: "7.0", matches: |op| op.starts_with("tanh.approx") },
+    ArchFeature { what: "`nanosleep`", min_sm: 70, min_ptx: "6.2", matches: |op| op.starts_with("nanosleep") },
+    ArchFeature {
+        what: "a scoped memory-model access (.acquire/.release/.acq_rel)",
+        min_sm: 70,
+        min_ptx: "6.0",
+        matches: |op| {
+            ["ld.", "st.", "atom.", "red.", "fence."].iter().any(|p| op.starts_with(p))
+                && [".acquire", ".release", ".acq_rel"].iter().any(|q| op.contains(q))
+        },
+    },
+    ArchFeature { what: "`shfl.sync`", min_sm: 30, min_ptx: "6.0", matches: |op| op.starts_with("shfl.sync") },
+    ArchFeature { what: "`vote.sync`", min_sm: 30, min_ptx: "6.0", matches: |op| op.starts_with("vote.sync") },
+];
+
+/// The rows of `ARCH_FEATURES` as `(what, min_sm, min_ptx)`, for the test
+/// that holds each one to `ptxas`.
+pub fn arch_features() -> impl Iterator<Item = (&'static str, u32, &'static str)> {
+    ARCH_FEATURES.iter().map(|f| (f.what, f.min_sm, f.min_ptx))
+}
+
+/// The architecture a module's own `.target` line names, as a number.
+fn module_target_level(ptx: &str) -> Option<u32> {
+    let arch = ptx.lines().find_map(|l| l.trim().strip_prefix(".target "))?;
+    let arch = arch.split(|c: char| c == ',' || c.is_whitespace()).next()?;
+    arch.strip_prefix("sm_")?
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse()
+        .ok()
+}
+
+/// What a finished module needs that its `.target` does not give it.
+#[derive(Debug, Default)]
+pub struct TargetFeatureCheck {
+    /// One per feature the target lacks, naming a kernel that uses it.
+    pub errors: Vec<String>,
+    /// The highest `min_ptx` among the features the target has.
+    pub required_ptx: Option<&'static str>,
+}
+
+/// Check a finished module against its own `.target`.
+///
+/// **Every target below sm_80 was accepted and then given sm_80 code.** The
+/// emitter treats sm_80 as the floor of its instruction mix, and
+/// `ptx_target_for` takes any architecture a profile names, so a profile for a
+/// GTX 1050 Ti (sm_61), a V100 (sm_70) or an RTX 2080 (sm_75) compiled every
+/// f16 and int8 GEMM in `tests/` - 25 programs - to `cp.async`, `ldmatrix`
+/// and m16n8k16 `mma.sync`, under "Compilation Successful!" and exit 0, and
+/// `ptxas` rejected all 25 at all three. The 36 programs that need nothing
+/// newer assemble there and are kept: refusing every old target would also
+/// refuse those, and the @ZeroDrift second-GPU kernels with them.
+///
+/// It reads the module text, not the emitter's state, for the same reason
+/// `finalize_ptx_version` rewrites the text: a check at the sites that emit
+/// `cp.async` (177 of them) is consulted only where someone remembered it.
+/// Comments are skipped - a GEMM's header comment names its `mma.sync`.
+pub fn check_target_features(ptx: &str) -> TargetFeatureCheck {
+    let mut out = TargetFeatureCheck::default();
+    let Some(level) = module_target_level(ptx) else { return out };
+    let mut hit: Vec<(usize, String, String)> = Vec::new(); // (row, opcode, kernel)
+    let mut kernel = String::new();
+    for line in ptx.lines() {
+        let code = line.split("//").next().unwrap_or("").trim();
+        if let Some(rest) = code.split(".entry ").nth(1) {
+            kernel = rest.split(|c: char| c == '(' || c.is_whitespace()).next().unwrap_or("").to_string();
+            continue;
+        }
+        let mut tokens = code
+            .trim_start_matches(['{', '}'])
+            .split(|c: char| c.is_whitespace() || c == ';')
+            .filter(|t| !t.is_empty() && !t.ends_with(':'));
+        let mut op = tokens.next().unwrap_or("");
+        if op.starts_with('@') {
+            op = tokens.next().unwrap_or("");
+        }
+        if op.is_empty() || op.starts_with('.') || !op.starts_with(|c: char| c.is_ascii_lowercase()) {
+            continue;
+        }
+        for (i, f) in ARCH_FEATURES.iter().enumerate() {
+            if (f.matches)(op) && !hit.iter().any(|(j, _, _)| *j == i) {
+                hit.push((i, op.to_string(), kernel.clone()));
+            }
+        }
+    }
+    for (i, op, kernel) in hit {
+        let f = &ARCH_FEATURES[i];
+        if level < f.min_sm {
+            out.errors.push(format!(
+                "[PTX] kernel `{kernel}` uses {} (`{op}`), which needs sm_{} or later; this \
+                 module targets sm_{level}. The backend has no lowering of it for older \
+                 cards, so `ptxas` would reject the module and the driver refuse it. \
+                 Compile for sm_{} or newer (SM_VERSION in .ysu_hw_profile), or leave \
+                 this kernel out of the build for this card.",
+                f.what, f.min_sm, f.min_sm
+            ));
+        } else if !out.required_ptx.is_some_and(|cur| ptx_version_ge(cur, f.min_ptx)) {
+            out.required_ptx = Some(f.min_ptx);
+        }
+    }
+    out
+}
+
+/// `ptx` with its `.version` raised to `required` if it declares less.
+pub fn raise_ptx_version(ptx: &str, required: &str) -> String {
+    match ptx.lines().find(|l| l.starts_with(".version")) {
+        Some(line) if !ptx_version_ge(line, required) => {
+            ptx.replacen(line, &format!(".version {}", required), 1)
+        }
+        _ => ptx.to_string(),
     }
 }
 
@@ -5219,6 +5396,11 @@ or `shared_alloc_u32` for a shared-memory array.",
                  backend (the default) or --emit-cpu."
                     .to_string(),
             );
+        }
+        let check = check_target_features(&self.ptx_buffer);
+        self.emit_errors.extend(check.errors);
+        if let Some(v) = check.required_ptx {
+            self.require_ptx_version(v);
         }
         self.finalize_ptx_version();
         // Last, over the whole module, so every emitter site and every entry

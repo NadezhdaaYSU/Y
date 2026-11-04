@@ -1538,6 +1538,17 @@ fn main() {
                 );
                 exit(1);
             }
+            let check = ptx_emitter::check_target_features(&ptx_code);
+            if !check.errors.is_empty() {
+                for e in &check.errors {
+                    log_error!("{}", e);
+                }
+                exit(1);
+            }
+            let ptx_code = match check.required_ptx {
+                Some(v) => ptx_emitter::raise_ptx_version(&ptx_code, v),
+                None => ptx_code,
+            };
 
             let write_path = if let Some(o) = &explicit_output {
                 o.clone()
@@ -1767,6 +1778,19 @@ fn main() {
         full_ptx.push_str("    ld.param.u64 nns_query_ptr, [param_nns_query_ptr];\n\n");
         full_ptx.push_str(&body);
         full_ptx.push_str("\n    ret;\n}\n");
+
+        // This module is built here, not by `emit_program`, so it is checked
+        // here: its attention body is `ldmatrix` and m16n8k16 `mma.sync`.
+        let check = ptx_emitter::check_target_features(&full_ptx);
+        if !check.errors.is_empty() {
+            for e in &check.errors {
+                log_error!("{}", e);
+            }
+            exit(1);
+        }
+        if let Some(v) = check.required_ptx {
+            full_ptx = ptx_emitter::raise_ptx_version(&full_ptx, v);
+        }
 
         match fs::write(&write_path, &full_ptx) {
             Ok(_) => {
