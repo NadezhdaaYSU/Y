@@ -26,3 +26,12 @@ Both 7B builds use `--low-memory` (`tools/exact_large_model.py`): bf16 loaded
 on the host, each Linear upcast and quantised on the target device. The stock
 GPU record fitted the 16 GB card only after Discord was closed; with it open
 the batch-32 case ran out of memory.
+
+## `throughput/`
+
+The 7B speed rows in the same section. `run7b_speed.sh` ran one arm per
+process in ABBA order (`b7_speed_{stock,exact,exact,stock}.*.log`, at
+`a3aa581`); the two `b7_speed_len_*` runs repeat one of each with
+`exact_throughput` refusing any run that generated fewer than 64 tokens.
+`hostemb_cost.py` / `.out` price stock's host-side embedding at 0.5B, where
+both placements fit.

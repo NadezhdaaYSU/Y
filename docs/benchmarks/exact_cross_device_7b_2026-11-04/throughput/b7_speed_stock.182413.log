@@ -1,0 +1,7 @@
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Qwen2.5-7B-Instruct  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+W1104 18:24:50.781000 17938 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/1_1] Not enough SMs to use max_autotune_gemm mode
+  sanity stock        canary ok, 49 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          2.030        31.5       1008.7     0.1%

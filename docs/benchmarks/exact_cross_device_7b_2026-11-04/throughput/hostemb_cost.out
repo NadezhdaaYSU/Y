@@ -1,0 +1,7 @@
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity stock_hostemb canary ok, 48 distinct tokens in reference
+stock              0.256     249.8 tok/s/seq  spread 0.2%
+stock_hostemb      0.261     245.3 tok/s/seq  spread 0.2%
+host embedding costs 1.019x
+exit 0
+
