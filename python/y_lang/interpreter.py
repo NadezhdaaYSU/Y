@@ -239,6 +239,14 @@ class _Module:
         text = _strip_comments(text)
         # These three take no `;`, so they would fuse with the next item.
         text = re.sub(r"^[ \t]*\.(version|target|address_size)\b[^\n]*", "", text, flags=re.M)
+        # Nor do a line table's `.loc` and `.file`, nor the `-g` DWARF
+        # sections. A `.loc` fused with the instruction after it, the pair
+        # read as the directive `.loc`, and the instruction was DROPPED: a
+        # `--lineinfo` kernel ran without it, silently, or failed on a label
+        # the `.loc` had swallowed. Nothing gave this interpreter a line
+        # table until `Y_PTX_LINEINFO` / `Y_PTX_DEBUG`.
+        text = re.sub(r"^[ \t]*\.(loc|file)\b[^\n]*", "", text, flags=re.M)
+        text = re.sub(r"^[ \t]*\.section\b[^{]*\{[^}]*\}", "", text, flags=re.M)
         for start, item in self._items(text):
             line = text.count("\n", 0, start) + 1
             s = item.strip()
@@ -1766,7 +1774,9 @@ def debug_interpret(kernel, grid: Tuple[int, int, int], block: Tuple[int, int, i
     if isinstance(kernel, str) and re.search(r"\bkernel\s+[\w$]+\s*\(", kernel):
         from .compiler import compile_to_ptx
         name = kernel_name or re.search(r"\bkernel\s+([\w$]+)\s*\(", kernel).group(1)
-        return CPUInterpreter(name, ptx=compile_to_ptx(kernel, target_sm=target_sm)).run(grid, block, args)
+        # Plain PTX whatever Y_PTX_DEBUG says: the interpreter runs
+        # instructions, and the debug information is for cuda-gdb.
+        return CPUInterpreter(name, ptx=compile_to_ptx(kernel, target_sm=target_sm, debug=False)).run(grid, block, args)
     raise CPUInterpreterError(
         f"debug_interpret needs a kernel to run - a TorchKernel or Y source - not just the name {kernel!r}. "
         "It used to return SUCCESS for a name alone without running anything.")

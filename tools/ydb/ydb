@@ -9,6 +9,7 @@
                                       run a kernel on the GPU, under cuda-gdb
     ydb prog.ysu --gpu LAUNCH --check memcheck
                                       the same launch under compute-sanitizer
+    ydb --python train.py -- args     a Python program's Y kernels under cuda-gdb
 
 ydb is not a second debugger. It builds the program with `Y -g` - next to its
 source, as `Y prog.ysu --debug` does - and starts gdb on it with:
@@ -47,6 +48,11 @@ shows one value across the warp. The code that runs is the debug build: the
 driver compiles `.target ..., debug` PTX without optimisation, so a kernel is
 slower than it is without -g, and `verify` says which evidence is about it.
 
+`--python SCRIPT` debugs the Y kernels a Python program launches through
+y_lang: it runs the script under cuda-gdb with Y_PTX_DEBUG=1, so y_lang
+compiles them with -g and writes each source to `<cache>/debug/<hash>/
+<kernel>.ysu`; `break saxpy:7` is line 7 of the kernel `saxpy`.
+
 `--check TOOL` runs the launch under compute-sanitizer instead (memcheck,
 racecheck, initcheck or synccheck) and reports each problem once per Y line,
 with the buffer element a bad access touched - see `ycheck.py`.
@@ -75,7 +81,7 @@ def main(argv=None):
         i = argv.index("--")
         argv, rest = argv[:i], argv[i + 1:]
     ap = argparse.ArgumentParser(prog="ydb", description="Debug a Y program as Y, over gdb.")
-    ap.add_argument("program", help="the .ysu source")
+    ap.add_argument("program", nargs="?", help="the .ysu source")
     ap.add_argument("-O", dest="opt", choices=["0", "1", "2", "3"], help="optimisation level (default -O0)")
     ap.add_argument("--y", help="the Y compiler to use")
     ap.add_argument("-ex", dest="ex", action="append", default=[], help="a gdb/ydb command to run (repeatable)")
@@ -85,7 +91,16 @@ def main(argv=None):
                     help="debug a kernel on the GPU under cuda-gdb: KERNEL<<<GRID, BLOCK>>>(ARG, ...)")
     ap.add_argument("--check", metavar="TOOL", choices=["memcheck", "racecheck", "initcheck", "synccheck"],
                     help="with --gpu: run the launch under compute-sanitizer's TOOL instead of cuda-gdb")
+    ap.add_argument("--python", metavar="SCRIPT",
+                    help="debug the Y kernels a Python program launches (through y_lang) under cuda-gdb")
     a = ap.parse_args(argv)
+    if a.python is not None:
+        if a.program or a.gpu or a.check or a.opt is not None:
+            print("ydb: --python runs a Python program: give no .ysu, --gpu, --check or -O with it", file=sys.stderr)
+            return 1
+        return python_program(a, rest)
+    if a.program is None:
+        ap.error("the .ysu source is required")
     if a.check and a.gpu is None:
         print("ydb: --check runs a kernel launch: give it with --gpu LAUNCH", file=sys.stderr)
         return 1
@@ -158,6 +173,38 @@ def find_cuda_gdb():
         if d and os.path.isfile(os.path.join(d, "bin", "cuda-gdb")):
             return os.path.join(d, "bin", "cuda-gdb")
     return None
+
+
+def python_program(a, rest):
+    """`--python SCRIPT`: the script under cuda-gdb, its y_lang kernels compiled
+    with -g (Y_PTX_DEBUG=1)."""
+    cgdb = find_cuda_gdb()
+    if not cgdb:
+        print("ydb: --python needs cuda-gdb (the CUDA toolkit's debugger); none on PATH or in "
+              "$CUDA_HOME, /opt/cuda, /usr/local/cuda", file=sys.stderr)
+        return 1
+    env = dict(os.environ)
+    env["Y_PTX_DEBUG"] = "1"
+    env["YDB_PYTHON"] = "1"
+    env["YDB_CWD"] = os.getcwd()
+    y = ymap.find_y(a.y)
+    if y:
+        env["YDB_Y"] = y
+    for k in ("YDB_PROGRAM", "YDB_HOST", "YDB_GPU_PTX"):
+        env.pop(k, None)
+    cmd = [cgdb, "-q"] + (["-nx"] if a.nx else []) + [
+        "-iex", "set debuginfod enabled off",
+        "-iex", "set prompt (ydb) ",
+        "-iex", "set breakpoint pending on",
+        "-x", os.path.join(REPO, "src", "debug_info_gdb.py"),
+        "-x", os.path.join(HERE, "ydb_gdb.py"),
+    ]
+    if a.batch:
+        cmd.append("-batch")
+    for e in a.ex:
+        cmd += ["-ex", e]
+    cmd += ["--args", sys.executable, os.path.abspath(a.python)] + rest
+    return subprocess.call(cmd, env=env)
 
 
 def gpu(a):
