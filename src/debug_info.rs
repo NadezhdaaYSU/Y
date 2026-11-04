@@ -166,7 +166,25 @@ struct EnumInfo {
     file: usize,
     line: usize,
     variants: Vec<String>,
+    /// Each variant's payload field types as Y spells them, `None` for a unit
+    /// variant: what the gdb extension decodes the payload words with.
+    field_types: Vec<Option<Vec<String>>>,
     has_data: bool,
+}
+
+/// A payload field's type as the gdb extension reads it: the scalar's Y name,
+/// an enum's name, or `&` and the referent.
+fn payload_type_name(t: &Type) -> String {
+    match t {
+        Type::Primitive(n, _) | Type::Ident(n, _) => n.clone(),
+        Type::Reference { inner, .. } => format!("&{}", payload_type_name(inner)),
+        _ => "?".to_string(),
+    }
+}
+
+/// `s` as a Python string literal.
+fn py_string(s: &str) -> String {
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
 /// Debug information for one module, built during emission and attached by
@@ -269,6 +287,28 @@ impl DebugInfo {
             .iter()
             .map(|(n, e)| format!("\"{}\": {}", n, if e.has_data { "True" } else { "False" }))
             .collect();
+        // Every enum's variants in tag order, each with its payload field types:
+        // a data-carrying enum's payload is `[8 x i64]` with field i in word i,
+        // and only the variant knows what type each word holds.
+        let variants: Vec<String> = self
+            .enums
+            .iter()
+            .map(|(n, e)| {
+                let vs: Vec<String> = e
+                    .variants
+                    .iter()
+                    .zip(&e.field_types)
+                    .map(|(v, f)| {
+                        let fields = match f {
+                            Some(ts) => format!("[{}]", ts.iter().map(|t| py_string(t)).collect::<Vec<_>>().join(", ")),
+                            None => "None".to_string(),
+                        };
+                        format!("[{}, {}]", py_string(v), fields)
+                    })
+                    .collect();
+                format!("{}: [{}]", py_string(n), vs.join(", "))
+            })
+            .collect();
         let methods: Vec<String> =
             self.methods.iter().map(|(s, d)| format!("\"{}\": \"{}\"", s, d)).collect();
         // The guarantees are JSON, which is ASCII here (`json_string`), so
@@ -281,8 +321,9 @@ impl DebugInfo {
             None => "None".to_string(),
         };
         format!(
-            "Y_PROGRAM = {{\"enums\": {{{}}}, \"methods\": {{{}}}, \"guarantees\": {}}}\n{}",
+            "Y_PROGRAM = {{\"enums\": {{{}}}, \"variants\": {{{}}}, \"methods\": {{{}}}, \"guarantees\": {}}}\n{}",
             enums.join(", "),
+            variants.join(", "),
             methods.join(", "),
             guarantees,
             GDB_EXTENSION
@@ -322,6 +363,11 @@ impl DebugInfo {
                         file: self.file_of(&e.name),
                         line: e.span.line,
                         variants: e.variants.iter().map(|v| v.name.clone()).collect(),
+                        field_types: e
+                            .variants
+                            .iter()
+                            .map(|v| v.fields.as_ref().map(|fs| fs.iter().map(payload_type_name).collect()))
+                            .collect(),
                         has_data: e.variants.iter().any(|v| v.fields.is_some()),
                     },
                 );

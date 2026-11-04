@@ -5974,11 +5974,18 @@ not exercised.
   or as `<optimized out>`. Near a scope edge the optimiser merged code across,
   a variable may be listed as `<optimized out>` slightly before or after its
   block.
-- **A data-carrying enum shows its payload as raw words.** For
-  `let s = Shape::Rect(2, 3);`, `print s` gives
-  `{tag = Rect, payload = {2, 3, 0, 0, 0, 0, 0, 0}}` (measured 2026-10-11): the
-  tag by name, the fields neither named nor typed. (This entry used to say
-  such an enum could not be constructed on the LLVM backend; it can now.)
+- **A data-carrying enum prints as `Enum::Variant(fields)`** (2026-11-04):
+  `print s` gives `Shape::Rect(-2, 3)`, `Shape::Circle(3.5)`,
+  `Shape::Label("hi")`, each field read as its own type (integers of every
+  width and sign, `F16`/`F32`/`F64`, `bool`, `String`, a unit enum by
+  variant name, a reference as its address). It used to print the payload
+  as the `[8 x i64]` words the DWARF describes, and that was wrong, not only
+  raw: `Rect(-2, 3)` showed `4294967294, 3` and `Circle(3.5)`
+  `4615063718147915776`; the example here had used `Rect(2, 3)`, the one
+  kind of value for which the words read right. `print/r s` still shows
+  `{tag = Rect, payload = {...}}`. The fields are positional, as in the
+  source; the extension decodes them from the variant list the compiler
+  embeds (`Y_PROGRAM["variants"]`), not from DWARF variant parts.
 - A kernel the LLVM backend substitutes with the packed GEMM runs that GEMM
   when its buffers do not overlap, and its body as written otherwise - decided
   when the program runs. Its body's lines and variables belong to the second

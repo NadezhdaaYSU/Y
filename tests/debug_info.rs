@@ -1028,6 +1028,85 @@ fn y_values_print_as_y() {
     assert!(out.contains("len = 5, cap = 6"), "`print *name` lost the YStr view:\n{}", out);
 }
 
+/// Data-carrying enums, one variant per payload field type the LLVM backend
+/// lays out. No local is a `String` or an `F16`, so neither type is described
+/// for gdb and the extension has to read them without one.
+const DATA_ENUMS: &str = "\
+enum Color {
+    Red,
+    Green,
+    Blue,
+}
+
+enum Shape {
+    Circle(F64),
+    Rect(I32, I32),
+    Mixed(I32, F32, bool, U8, I64, Color),
+    Small(I8, U16, I16, U32),
+    Label(String),
+    Half(F16),
+    Empty,
+}
+
+@unsafe
+fn main() -> I32 {
+    let tenth: F32 = 0.1;
+    let a: Shape = Shape::Circle(3.5);
+    let b: Shape = Shape::Rect(-2, 3);
+    let m: Shape = Shape::Mixed(-7, 0.1, true, 200, -9000000000, Color::Green);
+    let s: Shape = Shape::Small(-3, 65000, -300, 4000000000);
+    let l: Shape = Shape::Label(\"hi\");
+    let h: Shape = Shape::Half(1.5);
+    let e: Shape = Shape::Empty;
+    return 0; // L:stop
+}
+";
+
+/// A data-carrying enum prints as `Enum::Variant(fields)`, each field read as
+/// its own type. It used to print as `{tag = Rect, payload = {4294967294, 3,
+/// ...}}`: the payload words as 64-bit integers, so `Rect(-2, 3)` showed
+/// 4294967294 and `Circle(3.5)` 4615063718147915776 - wrong values, in a
+/// debugger. `print/r` still shows the words.
+#[test]
+fn a_data_enum_prints_its_variant_and_fields() {
+    if !have("gdb") {
+        return skip("a_data_enum_prints_its_variant_and_fields", "gdb");
+    }
+    let dir = scratch("data_enums");
+    let bin = build(&dir, "data_enums", DATA_ENUMS, true);
+    let out = gdb_y(
+        &dir,
+        &bin,
+        &format!(
+            "break data_enums.ysu:{}\nrun\nprint tenth\nprint a\nprint b\nprint m\nprint s\n\
+             print l\nprint h\nprint e\nprint/r b\nkill\n",
+            line_of(DATA_ENUMS, "stop")
+        ),
+    );
+    assert!(!out.contains("Python Exception"), "the extension raised:\n{}", out);
+    // An F32 field reads as an F32 local holding the same value does.
+    let tenth = out
+        .lines()
+        .find_map(|l| l.strip_prefix("$1 = "))
+        .unwrap_or_else(|| panic!("no `print tenth`:\n{}", out));
+    for want in [
+        "$2 = Shape::Circle(3.5)".to_string(),
+        "$3 = Shape::Rect(-2, 3)".to_string(),
+        format!("$4 = Shape::Mixed(-7, {}, true, 200, -9000000000, Color::Green)", tenth),
+        "$5 = Shape::Small(-3, 65000, -300, 4000000000)".to_string(),
+        "$6 = Shape::Label(\"hi\")".to_string(),
+        "$7 = Shape::Half(1.5)".to_string(),
+        "$8 = Shape::Empty".to_string(),
+    ] {
+        assert!(out.lines().any(|l| l == want), "missing `{}`:\n{}", want, out);
+    }
+    assert!(
+        out.lines().any(|l| l.starts_with("$9 = {tag = Rect, payload = {4294967294, 3")),
+        "`print/r` lost the raw words:\n{}",
+        out
+    );
+}
+
 /// A backtrace shows Y frames: a method by its Y name, no return addresses,
 /// and none of the C runtime's frames below `fn main`. `bt -no-filters` is
 /// gdb's own view, and still has them.

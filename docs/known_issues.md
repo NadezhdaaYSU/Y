@@ -269,7 +269,7 @@ source; each entry there now carries its status. What is still open:
 - A float kernel argument past float32's range raises `OverflowError` when
   launched on the GPU, and becomes inf under the CPU interpreter
   (`Y_INTERPRETER=1`), which converts it with numpy.
-- A data-carrying enum's payload prints as raw words (§38.6); the runtime has no
+- The runtime has no
   debug information, by design; a breakpoint in a kernel the LLVM backend
   replaces with the packed GEMM is hit only on the fallback path.
 - `ydb verify`: an invariant proof's listed assumptions are a superset; the
