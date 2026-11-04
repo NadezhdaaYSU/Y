@@ -3737,7 +3737,11 @@ x in warp 0 of block (0,0,0), at saxpy.ysu:7:
 `-g` changes no PTX instruction (checked over the corpus); the SASS is
 unoptimised debug code, and `verify` says the evidence about SASS is about the
 build without it. A value ptxas keeps no location for prints as
-`<optimized out>`, never as a wrong value. Manual §38.10.
+`<optimized out>`, never as a wrong value. `--check memcheck` (or
+`racecheck`, `initcheck`, `synccheck`) runs the same launch under
+compute-sanitizer and reports each problem at its Y line, with the buffer
+element touched: `at Out[32] .. Out[35]: past the end of Out (32 x F32)`.
+Manual §38.10.
 
 ---
 

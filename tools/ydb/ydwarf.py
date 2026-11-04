@@ -281,6 +281,29 @@ def kernels(ptx):
     return out
 
 
+def strip_debug(ptx):
+    """A `-g` module as it is without -g: its labels for the debug
+    information, the `debug` on its `.target` and the DWARF sections removed,
+    which leaves the `--lineinfo` module. `-g` adds nothing else
+    (tests/ptx_debug_info.rs holds it to that)."""
+    out, in_section = [], False
+    for raw in ptx.splitlines():
+        t = raw.strip()
+        if in_section:
+            if t == "}":
+                in_section = False
+            continue
+        if t.startswith(".section"):
+            in_section = True
+            continue
+        if re.fullmatch(r"\$L__ydbg\d+:", t):
+            continue
+        if t.startswith(".target ") and t.endswith(", debug"):
+            raw = raw.replace(", debug", "")
+        out.append(raw)
+    return "\n".join(out) + "\n"
+
+
 def _entries(ptx):
     """kernel name -> its body's lines (comments dropped), in order."""
     out, name, depth = {}, None, 0

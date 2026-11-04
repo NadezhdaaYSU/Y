@@ -6105,7 +6105,9 @@ python3 tools/ydb/ydb prog.ysu -- a b     # arguments for the program
 | `lanes EXPR` | under `--gpu`: EXPR in every lane of the focused warp, one thread each - §38.10 |
 
 `python3 tools/ydb/ydb prog.ysu --gpu 'KERNEL<<<GRID, BLOCK>>>(ARG, ...)'`
-debugs a kernel on the GPU instead, under cuda-gdb: §38.10.
+debugs a kernel on the GPU instead, under cuda-gdb, and with `--check
+memcheck` (or `racecheck`, `initcheck`, `synccheck`) runs it under
+compute-sanitizer: §38.10.
 
 A session on a program with a `Point`, an array `v`, an inner `let a` that
 shadows an outer one, and a kernel `bump` the host calls (abridged):
@@ -6337,6 +6339,45 @@ register to where it lives in the SASS.
   is `-O` with `--emit-ptx`.
 - Tested with cuda-gdb 13.4 on an RTX 4070 Ti SUPER (sm_89) that was also
   driving the desktop; the kernel stops while the display keeps running.
+- **`--check TOOL`: the same launch under compute-sanitizer.** `memcheck`
+  (out-of-bounds and misaligned accesses), `racecheck` (shared-memory hazards
+  no barrier orders), `initcheck` (reads of global memory nothing wrote) or
+  `synccheck` (barriers some threads miss). Each problem is reported once per
+  Y line, with the threads, and for memory the buffer element it touched. An
+  index into a `GlobalMemory` is checked neither by the compiler nor at run
+  time (`verify` says NOT CHECKED), so this is where an index past the end is
+  caught:
+
+  ```text
+  $ python3 tools/ydb/ydb oob.ysu --gpu 'oob<<<1, 32>>>(arange(32), zeros(32), 32)' --check memcheck
+  compute-sanitizer memcheck on oob<<<1, 32>>>(arange(32), zeros(32), 32), the build without -g:
+
+  oob.ysu:4  Out[i + 4] = v * 2.0;
+    out-of-bounds global write, 4 bytes, 4 times: threads (28,0,0)-(31,0,0) of block (0,0,0)
+    at Out[32] .. Out[35]: past the end of Out (32 x F32)
+
+  The kernel then failed: CUDA_ERROR_LAUNCH_FAILED (unspecified launch failure) on cuCtxSynchronize.
+
+  ERROR SUMMARY: 5 errors
+  ```
+
+  and a kernel that reads a slot of shared memory another thread writes, with
+  no `barrier_sync()` between - which the compiler accepts:
+
+  ```text
+  race.ysu:4  shared_store_v4(smem, t, 1, 2, 3, 4);
+  race.ysu:6  let v: U32x4 = shared_load_v4(smem, peer);
+    error: a race on shared memory between the write on line 4 and the read on line 6, 256 hazards: no barrier orders them
+  ```
+
+  The sanitizer runs the build WITHOUT -g (`ylaunch.py --plain`: the `-g`
+  module with its description removed, which is the `--lineinfo` module): it
+  attributes errors to Y lines there, and in the debug build it cannot even
+  name the kernel. So what it checks is the optimised code that runs without
+  -g. Its own error count is held against what the report read: a record the
+  report does not know is printed as written, and a disagreement prints the
+  sanitizer's whole output. The exit status is non-zero when it found
+  anything. A clean result is about this launch's geometry and inputs only.
 - Building it found that `let v0: U32 = v.x; v0 = v0 + 1;` also changed `v.x`:
   the binding shared the lane's register and the let-aliasing guard did not
   look at vectors (`tests/v4_lane_copy_assigned.ysu`). The binding now gets its
