@@ -15,7 +15,9 @@
 # checked, proved or assumed about each line (`guarantees`, which
 # `tools/ydb`'s `verify` reads; `src/guarantees.rs`).
 
+import json
 import re
+import struct
 
 import gdb
 from gdb.FrameDecorator import FrameDecorator
@@ -23,7 +25,7 @@ from gdb.FrameDecorator import FrameDecorator
 try:
     Y_PROGRAM
 except NameError:  # loaded by hand, outside a Y program
-    Y_PROGRAM = {"enums": {}, "methods": {}, "guarantees": None}
+    Y_PROGRAM = {"enums": {}, "variants": {}, "methods": {}, "guarantees": None}
 
 _OBJFILE = gdb.current_objfile()
 
@@ -106,6 +108,96 @@ class EnumPrinter:
         return "%s::<invalid %d>" % (self.name, v)
 
 
+# A payload field's Y type -> (bits, signed) for an integer, or the C type gdb
+# formats a float with. `primitive_llvm_type` in the LLVM backend is the
+# source of these names.
+_INTS = {
+    "I8": (8, True), "i8": (8, True), "char": (8, True), "U8": (8, False), "u8": (8, False),
+    "I16": (16, True), "i16": (16, True), "U16": (16, False), "u16": (16, False),
+    "I32": (32, True), "i32": (32, True), "U32": (32, False), "u32": (32, False),
+    "I64": (64, True), "i64": (64, True), "isize": (64, True),
+    "U64": (64, False), "u64": (64, False), "usize": (64, False),
+}
+_FLOATS = {"F32": ("float", 4), "f32": ("float", 4), "F64": ("double", 8), "f64": ("double", 8)}
+
+
+def _payload_field(word, ty):
+    """Field `ty` of a payload word: the backend stores field i at the start
+    of word i in its own type, so it is the word's low bytes, read as that
+    type - not the 64-bit integer DWARF describes the word as."""
+    w = word & 0xFFFFFFFFFFFFFFFF
+    if ty in _INTS:
+        bits, signed = _INTS[ty]
+        v = w & ((1 << bits) - 1)
+        if signed and v >> (bits - 1):
+            v -= 1 << bits
+        return str(v)
+    if ty in _FLOATS:
+        ctype, size = _FLOATS[ty]
+        raw = w.to_bytes(8, "little")[:size]
+        return str(gdb.Value(raw, gdb.lookup_type(ctype)))
+    if ty in ("F16", "f16"):
+        raw = w.to_bytes(8, "little")[:2]
+        # The program's own F16 if one is described, so it reads as an F16
+        # local does; C has no half type for gdb to fall back on.
+        for name in ("F16", "_Float16"):
+            try:
+                return str(gdb.Value(raw, gdb.lookup_type(name)))
+            except gdb.error:
+                pass
+        return repr(struct.unpack("<e", raw)[0])
+    if ty == "String":
+        return _string_at(w)
+    if ty == "bool":
+        return "true" if w & 0xFF else "false"
+    variants = Y_PROGRAM.get("variants", {}).get(ty)
+    if variants is not None and not Y_PROGRAM["enums"].get(ty):
+        tag = w & 0xFFFFFFFF
+        if tag < len(variants):
+            return "%s::%s" % (ty, variants[tag][0])
+        return "%s::<invalid %d>" % (ty, tag)
+    return "(%s) %#x" % (ty, w)
+
+
+def _string_at(addr):
+    """The text of the `YStr` at `addr`, read from memory: a payload `String`
+    has no gdb type to cast to unless some local is a `String` too.
+    `typedef struct { char* data; int32_t len; int32_t cap; } YStr;`"""
+    if addr == 0:
+        return "<String: null>"
+    try:
+        inferior = gdb.selected_inferior()
+        head = bytes(inferior.read_memory(addr, 16))
+        data = int.from_bytes(head[:8], "little")
+        n = int.from_bytes(head[8:12], "little", signed=True)
+        if n < 0 or n > (1 << 28):
+            return "<String at %#x: length %d>" % (addr, n)
+        text = bytes(inferior.read_memory(data, n)).decode("utf-8", "replace")
+    except gdb.MemoryError:
+        return "<String at %#x: unreadable>" % addr
+    return json.dumps(text, ensure_ascii=False)
+
+
+class DataEnumPrinter:
+    """A data-carrying Y enum value, as `Enum::Variant(field, ...)`."""
+
+    def __init__(self, val, name):
+        self.val = val
+        self.name = name
+
+    def to_string(self):
+        variants = Y_PROGRAM["variants"][self.name]
+        tag = int(self.val["tag"])
+        if not 0 <= tag < len(variants):
+            return "%s::<invalid %d>" % (self.name, tag)
+        variant, fields = variants[tag]
+        if fields is None:
+            return "%s::%s" % (self.name, variant)
+        words = self.val["payload"]
+        shown = [_payload_field(int(words[i]), t) for i, t in enumerate(fields)]
+        return "%s::%s(%s)" % (self.name, variant, ", ".join(shown))
+
+
 _FIXED = re.compile(r"^Q(\d+)\.(\d+)_raw$")
 
 
@@ -120,6 +212,9 @@ def y_lookup(val):
     if name in ("I8", "U8"):
         return IntPrinter(val)
     st = t.strip_typedefs()
+    if st.code == gdb.TYPE_CODE_STRUCT and Y_PROGRAM["enums"].get(st.name or "") \
+            and st.name in Y_PROGRAM.get("variants", {}):
+        return DataEnumPrinter(val, st.name)
     if st.code == gdb.TYPE_CODE_ENUM:
         enum = st.name or ""
         if enum in Y_PROGRAM["enums"]:
