@@ -665,25 +665,26 @@ and dropping the interpolation term fails it.
 eager, exact 0/5 and stock 5/5; CPU eager against GPU **compiled**, exact 0/5
 (the same token digest) and stock 5/5; ragged batch, exact 0/16 and stock 16/16.
 
-#### At 7B: the exact arm agrees, and the control could not be run
+#### At 7B: exact 0/5, stock 5/5
 
-Qwen2.5-7B-Instruct (2026-11-03; 28 layers, head dimension 128, so the first
+Qwen2.5-7B-Instruct (2026-11-03/04; 28 layers, head dimension 128, so the first
 real model at that width), the same 5 cases x 160 tokens, CPU eager (the int8
-`_int_mm` path) against GPU **compiled** (`torch.compile(dynamic=True)`):
-**exact changed 0/5 cases**. Both records carry token digest `7700e3e28f1d21d1`,
-weights fingerprint `fa21999abf0abea9`, workload hash `da1abea028b779a8` and
-the same integer-exp domain digest; both pass the sanity gate (canary ok, 94
-distinct tokens) and reproduce themselves on a second run.
+`_int_mm` path) against GPU: **exact changed 0/5 cases, stock bf16 5/5** (first
+differing at token 47 on the batch-1 case and 104 on the other four), and
+`--compare` accepts the pair. The exact records carry token digest
+`7700e3e28f1d21d1` on both devices, weights fingerprint `fa21999abf0abea9`,
+workload hash `da1abea028b779a8` and the same integer-exp domain digest; every
+arm passes the sanity gate and reproduces itself on a second run.
 
-That is not yet the result the 0.5B row is, because **the stock control is
-missing**. Stock bf16 is 14.2 GiB of weights; the 16 GB card also drives the
-desktop (2.9 GB held by the compositor, Discord, Chromium and the editor when
-checked), and every stock GPU run ran out of memory: with the embedding on the
-host, and then with `lm_head` too (a game held 0.8 GB of the card by then).
-Closing the desktop applications should free enough. The CPU stock record exists (digest
-`228b3b0c2bc95115`, gate ok); without its GPU half nothing shows this workload
-separates stock at 7B. Eager exact on the GPU also ran out of memory, on the
-batch-32 case; compiled fits.
+The GPU half is two processes merged into one artifact (same device block,
+config and exp digest; they do not fit the card together). Exact is
+**compiled** (`torch.compile(dynamic=True)`); eager exact ran out of memory on
+the batch-32 case. Stock is eager with the token embedding and `lm_head` on the
+host (`--stock-lm-head-on-host`): bf16 is 14.2 GiB of weights and the card also
+drives the desktop, so it fitted only once Discord was closed. The embedding is
+a gather and changes nothing; `lm_head` then runs in CPU bf16, so stock's
+divergence comes from the other layers. Its weights fingerprint
+`2f1059edeaca030e` matches the CPU's.
 
 The 7B builds do not hold a float32 copy anywhere: the checkpoint loads in
 bf16 on the host and each `nn.Linear` is upcast (exact) and quantised on the
@@ -698,8 +699,8 @@ There is no stock figure to divide by, for the same memory reason, and a game
 was running on the same GPU by the end of the batch-8 run, so these are not
 verified idle-GPU numbers and not a ratio.
 
-What this does not cover: a second GPU architecture, the 7B stock control and
-speed ratio, and the cos/sin table, which is still float64 rounded once and so
+What this does not cover: a second GPU architecture, the 7B speed ratio, and
+the cos/sin table, which is still float64 rounded once and so
 near certain (around 2^-29 per value), not exact.
 
 ## Finding 13 — `0/16` is also what a broken arm scores
