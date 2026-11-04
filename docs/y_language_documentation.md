@@ -6107,7 +6107,8 @@ python3 tools/ydb/ydb prog.ysu -- a b     # arguments for the program
 `python3 tools/ydb/ydb prog.ysu --gpu 'KERNEL<<<GRID, BLOCK>>>(ARG, ...)'`
 debugs a kernel on the GPU instead, under cuda-gdb, and with `--check
 memcheck` (or `racecheck`, `initcheck`, `synccheck`) runs it under
-compute-sanitizer: §38.10.
+compute-sanitizer, and `ydb --python train.py` debugs the kernels a Python
+program launches through y_lang: §38.10.
 
 A session on a program with a `Point`, an array `v`, an inner `let a` that
 shadows an outer one, and a kernel `bump` the host calls (abridged):
@@ -6378,6 +6379,37 @@ register to where it lives in the SASS.
   report does not know is printed as written, and a disagreement prints the
   sanitizer's whole output. The exit status is non-zero when it found
   anything. A clean result is about this launch's geometry and inputs only.
+- **From Python.** A kernel a program launches through `y_lang`
+  (`TorchKernel`, `@y_lang.jit`) is compiled with debug information when
+  `Y_PTX_DEBUG=1` (`-g`: cuda-gdb shows its variables) or `Y_PTX_LINEINFO=1`
+  (the line table: compute-sanitizer and profilers name its lines);
+  `compile_to_ptx(src, debug="g" | "lineinfo" | False)` says so per call.
+  `Y_DEBUG` is not this - it selects the CPU interpreter. The source has no
+  file of its own, so y_lang writes it to `<cache>/debug/<hash>/<kernel>.ysu`
+  (and, for `-g`, the PTX beside it) through the C API's
+  `y_compile_to_ptx_debug`. `ydb --python` runs the program under cuda-gdb
+  with `Y_PTX_DEBUG=1`:
+
+  ```text
+  $ python3 tools/ydb/ydb --python train.py
+  (ydb) break scale:5
+  (ydb) run
+  CUDA thread hit Breakpoint 1, scale<<<(1,1,1),(32,1,1)>>> (X=0x10012200000, Out=0x10012200200, N=20) at .../debug/eb05893dafeb712c/scale.ysu:5
+  5	        Out[i] = v * 3.0;
+  (ydb) lanes v
+  v in warp 0 (threads 0-31) of block (0,0,0), at scale.ysu:5:
+    [0] 0    [1] 1    [2] 2    [3] 3    [4] 4    [5] 5    [6] 6    [7] 7
+    ...
+  ```
+
+  `break scale:5` is set before anything is compiled, and names line 5 of the
+  file y_lang names after the kernel; `verify` compares the PTX y_lang
+  compiled with the plain build's. The instructions are the plain compile's
+  at every level (`python/tests/test_ptx_debug.py`). Adding this found that
+  the CPU interpreter dropped the instruction after every `.loc`: the
+  directive has no `;`, so the two fused and were read as the directive -
+  silently wrong for a line-table module, which nothing had given it before.
+  It skips `.loc`, `.file` and the DWARF sections now.
 - Building it found that `let v0: U32 = v.x; v0 = v0 + 1;` also changed `v.x`:
   the binding shared the lane's register and the let-aliasing guard did not
   look at vectors (`tests/v4_lane_copy_assigned.ysu`). The binding now gets its

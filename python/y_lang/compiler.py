@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import hashlib
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -122,6 +123,16 @@ class YCompilerLib:
         ]
         self.lib.y_autotune_select_config_json.restype = ctypes.c_void_p
 
+        # void* y_compile_to_ptx_debug(const char* source, const char* target_sm,
+        #                              const char* source_path, uint32_t level, char** error_out)
+        # Absent from a library built before it existed: `compile_to_ptx`
+        # refuses a debug compile then, rather than compiling without.
+        debug_fn = getattr(self.lib, "y_compile_to_ptx_debug", None)
+        if debug_fn is not None:
+            debug_fn.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_uint32,
+                                 ctypes.POINTER(ctypes.c_char_p)]
+            debug_fn.restype = ctypes.c_void_p
+
         # void y_free_string(char* s)
         self.lib.y_free_string.argtypes = [ctypes.c_void_p]
         self.lib.y_free_string.restype = None
@@ -212,23 +223,91 @@ def _ptx_cache_context():
     return [str(profile.resolve()), profile_identity, settings]
 
 
-def compile_to_ptx(source: str, target_sm: str = "auto") -> str:
+_DEBUG_LEVELS = {None: 0, "lineinfo": 1, "g": 2}
+
+
+def debug_mode(debug=None) -> Optional[str]:
+    """The debug information to compile with: `debug` if given, else
+    Y_PTX_DEBUG=1 (`"g"`: lines and variables, for cuda-gdb), else
+    Y_PTX_LINEINFO=1 (`"lineinfo"`: lines, for compute-sanitizer and
+    profilers), else None. Y_DEBUG is not this: it selects the CPU
+    interpreter. `debug=False` is none, whatever the environment says."""
+    if debug is False:
+        return None
+    if debug is not None:
+        if debug not in ("g", "lineinfo"):
+            raise ValueError(f'debug must be "g", "lineinfo" or None, not {debug!r}')
+        return debug
+    if os.environ.get("Y_PTX_DEBUG", "0").lower() in _TRUTHY:
+        return "g"
+    if os.environ.get("Y_PTX_LINEINFO", "0").lower() in _TRUTHY:
+        return "lineinfo"
+    return None
+
+
+def debug_source_path(source: str, name: Optional[str] = None) -> Path:
+    """Where a debug compile writes `source`, so the debugger has a file to
+    show: `<cache>/debug/<hash of the source>/<name>.ysu`. `name` defaults to
+    the first kernel's, so `break saxpy.ysu:7` names it."""
+    if name is None:
+        m = re.search(r"\bkernel\s+([A-Za-z_]\w*)", source)
+        name = m.group(1) if m else "kernel"
+    if not re.fullmatch(r"[A-Za-z_]\w*", name):
+        raise ValueError(f"{name!r} is not a kernel name a file can be named after")
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
+    return get_cache_dir() / "debug" / digest / f"{name}.ysu"
+
+
+def _beside(mode, source_path, ptx):
+    """A `-g` compile's PTX, written beside its source for `ydb`'s `verify`."""
+    if mode == "g":
+        out = source_path.with_suffix(".ptx")
+        try:
+            if not out.exists() or out.read_text(encoding="utf-8") != ptx:
+                out.write_text(ptx, encoding="utf-8")
+        except OSError:
+            pass
+    return ptx
+
+
+def compile_to_ptx(source: str, target_sm: str = "auto", debug=None,
+                   name: Optional[str] = None) -> str:
     """Compile PTX, caching by loaded compiler, target, and hardware profile.
+
+    `debug` is `"g"` (cuda-gdb shows each thread's variables), `"lineinfo"`
+    (compute-sanitizer and profilers show Y lines) or None; by default it is
+    read from Y_PTX_DEBUG / Y_PTX_LINEINFO (`debug_mode`). A debug compile
+    writes the source to `debug_source_path(source, name)` - the file the
+    debugger shows - and, for `"g"`, the PTX beside it, which `ydb`'s `verify`
+    reads. Its instructions are the same as without debug information.
 
     Restart Python after rebuilding the loaded library or changing Y_LIB_PATH.
     Compilations without a readable hardware profile bypass the cache until the
     compiler's hardware probe has recorded one.
     """
+    mode = debug_mode(debug)
     lib = YCompilerLib.get_instance()
+    source_path = None
+    if mode is not None:
+        if getattr(lib.lib, "y_compile_to_ptx_debug", None) is None:
+            raise RuntimeError(
+                f"{lib.lib_path} has no y_compile_to_ptx_debug, so it cannot compile with debug "
+                "information: rebuild it (cargo build --release) and restart Python"
+            )
+        source_path = debug_source_path(source, name)
+        source_path.parent.mkdir(parents=True, exist_ok=True)
+        if not source_path.exists() or source_path.read_text(encoding="utf-8") != source:
+            source_path.write_text(source, encoding="utf-8")
     context = _ptx_cache_context()
     cache_key = json.dumps(
-        ["y-ptx-cache-v2", lib.compiler_identity, lib.lib_path, target_sm, context, source],
+        ["y-ptx-cache-v2", lib.compiler_identity, lib.lib_path, target_sm, context, source]
+        + ([mode, str(source_path)] if mode is not None else []),
         ensure_ascii=False, separators=(",", ":"),
     )
     key_hash = hashlib.sha256(cache_key.encode("utf-8")).hexdigest()
     if context is not None and key_hash in _JIT_CACHE:
         _CACHE_STATS["mem_hits"] += 1
-        return _JIT_CACHE[key_hash]
+        return _beside(mode, source_path, _JIT_CACHE[key_hash])
 
     cache_dir = get_cache_dir()
     cache_file = cache_dir / f"{key_hash}.ptx"
@@ -238,18 +317,27 @@ def compile_to_ptx(source: str, target_sm: str = "auto") -> str:
             ptx_str = cache_file.read_text(encoding="utf-8")
             _JIT_CACHE[key_hash] = ptx_str
             _CACHE_STATS["disk_hits"] += 1
-            return ptx_str
+            return _beside(mode, source_path, ptx_str)
         except Exception:
             pass
 
     _CACHE_STATS["misses"] += 1
     error_out = ctypes.c_char_p()
 
-    ptx_ptr = lib.lib.y_compile_to_ptx(
-        source.encode("utf-8"),
-        target_sm.encode("utf-8"),
-        ctypes.byref(error_out)
-    )
+    if mode is None:
+        ptx_ptr = lib.lib.y_compile_to_ptx(
+            source.encode("utf-8"),
+            target_sm.encode("utf-8"),
+            ctypes.byref(error_out)
+        )
+    else:
+        ptx_ptr = lib.lib.y_compile_to_ptx_debug(
+            source.encode("utf-8"),
+            target_sm.encode("utf-8"),
+            str(source_path).encode("utf-8"),
+            _DEBUG_LEVELS[mode],
+            ctypes.byref(error_out)
+        )
 
     if error_out.value:
         err_msg = error_out.value.decode("utf-8")
@@ -261,6 +349,7 @@ def compile_to_ptx(source: str, target_sm: str = "auto") -> str:
 
     ptx_str = ctypes.cast(ptx_ptr, ctypes.c_char_p).value.decode("utf-8")
     lib.lib.y_free_string(ptx_ptr)
+    _beside(mode, source_path, ptx_str)
 
     # A probe can create/update the profile during compilation. Such a result
     # must not be stored under the hardware context observed before the probe.
@@ -348,7 +437,7 @@ class JITFunction:
     @property
     def ptx(self) -> str:
         src_str = self.source() if callable(self.source) else str(self.source)
-        return compile_to_ptx(src_str, target_sm=self.target_sm)
+        return compile_to_ptx(src_str, target_sm=self.target_sm, name=self.__name__)
 
     def __getitem__(self, grid):
         """Allows launch syntax: kernel[grid](*args, stream=stream)."""

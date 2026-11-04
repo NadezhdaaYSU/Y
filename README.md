@@ -3741,7 +3741,9 @@ build without it. A value ptxas keeps no location for prints as
 `racecheck`, `initcheck`, `synccheck`) runs the same launch under
 compute-sanitizer and reports each problem at its Y line, with the buffer
 element touched: `at Out[32] .. Out[35]: past the end of Out (32 x F32)`.
-Manual §38.10.
+From Python, `Y_PTX_DEBUG=1` (or `Y_PTX_LINEINFO=1`) compiles y_lang's
+kernels with debug information, and `ydb --python train.py` runs a PyTorch
+program under cuda-gdb with it set. Manual §38.10.
 
 ---
 

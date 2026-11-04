@@ -431,3 +431,80 @@ fn debug_flags_are_refused_where_they_do_nothing() {
     }
     let _ = fs::remove_dir_all(&dir);
 }
+
+const TRAIN: &str = r#"
+import torch
+from y_lang.torch_interop import TorchKernel
+
+SRC = """kernel scale(X: GlobalMemory<F32>, Out: GlobalMemory<F32>, N: I32) {
+    let i: I32 = thread_idx_x();
+    if i < N {
+        let v: F32 = X[i];
+        Out[i] = v * 3.0;
+    }
+}
+"""
+k = TorchKernel(SRC, kernel_name="scale")
+X = torch.arange(32, dtype=torch.float32, device="cuda")
+O = torch.zeros(32, device="cuda")
+k.launch((1, 1, 1), (32, 1, 1), [X, O, 20])
+torch.cuda.synchronize()
+print("Out", O[:4].tolist(), O[19].item(), O[20].item())
+"#;
+
+/// `ydb --python`: the Y kernel a PyTorch program launches through y_lang,
+/// stopped on the GPU at its line, with Y_PTX_DEBUG set by ydb - and
+/// `verify` comparing the PTX y_lang compiled with the plain build.
+#[test]
+fn cuda_gdb_debugs_a_kernel_a_python_program_launches() {
+    let test = "cuda_gdb_debugs_a_kernel_a_python_program_launches";
+    if !have_python() {
+        return skip(test, "no python3");
+    }
+    let torch = Command::new("python3").args(["-c", "import torch; assert torch.cuda.is_available()"]).output();
+    if !torch.map(|o| o.status.success()).unwrap_or(false) {
+        return skip(test, "no torch with CUDA");
+    }
+    let liby = Path::new(env!("CARGO_BIN_EXE_Y")).parent().unwrap().join("liby.so");
+    if !liby.exists() {
+        return skip(test, "no liby.so beside the compiler (cargo build --release)");
+    }
+    let dir = pinned::pinned_scratch("ptxdebug_python", pinned::SM_PINNED);
+    fs::write(dir.join("train.py"), TRAIN).unwrap();
+    let log = dir.join("ydb.log");
+    let f = fs::File::create(&log).unwrap();
+    let mut c = Command::new("python3");
+    c.current_dir(&dir)
+        .env("PYTHONPATH", pinned::repo().join("python"))
+        .env("Y_LIB_PATH", &liby)
+        .env("YSU_CACHE_DIR", dir.join("cache"))
+        .arg(tool("tools/ydb/ydb"))
+        .arg("--y")
+        .arg(env!("CARGO_BIN_EXE_Y"))
+        .arg("--python")
+        .arg("train.py")
+        .arg("--batch")
+        .arg("--nx");
+    for e in ["break scale:5", "run", "locals", "cuda thread (7,0,0)", "print v", "lanes v", "verify", "continue"] {
+        c.arg("-ex").arg(e);
+    }
+    c.stdout(f.try_clone().unwrap()).stderr(f);
+    c.status().expect("run ydb");
+    let all = fs::read_to_string(&log).unwrap();
+    if all.contains("needs cuda-gdb") {
+        return skip(test, "no cuda-gdb");
+    }
+    assert!(!all.contains("Python Exception"), "{}", all);
+    // The breakpoint was set before y_lang compiled anything: `scale:5` is
+    // line 5 of the file y_lang names after the kernel.
+    assert!(all.contains("/scale.ysu:5\n5\t        Out[i] = v * 3.0;"), "{}", all);
+    for want in ["(arg) N: I32 = 20", "v: F32 = 0", "i: I32 = 0", "$1 = 7", "[19] 19"] {
+        assert!(has_line(&all, want) || all.contains(want), "missing `{}`:\n{}", want, all);
+    }
+    assert!(all.contains("v in warp 0 (threads 0-31) of block (0,0,0), at scale.ysu:5:"), "{}", all);
+    assert!(all.contains("lanes 20-31: not here"), "{}", all);
+    assert!(all.contains("SAME PTX     its instructions are the ones Y --emit-ptx writes without -g"), "{}", all);
+    assert!(all.contains("Out [0.0, 3.0, 6.0, 9.0] 57.0 0.0"), "{}", all);
+    assert!(all.contains("exited normally"), "{}", all);
+    let _ = fs::remove_dir_all(&dir);
+}

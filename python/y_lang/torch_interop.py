@@ -191,7 +191,7 @@ class TorchKernel:
         self.source = ysu_source
         self.kernel_name = kernel_name
         self.target_sm = target_sm
-        self.ptx = compile_to_ptx(ysu_source, target_sm=target_sm)
+        self.ptx = compile_to_ptx(ysu_source, target_sm=target_sm, name=kernel_name)
         self._module = None
         self._function = None
 

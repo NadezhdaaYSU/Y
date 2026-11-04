@@ -29,6 +29,63 @@ pub unsafe extern "C" fn y_compile_to_ptx(
     target_sm: *const c_char,
     error_out: *mut *mut c_char,
 ) -> *mut c_char {
+    compile_to_ptx(source_ptr, target_sm, None, error_out)
+}
+
+/// `y_compile_to_ptx` with debug information, as the CLI's `--emit-ptx
+/// --lineinfo` (`level` 1: a line table, which compute-sanitizer and
+/// profilers attribute to Y lines) or `--emit-ptx -g` (`level` 2: the line
+/// table and each kernel's variables, which cuda-gdb shows). The PTX's
+/// instructions are the same at every level.
+///
+/// `source_path` names the file the debug information points at; the caller
+/// writes the source there, since the text alone has no file a debugger
+/// could show. `level` 0 is `y_compile_to_ptx`; any other level, or a missing
+/// path, is refused.
+///
+/// # Safety
+/// As `y_compile_to_ptx`; `source_path` must be a valid, null-terminated C
+/// string, or null with `level` 0.
+#[no_mangle]
+pub unsafe extern "C" fn y_compile_to_ptx_debug(
+    source_ptr: *const c_char,
+    target_sm: *const c_char,
+    source_path: *const c_char,
+    level: u32,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
+    let refuse = |msg: &str| {
+        if !error_out.is_null() {
+            *error_out = CString::new(msg).unwrap().into_raw();
+        }
+        ptr::null_mut()
+    };
+    if level == 0 {
+        return compile_to_ptx(source_ptr, target_sm, None, error_out);
+    }
+    if level > 2 {
+        return refuse("debug level must be 0 (none), 1 (line table) or 2 (line table and variables)");
+    }
+    if source_path.is_null() {
+        return refuse("debug information needs the path of the source file it describes");
+    }
+    let Ok(path) = CStr::from_ptr(source_path).to_str() else {
+        return refuse("Invalid UTF-8 source path");
+    };
+    if path.is_empty() {
+        return refuse("debug information needs the path of the source file it describes");
+    }
+    compile_to_ptx(source_ptr, target_sm, Some((std::path::Path::new(path), level == 2)), error_out)
+}
+
+/// The two entry points' compile: `debug` is the source's path and whether
+/// to describe the variables too (`-g`) or only the lines (`--lineinfo`).
+unsafe fn compile_to_ptx(
+    source_ptr: *const c_char,
+    target_sm: *const c_char,
+    debug: Option<(&std::path::Path, bool)>,
+    error_out: *mut *mut c_char,
+) -> *mut c_char {
     if source_ptr.is_null() {
         if !error_out.is_null() {
             *error_out = CString::new("Source pointer is null").unwrap().into_raw();
@@ -118,6 +175,14 @@ pub unsafe extern "C" fn y_compile_to_ptx(
     }
 
     let mut emitter = PtxEmitter::new_with_profile(&hw_profile);
+    if let Some((path, variables)) = debug {
+        // This entry point resolves no `import`: every item is the text's own,
+        // so every line is a line of `path` (`.file 1`).
+        emitter.enable_line_info(path, &[]);
+        if variables {
+            emitter.enable_debug_info();
+        }
+    }
     let ptx_output = emitter.emit_program(&ast, &hw_profile);
 
     // The emitter's refusals were discarded here, so a program it could not

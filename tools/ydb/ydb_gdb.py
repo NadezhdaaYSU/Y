@@ -24,8 +24,22 @@ import ymap  # noqa: E402
 import yverify  # noqa: E402
 
 
+def _frame_source():
+    """The .ysu file the selected frame is in, or None."""
+    try:
+        sal = gdb.selected_frame().find_sal()
+    except gdb.error:
+        return None
+    if sal.symtab is not None and sal.symtab.filename.endswith(".ysu"):
+        return sal.symtab.fullname()
+    return None
+
+
 def _program():
-    return os.environ.get("YDB_PROGRAM")
+    """The program's source: the one ydb built, or under `--python` - where
+    y_lang wrote each kernel's source to a file of its own - the file the
+    selected frame is in."""
+    return os.environ.get("YDB_PROGRAM") or (_frame_source() if os.environ.get("YDB_PYTHON") else None)
 
 
 def _sources():
@@ -74,6 +88,10 @@ def translate_location(spec):
     f = _function_file(name)
     if f:
         return "%s:%s" % (os.path.basename(f), line)
+    if os.environ.get("YDB_PYTHON"):
+        # Before the kernel's module loads nothing is known, and y_lang names
+        # a kernel's source file after the kernel.
+        return "%s.ysu:%s" % (name, line)
     return spec
 
 
@@ -441,9 +459,13 @@ class YVerify(gdb.Command):
         if item is not None and item["kind"] == "kernel":
             ptx, why = _gpu_ptx()
         debug_ptx = None
-        if os.environ.get("YDB_GPU_PTX") and item is not None and item["kind"] == "kernel":
+        # The -g PTX the kernel runs: ydb's own launch's, or under --python
+        # the one y_lang wrote beside the kernel's source.
+        ran = os.environ.get("YDB_GPU_PTX") or (
+            os.path.splitext(filename)[0] + ".ptx" if os.environ.get("YDB_PYTHON") and filename else None)
+        if ran and item is not None and item["kind"] == "kernel":
             try:
-                with open(os.environ["YDB_GPU_PTX"]) as f:
+                with open(ran) as f:
                     debug_ptx = f.read()
             except OSError as e:
                 raise gdb.GdbError("the -g PTX this session runs is gone: %s" % e)
@@ -490,6 +512,22 @@ def _ranges(nums):
     return ", ".join(str(a) if a == b else "%d-%d" % (a, b) for a, b in out)
 
 
+def _warp_name(rows, hardware):
+    """`warp 2 (threads 64-95)`: the warp's index in its block, from a lane's
+    thread - `cuda warp` numbers the SM's warp slots, which is not it."""
+    try:
+        bd = gdb.parse_and_eval("blockDim")
+        bx, by = int(bd["x"]), int(bd["y"])
+        lane, _, _, tid = rows[0]
+        x, y, z = (int(v) for v in tid.split(","))
+        first = x + y * bx + z * bx * by - lane
+        if first < 0 or first % 32:
+            raise ValueError(first)
+    except (gdb.error, ValueError, TypeError):
+        return "the warp in hardware slot %s" % hardware
+    return "warp %d (threads %d-%d)" % (first // 32, first, first + 31)
+
+
 class YLanes(gdb.Command):
     """An expression's value in every lane of the focused warp.
 
@@ -529,7 +567,7 @@ class YLanes(gdb.Command):
                 values[lane] = (tid, text)
         finally:
             gdb.execute("cuda lane %d" % focus, to_string=True)
-        print("%s in warp %s of block %s, at %s:" % (expr, warp, block, where))
+        print("%s in %s of block %s, at %s:" % (expr, _warp_name(rows, warp), block, where))
         lanes = sorted(values)
         cells = ["[%d] %s" % (l, values[l][1]) for l in lanes]
         width = max(len(c) for c in cells)
