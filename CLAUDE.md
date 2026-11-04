@@ -56,9 +56,11 @@ cargo run --bin Y -- tests/hello.ysu -g -o /tmp/y-hello
 cargo run --bin Y -- tests/paged_decode_attention_128_32_8_16.ysu --emit-ptx -o /tmp/y-attention.ptx
 ```
 
-- LLVM is the default. `-g`/`--debug` are LLVM-only; the Y entry symbol is
-  `ysu_main`. `--emit-ptx --lineinfo` adds GPU source maps. `tools/ydb/` provides
-  Y-aware gdb commands, PTX/SASS mapping, and line-level guarantee reports.
+- LLVM is the default; the Y entry symbol is `ysu_main`. `-g`/`--debug` give
+  host DWARF; `--emit-ptx -g` gives cuda-gdb-debuggable PTX (`ptx_debug_info.rs`,
+  no instruction changes), `--emit-ptx --lineinfo` GPU source maps only.
+  `tools/ydb/` provides Y-aware gdb commands, `--gpu` kernel launches under
+  cuda-gdb, PTX/SASS mapping, and line-level guarantee reports.
 - `--emit-cpu` prints Rust/AVX source; it does not compile it. `--emit-native`
   supports a restricted straight-line integer subset; reject unsupported forms.
   The C backend and `src/c_emitter.rs` have been removed.

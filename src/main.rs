@@ -801,16 +801,25 @@ fn main() {
         "--emit-zk-ptx",
         "--target=zk-ptx",
     ];
+    // `-g --emit-ptx` is the PTX backend's debug information for cuda-gdb
+    // (`src/ptx_debug_info.rs`); `--debug` starts gdb on a host program, so it
+    // is not, and neither is any other backend.
+    let ptx_debug = debug_info && args.iter().any(|a| a == "--emit-ptx" || a == "--target=ptx");
     if debug_info {
         let flag = if launch_debugger { "--debug" } else { "-g" };
-        if let Some(other) = args.iter().find(|a| NOT_LLVM.contains(&a.as_str())) {
+        if let Some(other) = args
+            .iter()
+            .find(|a| NOT_LLVM.contains(&a.as_str()) && !(ptx_debug && !launch_debugger && (*a == "--emit-ptx" || *a == "--target=ptx")))
+        {
             log_error!(
                 "{} cannot be combined with {}: debug information is produced by the LLVM \
-                 backend only (the default, and --emit-llvm).{}",
+                 backend (the default, and --emit-llvm) and, with -g, by --emit-ptx.{}",
                 flag,
                 other,
                 if other == "--emit-ptx" || other == "--target=ptx" {
-                    " For a PTX line table - which PTX and SASS each Y line became - use --lineinfo."
+                    " --debug builds a host program and starts gdb on it; for a kernel, \
+                     `Y prog.ysu --emit-ptx -g` writes PTX that cuda-gdb debugs, and \
+                     `tools/ydb/ydb prog.ysu --gpu ...` launches it under cuda-gdb."
                 } else {
                     ""
                 }
@@ -2195,11 +2204,14 @@ fn main() {
 
         let mut emitter = PtxEmitter::new_with_profile(&hw_profile);
         emitter.set_drift_costs(load_or_measure_drift_costs(&hw_profile.gpu_name));
-        if line_info {
+        if line_info || ptx_debug {
             let path = source_file
                 .as_deref()
-                .expect("--lineinfo without a source file is refused after option parsing");
+                .expect("--lineinfo and -g without a source file are refused after option parsing");
             emitter.enable_line_info(std::path::Path::new(path), &imported_items);
+        }
+        if ptx_debug {
+            emitter.enable_debug_info();
         }
         // Name the target, and say when it is a guess: on a machine with no
         // NVIDIA GPU this used to be `.target sm_00`, which `ptxas` rejects -

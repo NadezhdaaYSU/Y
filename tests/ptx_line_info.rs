@@ -499,7 +499,8 @@ fn main() {}
 }
 
 /// `--lineinfo` belongs to the PTX backend, and is refused - by name - where
-/// it would do nothing. `-g` with `--emit-ptx` points at it.
+/// it would do nothing. `--debug` with `--emit-ptx` points at `-g`, which is
+/// the PTX backend's too since 2026-11-04 (`tests/ptx_debug_info.rs`).
 #[test]
 fn lineinfo_is_refused_where_it_would_do_nothing() {
     let dir = pinned::pinned_scratch("lineinfo_refuse", pinned::SM_PINNED);
@@ -517,8 +518,8 @@ fn lineinfo_is_refused_where_it_would_do_nothing() {
     }
     let out = y(&dir).args(["--emit-attention-ptx", "64", "128", "--lineinfo"]).output().expect("run Y");
     assert!(!out.status.success() && text(&out).contains("--lineinfo cannot be combined with --emit-attention-ptx"), "{}", text(&out));
-    let out = y(&dir).arg(&path).arg("--emit-ptx").arg("-g").output().expect("run Y");
-    assert!(!out.status.success() && text(&out).contains("use --lineinfo"), "{}", text(&out));
+    let out = y(&dir).arg(&path).arg("--emit-ptx").arg("--debug").output().expect("run Y");
+    assert!(!out.status.success() && text(&out).contains("`Y prog.ysu --emit-ptx -g` writes PTX that cuda-gdb debugs"), "{}", text(&out));
     // The control: the PTX backend takes it.
     let out = y(&dir).arg(&path).arg("--emit-ptx").arg("--lineinfo").arg("-o").arg(dir.join("ok.ptx")).output().expect("run Y");
     assert!(out.status.success(), "{}", text(&out));

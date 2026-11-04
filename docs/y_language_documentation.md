@@ -5955,11 +5955,12 @@ not exercised.
 
 ### 38.6 Limits
 
-- **The default backend and `--emit-llvm` only.** `--emit-ptx`, `--emit-cpu`,
+- **The default backend, `--emit-llvm` and `--emit-ptx` only.** `--emit-cpu`,
   `--emit-native`, `--emit-coprocessor`, the ZK backends and circom input
   refuse `-g` and `--debug` by name rather than ignore them. For a GPU kernel,
-  `--emit-ptx --lineinfo` gives the line table (§38.7); there is no variable
-  information for PTX.
+  `--emit-ptx -g` writes PTX that cuda-gdb debugs with each thread's variables
+  (§38.10), and `--emit-ptx --lineinfo` the line table alone (§38.7);
+  `--debug --emit-ptx` is refused.
 - **Optimised builds (`-g -O1` .. `-O3`) are debuggable, with the usual
   losses.** The optimiser keeps values in registers and folds them away, so
   gdb shows `<optimized out>` for a value it no longer has; it inlines calls,
@@ -6101,6 +6102,10 @@ python3 tools/ydb/ydb prog.ysu -- a b     # arguments for the program
 | `asm` | the machine code the current line became |
 | `asm --ptx 14` / `asm --sass 14` | the PTX and SASS a kernel's line became, through `Y --emit-ptx --lineinfo` and `ptxas -lineinfo` at the module's own `.target` |
 | `verify` / `verify 14` | what covers a line: what the compiler proved, checked or took on trust there, and what checks the code it became - §38.9 |
+| `lanes EXPR` | under `--gpu`: EXPR in every lane of the focused warp, one thread each - §38.10 |
+
+`python3 tools/ydb/ydb prog.ysu --gpu 'KERNEL<<<GRID, BLOCK>>>(ARG, ...)'`
+debugs a kernel on the GPU instead, under cuda-gdb: §38.10.
 
 A session on a program with a `Point`, an array `v`, an inner `let a` that
 shadows an outer one, and a kernel `bump` the host calls (abridged):
@@ -6221,6 +6226,124 @@ The code the GPU runs (Y --emit-ptx for sm_89, then ptxas):
 - Building it found that strict mode did not bounds-check an array reached
   through a reference (`a: &mut [I16; 4]`): `a[9] = 1` compiled and wrote past
   the array. Fixed in `034b19f`.
+
+### 38.10 GPU kernels on the GPU: `--emit-ptx -g` and `ydb --gpu`
+
+`Y prog.ysu --emit-ptx -g` writes PTX that cuda-gdb debugs as Y: a breakpoint
+on a kernel's line stops every thread that reaches it, and each thread's
+bindings print by their Y names and types, from that thread's own registers.
+`ydb --gpu` runs one launch of a kernel under cuda-gdb, so no host program
+has to be written first. For §38.7's `saxpy` (abridged: paths shortened, and
+cuda-gdb's thread and focus notices left out):
+
+```text
+$ python3 tools/ydb/ydb saxpy.ysu --gpu 'saxpy<<<1, 32>>>(arange(32), ones(32), 20)'
+(ydb) break saxpy:7
+(ydb) run
+CUDA thread hit Breakpoint 1, saxpy<<<(1,1,1),(32,1,1)>>> (X=0x10012200000, Yv=0x10012200200, N=20) at saxpy.ysu:7
+7	        Yv[i] = a * x + Yv[i];
+(ydb) locals
+(arg) X: *F32 = 0x10012200000
+(arg) Yv: *F32 = 0x10012200200
+(arg) N: I32 = 20
+x: F32 = 0
+unused: I32 = 20
+a: F32 = 2
+i: I32 = 0
+(ydb) cuda thread (5,0,0)
+(ydb) print x
+$1 = 5
+(ydb) lanes x
+x in warp 0 of block (0,0,0), at saxpy.ysu:7:
+  [0] 0    [1] 1    [2] 2    [3] 3    [4] 4    [5] 5    [6] 6    [7] 7
+  [8] 8    [9] 9    [10] 10  [11] 11  [12] 12  [13] 13  [14] 14  [15] 15
+  [16] 16  [17] 17  [18] 18  [19] 19
+  lanes 20-31: not here (exited, or the block has no such thread)
+(ydb) tensor X 8
+X: 8 x F32 at 0x10012200000
+  [0] 0  [1] 1  [2] 2  [3] 3  [4] 4  [5] 5  [6] 6  [7] 7
+  min 0, max 7, mean 3.5, zeros 1, NaN 0, inf 0
+(ydb) continue
+saxpy<<<(1,1,1), (32,1,1)>>> finished
+  X: 32 x F32 = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, ..., 28, 29, 30, 31]
+  Yv: 32 x F32 = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, ..., 1, 1, 1, 1]
+```
+
+Threads 20 to 31 took the `if i < N` exit, so they are not at line 7.
+Everything cuda-gdb does still works: `cuda thread`, `cuda block`, `info
+cuda lanes`, `print X[i]`, `print *X@8`, `stepi`, and `asm`, which
+disassembles the SASS the line runs. `locals` and `verify` work as on the
+host.
+
+**The launch** is `KERNEL<<<GRID, BLOCK>>>(ARG, ...)` (`GRID`, `BLOCK`: `N`
+or `(x, y, z)`; an optional third `SHARED` is the dynamic shared bytes). Each
+`ARG`, in parameter order or as `NAME=ARG`, is a number for a scalar, or a
+buffer: `arange(n)`, `zeros(n)`, `ones(n)`, `full(n, v)` or `[a, b, ...]`.
+`tools/ydb/ylaunch.py` runs it through the CUDA driver API, reads each
+parameter's type from the debug information, and refuses what the type
+cannot hold exactly - `0.5` for an `I32`, `16777217` for an `F32` -
+rather than rounding it. After the kernel it prints every buffer, so the same
+launch run outside the debugger (`python3 tools/ydb/ylaunch.py prog.ptx
+LAUNCH`) shows what the kernel computed.
+
+**What it shows.**
+
+| binding | cuda-gdb shows |
+| :--- | :--- |
+| `I32`, `U32`, `I64`, `U64`, `F32`, `F64` | the value, typed by Y's name: `neg: I32 = -3`, `u: U32 = 4000000000` |
+| `GlobalMemory<T>` | a pointer to `T`; `print X[3]` and `tensor X 8` read device memory |
+| `U32x4` | `{x = .., y = .., z = .., w = ..}`, and `print v.x` reads as in the source |
+| a `@ZeroDrift` accumulator | its exact value and representation, `0.75 (Q32.32)` (the Y extension is loaded); `print/r` shows the raw `value * 2^32` |
+| a parameter the kernel assigns | its current value: `N = N + 1` shows `N` as the new value, not the launch's |
+
+A binding is visible from the instruction after its `let` to the end of its
+block, so on the `let`'s own line `print x` says `No symbol "x" in current
+context` instead of printing what the register held before. A `for` loop's
+variable is visible over the loop only. An inner `let a` hides the outer `a`
+for its block, and after the block the outer one is shown again.
+
+**How.** It is the format `nvcc -G` writes: `.target sm_89, debug`, the
+`--lineinfo` line table, and DWARF in `.section .debug_info` naming each
+binding's PTX register (`src/ptx_debug_info.rs`). The driver's JIT, or
+`ptxas`, compiles a `debug` target without optimisation and maps each PTX
+register to where it lives in the SASS.
+
+- **`-g` changes no instruction.** Over the corpus, the `-g` PTX without its
+  labels, its `debug` and its DWARF is byte-for-byte the `--lineinfo` PTX
+  (`tests/ptx_debug_info.rs`). The SASS is different: it is debug code,
+  unoptimised and slower. `verify` in a `--gpu` session says so: it compares
+  the running kernel's PTX with the plain build's (`SAME PTX`) and then marks
+  the evidence about the SASS - the `tools/ptxas_tval` validations - as being
+  about the build without -g, not the one being debugged.
+- **The description is held to the code.** `tools/ydb/ydwarf.py --check`
+  reads the DWARF back and checks every binding over the corpus: its registers
+  are declared and written before its scope begins, two names share a register
+  only while nothing writes it, and the scopes nest.
+- **`<optimized out>` and `<unavailable>`, never a wrong value.** ptxas keeps
+  no SASS location for a value nothing reads again (a `let acc: U32 = 0;`
+  overwritten before any read), nor - even in debug code, with CUDA 13.4 -
+  for the four registers of a vector load: a `U32x4`, and a `let v0: U32 =
+  v.x;` that shares its lane's register, print as unavailable. When a lane's
+  copy is assigned while it still shares the register, the vector's lane is
+  described as `<optimized out>` from its `let` on.
+- **Before the parameter loads** - the kernel's first instructions, where
+  `set cuda break_on_launch` stops - no variable is shown: the kernel's
+  described range starts after them, because the parameter registers do not
+  hold the parameters until then.
+- A kernel a library lowering replaces wholesale (a `@tile` GEMM, paged
+  attention, RoPE, RMSNorm) has its parameters and nothing else: none of its
+  code comes from a statement.
+- `--debug --emit-ptx` is refused (it would start gdb on a host program), as
+  is `-O` with `--emit-ptx`.
+- Tested with cuda-gdb 13.4 on an RTX 4070 Ti SUPER (sm_89) that was also
+  driving the desktop; the kernel stops while the display keeps running.
+- Building it found that `let v0: U32 = v.x; v0 = v0 + 1;` also changed `v.x`:
+  the binding shared the lane's register and the let-aliasing guard did not
+  look at vectors (`tests/v4_lane_copy_assigned.ysu`). The binding now gets its
+  own register when it is assigned and the lane is read again anywhere in the
+  kernel - which leaves every committed kernel's PTX unchanged
+  (`bn254_msm_bucket` assigns its lane copies and never reads the vectors
+  again).
 
 ---
 

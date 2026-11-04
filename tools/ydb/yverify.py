@@ -233,6 +233,28 @@ def ptx_parts(ptx):
     return header, module, entries
 
 
+def strip_debug(ptx):
+    """A `-g` module as it is without -g: its labels for the debug
+    information, the `debug` on its `.target` and the DWARF sections removed.
+    `-g` adds nothing else (tests/ptx_debug_info.rs holds it to that)."""
+    out, in_section = [], False
+    for raw in ptx.splitlines():
+        t = raw.strip()
+        if in_section:
+            if t == "}":
+                in_section = False
+            continue
+        if t.startswith(".section"):
+            in_section = True
+            continue
+        if re.fullmatch(r"\$L__ydbg\d+:", t):
+            continue
+        if t.startswith(".target ") and t.endswith(", debug"):
+            raw = raw.replace(", debug", "")
+        out.append(raw)
+    return "\n".join(out) + "\n"
+
+
 def same_kernel(this_ptx, artifact_ptx, name):
     """(same?, why not): the kernel `name` in this compile is the artifact's,
     instruction for instruction, at the same target, with every module-level
@@ -460,13 +482,15 @@ def _where(f, line):
     return " (lines %d-%d)" % (f["line"], f["end"])
 
 
-def report(program, line, g, facts_source, file=None, host=None, gpu_ptx=None, gpu_error=None, repo=REPO):
+def report(program, line, g, facts_source, file=None, host=None, gpu_ptx=None, gpu_error=None, repo=REPO,
+           gpu_debug_ptx=None):
     """The report for `file:line` (the program's own file by default), as text.
 
     `g` is the guarantee table, `facts_source` says where it came from.
     `host` describes the binary being debugged (`clang -O0`), or is None when
     there is none. `gpu_ptx` is this program's PTX, or None with `gpu_error`
-    saying why there is none."""
+    saying why there is none. `gpu_debug_ptx` is the `-g` PTX the process
+    being debugged runs (`ydb --gpu`), whose SASS no evidence is about."""
     file = file or program
     out = []
     src = ymap.source_line(file, line) if os.path.isfile(file) else ""
@@ -506,7 +530,22 @@ def report(program, line, g, facts_source, file=None, host=None, gpu_ptx=None, g
         else:
             ev, _ = gpu_evidence(item["name"], gpu_ptx, repo)
             target = ev[0][1].split()[-1]
-            out.append("The code the GPU runs (Y --emit-ptx for %s, then ptxas):" % target)
+            if gpu_debug_ptx is not None:
+                same, why = same_kernel(strip_debug(gpu_debug_ptx), gpu_ptx, item["name"])
+                out.append("The code this process runs on the GPU (Y --emit-ptx -g for %s: debug code):" % target)
+                if same:
+                    out.append(_wrap("SAME PTX", "its instructions are the ones Y --emit-ptx writes without -g, "
+                                     "compared here: -g adds labels, a line table and the DWARF, nothing else"))
+                else:
+                    out.append(_wrap("DIFFERENT", "its instructions are not the ones Y --emit-ptx writes without "
+                                     "-g (%s), so nothing below is about the code this process runs" % why))
+                out.append(_wrap("TRUSTED", "ptxas or the driver's JIT compiles `.target %s, debug` without "
+                                 "optimisation: the SASS this process runs is not the SASS any validation below "
+                                 "is about, and nothing checks it against the PTX" % target))
+                out.append("")
+                out.append("Without -g (Y --emit-ptx for %s, then ptxas) - what the evidence is about:" % target)
+            else:
+                out.append("The code the GPU runs (Y --emit-ptx for %s, then ptxas):" % target)
             for tag, text in ev[1:]:
                 out.append(_wrap(tag, text))
     return "\n".join(out)

@@ -11,6 +11,7 @@ pub mod lexical_scope;
 pub mod uniformity;
 pub mod intrinsics;
 pub mod parser;
+pub mod ptx_debug_info;
 pub mod ptx_emitter;
 pub mod sentinel;
 pub mod type_checker;
