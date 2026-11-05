@@ -1541,9 +1541,12 @@ Any M, N and K, still bit-exact:
 - Ragged sizes with N a multiple of 4: 0.91-1.26x, from 1000^3 to 3000^3.
   A nearly empty last tile row or column goes to narrow remainder tiles
   instead of costing a whole wave: 1025 x 1024 x 1024 runs at 1.09x.
-- N odd, where a B row is not 16-byte aligned and is copied 4 bytes at a
-  time: 0.80-0.97x. GPT-2's vocabulary projection, 1024 x 50257 x 768,
-  runs at 0.79-0.88x across runs.
+- N % 4 != 0, where a B row is not 16-byte aligned throughout. Each row's
+  alignment is known at compile time, so each is copied at its own widest
+  width:
+  - N = 2 mod 4: 0.79-1.02x. BERT's vocabulary projection,
+    1024 x 30522 x 768, runs at 1.00x.
+  - N odd: 0.77-0.98x. GPT-2's, 1024 x 50257 x 768, runs at 0.85x.
 
 ### BN254 field kernels, NTT and MSM
 
@@ -1590,7 +1593,7 @@ different baseline.
 | F16 GEMM, M = 128–256 against N or K = 11008 (Llama-2-7B's MLP) | cuBLAS | 0.97–0.98x, the best of eight tiles |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 | FP32 GEMM, 768³ and K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.81–0.95x |
-| FP32 GEMM with N odd (4-byte copies of B) | cuBLAS, TF32 off | 0.80–0.97x (GPT-2's 1024 × 50257 × 768: 0.79–0.88x) |
+| FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time) | cuBLAS, TF32 off | 0.77–0.98x (GPT-2's 1024 × 50257 × 768: 0.85x) |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound

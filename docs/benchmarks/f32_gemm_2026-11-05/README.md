@@ -207,25 +207,93 @@ Aligned shapes are as before (0.96-1.24x in the same run).
   within 3% of the current tiles on two K-heavy shapes and slower on the
   rest.
 
+## B rows at their own width (2026-11-06)
+
+With N % 4 != 0, B was copied 4 bytes at a time, and at 1024 x 50257 x 768
+that saturated the global-load queue. ncu: `lg_throttle` 0.57 against 0.04
+at N = 50176, issue 66% against 81%; the aligned shape ran at 1.07x cuBLAS,
+the odd one at 0.87x.
+
+The fix uses compile-time alignment. Every K tile starts at a multiple of
+16 rows, so whether row `kk` of a tile is 16-, 8- or 4-byte aligned depends
+only on `kk * N mod 4`, which is known when compiling. Each row is now
+copied at its widest width:
+
+| N | 16-byte rows | 8-byte rows | 4-byte rows | B copies per thread (large tile) |
+| :--- | :--- | :--- | :--- | :--- |
+| odd | a quarter | a quarter | half | 16 -> 11 |
+| 2 mod 4 | half | half | none | 16 -> 6 |
+
+The shared-memory layout is unchanged and the copies stay asynchronous.
+Four restrictions, each measured:
+- **N odd only on the 256-column tiles.** On the 128-column mid tile the
+  mixed widths were slower (1023 x 1025 x 1027: 1.15x the time;
+  `row_widths_ab.txt`).
+- **Not with a ragged column edge.** A chunk wider than 4 bytes would
+  straddle N. Copying it in part (the rest zero-filled) reads, by memcheck,
+  16 bytes at the end of B's last row, 8 past the allocation. Such a set
+  keeps one width that divides N: 8 bytes for N even, else 4.
+- **Splitting the edge off.** Because of the rule above, splitting the
+  edge into remainder tiles is what lets the whole tiles take the widths.
+  So the 50-tile limit on splitting is waived there:
+  - 1024 x 30522 x 768: 0.86x unsplit, 0.97x split;
+  - 1024 x 50257 x 768: 0.83x, 0.85x.
+- **Not with a K tail.** The K-tail guards on every copy, beside the
+  per-width registers, spilled: about 400 bytes on the 64-row tiles, and
+  616-920 bytes even under the large tile's 255. Raising the mid tile to
+  255 registers removed its spills but ran odd N 10-15% slower (ptxas used
+  210 registers), so the 170 budget stays.
+
+The old and new kernels, timed together (`row_widths_ab.txt`), give the
+same bits on every shape:
+
+| shape | before | now |
+| :--- | ---: | ---: |
+| 1024 x 30522 x 768 (BERT's vocabulary) | 0.85 | 1.00 |
+| 4096 x 30522 x 768 | 0.88 | 0.99 |
+| 2048 x 2050 x 2048 | 0.94 | 1.02 |
+| 2047 x 2050 x 2051 (K tail: one 8-byte width) | 0.90 | 0.96 |
+| 1024 x 1026 x 1024 | 0.75 | 0.79 |
+| 1024 x 50257 x 768 (GPT-2's vocabulary) | 0.81 | 0.85 |
+| 4096 x 50257 x 768 | 0.87 | 0.87 |
+| 4096 x 4097 x 4096 | 0.99 | 0.98 |
+| 1023 x 1025 x 1027, 2047 x 2049 x 2051 (unchanged code) | 0.78, 0.90 | 0.77, 0.91 |
+| 1024^3, 4096^3 (unchanged code) | 1.15, 1.02 | 1.15, 0.98 |
+
+The last two rows' SASS is identical before and after. Their differences
+are the card's run-to-run spread (it sits at its power cap).
+
 ## Checks
 
 `tests/f32_simt_gemm.rs`:
 - the tile rule, `.maxnreg`, and ptxas with no spills;
 - refusals: N or K of 2^22, the host backend, a near-miss signature;
-- bit-exact against `f32::mul_add` folded in order, on 24 shapes, each on
-  three grids including more CTAs than tiles. They cover all three tiles
-  and all five remainder tiles, a single K tile, 1x1x1, N odd and
-  N = 2 mod 4, a column edge alone, leftover rows that exactly fill their
-  strips, and ragged M, N and K on every tile;
-- the remainder sets each shape gets, from its header;
+- bit-exact against `f32::mul_add` folded in order, on 31 shapes, each on
+  three grids including more CTAs than tiles. They cover:
+  - all three tiles and all five remainder tiles;
+  - a single K tile, and 1x1x1;
+  - N odd and N = 2 mod 4, a column edge alone;
+  - leftover rows that exactly fill their strips;
+  - ragged M, N and K on every tile;
+  - B at each row's width with K past the prologue, and the one-width
+    fallbacks;
+- the remainder sets and B copy widths each shape gets, from its header;
 - a ragged K keeping a -0.0 sum;
 - the block-size trap, run in a child process;
-- compute-sanitizer memcheck and racecheck clean on 14 shapes, 10 of them
+- compute-sanitizer memcheck and racecheck clean on 17 shapes, 13 of them
   ragged.
 
-The emitter was mutated 41 times, and 40 of the mutants were killed
-(the last 11 target the remainder sets). Most
+The emitter was mutated 52 times (11 against the remainder sets, 11
+against the per-row B widths), and 50 of the mutants were killed. Most
 mutants of the edge handling (size-0 copies, the column clamp, a missing
 barrier between tiles) still give correct bits, so only the sanitizer test
-kills them. One survivor is equivalent: the tail's `wait_group 0` against
-`1`, where with 3 stages the newest group is always empty.
+kills them. Two survivors are equivalent:
+- the tail's `wait_group 0` against `1`, where with 3 stages the newest
+  group is always empty;
+- a K guard reading the first width's row for every width, where a K tail
+  always means a single width.
+
+Each test gap a survivor exposed was closed by adding a shape:
+- leftover rows that exactly fill their strips;
+- several B widths with K past the prologue;
+- an edge with no K tail.
