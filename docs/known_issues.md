@@ -198,16 +198,23 @@ source; each entry there now carries its status. What is still open:
 
 ### FP32 GEMM limits
 
-- The `@tile` FP32 GEMM (2026-11-05) refuses M or N not a multiple of 64 and
-  K not a multiple of 16: it has no ragged edge, so those shapes have no Y
-  FP32 GEMM. It needs sm_80 (`cp.async`); older targets are refused by
+- The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
+  needs sm_80 (`cp.async`); older targets are refused by
   `check_target_features`, so the GTX 1050 Ti (sm_61) has none.
 - Where cuBLAS splits K it is ahead: 0.81-0.85x at 768^3, 0.94-0.95x at
   1024 x 1024 x 4096 and 256 x 4096 x 4096. By kernel time, 256^3 is about
   0.92x. Y does not split, by design: the answer would then depend on the
-  shape (`docs/benchmarks/f32_gemm_2026-11-05/`).
+  shape.
+- With N odd, B is copied 4 bytes at a time, which fills the shared-memory
+  instruction queue on the 64-row tiles (MIO throttle 0.32 against 0.10):
+  0.59x at 1023 x 1025 x 1027, 0.76-0.90x on large odd-N shapes. A ragged
+  edge that adds a nearly empty wave costs up to a fifth (1024 x 1028 x 1024:
+  0.80x). Three tiles do not fit every shape; cuBLAS has dozens.
+- Below 128 rows a 64-row tile still computes all 64. That ties cuBLAS's
+  memory-bound GEMV at one row (0.93-0.97x), but there is no GEMV kernel.
 - Nothing in `python/y_lang` calls it yet; it runs through the generic
   launch path (the header states block, grid and dynamic shared memory).
+- All in `docs/benchmarks/f32_gemm_2026-11-05/`.
 
 ### Python packaging
 

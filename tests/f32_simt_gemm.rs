@@ -1,7 +1,7 @@
 //! The FP32 GEMM on CUDA cores: `@tile(M, N, K) kernel g(A, B, C:
 //! GlobalMemory<F32>)` (`src/ptx_emitter/f32_simt_gemm.rs`).
 //!
-//! Its claim is that every element of C is ONE `fma.rn.f32` chain over
+//! Any M, N and K. Its claim is that every element of C is ONE `fma.rn.f32` chain over
 //! k = 0..K-1, in that order, whatever the shape, the tile the shape selects
 //! and the grid it is launched with. That is exactly what `f32::mul_add`
 //! folded in the same order computes on the CPU, so the GPU results are
@@ -75,17 +75,29 @@ fn compile(dir: &Path, name: &str, m: u32, n: u32, k: u32, backend: &str) -> Res
 fn the_tile_follows_the_shape_and_each_kernel_assembles_without_spills() {
     let dir = pinned::pinned_scratch("f32_gemm_tiles", pinned::SM_PINNED);
     // (shape, tile, block, .maxnreg): the large tile needs ~2 waves of its
-    // 128x256 tiles on 66 SMs, the mid tile ~1 wave of 64x128.
+    // 128x256 tiles on 66 SMs, at least 80% full, and 128 rows; the mid tile
+    // ~1 wave of 64x128. Ragged shapes count their edge tiles whole.
     let cases = [
         ((4096, 4096, 4096), "large", 256, 255),
         ((2048, 2048, 2048), "large", 256, 255),
         ((1536, 1536, 1536), "mid", 128, 170),
         ((1024, 1024, 1024), "mid", 128, 170),
+        // 64 large tiles: one full wave is not enough for the large tile.
+        ((1024, 2048, 1024), "mid", 128, 170),
         ((128, 4096, 4096), "mid", 128, 170),
         ((512, 512, 512), "small", 128, 128),
         ((64, 64, 16), "small", 128, 128),
-        // 2048 rows but N = 4160 is not a multiple of 256: not the large tile.
-        ((2048, 4160, 64), "small", 128, 128),
+        // 272 large tiles, 4.1 waves: 82% full.
+        ((2048, 4160, 64), "large", 256, 255),
+        // 153 large tiles, 2.3 waves: 77% full, so not the large tile.
+        ((2049, 2049, 2048), "mid", 128, 170),
+        // Odd N (4-byte B copies), many waves.
+        ((1024, 50257, 768), "large", 256, 255),
+        // One row: never the 128-row tile.
+        ((1, 50257, 768), "mid", 128, 170),
+        ((1023, 1025, 1027), "mid", 128, 170),
+        ((7, 13, 5), "small", 128, 128),
+        ((1, 1, 1), "small", 128, 128),
     ];
     let ptxas = ptxas::ptxas();
     for (i, ((m, n, k), tile, block, maxnreg)) in cases.iter().enumerate() {
@@ -115,12 +127,15 @@ fn the_tile_follows_the_shape_and_each_kernel_assembles_without_spills() {
 }
 
 #[test]
-fn a_shape_off_the_tiles_is_refused_and_so_is_the_host_backend() {
+fn what_cannot_be_addressed_is_refused_and_so_is_the_host_backend() {
     let dir = pinned::pinned_scratch("f32_gemm_refused", pinned::SM_PINNED);
-    for (i, (m, n, k)) in [(100, 128, 64), (128, 96, 64), (128, 128, 40)].iter().enumerate() {
-        let log = compile(&dir, &format!("r{i}"), *m, *n, *k, "--emit-ptx").expect_err("an off-tile shape was compiled");
-        assert!(log.contains("an FP32 GEMM needs M % 64 == 0, N % 64 == 0 and K % 16 == 0"), "{m}x{n}x{k}:\n{log}");
+    // One tile's rows are addressed with 32-bit offsets.
+    for (i, (m, n, k)) in [(64, 64, 1 << 22), (64, 1 << 22, 64)].iter().enumerate() {
+        let log = compile(&dir, &format!("r{i}"), *m, *n, *k, "--emit-ptx").expect_err("an unaddressable shape was compiled");
+        assert!(log.contains("K and N must stay below 2^22"), "{m}x{n}x{k}:\n{log}");
     }
+    // Just below the bound compiles.
+    compile(&dir, "edge", 64, 64, (1 << 22) - 1, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
     // The source has no body; on the host it would be an empty function.
     let log = compile(&dir, "host", 128, 128, 64, "--emit-llvm").expect_err("the host backend compiled an empty FP32 GEMM");
     assert!(log.contains("is an `@tile` FP32 GEMM, whose body only the PTX backend"), "{log}");
@@ -173,13 +188,30 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
     // Each tile; K = 16 is one K tile (fewer than the pipeline's stages),
     // K = 32 two (the prologue loads them all), the others run the loop past
     // its last load.
-    let shapes: [((u32, u32, u32), &str); 6] = [
+    let shapes: [((u32, u32, u32), &str); 18] = [
         ((64, 64, 16), "small"),
         ((192, 320, 112), "small"),
         ((128, 4096, 80), "mid"),
         ((640, 1024, 48), "mid"),
         ((2048, 4096, 32), "large"),
         ((2048, 4096, 112), "large"),
+        // Ragged: a single element; M, N and K all ragged with N odd; K
+        // below one K tile; N a multiple of 4 but not of the tile; and each
+        // tile with ragged M and N, odd N on the large tile.
+        ((1, 1, 1), "small"),
+        ((7, 13, 5), "small"),
+        // N = 130: even, but a B row is not 16-byte aligned.
+        ((66, 130, 24), "small"),
+        ((33, 65, 17), "small"),
+        ((129, 257, 15), "small"),
+        ((300, 1028, 51), "small"),
+        // N ragged with M whole (the column mask alone).
+        ((128, 1028, 40), "small"),
+        ((2048, 4100, 20), "large"),
+        ((1023, 1025, 75), "mid"),
+        ((1, 8193, 40), "mid"),
+        ((2047, 4100, 20), "large"),
+        ((2047, 4099, 36), "large"),
     ];
     for (si, ((m, n, k), tile)) in shapes.iter().enumerate() {
         let (m, n, k) = (*m as usize, *n as usize, *k as usize);
@@ -286,7 +318,21 @@ fn child_sanitized_runs() {
     }
     let ctx = CudaContext::new().expect("the parent checked for a driver");
     let dir = pinned::pinned_scratch("f32_gemm_sanitized", pinned::SM_PINNED);
-    let shapes = [(64usize, 64usize, 16usize), (128, 4096, 48), (2048, 4096, 16), (2048, 4096, 64)];
+    let shapes = [
+        (64usize, 64usize, 16usize),
+        (128, 4096, 48),
+        (2048, 4096, 16),
+        (2048, 4096, 64),
+        // Ragged: rows past M and k past K are copies of size 0 from
+        // addresses past the buffers, which must not be read.
+        (1, 1, 1),
+        (33, 65, 17),
+        (129, 257, 15),
+        (300, 1028, 51),
+        (128, 1028, 40),
+        (1023, 1025, 75),
+        (2047, 4099, 36),
+    ];
     for (si, &(m, n, k)) in shapes.iter().enumerate() {
         let name = format!("san{si}");
         let ptx = compile(&dir, &name, m as u32, n as u32, k as u32, "--emit-ptx").unwrap();
@@ -304,7 +350,7 @@ fn child_sanitized_runs() {
             ctx.synchronize().unwrap();
             let mut raw = vec![0u8; m * n * 4];
             ctx.memcpy_dtoh_at(&mut raw, &dc, 0).unwrap();
-            for i in [0, m / 2 + 1, m - 1] {
+            for i in [0, m / 2, m - 1] {
                 for j in 0..n {
                     let g = f32::from_le_bytes(raw[(i * n + j) * 4..(i * n + j) * 4 + 4].try_into().unwrap());
                     assert_eq!(g.to_bits(), oracle(&a, &b, n, k, i, j).to_bits(), "{m}x{n}x{k} grid {grid:?} C[{i}][{j}]");
@@ -342,7 +388,39 @@ fn compute_sanitizer_finds_no_invalid_access_and_no_race() {
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         // Every shape ran (a child that died early prints a clean summary
         // for the launches it made).
-        assert_eq!(text.matches("SANITIZED_RUN").count(), 4, "{check}: not every shape ran:\n{text}");
+        assert_eq!(text.matches("SANITIZED_RUN").count(), 11, "{check}: not every shape ran:\n{text}");
         assert!(out.status.success() && text.contains(summary), "{check} found something:\n{text}");
     }
+}
+
+/// The last, partial K tile runs only its valid steps. Every product here
+/// rounds to -0.0, so each element is -0.0; one padded step (0 * 0 + -0.0)
+/// would make it +0.0.
+#[test]
+fn a_ragged_k_keeps_the_sign_of_a_zero_sum() {
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - the signed zero was not checked.");
+        return;
+    };
+    let dir = pinned::pinned_scratch("f32_gemm_negzero", pinned::SM_PINNED);
+    for (si, &(m, n, k)) in [(64usize, 64usize, 17usize), (2047, 4100, 20), (1023, 1025, 75)].iter().enumerate() {
+        let name = format!("z{si}");
+        let ptx = compile(&dir, &name, m as u32, n as u32, k as u32, "--emit-ptx").unwrap();
+        let h = header(&ptx);
+        let module = ctx.load_ptx(&ptx, &name).unwrap();
+        module.set_max_dynamic_smem(h.smem).unwrap();
+        let (a, b) = (vec![-1e-30f32; m * k], vec![1e-30f32; k * n]);
+        assert_eq!(oracle(&a, &b, n, k, 0, 0).to_bits(), (-0.0f32).to_bits(), "the premise: the in-order chain is -0.0");
+        let (da, db, dc) = (ctx.alloc(m * k * 4).unwrap(), ctx.alloc(k * n * 4).unwrap(), ctx.alloc(m * n * 4).unwrap());
+        ctx.memcpy_htod_at(&da, 0, &as_bytes(&a)).unwrap();
+        ctx.memcpy_htod_at(&db, 0, &as_bytes(&b)).unwrap();
+        ctx.memset_u8(&dc, 0xff).unwrap();
+        ctx.launch(&module, (h.grid.0, h.grid.1, 1), (h.block, 1, 1), h.smem, &[da.device_ptr(), db.device_ptr(), dc.device_ptr()]).unwrap();
+        ctx.synchronize().unwrap();
+        let mut raw = vec![0u8; m * n * 4];
+        ctx.memcpy_dtoh_at(&mut raw, &dc, 0).unwrap();
+        let positive = raw.chunks_exact(4).filter(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]) != 0x8000_0000).count();
+        assert_eq!(positive, 0, "{m}x{n}x{k} ({}): {positive} of {} elements are not -0.0", h.tile, m * n);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

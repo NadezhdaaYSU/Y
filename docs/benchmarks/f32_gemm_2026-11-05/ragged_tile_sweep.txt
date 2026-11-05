@@ -1,0 +1,46 @@
+# each tile forced (temporary Y_F32_GEMM_TILE override, removed), before the 80%-full and 128-row rules
+== large
+1024x1028x1024 tile large: cuBLAS 20.91 TF  Y 15.55 TF  = 0.743x
+1024x1025x1024 tile large: cuBLAS 21.42 TF  Y 10.26 TF  = 0.479x
+1000x1000x1000 tile large: cuBLAS 21.86 TF  Y 15.70 TF  = 0.718x
+3000x3000x3000 tile large: cuBLAS 29.26 TF  Y 27.10 TF  = 0.926x
+2047x2049x2051 tile large: cuBLAS 24.74 TF  Y 16.09 TF  = 0.651x
+4095x4097x512 tile large: cuBLAS 26.30 TF  Y 19.61 TF  = 0.745x
+1500x1500x1500 tile large: cuBLAS 23.13 TF  Y 16.76 TF  = 0.725x
+== mid
+1024x1028x1024 tile mid  : cuBLAS 21.41 TF  Y 16.79 TF  = 0.784x
+1024x1025x1024 tile mid  : cuBLAS 21.14 TF  Y 11.65 TF  = 0.551x
+1000x1000x1000 tile mid  : cuBLAS 21.33 TF  Y 26.03 TF  = 1.221x
+3000x3000x3000 tile mid  : cuBLAS 29.16 TF  Y 26.58 TF  = 0.911x
+2047x2049x2051 tile mid  : cuBLAS 24.55 TF  Y 19.51 TF  = 0.795x
+4095x4097x512 tile mid  : cuBLAS 26.12 TF  Y 22.09 TF  = 0.846x
+1500x1500x1500 tile mid  : cuBLAS 22.83 TF  Y 22.84 TF  = 1.001x
+== small
+1024x1028x1024 tile small: cuBLAS 21.40 TF  Y 16.18 TF  = 0.756x
+1024x1025x1024 tile small: cuBLAS 21.16 TF  Y 12.41 TF  = 0.587x
+1000x1000x1000 tile small: cuBLAS 21.66 TF  Y 18.81 TF  = 0.868x
+3000x3000x3000 tile small: cuBLAS 29.14 TF  Y 20.68 TF  = 0.710x
+2047x2049x2051 tile small: cuBLAS 24.61 TF  Y 16.58 TF  = 0.673x
+4095x4097x512 tile small: cuBLAS 26.09 TF  Y 18.17 TF  = 0.696x
+1500x1500x1500 tile small: cuBLAS 22.81 TF  Y 18.97 TF  = 0.832x
+
+# odd N, large vs mid forced
+== large
+1024x50257x768 tile large: cuBLAS 30.17 TF  Y 26.20 TF  = 0.868x
+4096x50257x768 tile large: cuBLAS 29.63 TF  Y 25.85 TF  = 0.872x
+4096x4097x4096 tile large: cuBLAS 27.72 TF  Y 25.18 TF  = 0.908x
+2049x2049x2048 tile large: cuBLAS 25.96 TF  Y 16.31 TF  = 0.628x
+== mid
+1024x50257x768 tile mid  : cuBLAS 29.99 TF  Y 24.12 TF  = 0.804x
+4096x50257x768 tile mid  : cuBLAS 29.72 TF  Y 23.19 TF  = 0.780x
+4096x4097x4096 tile mid  : cuBLAS 28.57 TF  Y 23.10 TF  = 0.808x
+2049x2049x2048 tile mid  : cuBLAS 25.73 TF  Y 19.60 TF  = 0.762x
+
+# one edge at a time, mid tile (before the rule change)
+1024x1024x1024 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 22.08 TF  Y 25.71 TF  = 1.164x
+1023x1024x1024 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 22.48 TF  Y 27.15 TF  = 1.208x
+1024x1028x1024 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 21.54 TF  Y 16.67 TF  = 0.774x
+1024x1025x1024 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 21.32 TF  Y 11.73 TF  = 0.550x
+1024x1024x1027 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 23.03 TF  Y 27.31 TF  = 1.186x
+1023x1025x1027 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 18.84 TF  Y 11.05 TF  = 0.587x
+2670 MHz, 175.14 W, 62

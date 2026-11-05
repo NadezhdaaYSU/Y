@@ -1537,6 +1537,14 @@ At 768^3 and on K-heavy shapes with 256-1024 rows (0.94-0.95x), cuBLAS
 splits K. That is faster there and more accurate, but it makes the answer
 depend on the shape, which Y does not do.
 
+Any M, N and K, still bit-exact:
+- Ragged sizes with N a multiple of 4: 0.94-1.25x, from 1000^3 to 3000^3.
+- N odd, where a B row is not 16-byte aligned and is copied 4 bytes at a
+  time: 0.76-0.90x on large shapes. GPT-2's vocabulary projection,
+  1024 x 50257 x 768, runs at 0.88x.
+- Two worst cases: 0.59x at 1023 x 1025 x 1027, and 0.80x where a last,
+  nearly empty tile column adds a wave (1024 x 1028 x 1024).
+
 ### BN254 field kernels, NTT and MSM
 
 Once the integer datapath existed, the ZK backend's arithmetic could be
