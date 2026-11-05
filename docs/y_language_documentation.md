@@ -6388,8 +6388,9 @@ register to where it lives in the SASS.
   sanitizer's whole output. The exit status is non-zero when it found
   anything. A clean result is about this launch's geometry and inputs only.
   Over the whole GPU test suite (2026-11-05, `docs/sanitizer_sweep_2026-11-05/`)
-  memcheck found no invalid access in any kernel a test launches and racecheck
-  no shared-memory hazard; every error memcheck reported was one of Y's own
+  memcheck found no invalid access in any kernel a test launches, racecheck no
+  shared-memory hazard, synccheck no barrier error and initcheck no read of
+  uninitialised memory; every error memcheck reported was one of Y's own
   runtime checks trapping on purpose.
 - **From Python.** A kernel a program launches through `y_lang`
   (`TorchKernel`, `@y_lang.jit`) is compiled with debug information when
