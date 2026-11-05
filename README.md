@@ -1519,6 +1519,24 @@ it, as Y did until 2026-10-18 and Triton's `tl.dot` still does, left a median
 relative error of 6.6% at K = 4096 on positive inputs, against 6.5e-5 now
 (`docs/benchmarks/fp8_e4m3_2026-10-18/`).
 
+### FP32 GEMM vs cuBLAS
+
+`@tile(M, N, K) kernel g(A, B, C: GlobalMemory<F32>)` runs on CUDA cores with
+cuBLAS's own structure (a multistage `cp.async` pipeline, A transposed into
+shared memory, grouped raster order). Every element of C is one `fma.rn.f32`
+chain in k order, so its bits do not depend on M, the tile or the grid. cuBLAS
+with TF32 off, on the RTX 4070 Ti SUPER, every output bit-identical to an
+in-order `fmaf` reference (`docs/benchmarks/f32_gemm_2026-11-05/`); above 1 is
+Y faster:
+
+| shape | 8192^3 | 4096^3 | 2048^3 | 1024^3 | 512^3 | 128 x 4096 x 4096 | 768^3 |
+|---|---|---|---|---|---|---|---|
+| **Y vs cuBLAS** | 0.98x | 0.96-1.00x | 1.03-1.04x | 1.20x | 1.19-1.20x | 0.99-1.02x | 0.81-0.85x |
+
+At 768^3 and on K-heavy shapes with 256-1024 rows (0.94-0.95x), cuBLAS
+splits K. That is faster there and more accurate, but it makes the answer
+depend on the shape, which Y does not do.
+
 ### BN254 field kernels, NTT and MSM
 
 Once the integer datapath existed, the ZK backend's arithmetic could be

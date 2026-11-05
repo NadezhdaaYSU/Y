@@ -4167,6 +4167,21 @@ Add @bounds(min, max) to state the accumulator's real range, or declare it as a 
     }
 
     fn emit_kernel(&mut self, k: &KernelDecl) {
+        // An `@tile` FP32 GEMM has no body in the source: the PTX backend
+        // writes it (`ptx_emitter::f32_simt_gemm`). Lowered here it would be
+        // an empty function that returns with C unwritten.
+        let global_f32 = |ty: &Type| {
+            matches!(ty, Type::Generic { base, args, .. }
+                if base == "GlobalMemory" && matches!(args.as_slice(), [GenericArg::Type(Type::Primitive(p, _))] if p == "F32"))
+        };
+        if k.tile.is_some() && k.params.len() == 3 && k.params.iter().all(|p| global_f32(&p.ty)) {
+            self.emit_errors.push(format!(
+                "[LLVM host backend] kernel `{}` is an `@tile` FP32 GEMM, whose body only the PTX backend \
+                 writes (`--emit-ptx`); compiled for the host it would be an empty function that leaves C unwritten",
+                k.name
+            ));
+            return;
+        }
         // As in `emit_func`: a binding of its own for every `let`.
         let renamed = KernelDecl {
             body: crate::lexical_scope::unique_bindings(&k.params, &k.body),

@@ -18,6 +18,9 @@ use std::fmt::Write;
 #[cfg(feature = "zk")]
 use crate::zk_emitter::*;
 
+/// `@tile` FP32 GEMM on CUDA cores (`emit_f32_simt_gemm_kernel`).
+mod f32_simt_gemm;
+
 /// L2-locality grid-swizzle group size for `emit_tensor_core_gemm_kernel`
 /// (see `emit_grid_swizzle_code`'s doc comment for the algorithm).
 /// Empirically swept over {4, 8, 16, 32} against real sm_89 (RTX 4070 Ti
@@ -5886,6 +5889,8 @@ or `shared_alloc_u32` for a shared-memory array.",
             ))
         } else if let Some((m, n, k, a_ptr, b_ptr, c_ptr)) = self.tile_gemm_int8_operands(kernel) {
             Some(self.emit_int8_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, &kernel.name, None))
+        } else if let Some((m, n, k, a_ptr, b_ptr, c_ptr)) = self.tile_gemm_f32_operands(kernel) {
+            Some(self.emit_f32_simt_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, hw_profile, &kernel.name))
         } else if let Some((m, n, k, a_ptr, b_ptr, scale_a_reg, scale_b_reg, c_ptr)) = self.tile_gemm_fp8_operands(kernel, "E4M3") {
             if !self.require_fp8_hardware(&kernel.name) {
                 return;

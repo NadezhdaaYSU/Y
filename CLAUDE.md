@@ -75,7 +75,8 @@ cargo run --bin Y -- tests/paged_decode_attention_128_32_8_16.ysu --emit-ptx -o 
 
 - Front end: `src/{lexer,parser,ast,type_checker,lexical_scope}.rs`;
   safety/resources: `linear_tracker.rs`, `guarantees.rs`, `zero_drift.rs`.
-- Emitters: `llvm_emitter.rs`, `ptx_emitter.rs`, `cpu_emitter.rs`,
+- Emitters: `llvm_emitter.rs`, `ptx_emitter.rs` (FP32 GEMM in
+  `ptx_emitter/f32_simt_gemm.rs`), `cpu_emitter.rs`,
   `native_emitter.rs`, `rt_core_emitter.rs`, `zk_emitter.rs`, `zk_witness.rs`.
 - Hardware/tuning: `sentinel.rs`, `ysu_gpu_probe.rs`, `autotuner.rs`,
   `empirical_autotune.rs`, `bank_conflict.rs`, `coprocessor_scheduler.rs`.

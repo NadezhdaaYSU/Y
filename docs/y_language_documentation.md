@@ -1167,6 +1167,27 @@ for i in 0..100 {
   still accumulates the first way. Exact small integers, the benchmarks'
   inputs, cannot show the difference
   ([record](benchmarks/fp8_e4m3_2026-10-18/README.md)).
+* **FP32 form (since 2026-11-05)**, with three parameters `(A, B, C:
+  GlobalMemory<F32>)`, A `M`x`K`, B `K`x`N`, C `M`x`N`, row-major: the GEMM
+  on CUDA cores (`src/ptx_emitter/f32_simt_gemm.rs`), sm_80 and later
+  (`cp.async`). **Every element of C is one `fma.rn.f32` chain over
+  k = 0..K-1 in that order**, so its bits depend on its row of A and column
+  of B only: not on M, the tile, or the grid. That is `f32::mul_add` folded
+  in order, which the tests compare bit for bit; there is no split K,
+  which would make the answer depend on the shape. M and N must be
+  multiples of 64 and K of 16 (refused otherwise). One of three tiles is
+  chosen from the shape and the SM count: 128x256 (one 256-thread CTA per
+  SM) when there are about two waves of them, 64x128 at about one wave,
+  64x64 otherwise. Launch: block `(threads, 1, 1)` as the header states,
+  anything else traps; output tiles are grid-strided, so any grid is
+  correct, and the header's grid runs one tile per CTA; the header states
+  the dynamic shared memory. Against cuBLAS (TF32 off) on an RTX 4070 Ti
+  SUPER: 0.93-1.04x from 2048 to 8192, 1.19-1.20x at 512 and 1024,
+  0.94-1.04x with 64-1024 rows or 128 columns and K = 2048-4096,
+  0.81-0.85x at 768^3,
+  where cuBLAS splits K in three
+  ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The host backend
+  refuses the kernel: it has no body there.
 * **Split K**, with four parameters `(A, B: GlobalMemory<F16>, C, Partial:
   GlobalMemory<F32>)` and a kernel name ending in `_splitk<S>`, S from 1 to
   64: K is cut into S equal parts, each a multiple of 8, and N must be a
