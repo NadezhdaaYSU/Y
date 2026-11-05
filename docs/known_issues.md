@@ -201,7 +201,7 @@ source; each entry there now carries its status. What is still open:
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
   needs sm_80 (`cp.async`); older targets are refused by
   `check_target_features`, so the GTX 1050 Ti (sm_61) has none.
-- Where cuBLAS splits K it is ahead: 0.81-0.85x at 768^3, 0.94-0.95x at
+- Where cuBLAS splits K it is ahead: 0.81-0.87x at 768^3, 0.94-0.95x at
   1024 x 1024 x 4096 and 256 x 4096 x 4096. By kernel time, 256^3 is about
   0.92x. Y does not split, by design: the answer would then depend on the
   shape.
