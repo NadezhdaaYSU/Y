@@ -1538,12 +1538,12 @@ splits K. That is faster there and more accurate, but it makes the answer
 depend on the shape, which Y does not do.
 
 Any M, N and K, still bit-exact:
-- Ragged sizes with N a multiple of 4: 0.94-1.25x, from 1000^3 to 3000^3.
+- Ragged sizes with N a multiple of 4: 0.91-1.26x, from 1000^3 to 3000^3.
+  A nearly empty last tile row or column goes to narrow remainder tiles
+  instead of costing a whole wave: 1025 x 1024 x 1024 runs at 1.09x.
 - N odd, where a B row is not 16-byte aligned and is copied 4 bytes at a
-  time: 0.76-0.90x on large shapes. GPT-2's vocabulary projection,
-  1024 x 50257 x 768, runs at 0.88x.
-- Two worst cases: 0.59x at 1023 x 1025 x 1027, and 0.80x where a last,
-  nearly empty tile column adds a wave (1024 x 1028 x 1024).
+  time: 0.80-0.97x. GPT-2's vocabulary projection, 1024 x 50257 x 768,
+  runs at 0.79-0.88x across runs.
 
 ### BN254 field kernels, NTT and MSM
 
@@ -1590,7 +1590,7 @@ different baseline.
 | F16 GEMM, M = 128–256 against N or K = 11008 (Llama-2-7B's MLP) | cuBLAS | 0.97–0.98x, the best of eight tiles |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 | FP32 GEMM, 768³ and K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.81–0.95x |
-| FP32 GEMM with N odd (4-byte copies of B) | cuBLAS, TF32 off | 0.59–0.90x (GPT-2's 1024 × 50257 × 768: 0.88x) |
+| FP32 GEMM with N odd (4-byte copies of B) | cuBLAS, TF32 off | 0.80–0.97x (GPT-2's 1024 × 50257 × 768: 0.79–0.88x) |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound

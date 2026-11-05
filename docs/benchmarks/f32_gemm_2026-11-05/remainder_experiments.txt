@@ -1,0 +1,69 @@
+# kernel time, Y only (ytime.py): with remainder tiles (rem) and with them disabled (norem, a temporary switch since removed), half-tile policy, before the 2% rule
+== rem
+1000x1000x1000 mid   grid 128x1:     79.8 us
+1025x1024x1024 mid   grid 136x1:    100.1 us
+1024x1028x1024 mid   grid 144x1:    114.3 us
+1023x1025x1027 mid   grid 144x1:    146.8 us
+2047x2049x2051 mid   grid 544x1:    815.1 us
+1030x1030x1030 mid   grid 153x1:    164.6 us
+1500x1500x1500 mid   grid 288x1:    317.7 us
+3000x3000x3000 large grid 300x1:   2070.0 us
+4097x4097x1024 large grid 561x1:   1538.5 us
+1x50257x768 mid   grid 393x1:    257.1 us
+1024x50257x768 large grid 1584x1:   3465.5 us
+300x1028x512 small grid 85x1:     30.6 us
+== norem
+1000x1000x1000 mid   grid 128x1:     80.9 us
+1025x1024x1024 mid   grid 136x1:    131.6 us
+1024x1028x1024 mid   grid 144x1:    128.4 us
+1023x1025x1027 mid   grid 144x1:    194.9 us
+2047x2049x2051 mid   grid 544x1:    938.8 us
+1030x1030x1030 mid   grid 153x1:    188.4 us
+1500x1500x1500 mid   grid 288x1:    316.2 us
+3000x3000x3000 large grid 288x1:   2061.7 us
+4097x4097x1024 large grid 561x1:   1694.0 us
+1x50257x768 mid   grid 393x1:    265.5 us
+1024x50257x768 large grid 1576x1:   3365.2 us
+300x1028x512 small grid 85x1:     30.5 us
+
+# with remainder tiles on every ragged edge (no policy yet) vs none, against cuBLAS
+== rem
+1x1x1 tile small: bit-exact True cuBLAS  0.00 TF  Y  0.00 TF  = 0.245x
+7x13x5 tile small: bit-exact True cuBLAS  0.00 TF  Y  0.00 TF  = 0.253x
+33x65x17 tile small: bit-exact True cuBLAS  0.01 TF  Y  0.01 TF  = 0.527x
+1024x1028x1024 tile mid  : bit-exact True cuBLAS 20.42 TF  Y 19.53 TF  = 0.957x
+1024x1025x1024 tile mid  : bit-exact True cuBLAS 20.52 TF  Y 16.51 TF  = 0.804x
+1023x1025x1027 tile mid  : bit-exact True cuBLAS 18.47 TF  Y 15.79 TF  = 0.855x
+2047x2049x2051 tile mid  : bit-exact True cuBLAS 24.40 TF  Y 21.86 TF  = 0.896x
+4096x4097x4096 tile large: bit-exact True cuBLAS 27.20 TF  Y 26.75 TF  = 0.983x
+1024x50257x768 tile large: bit-exact True cuBLAS 28.77 TF  Y 25.19 TF  = 0.876x
+== norem
+1x1x1 tile small: bit-exact False (grid 3x1: False) cuBLAS  0.00 TF  Y  0.00 TF  = 0.245x
+7x13x5 tile small: bit-exact False (grid 3x1: False) cuBLAS  0.00 TF  Y  0.00 TF  = 0.243x
+33x65x17 tile small: bit-exact False (grid 3x1: False) cuBLAS  0.01 TF  Y  0.01 TF  = 0.440x
+1024x1028x1024 tile mid  : bit-exact False (grid 3x1: False) cuBLAS 20.51 TF  Y 26.18 TF  = 1.277x
+1024x1025x1024 tile mid  : bit-exact False (grid 3x1: False) cuBLAS 20.33 TF  Y 15.84 TF  = 0.779x
+1023x1025x1027 tile mid  : bit-exact False (grid 3x1: False) cuBLAS 18.52 TF  Y 14.70 TF  = 0.794x
+2047x2049x2051 tile mid  : bit-exact False (grid 3x1: False) cuBLAS 24.44 TF  Y 21.09 TF  = 0.863x
+4096x4097x4096 tile large: bit-exact False (grid 3x1: False) cuBLAS 26.86 TF  Y 26.19 TF  = 0.975x
+1024x50257x768 tile large: bit-exact False (grid 3x1: False) cuBLAS 28.96 TF  Y 23.82 TF  = 0.823x
+
+# a 128x128 tile (8 warps, 2 CTAs/SM), tried and dropped
+== rule
+1023x1025x1027 tile mid  : cuBLAS 18.80 TF  Y 10.93 TF  = 0.582x
+1024x1028x1024 tile mid  : cuBLAS 20.52 TF  Y 16.36 TF  = 0.797x
+2047x2049x2051 tile mid  : cuBLAS 24.36 TF  Y 19.16 TF  = 0.786x
+768x768x768 tile mid  : cuBLAS 18.77 TF  Y 15.79 TF  = 0.841x
+1536x1536x1536 tile mid  : cuBLAS 23.77 TF  Y 24.00 TF  = 1.010x
+1024x1024x4096 tile mid  : cuBLAS 29.54 TF  Y 27.66 TF  = 0.936x
+256x4096x4096 tile mid  : cuBLAS 28.45 TF  Y 26.29 TF  = 0.924x
+1024x1024x1024 tile mid  : cuBLAS 21.49 TF  Y 25.93 TF  = 1.207x
+== square
+1023x1025x1027 tile square: cuBLAS 18.57 TF  Y  9.97 TF  = 0.537x
+1024x1028x1024 tile square: cuBLAS 20.67 TF  Y 13.51 TF  = 0.654x
+2047x2049x2051 tile square: cuBLAS 24.33 TF  Y 18.86 TF  = 0.775x
+768x768x768 tile square: cuBLAS 18.80 TF  Y 15.74 TF  = 0.837x
+1536x1536x1536 tile square: cuBLAS 23.71 TF  Y 21.01 TF  = 0.886x
+1024x1024x4096 tile square: cuBLAS 29.52 TF  Y 28.04 TF  = 0.950x
+256x4096x4096 tile square: cuBLAS 28.37 TF  Y 27.14 TF  = 0.957x
+1024x1024x1024 tile square: cuBLAS 22.80 TF  Y 26.39 TF  = 1.158x

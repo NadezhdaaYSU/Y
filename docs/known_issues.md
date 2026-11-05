@@ -206,10 +206,13 @@ source; each entry there now carries its status. What is still open:
   0.92x. Y does not split, by design: the answer would then depend on the
   shape.
 - With N odd, B is copied 4 bytes at a time, which fills the shared-memory
-  instruction queue on the 64-row tiles (MIO throttle 0.32 against 0.10):
-  0.59x at 1023 x 1025 x 1027, 0.76-0.90x on large odd-N shapes. A ragged
-  edge that adds a nearly empty wave costs up to a fifth (1024 x 1028 x 1024:
-  0.80x). Three tiles do not fit every shape; cuBLAS has dozens.
+  instruction queue on the 64-row tiles (MIO throttle 0.32 against 0.10,
+  +37% on the mid tile, +14% on the large one at equal tile counts):
+  0.80-0.97x, GPT-2's 1024 x 50257 x 768 0.79-0.88x across runs.
+- Remainder tiles take a leftover of at most half a tile on a side of at
+  most 50 tiles. Leftovers past that stay in ragged whole tiles, which can
+  still add a mostly empty wave. Three whole-tile sizes do not fit every
+  shape; cuBLAS has dozens.
 - Below 128 rows a 64-row tile still computes all 64. That ties cuBLAS's
   memory-bound GEMV at one row (0.93-0.97x), but there is no GEMV kernel.
 - Nothing in `python/y_lang` calls it yet; it runs through the generic

@@ -151,21 +151,80 @@ least 80% full and at least 128 rows.
 Below about 512^3 the event timing here measures cupy's launch (1x1x1:
 0.25x), not the kernel.
 
+## Remainder tiles (same day)
+
+Measuring Y alone at equal tile counts separated the two ragged-edge
+losses.
+
+- **A nearly empty last tile row or column costs a whole wave.**
+  - 1024 x 1028 x 1024 took 151 us, the same as 1024 x 1152 x 1024 (147 us,
+    also 144 tiles), against 85.5 us for 1024^3 (128 tiles).
+  - 1025 x 1024 x 1024 took 154 us against 88.
+  - 4096 x 4097 x 4096 needed 8.2 waves of large tiles, rounded up to 9.
+- **4-byte B copies (N odd) cost the rest.** At equal tile counts they
+  added 37% on the mid tile (207 against 151 us) and 14% on the large one.
+
+Leftover rows and columns of at most half a tile now go to narrow tiles in
+the same launch:
+- rows: 32-row strips (`rows32x256`, `rows32x128`, `rows32x64`);
+- columns: 64 or 32 columns wide (`rem128x64`, `rem64x32`).
+
+The header states which sets a kernel uses. A narrow tile costs about a
+third of a whole one, which sets two limits:
+- **At most half a tile.** Splitting off more is slower: 1000^3 left 40 of
+  64 rows and 104 of 128 columns, took 117 us split and 78 us whole, so it
+  stays whole.
+- **At most 50 tiles on that side.** With more, the ragged line is under 2%
+  of the work: at 1024 x 50257 x 768 (197 tile columns) splitting was 3%
+  slower.
+
+Each output is still one in-order chain, so the bits do not change.
+
+`remainder_final.txt`, against cuBLAS (the earlier column is the same
+shape before remainder tiles):
+
+| shape | before | now |
+| :--- | ---: | ---: |
+| 1025 x 1024 x 1024 | (154 us) | 1.09 |
+| 1024 x 1028 x 1024 | 0.80 | 0.91 |
+| 1023 x 1025 x 1027 (N odd) | 0.59 | 0.80 |
+| 2047 x 2049 x 2051 (N odd) | 0.80 | 0.90 |
+| 3000^3 | 0.94 | 0.97 |
+| 4095 x 4097 x 512 (N odd) | 0.76 | 0.83 |
+| 4096 x 4097 x 4096 (N odd) | 0.86 | 0.97 |
+| 1 x 4096 x 4096 | 0.93 | 0.99 |
+| 1000^3, 1500^3, 1 x 50257 x 768 | 1.25, 0.95, 0.97 | 1.26, 0.94, 0.98 (not split) |
+
+Aligned shapes are as before (0.96-1.24x in the same run).
+
+- **GPT-2's projection, not split.** 1024 x 50257 x 768 measured 0.79-0.85x
+  in this session's runs, against 0.87-0.88x earlier. Its old and new
+  kernels give identical bits. Timed together in one process, the new one
+  was 0.8% and 3.9% slower in two runs. That may be a small real cost of
+  computing the copy roles per tile, but most of the spread is the card's
+  clock, which sits at its power cap.
+- **Tried and dropped:** a 128x128 tile (`remainder_experiments.txt`) was
+  within 3% of the current tiles on two K-heavy shapes and slower on the
+  rest.
+
 ## Checks
 
 `tests/f32_simt_gemm.rs`:
 - the tile rule, `.maxnreg`, and ptxas with no spills;
 - refusals: N or K of 2^22, the host backend, a near-miss signature;
-- bit-exact against `f32::mul_add` folded in order, on 18 shapes, each on
-  three grids including more CTAs than tiles. They cover all three tiles,
-  a single K tile, 1x1x1, N odd and N = 2 mod 4, a column edge alone, and
-  ragged M, N and K on every tile;
+- bit-exact against `f32::mul_add` folded in order, on 24 shapes, each on
+  three grids including more CTAs than tiles. They cover all three tiles
+  and all five remainder tiles, a single K tile, 1x1x1, N odd and
+  N = 2 mod 4, a column edge alone, leftover rows that exactly fill their
+  strips, and ragged M, N and K on every tile;
+- the remainder sets each shape gets, from its header;
 - a ragged K keeping a -0.0 sum;
 - the block-size trap, run in a child process;
-- compute-sanitizer memcheck and racecheck clean on 11 shapes, 7 of them
+- compute-sanitizer memcheck and racecheck clean on 14 shapes, 10 of them
   ragged.
 
-The emitter was mutated 30 times, and 29 of the mutants were killed. Most
+The emitter was mutated 41 times, and 40 of the mutants were killed
+(the last 11 target the remainder sets). Most
 mutants of the edge handling (size-0 copies, the column clamp, a missing
 barrier between tiles) still give correct bits, so only the sanitizer test
 kills them. One survivor is equivalent: the tail's `wait_group 0` against
