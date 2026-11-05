@@ -111,6 +111,7 @@ sed -n 'START,ENDp' docs/claude-history/project-before-2026-10-10.md
 - Line 1857: A GREEN WORKSPACE IS NOT A GREEN CORPUS: THE RE-RUN THAT DISCHARGED THE HANDOFF'S OWN GAP PASSED WITH AN OVER-REFUSAL IN IT
   Preview: (a) `eval_interval` still models no `BitOr`, `BitXor`, `Shl`, `Shr` or `Mod`, and `x % c` and `x >> k` are the other two idioms that produce a provably bounded index; only `BitA...
   Status (2026-10-11): (a)(b) open: `eval_interval` lacks `|`, `^`, `<<`, `>>`, `%` (fail-closed over-refusal); (c) open; (d) n/a.
+  Status (2026-11-05): (a)(b) fixed - `eval_interval` bounds `%`, `|`, `^`, `<<`, `>>` and a non-constant non-negative mask (known_issues, Fixed); (c) open; (d) n/a.
 - Line 1861: THE LIFT'S ONE SUFFICIENCY CASE DID NOT SURVIVE ITS OWN LEVEL, AND PRICING THE HONEST LIFT FOUND SIX PLACES THE VALIDATOR COULD NOT SEE AN EFFECT
   Preview: 
   Status (2026-10-11): Research queue (proof programme / translation validator): no wrong answer; not re-measured, see known_issues "Performance, the proof programme".
