@@ -1,0 +1,109 @@
+=== attention_kfix_is_checked_at_launch memcheck
+      1 ========= COMPUTE
+     60 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 3198 errors
+     66 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+   3072 ========= Trace/breakpoint trap
+=== ptx_rmsnorm_v4 memcheck
+      1 ========= COMPUTE
+     12 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 1691 errors
+     15 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+   1664 ========= Trace/breakpoint trap
+=== zero_drift_f32_conversion memcheck
+      1 ========= COMPUTE
+     39 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 104 errors
+     52 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+     13 ========= Trace/breakpoint trap
+=== zero_drift_scatter memcheck
+      1 ========= COMPUTE
+    700 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 37328 errors
+    808 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+  35820 ========= Trace/breakpoint trap
+=== zero_drift_grid_sum memcheck
+      1 ========= COMPUTE
+    160 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 397 errors
+    192 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+     45 ========= Trace/breakpoint trap
+=== zero_drift_stop_point memcheck
+      1 ========= COMPUTE
+     36 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 92 errors
+     46 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+     10 ========= Trace/breakpoint trap
+=== ptx_shared_memory racecheck
+rc=0
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_smem_swizzle racecheck
+rc=0
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== gpu_attention_invariance racecheck
+rc=0
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.56s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_rmsnorm_v4 racecheck
+rc=0
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 38.30s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== int8_gemm_exactness racecheck
+rc=0
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_int8_gemm_scaled racecheck
+rc=0
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_typed_collectives racecheck
+rc=0
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.98s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_divergent_collectives racecheck
+rc=0
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.37s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_exact_pv racecheck
+rc=0
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.25s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== exact_pv_proof racecheck
+rc=0
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.33s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== zero_drift_grid_sum racecheck
+rc=0
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 164.17s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_f16_split_k racecheck
+rc=0
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 796.89s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== int8_gemm_launch_contract racecheck
+rc=0
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.26s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== ptx_int8_mma_layout racecheck
+rc=0
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== zk_gpu_ntt racecheck (zk)
+rc=0
+test result: ok. 11 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 17.99s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== zk_gpu_msm racecheck (zk)
+rc=0
+test result: ok. 10 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 4.88s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== zk_gpu_groth16 racecheck (zk)
+rc=0
+test result: ok. 5 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 2.00s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+=== zk_gpu_field racecheck (zk)
+rc=0
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.58s
+========= RACECHECK SUMMARY: 0 hazards displayed (0 errors, 0 warnings)
+DONE
