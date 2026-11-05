@@ -179,6 +179,23 @@ source; each entry there now carries its status. What is still open:
   per output the result is still farther from R than cuBLAS's GEMV on 6-21%
   of the outputs at M = 1.
 
+### GPU MSM dispatch threshold
+
+- `zk_gpu_msm::the_dispatch_thresholds_are_still_true` fails about one run in
+  three on the RTX 4070 Ti SUPER (2026-11-05; it fails with or without
+  `--features zk`): at n = 224,000, four times `MSM_GPU_MIN_COLD`, the cold
+  GPU MSM took 72-80 ms against the CPU's 69.6 ms. The cold GPU time is
+  BIMODAL - about 30 ms or about 60-80 ms at the same n, consistent across one
+  size's five repetitions and flipping between neighbouring sizes in either
+  order (224,000: 31.7 ms ascending, 63.7 ms descending; 262,144: 35.0 vs
+  80.7 ms). Fast, it beats the CPU 2.2x from about 200,000 terms; slow, it
+  ties. `where_the_gpu_starts_winning` now reads cold 0.57x at 65,536 and
+  0.91x at 131,072, where the threshold was set (2026-08-11) from 0.81x at
+  32,768 and 1.07x at 65,536. So the dispatcher sends MSMs of 56,000 to
+  roughly 150,000 terms to the slower backend. The kernel's PTX is unchanged;
+  the cause - something in the cold path's host side, by the bimodality - is
+  not found, and the constant is not changed until it is.
+
 ### Python packaging
 
 - `python/pyproject.toml` cannot be built into a wheel: its `readme =
