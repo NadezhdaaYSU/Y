@@ -205,10 +205,14 @@ source; each entry there now carries its status. What is still open:
   1024 x 1024 x 4096 and 256 x 4096 x 4096. By kernel time, 256^3 is about
   0.92x. Y does not split, by design: the answer would then depend on the
   shape.
-- With N odd, B is copied 4 bytes at a time, which fills the shared-memory
-  instruction queue on the 64-row tiles (MIO throttle 0.32 against 0.10,
-  +37% on the mid tile, +14% on the large one at equal tile counts):
-  0.80-0.97x, GPT-2's 1024 x 50257 x 768 0.79-0.88x across runs.
+- With N % 4 != 0, B rows that are not 16-byte aligned are copied 8 or 4
+  bytes at a time. Each row takes its own widest width only with K a
+  multiple of 16, no ragged column edge, and (for N odd) a 256-column tile.
+  Otherwise one width is used, because the guards spilled registers and
+  odd N measured slower on the narrower tiles. The 4-byte copies fill the
+  global-load queue (`lg_throttle` 0.57 against 0.04): N odd 0.77-0.98x,
+  GPT-2's 1024 x 50257 x 768 0.85x, 1023 x 1025 x 1027 0.77x. N = 2 mod 4
+  is 0.79-1.02x.
 - Remainder tiles take a leftover of at most half a tile on a side of at
   most 50 tiles. Leftovers past that stay in ragged whole tiles, which can
   still add a mostly empty wave. Three whole-tile sizes do not fit every

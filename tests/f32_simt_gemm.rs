@@ -100,6 +100,11 @@ fn the_tile_follows_the_shape_and_each_kernel_assembles_without_spills() {
         ((1, 1, 1), "small", 128, 170),
         // All three tile sets in one kernel, under one register cap.
         ((4097, 4097, 64), "large", 256, 255),
+        // B at each row's width, and with a K tail at one width.
+        ((2048, 12803, 64), "large", 256, 255),
+        ((2048, 12803, 67), "large", 256, 255),
+        ((256, 12802, 80), "mid", 128, 170),
+        ((2047, 2050, 2051), "mid", 128, 170),
         ((2049, 2049, 40), "mid", 128, 170),
         ((65, 70, 20), "small", 128, 170),
     ];
@@ -114,9 +119,34 @@ fn the_tile_follows_the_shape_and_each_kernel_assembles_without_spills() {
         ((65, 70, 20), "rows 64..65 in 1 tiles `rows32x64`; columns 64..70 in 2 tiles `rem64x32`"),
         // 40 of 64 rows and 104 of 128 columns left: whole tiles.
         ((1000, 1000, 1000), "none; none"),
-        // 197 tile columns: the ragged one is 0.5% of the work.
-        ((1024, 50257, 768), "none; none"),
+        // 196 tile columns: the ragged one is 0.5% of the work, and with N a
+        // multiple of 4 splitting it off gains nothing else.
+        ((1024, 50180, 768), "none; none"),
+        // As wide, but N odd: splitting lets the whole tiles copy B at each
+        // row's width.
+        ((1024, 50257, 768), "none; columns 50176..50257 in 16 tiles `rem128x64`"),
     ];
+    // How B is copied, from the header: one width where N allows it, each
+    // row at its own alignment's width where it does not.
+    let widths = [
+        ((1024, 1024, 1024), "B by 16-byte copies"),
+        ((1024, 30522, 768), "B by row-aligned 16-byte (rows 0 + 2j), 8-byte (rows 1 + 2j) copies"),
+        ((1024, 50257, 768), "B by row-aligned 16-byte (rows 0 + 4j), 8-byte (rows 2 + 4j), 4-byte (rows 1 + 2j) copies"),
+        // N odd on the 128-column mid tile: one width.
+        ((1023, 1025, 1027), "B by 4-byte copies"),
+        // An edge the remainder does not take (130 of 256 columns left):
+        // one width that divides N, so no chunk straddles it.
+        ((2048, 4226, 32), "B by 8-byte copies"),
+        // N = 2 mod 4 on the small tile.
+        ((66, 130, 64), "B by row-aligned 16-byte (rows 0 + 2j), 8-byte (rows 1 + 2j) copies"),
+        // A K tail keeps one width.
+        ((66, 130, 72), "B by 8-byte copies"),
+        ((1024, 50257, 770), "B by 4-byte copies"),
+    ];
+    for (i, ((m, n, k), want)) in widths.iter().enumerate() {
+        let ptx = compile(&dir, &format!("w{i}"), *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
+        assert!(ptx.contains(want), "{m}x{n}x{k}: not `{want}`:\n{}", ptx.lines().find(|l| l.contains("B by")).unwrap_or(""));
+    }
     let ptxas = ptxas::ptxas();
     for (i, ((m, n, k), want)) in remainders.iter().enumerate() {
         let ptx = compile(&dir, &format!("rem{i}"), *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
@@ -211,7 +241,7 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
     // Each tile; K = 16 is one K tile (fewer than the pipeline's stages),
     // K = 32 two (the prologue loads them all), the others run the loop past
     // its last load.
-    let shapes: [((u32, u32, u32), &str); 24] = [
+    let shapes: [((u32, u32, u32), &str); 31] = [
         ((64, 64, 16), "small"),
         ((192, 320, 112), "small"),
         ((128, 4096, 80), "mid"),
@@ -224,7 +254,7 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
         ((1, 1, 1), "small"),
         ((7, 13, 5), "small"),
         // N = 130: even, but a B row is not 16-byte aligned.
-        ((66, 130, 24), "small"),
+        ((66, 130, 64), "small"),
         ((33, 65, 17), "small"),
         ((129, 257, 15), "small"),
         ((300, 1028, 51), "small"),
@@ -245,6 +275,18 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
         // Leftover rows that exactly fill their 32-row strips.
         ((1056, 1024, 24), "mid"),
         ((2112, 4096, 24), "large"),
+        // B rows copied at their own alignment's width (16, 8 or 4 bytes):
+        // N = 2 mod 4 on the mid and large tiles, N odd on the large one,
+        // with K past the prologue's tiles so every width's pointer is
+        // advanced in the loop; then the same with a K tail, which keeps one
+        // width, and an edge the remainder does not take.
+        ((256, 12802, 80), "mid"),
+        ((2048, 12802, 16), "large"),
+        ((2048, 12803, 64), "large"),
+        ((2048, 4098, 48), "large"),
+        ((256, 12802, 83), "mid"),
+        ((2048, 12803, 67), "large"),
+        ((2048, 4226, 32), "large"),
     ];
     for (si, ((m, n, k), tile)) in shapes.iter().enumerate() {
         let (m, n, k) = (*m as usize, *n as usize, *k as usize);
@@ -368,6 +410,9 @@ fn child_sanitized_runs() {
         (1025, 1024, 40),
         (2049, 4100, 24),
         (65, 70, 20),
+        (256, 12802, 80),
+        (2048, 12803, 64),
+        (256, 12802, 83),
     ];
     for (si, &(m, n, k)) in shapes.iter().enumerate() {
         let name = format!("san{si}");
@@ -424,7 +469,7 @@ fn compute_sanitizer_finds_no_invalid_access_and_no_race() {
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         // Every shape ran (a child that died early prints a clean summary
         // for the launches it made).
-        assert_eq!(text.matches("SANITIZED_RUN").count(), 14, "{check}: not every shape ran:\n{text}");
+        assert_eq!(text.matches("SANITIZED_RUN").count(), 17, "{check}: not every shape ran:\n{text}");
         assert!(out.status.success() && text.contains(summary), "{check} found something:\n{text}");
     }
 }

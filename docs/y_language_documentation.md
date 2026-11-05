@@ -1181,9 +1181,15 @@ for i in 0..100 {
   of size 0, columns past N are clamped on read, and none of them is
   stored; the last, partial K tile runs only its valid steps, so a ragged
   K keeps the in-order chain, -0.0 included. With N % 4 != 0 a B row is
-  not 16-byte aligned, and B is copied and C stored 4 bytes at a time.
+  not 16-byte aligned throughout; since every K tile starts at a multiple
+  of 16 rows, each row's alignment is known at compile time, and with K a
+  multiple of 16 and no ragged column edge each row is copied at its own
+  widest width (16, 8 or 4 bytes; for N odd on the 256-column tiles only),
+  otherwise at one width that divides N. C is stored 8 bytes at a time for
+  N even, 4 for N odd.
   Leftover rows or columns of at most half a tile, on a side of at most 50
-  tiles, go to narrow remainder tiles in the same launch (32-row strips,
+  tiles (or of any width where that lets B's rows take their own widths),
+  go to narrow remainder tiles in the same launch (32-row strips,
   64- or 32-column tiles; the header names them), where a nearly empty
   whole tile row or column would cost a whole wave.
   One of three tiles is chosen from the shape and the SM count: 128x256
@@ -1196,9 +1202,9 @@ for i in 0..100 {
   0.94-1.04x with 64-1024 rows or 128 columns and K = 2048-4096,
   0.81-0.87x at 768^3, where cuBLAS splits K in three; ragged with N a
   multiple of 4, 0.91-1.26x (1000^3 to 3000^3, 1024 x 1028 x 1024,
-  1025 x 1024 x 1024); N odd, 0.80-0.97x (1023 x 1025 x 1027 to
-  4096 x 4097 x 4096; GPT-2's 1024 x 50257 x 768: 0.79-0.88x across runs);
-  one row (1 x 50257 x 768), 0.98x
+  1025 x 1024 x 1024); N = 2 mod 4, 0.79-1.02x (BERT's 1024 x 30522 x 768:
+  1.00x); N odd, 0.77-0.98x (1023 x 1025 x 1027 to 4096 x 4097 x 4096;
+  GPT-2's 1024 x 50257 x 768: 0.85x); one row (1 x 50257 x 768), 0.98x
   ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The host backend
   refuses the kernel: it has no body there.
 * **Split K**, with four parameters `(A, B: GlobalMemory<F16>, C, Partial:
