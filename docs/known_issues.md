@@ -11,11 +11,9 @@ source; each entry there now carries its status. What is still open:
 
 ### Checked by name only
 
-- `@divergence(uniform)` is checked by looking for identifiers containing
-  `threadIdx` or `laneId`, so `@divergence(uniform) if thread_idx_x() < 20`
-  passes. It changes no PTX (the LLVM backend attaches metadata to the
-  branch), and since 2026-10-12 it does not admit a shuffle or a barrier
-  into a branch the threads can disagree on; see the fixed entry below.
+- The self-hosted type checker (`self_hosted/type_checker.ysu`) still checks
+  `@divergence(uniform)` by looking for an identifier named `threadIdx` or
+  `laneId`. The Rust compiler's check was replaced on 2026-11-05 (below).
 
 ### Benchmarks
 
@@ -385,6 +383,7 @@ source; each entry there now carries its status. What is still open:
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| `@divergence(uniform)` was checked by name only | It looked for identifiers containing `threadIdx` or `laneId`, which no Y program spells, so `@divergence(uniform) if thread_idx_x() < 20` passed, as did any condition on a value computed from the thread index, and a `for`'s annotation was not looked at. In a kernel the condition (a `for`'s bounds) must now be warp-uniform by `crate::uniformity`, the analysis that refuses divergent collectives, and a refusal names what makes the lanes differ (2026-11-05). `tests/divergence_annotation.rs` (six refusals through both backends, five controls); each of four mutants fails it. |
 | `rope_<head_dim>` wrote part of each row at a head_dim not a multiple of 64, and its README comparison with FlashInfer was of half FlashInfer's work | A row's lanes took whole pairs, with only a `debug_assert` on the width, which release builds drop: the parent's `rope_96` wrote 64 of each row's 96 elements and `rope_32` none (`docs/benchmarks/rope_2026-10-19/old_bugs/`). Such a head_dim is refused now. The kernel takes a fourth parameter, `Rows`, and puts 8 rows in a 256-thread CTA (16 at head_dim 64). It traps on a block of another size, on a grid that does not reach `Rows`, and on a negative `Rows`. The three-parameter form is refused, since unmatched it would compile as an empty kernel. The benchmark scripts gave `apply_rope_pos_ids` X as both q and k, where Y rotated X once, and timed Python launches, so the README's 1.85x and 1.92x were of launches and of unequal work. With the same work, in graph replays, that kernel took 1.47-2.49x FlashInfer's time at head_dim 128 inside the L2. `python/y_lang/tests/test_rope.py` (head_dim 64-512, partial CTAs, each trap in a child process, the refusals); each of nine mutants fails it. |
 | `rmsnorm_residual_<d>` could not be built from hidden 12288 up, and wrote part of a row at a width not a multiple of 8 | It staged h through `d * 4` bytes of static shared memory, which `ptxas` refuses above 48 KB ("uses too much shared data"), and moved whole 16-byte groups of 8 f16 with no check of the width, so hidden 100 compiled and left the last 4 elements of every row unwritten. h now stays in registers (no shared memory but the 8-to-32-float cross-warp sum), a width that is not a multiple of 8 is refused, and a launch with another block size than the PTX header states traps; the warp count changed with it, from 8 to 16 at 4096 (`docs/benchmarks/rmsnorm_residual_2026-10-19/`). `python/y_lang/tests/test_rmsnorm_residual.py` (hidden 256-65536, the trap in a child process, the refusal); each of nine mutants fails it. |
 | Y's FP8 GEMM summed in the tensor core's accumulator | The `@tile` FP8 GEMM chained every `mma.sync.m16n8k32` of its K loop in the mma's own accumulator, which on an RTX 4070 Ti SUPER adds an mma's products at about 11 bits, truncating: on positive inputs at K = 4096 the median relative error was 6.6% (`torch._scaled_mm`: 5.7e-4). Every FP8 test and benchmark used small integers, whose partial sums are exact, so none could see it. Each mma now starts from zero and is added into the accumulator with `add.rn.f32`: 6.5e-5, at no measured cost (`docs/benchmarks/fp8_e4m3_2026-10-18/`). The new e4m3-input GEMM does the same. `test_partial_sums_are_added_in_float32` in `test_fp8_gemm.py` and `test_fp8_e4m3.py`; each fails on the chained form (7.1e-2). |
