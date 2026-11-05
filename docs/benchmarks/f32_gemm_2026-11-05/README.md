@@ -101,17 +101,72 @@ Each step was measured before it was kept.
    The rule's choice was the fastest or within noise everywhere. A fourth,
    8-warp 4x4-per-thread tile was never faster, so it was dropped.
 
+## Any size (same day)
+
+Since the same day the kernel takes any M, N and K below 2^22.
+
+- **Edges.** Rows past M and k past K are `cp.async` copies of size 0,
+  which read nothing (memcheck, racecheck and initcheck are clean on shapes
+  from 1x1x1 to 2047 x 4099 x 36). Columns past N are clamped on read.
+  Nothing past the edges is stored.
+- **K tail.** The last, partial K tile runs only its valid steps, so a
+  ragged K keeps the in-order chain, -0.0 included.
+- **N % 4 != 0.** A B row is not 16-byte aligned, so B is copied and C
+  stored 4 bytes at a time.
+- **Aligned shapes are unchanged.** They emit SASS identical to before
+  (checked at five shapes).
+
+`ragged_final.txt` (`bench.py ragged`), every shape bit-identical:
+
+| shape | tile | Y / cuBLAS |
+| :--- | :--- | ---: |
+| 1000^3 | mid | 1.25 |
+| 1500^3 | mid | 0.95 |
+| 3000^3 | large | 0.94 |
+| 1024 x 1028 x 1024 | mid | 0.80 |
+| 1023 x 1025 x 1027 (N odd) | mid | 0.59 |
+| 2047 x 2049 x 2051 (N odd) | mid | 0.80 |
+| 4095 x 4097 x 512 (N odd) | large | 0.76 |
+| 4096 x 4097 x 4096 (N odd) | large | 0.86 |
+| 1024 x 50257 x 768 (GPT-2 vocabulary, N odd) | large | 0.88 |
+| 4096 x 50257 x 768 | large | 0.90 |
+| 1 x 4096 x 4096 | small | 0.93 |
+| 1 x 50257 x 768 | mid | 0.97 |
+
+The two losses (`ragged_tile_sweep.txt`):
+
+- **Odd N.** Copying B 4 bytes at a time doubles the copy instructions.
+  ncu at 1024 x 1025 x 1024 on the mid tile: MIO throttle 0.32 against
+  0.10 at N = 1028, and issue 62% against 74%. Only the 128x256 tile has
+  enough FMAs per copied element to hide it, as cuBLAS's align1 kernels do.
+  Mid-sized shapes have too few of those tiles to fill the GPU.
+- **A nearly empty last tile column.** At 1024 x 1028 x 1024 it adds a
+  wave, and every tile measured 0.74-0.78x.
+
+The tile rule changed with this: the large tile now needs its waves at
+least 80% full and at least 128 rows.
+- 2047 x 2049 x 2051 went from the large tile (0.65x) to mid (0.80x).
+- 1 x 50257 x 768 went from large (0.68x) to mid (0.97x).
+
+Below about 512^3 the event timing here measures cupy's launch (1x1x1:
+0.25x), not the kernel.
+
 ## Checks
 
 `tests/f32_simt_gemm.rs`:
 - the tile rule, `.maxnreg`, and ptxas with no spills;
-- refusals: off-tile shapes, the host backend, a near-miss signature;
-- bit-exact against `f32::mul_add` folded in order, on six shapes covering
-  all three tiles and a single K tile, each on three grids including more
-  CTAs than tiles;
+- refusals: N or K of 2^22, the host backend, a near-miss signature;
+- bit-exact against `f32::mul_add` folded in order, on 18 shapes, each on
+  three grids including more CTAs than tiles. They cover all three tiles,
+  a single K tile, 1x1x1, N odd and N = 2 mod 4, a column edge alone, and
+  ragged M, N and K on every tile;
+- a ragged K keeping a -0.0 sum;
 - the block-size trap, run in a child process;
-- compute-sanitizer memcheck and racecheck clean.
+- compute-sanitizer memcheck and racecheck clean on 11 shapes, 7 of them
+  ragged.
 
-14 mutants of the emitter were all killed. Three of them (a missing barrier
-between tiles, a load past K, a prologue load past K) give correct bits and
-were killed only by the sanitizer test.
+The emitter was mutated 30 times, and 29 of the mutants were killed. Most
+mutants of the edge handling (size-0 copies, the column clamp, a missing
+barrier between tiles) still give correct bits, so only the sanitizer test
+kills them. One survivor is equivalent: the tail's `wait_group 0` against
+`1`, where with 3 stages the newest group is always empty.

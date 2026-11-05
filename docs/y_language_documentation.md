@@ -1174,18 +1174,25 @@ for i in 0..100 {
   k = 0..K-1 in that order**, so its bits depend on its row of A and column
   of B only: not on M, the tile, or the grid. That is `f32::mul_add` folded
   in order, which the tests compare bit for bit; there is no split K,
-  which would make the answer depend on the shape. M and N must be
-  multiples of 64 and K of 16 (refused otherwise). One of three tiles is
-  chosen from the shape and the SM count: 128x256 (one 256-thread CTA per
-  SM) when there are about two waves of them, 64x128 at about one wave,
-  64x64 otherwise. Launch: block `(threads, 1, 1)` as the header states,
+  which would make the answer depend on the shape. Any M, N and K (since
+  the same day; N and K below 2^22): rows past M and k past K are copies
+  of size 0, columns past N are clamped on read, and none of them is
+  stored; the last, partial K tile runs only its valid steps, so a ragged
+  K keeps the in-order chain, -0.0 included. With N % 4 != 0 a B row is
+  not 16-byte aligned, and B is copied and C stored 4 bytes at a time.
+  One of three tiles is chosen from the shape and the SM count: 128x256
+  (one 256-thread CTA per SM) for at least 128 rows and about two waves of
+  them, at least 80% full; 64x128 at about one wave; 64x64 otherwise. Launch: block `(threads, 1, 1)` as the header states,
   anything else traps; output tiles are grid-strided, so any grid is
   correct, and the header's grid runs one tile per CTA; the header states
   the dynamic shared memory. Against cuBLAS (TF32 off) on an RTX 4070 Ti
   SUPER: 0.93-1.04x from 2048 to 8192, 1.19-1.20x at 512 and 1024,
   0.94-1.04x with 64-1024 rows or 128 columns and K = 2048-4096,
-  0.81-0.85x at 768^3,
-  where cuBLAS splits K in three
+  0.81-0.85x at 768^3, where cuBLAS splits K in three; ragged with N a
+  multiple of 4, 0.94-1.25x (1000^3 to 3000^3), 0.80x at 1024 x 1028 x 1024
+  (its last tile column nearly empty); N odd, 0.76-0.90x on large shapes
+  (GPT-2's 1024 x 50257 x 768: 0.88x), 0.59x at 1023 x 1025 x 1027; one row
+  (1 x 50257 x 768), 0.97x
   ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The host backend
   refuses the kernel: it has no body there.
 * **Split K**, with four parameters `(A, B: GlobalMemory<F16>, C, Partial:

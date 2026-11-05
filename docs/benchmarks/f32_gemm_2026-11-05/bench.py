@@ -3,7 +3,7 @@
 Run from the repository root, after `cargo build --release`, with the GPU
 otherwise idle:
 
-    venv/bin/python docs/benchmarks/f32_gemm_2026-11-05/bench.py [MxNxK ...]
+    venv/bin/python docs/benchmarks/f32_gemm_2026-11-05/bench.py [MxNxK ... | ragged]
 
 Each shape is compiled by target/release/Y in a temporary directory holding a
 copy of the root's `.ysu_hw_profile` (the tile choice reads its SM count).
@@ -53,8 +53,11 @@ def ev():
 DEFAULT = ["8192x8192x8192", "4096x4096x4096", "3072x3072x3072", "2048x2048x2048", "1536x1536x1536",
            "1024x1024x1024", "768x768x768", "512x512x512", "4096x4096x1024", "1024x4096x4096",
            "1024x1024x4096", "256x4096x4096", "128x4096x4096", "4096x128x4096", "64x8192x2048"]
+RAGGED = ["1x4096x4096", "1x50257x768", "1000x1000x1000", "1023x1025x1027", "1024x1028x1024",
+          "1500x1500x1500", "2047x2049x2051", "3000x3000x3000", "4095x4097x512", "1024x50257x768",
+          "4096x50257x768", "4096x4097x4096"]
 torch.manual_seed(0)
-for spec in sys.argv[1:] or DEFAULT:
+for spec in (RAGGED if sys.argv[1:] == ["ragged"] else sys.argv[1:] or DEFAULT):
     m, n, k = map(int, spec.split("x"))
     f, tile, block, grid, smem = build(m, n, k)
     a = torch.randn(m, k, device="cuda"); b = torch.randn(k, n, device="cuda")
@@ -66,7 +69,7 @@ for spec in sys.argv[1:] or DEFAULT:
     yc.fill_(float("nan")); run((3, 1, 1)); torch.cuda.synchronize()
     exact3 = torch.equal(yc.view(torch.int32), oc.view(torch.int32))
     del oc
-    cb = torch.mm(a, b); reps = max(3, int(1e11 / (2 * m * n * k))); best = {"cuBLAS": 1e9, "Y": 1e9}
+    cb = torch.mm(a, b); reps = min(200, max(3, int(1e11 / (2 * m * n * k)))); best = {"cuBLAS": 1e9, "Y": 1e9}
     for _ in range(11):
         for side in best:
             s, e = ev(), ev(); s.record()

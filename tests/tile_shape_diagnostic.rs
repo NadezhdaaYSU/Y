@@ -102,6 +102,11 @@ const SHAPES: &[(&str, &str, &str)] = &[
         "A: GlobalMemory<I8>, B: GlobalMemory<I8>, Sa: GlobalMemory<F32>, \
          Sb: GlobalMemory<F32>, Bias: GlobalMemory<F32>, C: GlobalMemory<F32>",
     ),
+    (
+        "FP32 GEMM (CUDA cores)",
+        "64, 32, 128",
+        "A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>",
+    ),
 ];
 
 #[test]
@@ -134,6 +139,7 @@ fn the_rejection_message_names_every_accepted_shape() {
         "SwiGLU",
         "Bias",
         "scaled epilogue",
+        "FP32 GEMM (CUDA cores)",
     ] {
         assert!(
             text.contains(needle),
@@ -146,9 +152,11 @@ fn the_rejection_message_names_every_accepted_shape() {
 #[test]
 fn the_control_a_genuinely_unsupported_shape_is_still_refused() {
     // Without this, "name every shape" could be satisfied by accepting
-    // everything. Two F32 buffers is not any of the listed shapes.
+    // everything. F32 operands with an F16 output is not any of the listed
+    // shapes. (Until 2026-11-05 the control was F32/F32/F32, which is now
+    // the FP32 GEMM.)
     let src = "@tile(64, 32, 128)\nkernel k(A: GlobalMemory<F32>, B: GlobalMemory<F32>, \
-               C: GlobalMemory<F32>) {\n}\n\nfn main() {}\n";
+               C: GlobalMemory<F16>) {\n}\n\nfn main() {}\n";
     let (ok, _) = compile(src);
-    assert!(!ok, "an F32/F32/F32 tile GEMM is not a supported shape and must be refused");
+    assert!(!ok, "an F32/F32/F16 tile GEMM is not a supported shape and must be refused");
 }
