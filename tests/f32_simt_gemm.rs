@@ -85,8 +85,8 @@ fn the_tile_follows_the_shape_and_each_kernel_assembles_without_spills() {
         // 64 large tiles: one full wave is not enough for the large tile.
         ((1024, 2048, 1024), "mid", 128, 170),
         ((128, 4096, 4096), "mid", 128, 170),
-        ((512, 512, 512), "small", 128, 128),
-        ((64, 64, 16), "small", 128, 128),
+        ((512, 512, 512), "small", 128, 170),
+        ((64, 64, 16), "small", 128, 170),
         // 272 large tiles, 4.1 waves: 82% full.
         ((2048, 4160, 64), "large", 256, 255),
         // 153 large tiles, 2.3 waves: 77% full, so not the large tile.
@@ -96,10 +96,33 @@ fn the_tile_follows_the_shape_and_each_kernel_assembles_without_spills() {
         // One row: never the 128-row tile.
         ((1, 50257, 768), "mid", 128, 170),
         ((1023, 1025, 1027), "mid", 128, 170),
-        ((7, 13, 5), "small", 128, 128),
-        ((1, 1, 1), "small", 128, 128),
+        ((7, 13, 5), "small", 128, 170),
+        ((1, 1, 1), "small", 128, 170),
+        // All three tile sets in one kernel, under one register cap.
+        ((4097, 4097, 64), "large", 256, 255),
+        ((2049, 2049, 40), "mid", 128, 170),
+        ((65, 70, 20), "small", 128, 170),
+    ];
+    // Leftover rows and columns of at most half a tile, on a side of at most
+    // 50 tiles, go to remainder tiles in the same launch; anything else stays
+    // in ragged whole tiles.
+    let remainders = [
+        ((1025, 1024, 1024), "rows 1024..1025 in 8 tiles `rows32x128`; none"),
+        ((1024, 1028, 1024), "none; columns 1024..1028 in 16 tiles `rem64x32`"),
+        ((2049, 2049, 2048), "rows 2048..2049 in 16 tiles `rows32x128`; columns 2048..2049 in 33 tiles `rem64x32`"),
+        ((4097, 4097, 64), "rows 4096..4097 in 16 tiles `rows32x256`; columns 4096..4097 in 33 tiles `rem128x64`"),
+        ((65, 70, 20), "rows 64..65 in 1 tiles `rows32x64`; columns 64..70 in 2 tiles `rem64x32`"),
+        // 40 of 64 rows and 104 of 128 columns left: whole tiles.
+        ((1000, 1000, 1000), "none; none"),
+        // 197 tile columns: the ragged one is 0.5% of the work.
+        ((1024, 50257, 768), "none; none"),
     ];
     let ptxas = ptxas::ptxas();
+    for (i, ((m, n, k), want)) in remainders.iter().enumerate() {
+        let ptx = compile(&dir, &format!("rem{i}"), *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
+        let line = ptx.lines().find(|l| l.contains("// Remainder: ")).unwrap_or_else(|| panic!("{m}x{n}x{k}: no remainder line"));
+        assert!(line.ends_with(&format!("Remainder: {want}.")), "{m}x{n}x{k}: {line}");
+    }
     for (i, ((m, n, k), tile, block, maxnreg)) in cases.iter().enumerate() {
         let name = format!("g{i}");
         let ptx = compile(&dir, &name, *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{m}x{n}x{k} refused:\n{log}"));
@@ -188,7 +211,7 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
     // Each tile; K = 16 is one K tile (fewer than the pipeline's stages),
     // K = 32 two (the prologue loads them all), the others run the loop past
     // its last load.
-    let shapes: [((u32, u32, u32), &str); 18] = [
+    let shapes: [((u32, u32, u32), &str); 24] = [
         ((64, 64, 16), "small"),
         ((192, 320, 112), "small"),
         ((128, 4096, 80), "mid"),
@@ -212,6 +235,16 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
         ((1, 8193, 40), "mid"),
         ((2047, 4100, 20), "large"),
         ((2047, 4099, 36), "large"),
+        // Remainder tiles: rows (`rows32x128`), rows and columns on the
+        // large tile (`rows32x256`, `rem128x64`) and the small one
+        // (`rows32x64`, `rem64x32`), N odd in a remainder.
+        ((1025, 1024, 40), "mid"),
+        ((2049, 4100, 24), "large"),
+        ((65, 70, 20), "small"),
+        ((1025, 1025, 33), "mid"),
+        // Leftover rows that exactly fill their 32-row strips.
+        ((1056, 1024, 24), "mid"),
+        ((2112, 4096, 24), "large"),
     ];
     for (si, ((m, n, k), tile)) in shapes.iter().enumerate() {
         let (m, n, k) = (*m as usize, *n as usize, *k as usize);
@@ -332,6 +365,9 @@ fn child_sanitized_runs() {
         (128, 1028, 40),
         (1023, 1025, 75),
         (2047, 4099, 36),
+        (1025, 1024, 40),
+        (2049, 4100, 24),
+        (65, 70, 20),
     ];
     for (si, &(m, n, k)) in shapes.iter().enumerate() {
         let name = format!("san{si}");
@@ -388,7 +424,7 @@ fn compute_sanitizer_finds_no_invalid_access_and_no_race() {
         let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
         // Every shape ran (a child that died early prints a clean summary
         // for the launches it made).
-        assert_eq!(text.matches("SANITIZED_RUN").count(), 11, "{check}: not every shape ran:\n{text}");
+        assert_eq!(text.matches("SANITIZED_RUN").count(), 14, "{check}: not every shape ran:\n{text}");
         assert!(out.status.success() && text.contains(summary), "{check} found something:\n{text}");
     }
 }

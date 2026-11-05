@@ -1,7 +1,11 @@
 //! The FP32 GEMM on CUDA cores: `@tile(M, N, K) kernel k(A, B, C:
 //! GlobalMemory<F32>)`, `C = A B` with A `[M][K]`, B `[K][N]`, C `[M][N]`, all
 //! row-major f32, any M, N and K below 2^22 (ragged edges: the comment at
-//! `rag_m` in `emit_f32_simt_gemm_kernel`).
+//! `rag_m` in `emit_f32_gemm_tile_set`). Rows and columns past the last
+//! whole tile, when they are at most half a tile on a side of at most 50
+//! tiles, go to narrow remainder tiles in the same launch
+//! (`f32_gemm_remainder`, `f32_gemm_row_remainder`): a nearly empty tile row
+//! or column otherwise costs a whole wave.
 //!
 //! **What it is for: matching cuBLAS, so a Y program does not trade speed for
 //! Y's checks.** The design is the one cuBLAS itself runs at these shapes
@@ -85,9 +89,28 @@ pub(crate) const F32_TILE_LARGE: F32GemmTile =
 /// Mid and skinny shapes: 4 warps of 32x64, 8x8 per thread.
 pub(crate) const F32_TILE_MID: F32GemmTile =
     F32GemmTile { name: "mid", bm: 64, bn: 128, bk: 16, wm: 32, wn: 64, tm: 8, tn: 8, stages: 3, reg_ctas: 3 };
-/// Small shapes: 4 warps of 32x32, 4x8 per thread.
+/// Small shapes: 4 warps of 32x32, 4x8 per thread. Three CTAs per SM:
+/// its 25,344 bytes of shared memory leave no room for a fourth, so its
+/// registers are budgeted for three (with the remainder sets beside it in
+/// one kernel, a four-CTA budget of 128 spilled).
 pub(crate) const F32_TILE_SMALL: F32GemmTile =
-    F32GemmTile { name: "small", bm: 64, bn: 64, bk: 16, wm: 32, wn: 32, tm: 4, tn: 8, stages: 3, reg_ctas: 4 };
+    F32GemmTile { name: "small", bm: 64, bn: 64, bk: 16, wm: 32, wn: 32, tm: 4, tn: 8, stages: 3, reg_ctas: 3 };
+/// Remainder columns of the large tile: 8 warps of 32x32, 4x8 per thread.
+pub(crate) const F32_TILE_REM_LARGE: F32GemmTile =
+    F32GemmTile { name: "rem128x64", bm: 128, bn: 64, bk: 16, wm: 32, wn: 32, tm: 4, tn: 8, stages: 3, reg_ctas: 1 };
+/// Remainder columns of the mid and small tiles: 4 warps of 32x16, 4x4 per
+/// thread.
+pub(crate) const F32_TILE_REM_MID: F32GemmTile =
+    F32GemmTile { name: "rem64x32", bm: 64, bn: 32, bk: 16, wm: 32, wn: 16, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
+/// Remainder rows of the large tile: 8 warps of 32x32, 4x8 per thread.
+pub(crate) const F32_TILE_ROWS_LARGE: F32GemmTile =
+    F32GemmTile { name: "rows32x256", bm: 32, bn: 256, bk: 16, wm: 32, wn: 32, tm: 4, tn: 8, stages: 3, reg_ctas: 1 };
+/// Remainder rows of the mid tile: 4 warps of 32x32, 4x8 per thread.
+pub(crate) const F32_TILE_ROWS_MID: F32GemmTile =
+    F32GemmTile { name: "rows32x128", bm: 32, bn: 128, bk: 16, wm: 32, wn: 32, tm: 4, tn: 8, stages: 3, reg_ctas: 3 };
+/// Remainder rows of the small tile: 4 warps of 32x16, 4x4 per thread.
+pub(crate) const F32_TILE_ROWS_SMALL: F32GemmTile =
+    F32GemmTile { name: "rows32x64", bm: 32, bn: 64, bk: 16, wm: 32, wn: 16, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
 impl PtxEmitter {
     /// The tile for an `m x n x k` FP32 GEMM on `sms` SMs, or why there is none.
     ///
@@ -125,6 +148,39 @@ impl PtxEmitter {
             return Ok(F32_TILE_MID);
         }
         Ok(F32_TILE_SMALL)
+    }
+
+    /// The narrow tiles for the columns past `t`'s last whole tile, if N
+    /// leaves any.
+    ///
+    /// Only for a leftover of at most half a tile: a narrow tile costs about
+    /// a third of a whole one, so more of them than that is slower than the
+    /// ragged whole tile (1000^3: 117 us split, 78 us whole; 1024 x 1028 x
+    /// 1024, 4 columns left: 112 us split, 133 us whole).
+    pub(crate) fn f32_gemm_remainder(t: F32GemmTile, n: u32) -> Option<F32GemmTile> {
+        // ... and only where that tile column is at least ~2% of the tiles:
+        // at 1024 x 50257 x 768 (197 columns) splitting was 3% slower.
+        if n % t.bn == 0 || n % t.bn > t.bn / 2 || n.div_ceil(t.bn) > 50 {
+            return None;
+        }
+        Some(if t.threads() == F32_TILE_REM_LARGE.threads() { F32_TILE_REM_LARGE } else { F32_TILE_REM_MID })
+    }
+
+    /// The 32-row tiles for the rows past `t`'s last whole tile, if M
+    /// leaves any; same columns per tile as `t`.
+    ///
+    /// Only for a leftover of at most half a tile (one strip of 32 rows on
+    /// the 64-row tiles, two on the large tile): 1025 x 1024 x 1024 took
+    /// 99 us split and 138 us whole.
+    pub(crate) fn f32_gemm_row_remainder(t: F32GemmTile, m: u32) -> Option<F32GemmTile> {
+        if m % t.bm == 0 || m % t.bm > t.bm / 2 || m.div_ceil(t.bm) > 50 {
+            return None;
+        }
+        Some(match t.bn {
+            256 => F32_TILE_ROWS_LARGE,
+            128 => F32_TILE_ROWS_MID,
+            _ => F32_TILE_ROWS_SMALL,
+        })
     }
 
     /// Recognise `@tile(M, N, K) kernel f(A, B, C: GlobalMemory<F32>)`.
@@ -185,58 +241,48 @@ impl PtxEmitter {
                 return 32;
             }
         };
+        // Columns past the last whole tile go to narrow remainder tiles in
+        // the same launch, instead of a whole tile column that is mostly
+        // computed for nothing: at 1024 x 1028 x 1024 that column was 16 of
+        // 144 tiles and a second wave (151 us, against 85.5 us at N = 1024).
+        // Each output is still the same in-order chain, so the bits do not
+        // change; the whole tiles lose their column masks.
+        let rem = Self::f32_gemm_remainder(t, n);
+        let rows = Self::f32_gemm_row_remainder(t, m);
+        let n_main = if rem.is_some() { n / t.bn * t.bn } else { n };
+        let m_main = if rows.is_some() { m / t.bm * t.bm } else { m };
         let nt = t.threads();
-        let (lm, ln) = (t.wm / t.tm, t.wn / t.tn);
-        let sa_stride = t.bm + F32_GEMM_PAD_A; // floats per row of A^T
-        // Ragged edges, each handled only where the shape has one, so an
-        // aligned shape's kernel is the code measured in the module doc:
-        // - M: an A copy of a row past M copies nothing (`cp.async`'s
-        //   source size 0; it reads nothing and zero-fills), and C's rows
-        //   past M are not stored;
-        // - N: the B columns a thread copies are clamped to the last valid
-        //   ones once per tile (they feed only C columns past N, which are not
-        //   stored); with N % 4 != 0 a B row is not 16-byte aligned, so B is
-        //   copied and C stored 4 bytes at a time;
-        // - K: the copies of k >= K copy nothing, and the last K tile runs
-        //   only its K % BK valid steps, so every element is still the
-        //   in-order chain over k < K (zero products would turn a -0.0 sum
-        //   into +0.0).
-        let rag_m = m % t.bm != 0;
-        let rag_n = n % t.bn != 0;
+        // Whole tiles: rows 0..m_main x columns 0..n_main. Row remainder:
+        // rows m_main..M x columns 0..n_main. Column remainder: every row x
+        // columns n_main..N.
+        let main_tiles = m_main.div_ceil(t.bm) * n_main.div_ceil(t.bn);
+        let (row_tiles, rows_desc) = match rows {
+            Some(r) => {
+                assert_eq!(r.threads(), nt, "a remainder tile runs with the main tile's block");
+                let tiles = (m - m_main).div_ceil(r.bm) * n_main.div_ceil(r.bn);
+                (tiles, format!("rows {m_main}..{m} in {tiles} tiles `{}`", r.name))
+            }
+            None => (0, "none".to_string()),
+        };
+        let (rem_tiles, rem_desc) = match rem {
+            Some(r) => {
+                assert_eq!(r.threads(), nt, "a remainder tile runs with the main tile's block");
+                let tiles = m.div_ceil(r.bm) * (n - n_main).div_ceil(r.bn);
+                (tiles, format!("columns {n_main}..{n} in {tiles} tiles `{}`", r.name))
+            }
+            None => (0, "none".to_string()),
+        };
+        let rem_desc = format!("{rows_desc}; {rem_desc}");
+        let tiles = main_tiles + row_tiles + rem_tiles;
+        let smem = [Some(t), rows, rem].iter().flatten().map(|c| c.smem_bytes()).max().unwrap();
         let vec_n = n % 4 == 0;
         let k_tail = k % t.bk;
-        let kt_full = k / t.bk;
-        let kt_total = k.div_ceil(t.bk);
-        let a_copies = t.bm * t.bk / nt; // 4-byte copies of A per thread per stage
-        // B: 16-byte copies of 4 columns, or 4-byte copies of one.
-        let b_width = if vec_n { 4 } else { 1 };
-        let b_copies = t.bk * t.bn / b_width / nt;
-        let b_cols = t.bn / b_width; // copy slots across a B row
-        let copies = a_copies + b_copies;
-        // The copies are spread over the k steps before the commit at
-        // k = BK - 2, one per step where they fit.
-        let per_step = copies.div_ceil(t.bk - 1);
-        assert!(
-            lm * ln == 32 && t.tm % 4 == 0 && t.tn % 4 == 0 && nt % t.bk == 0 && nt % b_cols == 0,
-            "F32 GEMM tile {:?} is malformed",
-            t
-        );
-        let (nbx, nby) = (n.div_ceil(t.bn), m.div_ceil(t.bm));
-        let tiles = nbx * nby;
-        let stage_a = t.bk * sa_stride * 4; // bytes
-        let stage_b = t.bk * t.bn * 4;
-        let smem = t.smem_bytes();
-        let s = t.stages;
-
         let edges = {
             let mut e = Vec::new();
-            if rag_m {
+            if m % t.bm != 0 {
                 e.push(format!("rows past M={m} are not read or stored"));
             }
-            if rag_n {
-                e.push(format!("columns past N={n} are clamped on read and not stored"));
-            }
-            if !vec_n {
+            if n % 4 != 0 {
                 e.push("N % 4 != 0: B copied and C stored 4 bytes at a time".to_string());
             }
             if k_tail != 0 {
@@ -249,12 +295,13 @@ impl PtxEmitter {
             "    // ========================================================\n\
              \x20   // [Y F32 SIMT GEMM] M={m} N={n} K={k} | CTA {}x{}x{} | {}x{} warps of {}x{}, {}x{} outputs per thread | tile `{}`\n\
              \x20   // {} stages of cp.async, A transposed by 4-byte copies, B by {}-byte copies, grouped raster of {} tile rows.\n\
+             \x20   // Remainder: {rem_desc}.\n\
              \x20   // Ragged edges: {edges}.\n\
              \x20   // Each C element is one fma.rn.f32 chain over k = 0..K-1 in order: the same bits for every shape, tile and grid.\n\
-             \x20   // Launch: block ({nt},1,1), anything else traps. {tiles} output tiles, grid-strided: ANY grid works, ({nbx}, {nby}, 1) is one tile per CTA.\n\
+             \x20   // Launch: block ({nt},1,1), anything else traps. {tiles} output tiles, grid-strided: ANY grid works, ({tiles}, 1, 1) is one tile per CTA.\n\
              \x20   // A row-major [M][K], B row-major [K][N], C row-major [M][N], f32, 16-byte aligned. Dynamic shared memory required: {smem} bytes.\n\
              \x20   // ========================================================",
-            t.bm, t.bn, t.bk, t.bm / t.wm, t.bn / t.wn, t.wm, t.wn, t.tm, t.tn, t.name, s, b_width * 4, F32_GEMM_GROUP
+            t.bm, t.bn, t.bk, t.bm / t.wm, t.bn / t.wn, t.wm, t.wn, t.tm, t.tn, t.name, t.stages, if vec_n { 16 } else { 4 }, F32_GEMM_GROUP
         )
         .unwrap();
 
@@ -285,6 +332,138 @@ impl PtxEmitter {
         }
         w(self, format!("mov.u32 {}, %tid.x;", tid));
 
+        let s_a = self.alloc_reg32();
+        w(self, format!("mov.u32 {}, {};", s_a, smem_sym));
+
+        // ---- Tile loop: linear tile id, grid-strided; whole tiles first,
+        // then the remainder tiles.
+        let r = |e: &mut Self| e.alloc_reg32();
+        let (pid, stride) = (r(self), r(self));
+        let (cx, cy, cz, ncx, ncy, ncz) = (r(self), r(self), r(self), r(self), r(self), r(self));
+        for (reg, sreg) in [(&cx, "%ctaid.x"), (&cy, "%ctaid.y"), (&cz, "%ctaid.z"), (&ncx, "%nctaid.x"), (&ncy, "%nctaid.y"), (&ncz, "%nctaid.z")] {
+            w(self, format!("mov.u32 {}, {};", reg, sreg));
+        }
+        w(self, format!("mad.lo.u32 {}, {}, {}, {};", pid, cz, ncy, cy));
+        w(self, format!("mad.lo.u32 {}, {}, {}, {};", pid, pid, ncx, cx));
+        w(self, format!("mul.lo.u32 {}, {}, {};", stride, ncx, ncy));
+        w(self, format!("mul.lo.u32 {}, {}, {};", stride, stride, ncz));
+        let tile_top = self.alloc_label("f32_gemm_tile");
+        let next = self.alloc_label("f32_gemm_next");
+        let done = self.alloc_label("f32_gemm_done");
+        let p_done = self.alloc_pred();
+        self.ptx_buffer.push_str(&format!("{}:\n", tile_top));
+        w(self, format!("setp.ge.u32 {}, {}, {};", p_done, pid, tiles));
+        w(self, format!("@{} bra {};", p_done, done));
+        // The three sets in pid order: whole tiles, row remainder, column
+        // remainder. A set with no tiles emits nothing.
+        let sets = [
+            (Some(t), 0, m_main, 0, n_main, main_tiles),
+            (rows, m_main, m - m_main, 0, n_main, row_tiles),
+            (rem, 0, m, n_main, n - n_main, rem_tiles),
+        ];
+        let mut first_tile = 0;
+        for (cfg, row_origin, nrows, col_origin, ncols, count) in sets {
+            let Some(cfg) = cfg else { continue };
+            if count == 0 {
+                continue;
+            }
+            let skip = self.alloc_label("f32_gemm_set");
+            let p = self.alloc_pred();
+            // pid in [first_tile, first_tile + count)
+            w(self, format!("setp.ge.u32 {}, {}, {};", p, pid, first_tile + count));
+            w(self, format!("@{} bra {};", p, skip));
+            let idx = if first_tile == 0 {
+                pid.clone()
+            } else {
+                let idx = r(self);
+                w(self, format!("sub.u32 {}, {}, {};", idx, pid, first_tile));
+                idx
+            };
+            self.emit_f32_gemm_tile_set(cfg, m, n, k, row_origin, nrows, col_origin, ncols, &idx, &ga0, &gb0, &gc0, &tid, &s_a);
+            w(self, format!("bra.uni {};", next));
+            self.ptx_buffer.push_str(&format!("{}:\n", skip));
+            first_tile += count;
+        }
+        self.ptx_buffer.push_str(&format!("{}:\n", next));
+        // Every warp is done with the stages before the next tile's prologue
+        // writes them.
+        w(self, "bar.sync 0;".to_string());
+        w(self, format!("add.u32 {}, {}, {};", pid, pid, stride));
+        w(self, format!("bra.uni {};", tile_top));
+        self.ptx_buffer.push_str(&format!("{}:\n", done));
+        nt
+    }
+
+    /// The tiles of one configuration covering rows `row_origin ..
+    /// row_origin + nrows` and columns `col_origin .. col_origin + ncols` of
+    /// C: this set's tile `idx` (grouped raster over its own tiles), from its
+    /// copy roles through its epilogue.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_f32_gemm_tile_set(
+        &mut self,
+        t: F32GemmTile,
+        m: u32,
+        n: u32,
+        k: u32,
+        row_origin: u32,
+        nrows: u32,
+        col_origin: u32,
+        ncols: u32,
+        idx: &str,
+        ga0: &str,
+        gb0: &str,
+        gc0: &str,
+        tid: &str,
+        s_a: &str,
+    ) {
+        let nt = t.threads();
+        let (lm, ln) = (t.wm / t.tm, t.wn / t.tn);
+        let sa_stride = t.bm + F32_GEMM_PAD_A; // floats per row of A^T
+        // Ragged edges, each handled only where the shape has one, so an
+        // aligned shape's kernel is the code measured in the module doc:
+        // - M: an A copy of a row past M copies nothing (`cp.async`'s
+        //   source size 0; it reads nothing and zero-fills), and C's rows
+        //   past M are not stored;
+        // - N: the B columns a thread copies are clamped to the last valid
+        //   ones once per tile (they feed only C columns past N, which are not
+        //   stored); with N % 4 != 0 a B row is not 16-byte aligned, so B is
+        //   copied and C stored 4 bytes at a time;
+        // - K: the copies of k >= K copy nothing, and the last K tile runs
+        //   only its K % BK valid steps, so every element is still the
+        //   in-order chain over k < K (zero products would turn a -0.0 sum
+        //   into +0.0).
+        let rag_m = nrows % t.bm != 0;
+        let rag_n = ncols % t.bn != 0;
+        let vec_n = n % 4 == 0;
+        let k_tail = k % t.bk;
+        let kt_full = k / t.bk;
+        let kt_total = k.div_ceil(t.bk);
+        let a_copies = t.bm * t.bk / nt; // 4-byte copies of A per thread per stage
+        // B: 16-byte copies of 4 columns, or 4-byte copies of one.
+        let b_width = if vec_n { 4 } else { 1 };
+        let b_copies = t.bk * t.bn / b_width / nt;
+        let b_cols = t.bn / b_width; // copy slots across a B row
+        let copies = a_copies + b_copies;
+        // The copies are spread over the k steps before the commit at
+        // k = BK - 2, one per step where they fit.
+        let per_step = copies.div_ceil(t.bk - 1);
+        assert!(
+            lm * ln == 32 && t.tm % 4 == 0 && t.tn % 4 == 0 && nt % t.bk == 0 && nt % b_cols == 0,
+            "F32 GEMM tile {:?} is malformed",
+            t
+        );
+        let (nbx, nby) = (ncols.div_ceil(t.bn), nrows.div_ceil(t.bm));
+        let stage_a = t.bk * sa_stride * 4; // bytes
+        let stage_b = t.bk * t.bn * 4;
+        let s = t.stages;
+
+        let w = |e: &mut Self, line: String| {
+            e.ptx_buffer.push_str("    ");
+            e.ptx_buffer.push_str(&line);
+            e.ptx_buffer.push('\n');
+        };
+        let tmp = self.alloc_reg32();
+
         // ---- Thread roles (all from tid; sizes are powers of two).
         let r = |e: &mut Self| e.alloc_reg32();
         let (warp, lane, wm_i, wn_i, lm_i, ln_i) = (r(self), r(self), r(self), r(self), r(self), r(self));
@@ -296,8 +475,7 @@ impl PtxEmitter {
         w(self, format!("shr.u32 {}, {}, {};", lm_i, lane, Self::f32_gemm_log2(ln)));
         w(self, format!("and.b32 {}, {}, {};", ln_i, lane, ln - 1));
 
-        let (s_a, s_b) = (r(self), r(self));
-        w(self, format!("mov.u32 {}, {};", s_a, smem_sym));
+        let s_b = r(self);
         w(self, format!("add.u32 {}, {}, {};", s_b, s_a, s * stage_a));
         // Fragment bases: this thread's float4 columns of A^T and B.
         let (frag_a, frag_b) = (r(self), r(self));
@@ -326,17 +504,6 @@ impl PtxEmitter {
         w(self, format!("shl.b32 {}, {}, 2;", tmp, tmp));
         w(self, format!("add.u32 {}, {}, {};", copy_b, s_b, tmp));
 
-        // ---- Tile loop: linear tile id, grid-strided.
-        let (pid, stride) = (r(self), r(self));
-        let (cx, cy, cz, ncx, ncy, ncz) = (r(self), r(self), r(self), r(self), r(self), r(self));
-        for (reg, sreg) in [(&cx, "%ctaid.x"), (&cy, "%ctaid.y"), (&cz, "%ctaid.z"), (&ncx, "%nctaid.x"), (&ncy, "%nctaid.y"), (&ncz, "%nctaid.z")] {
-            w(self, format!("mov.u32 {}, {};", reg, sreg));
-        }
-        w(self, format!("mad.lo.u32 {}, {}, {}, {};", pid, cz, ncy, cy));
-        w(self, format!("mad.lo.u32 {}, {}, {}, {};", pid, pid, ncx, cx));
-        w(self, format!("mul.lo.u32 {}, {}, {};", stride, ncx, ncy));
-        w(self, format!("mul.lo.u32 {}, {}, {};", stride, stride, ncz));
-
         let acc: Vec<Vec<String>> = (0..t.tm).map(|_| (0..t.tn).map(|_| self.alloc_regf32()).collect()).collect();
         // A fresh fragment register for every k step of the tile, never two
         // buffers reused: reuse ties each load to the end of the FMAs that
@@ -347,10 +514,8 @@ impl PtxEmitter {
         let fa: Vec<Vec<String>> = (0..t.bk).map(|_| (0..t.tm).map(|_| self.alloc_regf32()).collect()).collect();
         let fb: Vec<Vec<String>> = (0..t.bk).map(|_| (0..t.tn).map(|_| self.alloc_regf32()).collect()).collect();
 
-        let tile_top = self.alloc_label("f32_gemm_tile");
         let k_top = self.alloc_label("f32_gemm_k");
-        let done = self.alloc_label("f32_gemm_done");
-        let (p_done, p_more, p_loop, p_wrap) = (self.alloc_pred(), self.alloc_pred(), self.alloc_pred(), self.alloc_pred());
+        let (p_more, p_loop, p_wrap) = (self.alloc_pred(), self.alloc_pred(), self.alloc_pred());
         let (by, bx, grp, first, gm, rr) = (r(self), r(self), r(self), r(self), r(self), r(self));
         let (ga, gb) = (self.alloc_reg64(), self.alloc_reg64());
         let (off64, off64b) = (self.alloc_reg64(), self.alloc_reg64());
@@ -361,18 +526,15 @@ impl PtxEmitter {
         let (c_lim, klim, klim_b, sz) = (r(self), r(self), r(self), r(self));
         let (p_g, p_k) = (self.alloc_pred(), self.alloc_pred());
 
-        self.ptx_buffer.push_str(&format!("{}:\n", tile_top));
-        w(self, format!("setp.ge.u32 {}, {}, {};", p_done, pid, tiles));
-        w(self, format!("@{} bra {};", p_done, done));
         // Grouped raster: tile rows in groups of GROUP, column-major inside a
         // group, so consecutive CTAs share B's columns.
         let gsz = F32_GEMM_GROUP * nbx;
-        w(self, format!("div.u32 {}, {}, {};", grp, pid, gsz));
+        w(self, format!("div.u32 {}, {}, {};", grp, idx, gsz));
         w(self, format!("mul.lo.u32 {}, {}, {};", first, grp, F32_GEMM_GROUP));
         w(self, format!("sub.u32 {}, {}, {};", gm, nby, first));
         w(self, format!("min.u32 {}, {}, {};", gm, gm, F32_GEMM_GROUP));
         w(self, format!("mul.lo.u32 {}, {}, {};", tmp, grp, gsz));
-        w(self, format!("sub.u32 {}, {}, {};", rr, pid, tmp));
+        w(self, format!("sub.u32 {}, {}, {};", rr, idx, tmp));
         w(self, format!("rem.u32 {}, {}, {};", by, rr, gm));
         w(self, format!("add.u32 {}, {}, {};", by, by, first));
         w(self, format!("div.u32 {}, {}, {};", bx, rr, gm));
@@ -381,6 +543,9 @@ impl PtxEmitter {
         let a_row_step = nt / t.bk; // rows of A between copy c and c+1
         let b_row_step = nt / b_cols;
         w(self, format!("mad.lo.u32 {}, {}, {}, {};", tmp, by, t.bm, row_a));
+        if row_origin != 0 {
+            w(self, format!("add.u32 {}, {}, {};", tmp, tmp, row_origin));
+        }
         if rag_m {
             // c_lim = clamp(ceil((M - row) / step), 0, copies)
             w(self, format!("sub.s32 {}, {}, {};", c_lim, m, tmp));
@@ -395,6 +560,9 @@ impl PtxEmitter {
         w(self, format!("add.u64 {}, {}, {};", ga, ga0, off64));
         w(self, format!("mul.wide.u32 {}, {}, {};", off64, row_b, n * 4));
         w(self, format!("mad.lo.u32 {}, {}, {}, {};", tmp, bx, t.bn, col_b));
+        if col_origin != 0 {
+            w(self, format!("add.u32 {}, {}, {};", tmp, tmp, col_origin));
+        }
         if rag_n {
             w(self, format!("min.u32 {}, {}, {};", tmp, tmp, n - b_width));
         }
@@ -586,10 +754,16 @@ impl PtxEmitter {
         w(self, format!("mul.lo.u32 {}, {}, {};", tmp, wm_i, t.wm));
         w(self, format!("mad.lo.u32 {}, {}, 4, {};", tmp, lm_i, tmp));
         w(self, format!("mad.lo.u32 {}, {}, {}, {};", row0, by, t.bm, tmp));
+        if row_origin != 0 {
+            w(self, format!("add.u32 {}, {}, {};", row0, row0, row_origin));
+        }
         w(self, format!("mul.wide.u32 {}, {}, {};", off64, row0, n * 4));
         w(self, format!("mul.lo.u32 {}, {}, {};", tmp, wn_i, t.wn));
         w(self, format!("mad.lo.u32 {}, {}, 4, {};", tmp, ln_i, tmp));
         w(self, format!("mad.lo.u32 {}, {}, {}, {};", col0, bx, t.bn, tmp));
+        if col_origin != 0 {
+            w(self, format!("add.u32 {}, {}, {};", col0, col0, col_origin));
+        }
         w(self, format!("mul.wide.u32 {}, {}, 4;", off64b, col0));
         w(self, format!("add.u64 {}, {}, {};", off64, off64, off64b));
         w(self, format!("add.u64 {}, {}, {};", gcb, gc0, off64));
@@ -642,12 +816,5 @@ impl PtxEmitter {
                 }
             }
         }
-        // Every warp is done with the stages before the next tile's prologue
-        // writes them.
-        w(self, "bar.sync 0;".to_string());
-        w(self, format!("add.u32 {}, {}, {};", pid, pid, stride));
-        w(self, format!("bra.uni {};", tile_top));
-        self.ptx_buffer.push_str(&format!("{}:\n", done));
-        nt
     }
 }

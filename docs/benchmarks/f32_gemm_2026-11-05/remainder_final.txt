@@ -1,0 +1,24 @@
+4096x4096x4096 tile large: bit-exact True (grid 3x1: True) | cuBLAS 30.92 TF  Y 29.97 TF  = 0.969x
+2048x2048x2048 tile large: bit-exact True (grid 3x1: True) | cuBLAS 30.42 TF  Y 31.39 TF  = 1.032x
+3072x3072x3072 tile large: bit-exact True (grid 3x1: True) | cuBLAS 29.69 TF  Y 28.39 TF  = 0.956x
+1024x1024x1024 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 21.98 TF  Y 27.18 TF  = 1.237x
+512x512x512 tile small: bit-exact True (grid 3x1: True) | cuBLAS 14.23 TF  Y 16.11 TF  = 1.132x
+768x768x768 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 18.76 TF  Y 16.27 TF  = 0.868x
+128x4096x4096 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 23.63 TF  Y 24.31 TF  = 1.029x
+1024x4096x4096 tile large: bit-exact True (grid 3x1: True) | cuBLAS 30.84 TF  Y 31.48 TF  = 1.021x
+2445 MHz, 208.30 W, 73
+1000x1000x1000 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 20.89 TF  Y 26.31 TF  = 1.259x
+1025x1024x1024 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 19.53 TF  Y 21.36 TF  = 1.094x
+1024x1028x1024 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 20.44 TF  Y 18.53 TF  = 0.907x
+1023x1025x1027 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 18.22 TF  Y 14.52 TF  = 0.797x
+2047x2049x2051 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 24.35 TF  Y 21.83 TF  = 0.897x
+1500x1500x1500 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS 22.97 TF  Y 21.64 TF  = 0.942x
+1x50257x768 tile mid  : bit-exact True (grid 3x1: True) | cuBLAS  0.30 TF  Y  0.29 TF  = 0.981x
+1x4096x4096 tile small: bit-exact True (grid 3x1: True) | cuBLAS  0.30 TF  Y  0.30 TF  = 0.987x
+2760 MHz, 226.82 W, 65
+3000x3000x3000 tile large: bit-exact True (grid 3x1: True) | cuBLAS 28.77 TF  Y 27.91 TF  = 0.970x
+4097x4097x1024 tile large: bit-exact True (grid 3x1: True) | cuBLAS 27.93 TF  Y 23.48 TF  = 0.841x
+4095x4097x512 tile large: bit-exact True (grid 3x1: True) | cuBLAS 25.99 TF  Y 21.43 TF  = 0.825x
+1024x50257x768 tile large: bit-exact True (grid 3x1: True) | cuBLAS 29.72 TF  Y 24.31 TF  = 0.818x
+4096x4097x4096 tile large: bit-exact True (grid 3x1: True) | cuBLAS 27.88 TF  Y 26.92 TF  = 0.966x
+2460 MHz, 219.67 W, 74

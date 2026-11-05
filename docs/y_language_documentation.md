@@ -1182,6 +1182,10 @@ for i in 0..100 {
   stored; the last, partial K tile runs only its valid steps, so a ragged
   K keeps the in-order chain, -0.0 included. With N % 4 != 0 a B row is
   not 16-byte aligned, and B is copied and C stored 4 bytes at a time.
+  Leftover rows or columns of at most half a tile, on a side of at most 50
+  tiles, go to narrow remainder tiles in the same launch (32-row strips,
+  64- or 32-column tiles; the header names them), where a nearly empty
+  whole tile row or column would cost a whole wave.
   One of three tiles is chosen from the shape and the SM count: 128x256
   (one 256-thread CTA per SM) for at least 128 rows and about two waves of
   them, at least 80% full; 64x128 at about one wave; 64x64 otherwise. Launch: block `(threads, 1, 1)` as the header states,
@@ -1190,11 +1194,11 @@ for i in 0..100 {
   the dynamic shared memory. Against cuBLAS (TF32 off) on an RTX 4070 Ti
   SUPER: 0.93-1.04x from 2048 to 8192, 1.19-1.20x at 512 and 1024,
   0.94-1.04x with 64-1024 rows or 128 columns and K = 2048-4096,
-  0.81-0.85x at 768^3, where cuBLAS splits K in three; ragged with N a
-  multiple of 4, 0.94-1.25x (1000^3 to 3000^3), 0.80x at 1024 x 1028 x 1024
-  (its last tile column nearly empty); N odd, 0.76-0.90x on large shapes
-  (GPT-2's 1024 x 50257 x 768: 0.88x), 0.59x at 1023 x 1025 x 1027; one row
-  (1 x 50257 x 768), 0.97x
+  0.81-0.87x at 768^3, where cuBLAS splits K in three; ragged with N a
+  multiple of 4, 0.91-1.26x (1000^3 to 3000^3, 1024 x 1028 x 1024,
+  1025 x 1024 x 1024); N odd, 0.80-0.97x (1023 x 1025 x 1027 to
+  4096 x 4097 x 4096; GPT-2's 1024 x 50257 x 768: 0.79-0.88x across runs);
+  one row (1 x 50257 x 768), 0.98x
   ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The host backend
   refuses the kernel: it has no body there.
 * **Split K**, with four parameters `(A, B: GlobalMemory<F16>, C, Partial:
