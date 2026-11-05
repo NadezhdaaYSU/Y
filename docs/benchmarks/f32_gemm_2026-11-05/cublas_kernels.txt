@@ -1,0 +1,5 @@
+(1024, 1024, 1024) ['Memset (Device)', 'ampere_sgemm_128x64_nn']
+(2048, 2048, 2048) ['Memset (Device)', 'void cutlass::Kernel2<cutlass_80_simt_sgemm_256x128_8x4_nn_align1>(cutlass_80_simt_sgemm_256x128_8x4_nn_align1::Params)']
+(4096, 4096, 4096) ['void cutlass::Kernel2<cutlass_80_simt_sgemm_256x128_8x4_nn_align1>(cutlass_80_simt_sgemm_256x128_8x4_nn_align1::Params)']
+(8192, 8192, 8192) ['void cutlass::Kernel2<cutlass_80_simt_sgemm_256x128_8x4_nn_align1>(cutlass_80_simt_sgemm_256x128_8x4_nn_align1::Params)']
+(128, 4096, 4096) ['Memset (Device)', 'ampere_sgemm_128x128_nn']

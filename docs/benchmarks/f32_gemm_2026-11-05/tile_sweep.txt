@@ -1,0 +1,40 @@
+== large
+256x256x256 tile large: cuBLAS  4.95 TF  Y  0.96 TF  = 0.194x
+512x512x512 tile large: cuBLAS 14.95 TF  Y  4.02 TF  = 0.269x
+768x768x768 tile large: cuBLAS 19.13 TF  Y  9.13 TF  = 0.477x
+1024x1024x1024 tile large: cuBLAS 23.41 TF  Y 16.54 TF  = 0.707x
+3072x3072x3072 tile large: cuBLAS 29.93 TF  Y 28.47 TF  = 0.951x
+256x4096x4096 tile large: cuBLAS 28.74 TF  Y 16.93 TF  = 0.589x
+1024x1024x4096 tile large: cuBLAS 29.77 TF  Y 16.95 TF  = 0.569x
+1536x1536x1536 tile large: cuBLAS 23.60 TF  Y 17.90 TF  = 0.759x
+128x4096x4096 tile large: cuBLAS 23.74 TF  Y  8.50 TF  = 0.358x
+== mid
+256x256x256 tile mid  : cuBLAS  5.04 TF  Y  2.78 TF  = 0.552x
+512x512x512 tile mid  : cuBLAS 14.82 TF  Y 12.33 TF  = 0.832x
+768x768x768 tile mid  : cuBLAS 18.99 TF  Y 15.95 TF  = 0.840x
+1024x1024x1024 tile mid  : cuBLAS 23.00 TF  Y 27.09 TF  = 1.178x
+3072x3072x3072 tile mid  : cuBLAS 29.86 TF  Y 27.23 TF  = 0.912x
+256x4096x4096 tile mid  : cuBLAS 27.84 TF  Y 26.56 TF  = 0.954x
+1024x1024x4096 tile mid  : cuBLAS 28.87 TF  Y 27.57 TF  = 0.955x
+1536x1536x1536 tile mid  : cuBLAS 22.71 TF  Y 23.47 TF  = 1.034x
+128x4096x4096 tile mid  : cuBLAS 23.53 TF  Y 23.80 TF  = 1.011x
+== small
+256x256x256 tile small: cuBLAS  4.96 TF  Y  2.76 TF  = 0.557x
+512x512x512 tile small: cuBLAS 14.95 TF  Y 17.49 TF  = 1.170x
+768x768x768 tile small: cuBLAS 18.68 TF  Y 15.07 TF  = 0.806x
+1024x1024x1024 tile small: cuBLAS 22.51 TF  Y 19.91 TF  = 0.885x
+3072x3072x3072 tile small: cuBLAS 29.67 TF  Y 20.88 TF  = 0.704x
+256x4096x4096 tile small: cuBLAS 28.48 TF  Y 19.81 TF  = 0.696x
+1024x1024x4096 tile small: cuBLAS 29.21 TF  Y 19.97 TF  = 0.684x
+1536x1536x1536 tile small: cuBLAS 23.20 TF  Y 20.41 TF  = 0.880x
+128x4096x4096 tile small: cuBLAS 23.73 TF  Y 19.59 TF  = 0.826x
+== tiny
+256x256x256 tile tiny : cuBLAS  4.94 TF  Y  2.77 TF  = 0.560x
+512x512x512 tile tiny : cuBLAS 14.84 TF  Y 14.01 TF  = 0.944x
+768x768x768 tile tiny : cuBLAS 19.01 TF  Y 12.04 TF  = 0.633x
+1024x1024x1024 tile tiny : cuBLAS 22.98 TF  Y 16.50 TF  = 0.718x
+3072x3072x3072 tile tiny : cuBLAS 29.60 TF  Y 17.35 TF  = 0.586x
+256x4096x4096 tile tiny : cuBLAS 28.55 TF  Y 16.52 TF  = 0.579x
+1024x1024x4096 tile tiny : cuBLAS 29.49 TF  Y 16.46 TF  = 0.558x
+1536x1536x1536 tile tiny : cuBLAS 23.14 TF  Y 16.66 TF  = 0.720x
+128x4096x4096 tile tiny : cuBLAS 23.64 TF  Y 16.00 TF  = 0.677x

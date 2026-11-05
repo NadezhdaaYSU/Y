@@ -1,0 +1,10 @@
+# ncu gpu__time_duration (us), 256x256x256, three launches each; ncu locks clocks to base
+ampere_sgemm_64x32_sliced1x4_nn                              6.240 us
+void cublasLt::splitKreduce_kernel<32, 16, int, float, float 2.528 us
+y_256_256_256                                                9.152 us
+ampere_sgemm_64x32_sliced1x4_nn                              5.760 us
+void cublasLt::splitKreduce_kernel<32, 16, int, float, float 2.528 us
+y_256_256_256                                                9.152 us
+ampere_sgemm_64x32_sliced1x4_nn                              5.696 us
+void cublasLt::splitKreduce_kernel<32, 16, int, float, float 2.368 us
+y_256_256_256                                                9.088 us

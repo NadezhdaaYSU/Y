@@ -196,6 +196,19 @@ source; each entry there now carries its status. What is still open:
   the cause - something in the cold path's host side, by the bimodality - is
   not found, and the constant is not changed until it is.
 
+### FP32 GEMM limits
+
+- The `@tile` FP32 GEMM (2026-11-05) refuses M or N not a multiple of 64 and
+  K not a multiple of 16: it has no ragged edge, so those shapes have no Y
+  FP32 GEMM. It needs sm_80 (`cp.async`); older targets are refused by
+  `check_target_features`, so the GTX 1050 Ti (sm_61) has none.
+- Where cuBLAS splits K it is ahead: 0.81-0.85x at 768^3, 0.94-0.95x at
+  1024 x 1024 x 4096 and 256 x 4096 x 4096. By kernel time, 256^3 is about
+  0.92x. Y does not split, by design: the answer would then depend on the
+  shape (`docs/benchmarks/f32_gemm_2026-11-05/`).
+- Nothing in `python/y_lang` calls it yet; it runs through the generic
+  launch path (the header states block, grid and dynamic shared memory).
+
 ### Python packaging
 
 - `python/pyproject.toml` cannot be built into a wheel: its `readme =
