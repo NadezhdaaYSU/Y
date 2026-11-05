@@ -222,6 +222,10 @@ pub struct TypeChecker {
     pub linear_tracker: LinearTracker,
     pub errors: Vec<String>,
     pub in_unsafe: bool,
+    /// The kernel being checked: how far each of its values is the same
+    /// across threads (`crate::uniformity`). `None` outside a kernel, where
+    /// one thread runs the code and every branch is uniform.
+    kernel_uniformity: Option<crate::uniformity::Uniformity>,
     allow_transfer_use: usize,
     current_return_type: Option<SemanticType>,
     functions: HashMap<String, FunctionSignature>,
@@ -267,6 +271,7 @@ impl TypeChecker {
             linear_tracker: LinearTracker::new(),
             errors: Vec::new(),
             in_unsafe: false,
+            kernel_uniformity: None,
             allow_transfer_use: 0,
             current_return_type: None,
             functions: HashMap::new(),
@@ -1316,51 +1321,29 @@ not know its length",
         }
     }
 
-    fn check_uniformity(&mut self, expr: &Expr) {
-        // Uniformity analysis: fail if the expression relies on thread-local IDs
-        let mut is_uniform = true;
-        
-        // Very basic prototype check: walk the expression and look for known thread-local variables
-        // like threadIdx.x, blockDim.x, blockIdx.x, or memory loads that aren't broadcast.
-        // For this bootstrap version, we will just check if any Ident contains "threadIdx".
-        fn walk_expr(e: &Expr, is_u: &mut bool) {
-            match e {
-                Expr::Ident(name, _) => {
-                    if name.contains("threadIdx") || name.contains("laneId") {
-                        *is_u = false;
-                    }
-                }
-                Expr::BinaryOp { left, right, .. } => {
-                    walk_expr(left, is_u);
-                    walk_expr(right, is_u);
-                }
-                Expr::UnaryOp { operand, .. } => {
-                    walk_expr(operand, is_u);
-                }
-                Expr::Call { args, .. } => {
-                    for arg in args {
-                        walk_expr(arg, is_u);
-                    }
-                }
-                Expr::MemberAccess { base, .. } => {
-                    walk_expr(base, is_u);
-                }
-                Expr::Index { base, index, .. } => {
-                    // Indexing into a potentially non-uniform array is divergent
-                    // unless we prove the array contains uniform data. For now, mark unsafe indexing.
-                    walk_expr(base, is_u);
-                    walk_expr(index, is_u);
-                }
-                _ => {}
-            }
-        }
-        
-        walk_expr(expr, &mut is_uniform);
-        
-        if !is_uniform {
+    /// `@divergence(uniform)` claims every lane of a warp takes the branch
+    /// the same way: its condition (or a `for`'s bounds) must be at least as
+    /// uniform as a warp, by the analysis the PTX backend refuses divergent
+    /// collectives with (`crate::uniformity`).
+    ///
+    /// It was checked by looking for identifiers containing `threadIdx` or
+    /// `laneId`, which no Y program spells - the thread index is the call
+    /// `thread_idx_x()` - so `@divergence(uniform) if thread_idx_x() < 20`
+    /// was accepted, and so was a condition on any value computed from it.
+    /// Outside a kernel one thread runs the code and the claim holds.
+    fn check_uniformity(&mut self, expr: &Expr, what: &str) {
+        let Some(u) = self.kernel_uniformity.as_ref() else { return };
+        if u.of(expr) == crate::uniformity::Uniform::Thread {
+            let why = u.why(expr);
             self.errors.push(format!(
-                "Line {}: Hardware Constraint Violation: Branch expression is not guaranteed to be uniform. Warp divergence detected.",
-                expr.span().line
+                "Line {}: `@divergence(uniform)` claims every lane of a warp takes this {} the same \
+                 way, but its {} can differ between the lanes of a warp: it reads {}. Remove the \
+                 annotation, or branch on values every lane shares - constants, kernel parameters, \
+                 the block and grid built-ins, a warp reduction's result.",
+                expr.span().line,
+                what,
+                if what == "for" { "bounds" } else { "condition" },
+                why
             ));
         }
     }
@@ -1556,7 +1539,9 @@ not know its length",
             self.set_signal_constraint(param.name.clone(), ConstraintState::Constrained, param.span.clone());
         }
 
+        self.kernel_uniformity = Some(crate::uniformity::Uniformity::of_body(&kernel.body));
         self.check_block(&kernel.body);
+        self.kernel_uniformity = None;
 
         self.verify_kernel_coherence(kernel);
         self.verify_tile_gemm_kernel(kernel);
@@ -2156,7 +2141,12 @@ so the stored value is tested and a value outside the range stops the program"
                 }
                 self.insert_var(name.clone(), resolved);
             }
-            Stmt::For { loop_var, start, end, step, body, invariant, is_uniform_branch: _, span, .. } => {
+            Stmt::For { loop_var, start, end, step, body, invariant, is_uniform_branch, span, .. } => {
+                if *is_uniform_branch {
+                    for e in std::iter::once(start).chain(std::iter::once(end)).chain(step.iter()) {
+                        self.check_uniformity(e, "for");
+                    }
+                }
                 for expr in std::iter::once(start).chain(std::iter::once(end)).chain(step.iter()) {
                     let ty = self.check_expr(expr);
                     if ty != SemanticType::Unknown && !matches!(&ty, SemanticType::Primitive(p)
@@ -2364,7 +2354,7 @@ so the stored value is tested and a value outside the range stops the program"
                 ..
             } => {
                 if *is_uniform_branch {
-                    self.check_uniformity(condition);
+                    self.check_uniformity(condition, "if");
                 }
                 let cond_ty = self.check_expr(condition);
                 self.require_bool_condition(&cond_ty, "if", condition.span());
@@ -2401,7 +2391,7 @@ so the stored value is tested and a value outside the range stops the program"
                     ));
                 }
                 if *is_uniform_branch {
-                    self.check_uniformity(condition);
+                    self.check_uniformity(condition, "while");
                 }
 
                 let mut assigned_vars = std::collections::HashSet::new();

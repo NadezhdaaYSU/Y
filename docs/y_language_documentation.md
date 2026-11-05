@@ -1319,11 +1319,19 @@ struct Receiver {
 
 ### 9.16 `@divergence`
 * **Syntax**: `@divergence(uniform)` before an `if` or `while`.
-* **Function**: Claims the branch is the same for every thread of a warp. The
-  claim is checked only by looking for identifiers containing `threadIdx` or
-  `laneId` in the condition, so `@divergence(uniform) if thread_idx_x() < 20`
-  is accepted. The LLVM backend attaches `!uniform_branch` metadata to the
-  branch; the PTX backend emits the same code with or without it.
+* **Syntax note**: before a `for`, the claim is about its bounds and step.
+* **Function**: Claims the branch is the same for every thread of a warp, and
+  in a kernel the claim is checked (2026-11-05) by the analysis that refuses
+  divergent collectives (§20.7): the condition may read constants, kernel
+  parameters, the block and grid built-ins and a warp reduction's result, and
+  values computed only from those; a thread index, a memory read, or a
+  variable assigned from one - or assigned inside a branch on one - is
+  refused, naming it: `@divergence(uniform) if thread_idx_x() < 20` says *it
+  reads `thread_idx_x()`*. (It was checked by looking for identifiers
+  containing `threadIdx` or `laneId`, which no Y program spells, so that
+  example was accepted.) In a `fn`, one thread runs the code and the claim
+  holds. The LLVM backend attaches `!uniform_branch` metadata to the branch;
+  the PTX backend emits the same code with or without it.
 * **It does not admit a collective.** A shuffle (`warp_reduce_sum`,
   `warp_reduce_max`, `shfl_sync_bfly`) or a barrier (`barrier_sync`) under a
   condition the threads can disagree on is refused whether or not the branch
