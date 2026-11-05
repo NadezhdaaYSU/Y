@@ -933,7 +933,11 @@ not know its length",
     fn eval_interval(&self, expr: &Expr) -> Option<Interval> {
         let interval = self.eval_interval_unchecked(expr)?;
         if matches!(expr,
-            Expr::BinaryOp { op: BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod, .. }
+            Expr::BinaryOp {
+                op: BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod
+                    | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr,
+                ..
+            }
             | Expr::UnaryOp { op: UnaryOp::Neg, .. })
         {
             // Entry facts must describe machine execution too. Checking only
@@ -951,8 +955,13 @@ not know its length",
                 // where LLVM produces a negative signed 64-bit value.
                 return None;
             }
-            if matches!(expr, Expr::BinaryOp { op: BinaryOp::Div | BinaryOp::Mod, .. }) {
-                self.expr_to_smt(expr, &HashMap::new(), &mut Vec::new()).ok()?;
+            // The operand types must be ones the backends compute alike
+            // (`smt_operand_types`). This encoded the whole expression, which
+            // also refused every division with a bitwise operand -
+            // `(i & 1023) % 8` - though the operand's interval is decided,
+            // and gated, by its own `eval_interval`.
+            if let Expr::BinaryOp { op: BinaryOp::Div | BinaryOp::Mod, left, right, .. } = expr {
+                self.smt_operand_types(left, right).ok()?;
             }
             let limit = 1i128 << (bits - 1);
             if (interval.min as i128) < -limit || (interval.max as i128) >= limit {
@@ -998,16 +1007,18 @@ not know its length",
                 // unbounded left operand, and demanding an interval for it
                 // returns `None` before the operator is ever consulted. A
                 // negative or non-constant mask falls through to `None`.
-                let mask_of = |side: &Expr| -> Option<(i64, u64)> {
-                    match self.eval_interval(side) {
-                        Some(i) if i.min == i.max && i.min >= 0 => Some((i.min, i.trust)),
-                        _ => None,
-                    }
-                };
-                // The result rests on the MASK's range only: it holds whatever
-                // the other operand is.
-                let (mask, trust) = mask_of(right).or_else(|| mask_of(left))?;
-                Some(Interval { min: 0, max: mask, trust })
+                //
+                // The mask need not be a constant: any operand proved
+                // non-negative bounds the result by its own maximum, whatever
+                // the other is (2026-11-05; archive 1857 (b)). Two
+                // non-negative operands bound it by the smaller maximum.
+                let nonneg = |side: &Expr| self.eval_interval(side).filter(|i| i.min >= 0);
+                match (nonneg(left), nonneg(right)) {
+                    (Some(l), Some(r)) => Some(Interval { min: 0, max: l.max.min(r.max), trust: l.trust | r.trust }),
+                    // The result rests on the mask's range only.
+                    (Some(m), None) | (None, Some(m)) => Some(Interval { min: 0, max: m.max, trust: m.trust }),
+                    (None, None) => None,
+                }
             }
             Expr::BinaryOp { left, op, right, .. } => {
                 let lhs = self.eval_interval(left)?;
@@ -1035,6 +1046,43 @@ not know its length",
                             max: *candidates.iter().max().unwrap(),
                             trust: lhs.trust | rhs.trust,
                         })
+                    }
+                    // The rules below hold only where every backend computes the
+                    // same value: non-negative operands, for which LLVM's
+                    // `srem`/`ashr`, PTX's `rem.s32`/`shr.s32` (or `.u32`) and
+                    // Rust's `%`/`>>` agree, and shift amounts inside the
+                    // type's width (`eval_interval` checks the result fits the
+                    // type, and that the type is signed). Anything else has no
+                    // interval: refused as unprovable, not guessed.
+                    BinaryOp::Mod if lhs.min >= 0 && rhs.min > 0 => Some(Interval {
+                        min: 0,
+                        max: lhs.max.min(rhs.max - 1),
+                        trust: lhs.trust | rhs.trust,
+                    }),
+                    BinaryOp::Shr | BinaryOp::Shl if lhs.min >= 0 && rhs.min >= 0 => {
+                        let bits = self.smt_integer_type(left).ok()?.bits as i64;
+                        if rhs.max >= bits {
+                            return None;
+                        }
+                        if *op == BinaryOp::Shr {
+                            Some(Interval { min: lhs.min >> rhs.max, max: lhs.max >> rhs.min, trust: lhs.trust | rhs.trust })
+                        } else {
+                            // In i128, so `eval_interval`'s range check sees an
+                            // overflow rather than a wrapped value.
+                            let hi = (lhs.max as i128) << rhs.max;
+                            let max = i64::try_from(hi).ok()?;
+                            Some(Interval { min: lhs.min << rhs.min, max, trust: lhs.trust | rhs.trust })
+                        }
+                    }
+                    // Both non-negative: no bit above the higher operand's top
+                    // bit, and `|` is at least either operand, `^` at least 0;
+                    // neither exceeds the sum.
+                    BinaryOp::BitOr | BinaryOp::BitXor if lhs.min >= 0 && rhs.min >= 0 => {
+                        let top = lhs.max.max(rhs.max);
+                        let ceiling = if top == 0 { 0 } else { (1i64 << (64 - top.leading_zeros())) - 1 };
+                        let max = ceiling.min(lhs.max.checked_add(rhs.max)?);
+                        let min = if *op == BinaryOp::BitOr { lhs.min.max(rhs.min) } else { 0 };
+                        Some(Interval { min, max, trust: lhs.trust | rhs.trust })
                     }
                     BinaryOp::Div => {
                         if rhs.min <= 0 && rhs.max >= 0 {
@@ -3501,6 +3549,11 @@ so the stored value is tested and a value outside the range stops the program"
             Expr::BinaryOp { left, op, right, .. }
                 if matches!(op, BinaryOp::Add | BinaryOp::Sub | BinaryOp::Mul | BinaryOp::Div | BinaryOp::Mod) =>
                 Ok(self.smt_operand_types(left, right)?.0),
+            // Their type, for `eval_interval`'s range check. `expr_to_smt`
+            // still has no encoding for them and refuses them by name.
+            Expr::BinaryOp { left, op, right, .. }
+                if matches!(op, BinaryOp::BitAnd | BinaryOp::BitOr | BinaryOp::BitXor | BinaryOp::Shl | BinaryOp::Shr) =>
+                Ok(self.smt_operand_types(left, right)?.0),
             Expr::Call { func, args, .. } if args.is_empty()
                 && matches!(&**func, Expr::Ident(name, _) if gpu_index_symbol(name).is_some()) => Ok(SmtInt::I32),
             _ => Err("expression has no supported machine integer type".into()),
@@ -5576,5 +5629,94 @@ mod tests {
             "expected a missing-K validation error, got: {:?}",
             tc.errors
         );
+    }
+
+    /// Every interval `eval_interval` decides for `%`, `&`, `|`, `^`, `<<` and
+    /// `>>` holds of every value it covers. Two `I32` variables take every
+    /// pair of the small ranges below; wherever an interval is decided, each
+    /// pair of operand values gives a result inside it, computed as an `i32`
+    /// - two's complement, `%` truncating, `>>` arithmetic, `<<` wrapping -
+    /// and a shift past the width or a remainder by zero is never decided.
+    #[test]
+    fn bitwise_and_remainder_intervals_hold_every_value_they_cover() {
+        let mut tc = TypeChecker::new();
+        tc.insert_var("a".into(), SemanticType::Primitive("I32".into()));
+        tc.insert_var("b".into(), SemanticType::Primitive("I32".into()));
+        // `u` has no interval at all: `u & b` is bounded by `b` alone.
+        tc.insert_var("u".into(), SemanticType::Primitive("I32".into()));
+        let anything: Vec<i32> = (-2000..2000).step_by(37).chain([i32::MIN, i32::MIN + 1, -1, i32::MAX - 1, i32::MAX]).collect();
+        let ranges: [(i64, i64); 14] = [
+            (-9, -1), (-3, 4), (0, 0), (0, 1), (0, 7), (1, 8), (3, 5),
+            (5, 13), (0, 31), (2, 33), (16, 40), (-1, 0), (0, 255), (100, 300),
+        ];
+        let span = || Span { line: 0, col: 0 };
+        let ops = [BinaryOp::Mod, BinaryOp::BitAnd, BinaryOp::BitOr, BinaryOp::BitXor, BinaryOp::Shl, BinaryOp::Shr];
+        let mut decided = std::collections::HashMap::new();
+        for &(alo, ahi) in &ranges {
+            for &(blo, bhi) in &ranges {
+                tc.update_interval("a", Some(Interval { min: alo, max: ahi, trust: 0 }));
+                tc.update_interval("b", Some(Interval { min: blo, max: bhi, trust: 0 }));
+                for op in &ops {
+                    let e = Expr::BinaryOp {
+                        left: Box::new(Expr::Ident("a".into(), span())),
+                        op: op.clone(),
+                        right: Box::new(Expr::Ident("b".into(), span())),
+                        span: span(),
+                    };
+                    let Some(iv) = tc.eval_interval(&e) else { continue };
+                    *decided.entry(format!("{:?}", op)).or_insert(0) += 1;
+                    for x in alo..=ahi {
+                        for y in blo..=bhi {
+                            let (x, y) = (x as i32, y as i32);
+                            let v = match op {
+                                BinaryOp::Mod => x.checked_rem(y)
+                                    .unwrap_or_else(|| panic!("{x} % {y} faults, and [{alo}, {ahi}] % [{blo}, {bhi}] was decided")),
+                                BinaryOp::BitAnd => x & y,
+                                BinaryOp::BitOr => x | y,
+                                BinaryOp::BitXor => x ^ y,
+                                BinaryOp::Shl | BinaryOp::Shr => {
+                                    assert!((0..32).contains(&y), "a shift by {y} was decided ([{blo}, {bhi}])");
+                                    if *op == BinaryOp::Shl { x.wrapping_shl(y as u32) } else { x >> y }
+                                }
+                                _ => unreachable!(),
+                            } as i64;
+                            assert!(
+                                iv.min <= v && v <= iv.max,
+                                "{x} {op:?} {y} = {v}, outside [{}, {}] decided for [{alo}, {ahi}] and [{blo}, {bhi}]",
+                                iv.min, iv.max
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        // `u & b` and `b & u`, for every non-negative range of `b`.
+        let mut masked = 0;
+        for &(blo, bhi) in &ranges {
+            tc.update_interval("b", Some(Interval { min: blo, max: bhi, trust: 0 }));
+            for (l, r) in [("u", "b"), ("b", "u")] {
+                let e = Expr::BinaryOp {
+                    left: Box::new(Expr::Ident(l.into(), span())),
+                    op: BinaryOp::BitAnd,
+                    right: Box::new(Expr::Ident(r.into(), span())),
+                    span: span(),
+                };
+                let decided = tc.eval_interval(&e);
+                assert_eq!(decided.is_some(), blo >= 0, "{l} & {r} with b in [{blo}, {bhi}]: decided {decided:?}");
+                let Some(iv) = decided else { continue };
+                masked += 1;
+                for &x in &anything {
+                    for y in blo..=bhi {
+                        let v = (x & y as i32) as i64;
+                        assert!(iv.min <= v && v <= iv.max, "{x} & {y} = {v}, outside [{}, {}]", iv.min, iv.max);
+                    }
+                }
+            }
+        }
+        assert!(masked >= 10, "the non-constant mask was decided only {masked} times");
+        // Each rule is reached, or this checked nothing.
+        for op in ["Mod", "BitAnd", "BitOr", "BitXor", "Shl", "Shr"] {
+            assert!(decided.get(op).copied().unwrap_or(0) >= 10, "{op} decided only {:?} times", decided.get(op));
+        }
     }
 }

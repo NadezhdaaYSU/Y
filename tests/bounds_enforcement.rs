@@ -117,13 +117,27 @@ fn initialiser_outside_declared_bounds_is_rejected() {
 /// An index built with an operator interval arithmetic does not model must be
 /// refused, not assumed in range.
 ///
-/// `%` has no arm in `eval_interval`, so the index has no provable range. The
-/// correct answer is to say so.
+/// `%` had no arm in `eval_interval` until 2026-11-05, and this test used
+/// `arr[i % 100]` as its unmodelled index. That index is in bounds - `i` is
+/// in [0, 3], and so is `i % 100` - and is proved now (asserted below). `%`
+/// of a dividend that can be negative is still not modelled: the result's
+/// sign is the dividend's, and the rule takes only what every backend
+/// computes alike. Such an index has no provable range, and the correct
+/// answer is to say so.
 #[test]
 fn index_through_an_unmodelled_operator_is_refused() {
+    let proved = compile(
+        "modelled_index",
+        "fn main() {\n    @safe {\n        let arr: [I32; 4] = {};\n        @invariant(i >= 0)\n        for i in 0..4 {\n            let v: I32 = arr[i % 100];\n        }\n    }\n}\n",
+    );
+    assert!(
+        proved.contains("Front-end analysis complete"),
+        "`arr[i % 100]` with i in [0, 3] is in bounds and is proved:\n{}",
+        proved
+    );
     let out = compile(
         "unmodelled_index",
-        "fn main() {\n    @safe {\n        let arr: [I32; 4] = {};\n        @invariant(i >= 0)\n        for i in 0..4 {\n            let v: I32 = arr[i % 100];\n        }\n    }\n}\n",
+        "fn main() {\n    @safe {\n        let arr: [I32; 4] = {};\n        @invariant(i >= 0)\n        for i in 0..4 {\n            let v: I32 = arr[(i - 2) % 100];\n        }\n    }\n}\n",
     );
     assert!(
         !out.contains("Front-end analysis complete"),
