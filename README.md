@@ -1531,7 +1531,7 @@ Y faster:
 
 | shape | 8192^3 | 4096^3 | 2048^3 | 1024^3 | 512^3 | 128 x 4096 x 4096 | 768^3 |
 |---|---|---|---|---|---|---|---|
-| **Y vs cuBLAS** | 0.98x | 0.96-1.00x | 1.03-1.04x | 1.20x | 1.19-1.20x | 0.99-1.02x | 0.81-0.85x |
+| **Y vs cuBLAS** | 0.98x | 0.96-1.00x | 1.03-1.04x | 1.20x | 1.19-1.20x | 0.99-1.02x | 0.81-0.87x |
 
 At 768^3 and on K-heavy shapes with 256-1024 rows (0.94-0.95x), cuBLAS
 splits K. That is faster there and more accurate, but it makes the answer
