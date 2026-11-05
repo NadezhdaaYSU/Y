@@ -15,8 +15,8 @@ under NVIDIA compute-sanitizer, one binary at a time, at commit `10d9d44`.
 | :--- | :--- | :--- |
 | memcheck | 38 (the four `zk_gpu_*` with `--features zk`) | **no invalid or misaligned access** in any kernel any test launches |
 | racecheck | 18 with shared-memory kernels: GEMMs (F16 split K, int8, scaled int8, MMA layout), attention, RMSNorm, swizzle, collectives, exact PV, the grid-sum drift reduction, NTT, MSM, Groth16, field | **no shared-memory hazard** |
-| synccheck | 27 of the 40 before the session ended | no barrier error in those 27; the other 13 were not run |
-| initcheck | not run | - |
+| synccheck | 38 (rerun in full at `6801d5b`, the `zk_gpu_*` with `--features zk`) | **no barrier error** |
+| initcheck | 38 (at `6801d5b`, likewise) | **no read of uninitialised global memory** |
 
 `adaptive_jit_gpu` and `adaptive_jit_ffi_gpu` ran nothing (every test is
 `#[ignore]`d), and the `zk_gpu_*` binaries run nothing without `--features
@@ -68,7 +68,11 @@ output when it cannot.
   sanitizer checks executions, not all inputs.
 - `#[ignore]`d tests (benchmarks, long sweeps) and the three timing tests were
   not run.
-- synccheck covered 27 of 40 binaries and initcheck none.
+- synccheck and initcheck report no error for a trap, so the intended traps
+  above do not appear in their counts. Under initcheck one test of
+  `zk_gpu_msm` failed: `the_dispatch_thresholds_are_still_true`, a timing
+  test the sanitizer slows (it is also marginal without one; known issues,
+  "GPU MSM dispatch threshold"), with no sanitizer error.
 
 ## Rerun
 
@@ -79,7 +83,9 @@ docs/sanitizer_sweep_2026-11-05/sweep.sh memcheck target/sanitizer_memcheck
 
 `memcheck_summary.txt` is the first pass (30 records printed per binary),
 `memcheck_uncapped_and_zk.txt` and `memcheck_recount_and_racecheck.txt` the
-uncapped recount and the racecheck pass, `synccheck_partial.txt` the
-synccheck pass as far as it went. Per-binary logs were not kept: the
+uncapped recount and the racecheck pass, `synccheck_summary.txt` and
+`initcheck_summary.txt` the full synccheck and initcheck passes (by
+`sweep.sh`; a pass at `10d9d44` that stopped after 27 binaries had found
+nothing either). Per-binary logs were not kept: the
 trapping binaries' logs run to megabytes and hold nothing but the records
 counted above.
