@@ -6379,6 +6379,10 @@ register to where it lives in the SASS.
   report does not know is printed as written, and a disagreement prints the
   sanitizer's whole output. The exit status is non-zero when it found
   anything. A clean result is about this launch's geometry and inputs only.
+  Over the whole GPU test suite (2026-11-05, `docs/sanitizer_sweep_2026-11-05/`)
+  memcheck found no invalid access in any kernel a test launches and racecheck
+  no shared-memory hazard; every error memcheck reported was one of Y's own
+  runtime checks trapping on purpose.
 - **From Python.** A kernel a program launches through `y_lang`
   (`TorchKernel`, `@y_lang.jit`) is compiled with debug information when
   `Y_PTX_DEBUG=1` (`-g`: cuda-gdb shows its variables) or `Y_PTX_LINEINFO=1`

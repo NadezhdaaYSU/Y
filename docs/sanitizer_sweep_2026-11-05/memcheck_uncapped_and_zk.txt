@@ -1,0 +1,64 @@
+=== attention_kfix_is_checked_at_launch
+      1 ========= COMPUTE-SANITIZER
+     60 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 3198 errors
+     66 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+   3071 ========= Trace/breakpoint trap
+=== ptx_rmsnorm_v4
+      1 ========= COMPUTE-SANITIZER
+     12 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 1691 errors
+     15 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+   1663 ========= Trace/breakpoint trap
+=== zero_drift_f32_conversion
+      1 ========= COMPUTE-SANITIZER
+     39 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 104 errors
+     52 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+     12 ========= Trace/breakpoint trap
+=== zero_drift_scatter
+      1 ========= COMPUTE-SANITIZER
+    700 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 37232 errors
+    808 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+  35723 ========= Trace/breakpoint trap
+=== zero_drift_grid_sum
+      1 ========= COMPUTE-SANITIZER
+    160 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 397 errors
+    192 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+     44 ========= Trace/breakpoint trap
+=== zero_drift_stop_point
+      1 ========= COMPUTE-SANITIZER
+     36 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 92 errors
+     46 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+      9 ========= Trace/breakpoint trap
+=== zero_drift_runtime_checks
+      1 ========= COMPUTE-SANITIZER
+     15 ========= CUDA API Error: Sticky error detected
+      1 ========= ERROR SUMMARY: 40 errors
+     20 ========= Program hit CUDA_ERROR_LAUNCH_FAILED
+      4 ========= Trace/breakpoint trap
+=== zk
+  Executable tests/zk_gpu_field.rs (target/release/deps/zk_gpu_field-ef6f22d2e7dabb40)
+=== zk_gpu_field (zk)
+      1 ========= COMPUTE-SANITIZER
+      1 ========= ERROR SUMMARY: 0 errors
+      1 test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.88s
+  Executable tests/zk_gpu_ntt.rs (target/release/deps/zk_gpu_ntt-0b5d71b8402f3141)
+=== zk_gpu_ntt (zk)
+      1 ========= COMPUTE-SANITIZER
+      1 ========= ERROR SUMMARY: 0 errors
+      1 test result: ok. 11 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 7.09s
+  Executable tests/zk_gpu_groth16.rs (target/release/deps/zk_gpu_groth16-227c594f5dca29be)
+=== zk_gpu_groth16 (zk)
+      1 ========= COMPUTE-SANITIZER
+      1 ========= ERROR SUMMARY: 0 errors
+      1 test result: ok. 5 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.89s
+  Executable tests/zk_gpu_msm.rs (target/release/deps/zk_gpu_msm-e4128f7d320ad70a)
+=== zk_gpu_msm (zk)
+      1 ========= COMPUTE-SANITIZER
+      1 ========= ERROR SUMMARY: 0 errors
+      1 test result: ok. 10 passed; 0 failed; 5 ignored; 0 measured; 0 filtered out; finished in 4.10s
+DONE
