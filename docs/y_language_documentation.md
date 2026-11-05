@@ -1100,9 +1100,11 @@ for i in 0..100 {
 
 ### 9.12 `@tile` — **on a `kernel` only**
 * **Syntax**: `@tile(M, N, K)` immediately before a `kernel`.
-* **Function**: selects the tensor-core GEMM lowering for that kernel. `M`,
-  `N` and `K` are the matrices' dimensions, not a block shape: `C = A @ B`
-  with A `M`x`K` and B `K`x`N` in `F16` and C `M`x`N` in `F32`, row-major; see
+* **Function**: selects a GEMM lowering for that kernel: on tensor cores
+  for the F16, int8 and FP8 forms, on CUDA cores for the FP32 form (below).
+  `M`, `N` and `K` are the matrices' dimensions, not a block shape: for the
+  F16 form `C = A @ B` with A `M`x`K` and B `K`x`N` in `F16` and C `M`x`N`
+  in `F32`, row-major; see
   the `@tile`-dispatched kernels in `tests/gemm_f16_*.ysu`. The CTA tile is
   chosen in the order `Autotuner::autotune` documents: `Y_CTA_OVERRIDE`, then
   the tile `.ysu_hw_profile` records as measured for that shape, then a fresh

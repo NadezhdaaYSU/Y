@@ -1589,6 +1589,8 @@ different baseline.
 | Square F16 GEMM, 4096³ | cuBLAS | 0.97–0.99x (1.01x under sustained load on random data) |
 | F16 GEMM, M = 128–256 against N or K = 11008 (Llama-2-7B's MLP) | cuBLAS | 0.97–0.98x, the best of eight tiles |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
+| FP32 GEMM, 768³ and K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.81–0.95x |
+| FP32 GEMM with N odd (4-byte copies of B) | cuBLAS, TF32 off | 0.59–0.90x (GPT-2's 1024 × 50257 × 768: 0.88x) |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
