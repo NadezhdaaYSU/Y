@@ -1173,6 +1173,14 @@ for i in 0..100 {
     4096³, 0.91-1.77x over 37 shapes, with the losses listed in
     [known issues](known_issues.md)
     ([record](benchmarks/int8_gemm_2026-11-06/README.md)).
+  - From PyTorch (since 2026-11-07): `y_lang.int8_gemm.int8_mm(a, b)` takes
+    int8 CUDA tensors `a` `[M][K]` and `b` `[N][K]` and returns the int32
+    `[M][N]` product. It compiles this kernel for the tensor's device and
+    launches it as its header says. Under `torch.compile` it is the custom op
+    `torch.ops.y_lang.int8_mm`. M is free: rows are zero-padded to a multiple
+    of 16 (up to 128 rows) or of 128, and dropped. The other limits above are
+    refused by name. `tools/exact_model.py` runs its linear layers on it with
+    `Y_EXACT_GEMM=y`.
 * **FP8 (e4m3) forms**, on sm_89 and later, with five parameters
   `(A, B, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>)`:
   - A, B: `GlobalMemory<F32>`, A `M`x`K` and B `K`x`N`: each CTA quantises its

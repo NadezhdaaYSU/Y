@@ -249,8 +249,13 @@ source; each entry there now carries its status. What is still open:
     `C`. Only `gridDim.z > 1` reduces, and it still needs `C` zeroed;
   - any grid still gives the same matrix.
 
-  `python/y_lang` has no int8 GEMM caller. The scaled form ignores
-  `gridDim.z`: each of its CTAs walks the whole K and stores.
+  The scaled form ignores `gridDim.z`: each of its CTAs walks the whole K
+  and stores.
+- From Python the plain form is `y_lang.int8_gemm.int8_mm(a, b)` (since
+  2026-11-07), and `tools/exact_model.py` runs it with `Y_EXACT_GEMM=y`.
+  The op compiles one kernel per row bucket and shape: rows are zero-padded
+  to a multiple of 16 up to 128 rows and of 128 above, up to 127 rows of
+  wasted work per call. Nothing calls the scaled form from Python.
 - A and B must be 16-byte aligned (`cp.async.cg` 16-byte copies; K % 32 == 0
   keeps every row aligned), and `C` 8-byte aligned (`st.global.v2`). Nothing
   checks either at run time.
@@ -283,7 +288,8 @@ source; each entry there now carries its status. What is still open:
 
 ### `y_lang.ops`
 
-- Nothing in it runs a kernel the Y compiler emitted. `fp8_gemm`'s CUDA C++
+- Only `int8_mm` runs a kernel the Y compiler emitted (since 2026-11-07, see
+  "int8 GEMM limits"); the rest does not. `fp8_gemm`'s CUDA C++
   path (`tests/y_tensor_core_gemm.cu` through CuPy) cannot run with CuPy 14:
   NVRTC cannot find `crt/mma.h` through the pip CUDA headers, and
   `Stream.from_external` no longer takes a raw pointer. It raises on 1- and

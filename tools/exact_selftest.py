@@ -389,6 +389,89 @@ def check_all_gemm_configs_agree(dev, fail):
             f"agree bit-for-bit ({runs} runs)")
 
 
+def check_y_gemm_agrees(dev, fail):
+    """Y's own int8 GEMM (`Y_EXACT_GEMM=y`) gives the bits the `_int_mm` path does.
+
+    Two levels. The kernel against a float64 product (exact: |sum| <= K * 2^14
+    < 2^53) over the whole int8 range, -128 included, at this model's shapes
+    and at row counts either side of the op's padding buckets. Then
+    ExactLinear built in "y" mode against the same layer built in "torch" mode,
+    with plain and two-digit activations, eager and compiled: the weights and
+    the epilogue are the same, so a difference could only be the GEMM. A
+    counter shows the Y path ran, and a changed weight shows the comparison
+    can fail. Runs only in "y" mode, the one it vouches for.
+    """
+    if EM.GEMM != "y":
+        return "SKIP: Y_EXACT_GEMM is not 'y', so Y's kernel is not the one that runs"
+    import torch._dynamo
+    bits = lambda t: t.detach().cpu().contiguous().view(torch.uint8)
+    same = lambda a, b: a.shape == b.shape and torch.equal(bits(a), bits(b))
+    real = EM.y_int8_mm()
+    torch.manual_seed(7)
+    runs = 0
+    for (n, k) in ((896, 896), (128, 896), (4864, 896), (896, 4864)):
+        b = torch.randint(-128, 128, (n, k), device=dev, dtype=torch.int8)
+        for m in (1, 16, 17, 129):
+            a = torch.randint(-128, 128, (m, k), device=dev, dtype=torch.int8)
+            got = real(a, b)
+            runs += 1
+            if (got.dtype != torch.int32 or tuple(got.shape) != (m, n)
+                    or not torch.equal(got.double(), a.double() @ b.double().t())):
+                fail(f"Y int8_mm {m}x{n}x{k} differs from the float64 product")
+    for v in (-128, 127):
+        a = torch.full((17, 4864), v, device=dev, dtype=torch.int8)
+        b = torch.full((896, 4864), -128, device=dev, dtype=torch.int8)
+        if not torch.equal(real(a, b), torch.full((17, 896), v * -128 * 4864, device=dev,
+                                                  dtype=torch.int32)):
+            fail(f"Y int8_mm with every product {v} * -128 at K=4864 is not exact")
+    calls = []
+    saved = (EM.GEMM, EM.ACT_LEVELS, EM._Y_INT8_MM)
+    layers = 0
+    try:
+        for levels, (k_in, n_out) in ((127, (896, 4864)), (511, (896, 4864)),
+                                      (127, (4864, 896)), (511, (4864, 896))):
+            # The second shape is a down projection: few output tiles over a
+            # long K, where the op splits K over gridDim.z.
+            EM.ACT_LEVELS = levels
+            lin = nn.Linear(k_in, n_out, bias=True).to(dev)
+            EM.GEMM = "torch"
+            lt = EM.ExactLinear(lin)
+            EM.GEMM = "y"
+            ly, bent = EM.ExactLinear(lin), EM.ExactLinear(lin)
+            if ly.split_act != (levels > 127):
+                fail(f"levels {levels}: the layer's split_act is {ly.split_act}")
+            with torch.no_grad():
+                bent.w8t[5, 3] += 1          # one weight, through the view
+            for m in (1, 32, 77):
+                x = torch.randn(m, k_in, device=dev) * 3
+                EM.GEMM = "torch"
+                yt = lt(x)
+                EM.GEMM = "y"
+                EM._Y_INT8_MM = lambda a, b: (calls.append(tuple(a.shape)), real(a, b))[1]
+                yy = ly(x)
+                EM._Y_INT8_MM = real
+                layers += 1
+                if not same(yt, yy):
+                    fail(f"levels {levels}, M={m}: ExactLinear on Y's GEMM differs "
+                         f"from the _int_mm path")
+                if same(bent(x), yt):
+                    fail(f"control did not fire: levels {levels}, M={m}, a changed "
+                         f"weight gives the same output, so the comparison is vacuous")
+            torch._dynamo.reset()
+            if not same(torch.compile(ly, dynamic=True, fullgraph=True)(x), yy):
+                fail(f"levels {levels}: compiled ExactLinear on Y's GEMM differs "
+                     f"from eager")
+    finally:
+        EM.GEMM, EM.ACT_LEVELS, EM._Y_INT8_MM = saved
+        torch._dynamo.reset()
+    if len(calls) != layers:
+        fail(f"Y's GEMM ran {len(calls)} times for {layers} layer calls: the 'y' "
+             f"mode is not taking the Y path")
+    return (f"Y's int8 GEMM matches float64 in {runs} products and the _int_mm path "
+            f"in {layers} layer calls, plain and two-digit, eager and compiled "
+            f"(control: a changed weight differs)")
+
+
 def check_digit_split_is_exact(dev, fail):
     """`q == hi*128 + lo` over EVERY representable q, both digits fitting int8.
 
@@ -802,6 +885,7 @@ NEEDS_GPU = {
     "check_quantiser_at_volume",
     "check_all_gemm_configs_agree",
     "check_hilo_gemm_configs_agree",
+    "check_y_gemm_agrees",
     "check_pad_is_load_bearing",
     "check_quantisers_are_device_independent",
     "check_quantisers_survive_compile",
@@ -824,6 +908,7 @@ def main():
               check_linear, check_bias_is_not_fused, check_quantiser_at_volume,
               check_pad_is_load_bearing, check_all_gemm_configs_agree,
               check_digit_split_is_exact, check_hilo_gemm_configs_agree,
+              check_y_gemm_agrees,
               check_quantisers_are_device_independent,
               check_quantisers_survive_compile, check_cpu_int_mm_probe,
               check_silu_table,
