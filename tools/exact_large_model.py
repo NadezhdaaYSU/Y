@@ -98,7 +98,7 @@ def build_exact(model_id, device):
     m.to(device=device, dtype=torch.float32)
     n_lin, n_norm = exact_model.convert(m)
     assert n_lin == 0, "every Linear should already be ExactLinear"
-    if (device != "cpu" and exact_model.USE_TRITON
+    if (device != "cpu" and exact_model.GEMM == "triton"
             and exact_model.w8a8_matmul is not None):
         import w8a8_gemv
         w8a8_gemv.prime(sorted(set(shapes)), torch.device(device))

@@ -9,9 +9,11 @@ tiling from the problem size, which changes the summation order) and RMSNorm
 
 This module swaps all three for order-independent versions:
 
-  * `ExactLinear`   - W8A8, accumulated in exact int32 via `torch._int_mm`
-                      (tensor cores; integer addition, so any tile order gives
-                      the same bits). Falls back to float64, which represents
+  * `ExactLinear`   - W8A8, accumulated in exact int32 on the tensor cores:
+                      the Triton kernel in `w8a8_gemv`, `torch._int_mm`, or
+                      Y's own proved kernel (`Y_EXACT_GEMM`, below). Integer
+                      addition, so any tile order gives the same bits, and
+                      the three give the same bits. Falls back to float64, which represents
                       every integer below 2^53 exactly, when `_int_mm` will not
                       take the shape, or on a CPU whose int8 GEMM fails
                       `cpu_int_mm_is_exact`.
@@ -31,6 +33,7 @@ the quantisation scheme dominates every other error term by ~300,000x.
 """
 import math
 import os
+import sys
 
 import torch
 import torch.nn as nn
@@ -42,6 +45,36 @@ except Exception:                                    # noqa: BLE001
 # `Y_EXACT_TRITON=0` forces the torch fallback, so the two paths can be A/B'd
 # against each other rather than only against the float64 reference.
 USE_TRITON = os.environ.get("Y_EXACT_TRITON", "1") != "0"
+
+# The kernel that computes `ExactLinear`'s int8 product on a GPU:
+#   * "triton" - `w8a8_gemv`'s kernels, the default;
+#   * "torch"  - `torch._int_mm`, i.e. cuBLASLt (what `Y_EXACT_TRITON=0` gives);
+#   * "y"      - Y's own tensor-core GEMM, `y_lang.int8_gemm.int8_mm`: the
+#                kernel whose schedule and value `proofs/Int8Gemm*.v` prove.
+#                With it, the GEMM that runs is the GEMM that is proved. It has
+#                no fallback: a shape it refuses is an error, not a quiet
+#                switch to another kernel.
+# All three sums are exact and the epilogue is the same torch code, so the
+# choice changes speed and what is trusted, never a bit
+# (`exact_selftest.check_y_gemm_agrees`). The CPU path is the same in every mode.
+GEMM = os.environ.get("Y_EXACT_GEMM") or ("triton" if USE_TRITON else "torch")
+if GEMM not in ("triton", "torch", "y"):
+    raise ValueError(f"Y_EXACT_GEMM={GEMM!r}: expected 'triton', 'torch' or 'y'")
+_Y_INT8_MM = None
+
+
+def y_int8_mm():
+    """`y_lang.int8_gemm.int8_mm`, with this checkout's `python/` put first on
+    the path, so the op is the one built from these sources."""
+    global _Y_INT8_MM
+    if _Y_INT8_MM is None:
+        pkg = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "python")
+        pkg = os.path.normpath(pkg)
+        if pkg not in sys.path:
+            sys.path.insert(0, pkg)
+        from y_lang.int8_gemm import int8_mm
+        _Y_INT8_MM = int8_mm
+    return _Y_INT8_MM
 
 # Under torch.compile, Inductor rounds differently from eager PyTorch in three
 # ways, and each one moved a compiled GPU decode off the CPU's tokens:
@@ -288,7 +321,17 @@ class ExactLinear(nn.Module):
         # every decode step. Measured at M=32: 97.0 us with the transpose in
         # the loop against 8.9 us with it hoisted - an 11x self-inflicted cost
         # that had nothing to do with exactness.
-        self.register_buffer("w8t", w8.t().contiguous())
+        if GEMM == "y":
+            # Y's kernel reads B as [N][K] with K-contiguous rows, which is
+            # nn.Linear's own layout. The buffer is still `w8t`, [K][N], as a
+            # transposed VIEW of that storage, so every other path, `.to()`
+            # (which keeps a dense tensor's strides) and the cross-device
+            # weight fingerprint (buffer names and shapes) see what they
+            # always did, and `w8t.t()` is the kernel's operand with no copy.
+            self.register_buffer("w8t", w8.contiguous().t())
+            y_int8_mm()          # imported now, so a missing liby.so fails here
+        else:
+            self.register_buffer("w8t", w8.t().contiguous())
         self.register_buffer("sw", sw.squeeze(-1).float())
         self.register_buffer(
             "bias", lin.bias.data.clone() if lin.bias is not None else None
@@ -330,7 +373,7 @@ class ExactLinear(nn.Module):
             return self._forward_split(x, xf, shape)
         x8, sx = _q_per_row(xf)
         x8 = x8.to(torch.int8)
-        if (USE_TRITON and w8a8_matmul is not None and x.is_cuda
+        if (GEMM == "triton" and w8a8_matmul is not None and x.is_cuda
                 and xf.dtype == torch.float32):
             # Only the GEMM is Triton. The quantisation above stays in torch on
             # purpose so inductor can fuse it into the preceding RMSNorm/SiLU -
@@ -343,7 +386,11 @@ class ExactLinear(nn.Module):
             return y.reshape(*shape[:-1], self.out_features).to(x.dtype)
         m = x8.shape[0]
         acc = None
-        if x.is_cuda or _CPU_INT_MM_EXACT:
+        if GEMM == "y" and x.is_cuda:
+            # Y's kernel takes any M (it pads to its own row bucket), and the
+            # epilogue below is the one the `_int_mm` path uses.
+            acc = y_int8_mm()(x8.contiguous(), self.w8t.t()).to(torch.float32)
+        elif x.is_cuda or _CPU_INT_MM_EXACT:
             # On CUDA `torch._int_mm` accepts only M divisible by 32 (measured: 32, 64,
             # 96, 128, 256 succeed; 1..31, 33..47, 48 and 56 are refused). At
             # decode M is the batch size, so the *original* guard - `M % 8 == 0`
@@ -385,7 +432,7 @@ class ExactLinear(nn.Module):
         q, sx = _q_per_row(xf, self.a_levels)
         qi = q.to(torch.int32)
         hi, lo = split_digits(qi, self.a_levels)
-        if (USE_TRITON and w8a8_matmul_hilo is not None and x.is_cuda
+        if (GEMM == "triton" and w8a8_matmul_hilo is not None and x.is_cuda
                 and xf.dtype == torch.float32):
             y = w8a8_matmul_hilo(hi.contiguous(), lo.contiguous(),
                                  sx.reshape(-1).float(), self.w8t, self.sw,
@@ -397,7 +444,13 @@ class ExactLinear(nn.Module):
         # would round even though each half is fine.
         m = hi.shape[0]
         acc = None
-        if x.is_cuda or _CPU_INT_MM_EXACT:
+        if GEMM == "y" and x.is_cuda:
+            # Both digits in ONE launch, rows [hi; lo], so the weights are read
+            # once, as the Triton kernel reads them once. int32 throughout: the
+            # combine is inside the `(a_levels + 128)` bound asserted above.
+            r = y_int8_mm()(torch.cat([hi, lo]), self.w8t.t())
+            acc = r[:m] * 128 + r[m:]
+        elif x.is_cuda or _CPU_INT_MM_EXACT:
             pad = (-m) % 32 if x.is_cuda else 0
             try:
                 def mm(t):
@@ -566,7 +619,7 @@ def convert(model, linears=True, norms=True, floats=None):
     # inside `torch.compile`, where N and K are SymInts and the kernel cannot
     # even be launched. Five distinct shapes here, a few hundred ms total.
     if (linears and shapes and dev is not None and dev.type == "cuda"
-            and USE_TRITON and w8a8_matmul is not None):
+            and GEMM == "triton" and w8a8_matmul is not None):
         import w8a8_gemv
         w8a8_gemv.prime(shapes, dev)
     return n_lin, n_norm

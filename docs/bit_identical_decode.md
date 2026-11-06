@@ -724,6 +724,33 @@ What this does not cover: a second GPU architecture, a non-deterministic int8
 baseline and int8 accuracy at 7B, and the cos/sin table, which is still float64
 rounded once and so near certain (around 2^-29 per value), not exact.
 
+#### On Y's own GEMM: the kernel that runs is the kernel that is proved (2026-11-07)
+
+Every run above computed the linear layers' int8 products on the GPU with the
+Triton kernel in `tools/w8a8_gemv.py`, or with cuBLASLt (`torch._int_mm`). The
+int8 GEMM that `proofs/Int8GemmSchedule.v` and `proofs/Int8GemmExact.v` prove
+is Y's own, and the pipeline did not run it. `Y_EXACT_GEMM=y` now runs every
+`ExactLinear` product on that kernel, through `y_lang.int8_gemm.int8_mm`. The
+op compiles the kernel per row bucket and shape, launches it as its header
+says, and splits K over `gridDim.z` when the output tiles leave half the card
+idle. The epilogue is the torch code the `_int_mm` path uses, so nothing
+else changes.
+
+Qwen2.5-0.5B, the same 5 cases x 160 tokens, CPU eager against the GPU in Y
+mode: **exact changed 0/5 cases, eager and compiled, and stock 5/5**. All
+three GPU records carry the CPU's exact token digest `30eec169d2f38da4`: Y
+eager, Y compiled, and the default Triton path re-recorded as a regression
+check. `exact_selftest.py` passes in Y mode, including a check that compares
+Y's kernel with a float64 product over the whole int8 range and with the
+`_int_mm` path in 12 layer calls, eager and compiled, with a changed weight
+as the control. The records are in `docs/benchmarks/exact_y_gemm_2026-11-07/`.
+
+In Y mode the int32 product of every linear layer is computed by a kernel
+with a machine-checked proof. The rest is tested, not proved:
+- the quantisation, the epilogue, attention and the norms;
+- `ptxas`, and the ISA semantics of `mma.sync`, `ldmatrix` and `cp.async`, are
+  trusted.
+
 ## Finding 13 — `0/16` is also what a broken arm scores
 
 Finding 11's fixed-order-float arm read **12/16** on its first run. Two of my own

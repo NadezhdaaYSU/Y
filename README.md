@@ -2799,6 +2799,18 @@ output tiles, is caught only by racecheck.
 
 Record, raw logs and scripts: `docs/benchmarks/int8_gemm_2026-11-06/`.
 
+**The exact-inference pipeline now runs it (2026-11-07).** Until then the
+pipeline's linear layers ran on a Triton kernel or on cuBLASLt, so the proofs
+covered a kernel the pipeline did not use. `y_lang.int8_gemm.int8_mm` calls
+this kernel from PyTorch. It is a custom op under `torch.compile`, pads M to
+a row bucket, and splits K over `gridDim.z` when the output tiles leave half
+the card idle. `Y_EXACT_GEMM=y` puts every `ExactLinear` product on it. On
+Qwen2.5-0.5B, 5 cases x 160 tokens, the GPU in that mode decodes to the CPU's
+exact token digest, eager and compiled: 0 of 5 cases changed, against 5 of 5
+for stock bf16 (`docs/bit_identical_decode.md`,
+`docs/benchmarks/exact_y_gemm_2026-11-07/`). Its speed against the Triton
+kernel is not measured yet.
+
 ### The GPU warp tiling is proved, and the guard for it was compiled out
 
 Asked when the tensor-core GEMMs get proofs, the measurement moved the plan

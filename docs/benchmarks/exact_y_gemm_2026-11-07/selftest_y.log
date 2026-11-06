@@ -1,0 +1,22 @@
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+  ok    integer exp2 == float64 recipe on 56685 arguments, and == src/fixed_exp.rs over all 2031616 of them
+  ok    exact_pv == float64 matmul at T in {1..4097}, p up to 2^28 inclusive
+  ok    control: a too-wide digit does corrupt p@V (the bound is real)
+  ok    ExactLinear == float64 reference on 44 shape/size combinations
+  ok    biased layers round twice (no FMA contraction) at 3 shapes
+  ok    Triton quantiser == torch.round(x/s) on 12,255,232 elements
+  ok    control: torch._int_mm still refuses M=1, so the padding is load-bearing
+  ok    all 11 GEMM candidates (tiles + K-splits) agree bit-for-bit (76 runs)
+  ok    q == hi*128 + lo exactly over all 1023 values of q (a_levels 511, hi in [-4, 3])
+  ok    wide-activation GEMM: all candidates agree AND match the exact int32 product (58 runs, a_levels 511)
+  ok    Y's int8 GEMM matches float64 in 16 products and the _int_mm path in 12 layer calls, plain and two-digit, eager and compiled (control: a changed weight differs)
+  ok    activation, KV and weight quantisers, RMSNorm and SiLU give the same bits on CPU and GPU (controls: CUDA `/ 127.0` and float32 SiLU do not)
+  ok    quantisers, ExactLinear, RMSNorm, SiLU and a multiply-subtract compiled on the GPU give the CPU's bits (controls: a folded constant divisor, an approximate divide and an FMA contraction all differ)
+  ok    CPU int8 GEMM probed exact and used (controls: a saturating and a refusing GEMM are both rejected)
+  ok    ExactSiLU within 1.8e-06 abs / 0.00071 rel of float64 SiLU on 3,407,872 values; NaN propagates (control: no interpolation misses the bound)
+  ok    attention == float64 reference on 8 shapes
+  ok    quantised KV cache == stateless quantisation over 80 appends + 4 resets
+  ok    attention row 0 is bit-identical across 6 batch sizes at 4 key lengths, and across 3 pad-to-neighbour lengths
+
+The optimised exact path computes exactly the same function as the float64 reference,
+and is batch-invariant on its own account.
