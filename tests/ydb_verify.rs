@@ -348,7 +348,9 @@ fn a_lowering_is_credited_with_the_proofs_about_it() {
     assert!(text.contains("REPLACED kernel int8_gemm is replaced wholesale by Y's int8 tensor-core GEMM"), "{}", text);
     assert!(text.contains("PROVED proofs/Int8GemmSchedule.v"), "{}", text);
     assert!(text.contains("PROVED proofs/Int8GemmExact.v"), "{}", text);
-    assert!(text.contains("for K up to 133,120"), "{}", text);
+    // 131,040 is the licence the compiler enforces (`INT8_MAX_EXACT_K`); this said
+    // 133,120, the last K measured exact with every operand 127, until 2026-11-06.
+    assert!(text.contains("for K up to 131,040"), "{}", text);
     // The control: an ordinary kernel is replaced by nothing and proved by nothing.
     let (dir2, prog2) = setup("plainkernel", PROG, pinned::SM_PINNED);
     let text = yverify(&dir2, &prog2, line_of(PROG, "out"));

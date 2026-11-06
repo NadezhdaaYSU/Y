@@ -1,0 +1,26 @@
+# cold: operands rotated over 128 MB of copies; NVIDIA GeForce RTX 4070 Ti SUPER, 66 SMs; torch 2.13.0+cu130, cupy 14.1.1, CUDA runtime 12090, driver 13040
+32x4096x4096  cuBLASLt      29.5 us   36.4 TOPS | rule 64x64 1.039x large 128x128 0.981x mid 64x128 1.017x small 64x64 1.037x  | bits ok
+32x11008x4096  cuBLASLt      76.2 us   37.9 TOPS | rule 64x64 0.991x large 128x128 0.974x mid 64x128 1.001x small 64x64 0.988x  | bits ok
+32x4096x11008  cuBLASLt      79.1 us   36.5 TOPS | rule 64x64 1.013x large 128x128 0.879x mid 64x128 0.907x small 64x64 1.011x  | bits ok
+32x14336x4096  cuBLASLt     101.8 us   36.9 TOPS | rule 64x64 0.995x large 128x128 0.998x mid 64x128 1.016x small 64x64 1.000x  | bits ok
+32x4096x14336  cuBLASLt     104.9 us   35.8 TOPS | rule 64x64 1.009x large 128x128 0.891x mid 64x128 0.914x small 64x64 1.015x  | bits ok
+32x1024x4096  cuBLASLt      15.1 us   17.8 TOPS | rule 64x64 1.333x large 128x128 0.573x mid 64x128 0.771x small 64x64 1.333x  | bits ok
+128x4096x4096  cuBLASLt      30.7 us  139.8 TOPS | rule 64x128 1.013x large 128x128 0.980x mid 64x128 1.014x small 64x64 1.023x  | bits ok
+128x11008x4096  cuBLASLt      86.8 us  133.0 TOPS | rule 128x128 1.031x large 128x128 1.031x mid 64x128 0.963x small 64x64 1.029x  | bits ok
+128x4096x11008  cuBLASLt      83.0 us  139.1 TOPS | rule 64x128 0.913x large 128x128 0.885x mid 64x128 0.916x small 64x64 0.992x  | bits ok
+128x14336x4096  cuBLASLt     115.0 us  130.7 TOPS | rule 128x128 1.017x large 128x128 1.018x mid 64x128 1.032x small 64x64 0.994x  | bits ok
+128x4096x14336  cuBLASLt     109.8 us  136.9 TOPS | rule 64x128 0.927x large 128x128 0.896x mid 64x128 0.941x small 64x64 0.990x  | bits ok
+128x1024x4096  cuBLASLt      15.3 us   70.4 TOPS | rule 64x64 1.272x large 128x128 0.566x mid 64x128 0.736x small 64x64 1.274x  | bits ok
+512x4096x4096  cuBLASLt      77.7 us  221.1 TOPS | rule 128x128 1.338x large 128x128 1.335x mid 64x128 1.046x small 64x64 0.817x  | bits ok
+512x11008x4096  cuBLASLt     170.2 us  271.2 TOPS | rule 128x128 0.972x large 128x128 0.972x mid 64x128 0.858x small 64x64 0.679x  | bits ok
+512x4096x11008  cuBLASLt     203.0 us  227.4 TOPS | rule 128x128 1.343x large 128x128 1.340x mid 64x128 1.032x small 64x64 0.797x  | bits ok
+512x14336x4096  cuBLASLt     230.3 us  261.1 TOPS | rule 128x128 1.121x large 128x128 1.117x mid 64x128 0.900x small 64x64 0.713x  | bits ok
+512x4096x14336  cuBLASLt     263.1 us  228.6 TOPS | rule 128x128 1.371x large 128x128 1.369x mid 64x128 1.030x small 64x64 0.793x  | bits ok
+512x1024x4096  cuBLASLt      20.6 us  208.4 TOPS | rule 64x128 0.931x large 128x128 0.745x mid 64x128 0.930x small 64x64 0.826x  | bits ok
+2048x4096x4096  cuBLASLt     227.0 us  302.7 TOPS | rule 128x128 1.009x large 128x128 1.006x mid 64x128 0.786x small 64x64 0.623x  | bits ok
+2048x11008x4096  cuBLASLt     613.6 us  301.0 TOPS | rule 128x128 1.048x large 128x128 1.054x mid 64x128 0.814x small 64x64 0.634x  | bits ok
+2048x4096x11008  cuBLASLt     566.9 us  325.8 TOPS | rule 128x128 0.994x large 128x128 0.995x mid 64x128 0.734x small 64x64 0.586x  | bits ok
+2048x14336x4096  cuBLASLt     771.1 us  311.9 TOPS | rule 128x128 1.014x large 128x128 1.012x mid 64x128 0.786x small 64x64 0.613x  | bits ok
+2048x4096x14336  cuBLASLt     771.3 us  311.8 TOPS | rule 128x128 1.049x large 128x128 1.040x mid 64x128 0.774x small 64x64 0.615x  | bits ok
+2048x1024x4096  cuBLASLt      76.7 us  224.0 TOPS | rule 128x128 1.332x large 128x128 1.329x mid 64x128 1.040x small 64x64 0.815x  | bits ok
+# 2490 MHz, 162.38 W, 64

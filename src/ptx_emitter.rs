@@ -20,6 +20,7 @@ use crate::zk_emitter::*;
 
 /// `@tile` FP32 GEMM on CUDA cores (`emit_f32_simt_gemm_kernel`).
 mod f32_simt_gemm;
+mod int8_staged_gemm;
 
 /// L2-locality grid-swizzle group size for `emit_tensor_core_gemm_kernel`
 /// (see `emit_grid_swizzle_code`'s doc comment for the algorithm).
@@ -10146,100 +10147,12 @@ declare it as a Q format.\n{}",
         Ok(())
     }
 
-    /// Returns `(m, n, k, a_reg, b_reg, scale_a_reg, scale_b_reg, c_reg)` if
-    /// `kernel` carries a validated kernel-level `@tile(M, N, K)` directive
-    /// with exactly 5 params: A, B: `GlobalMemory<F32>` (quantized to e4m3
-    /// on the fly - see `emit_fp8_gemm_kernel`), scale_a, scale_b: `F32`
-    /// scalars (per-tensor dequant scale, typically `amax/448.0` - the
-    /// caller's/launcher's job to compute), C: `GlobalMemory<F32>`.
-    /// `type_checker::verify_tile_gemm_kernel` enforces this shape as a hard
-    /// compile error in the normal CLI pipeline (see its own doc comment,
-    /// which this must never disagree with) - re-checked here for the same
-    /// reason `tile_gemm_operands` re-checks its own shape: `PtxEmitter` can
-    /// be driven directly with no type_checker pass at all (this file's own
-    /// unit tests do exactly that). `None` means "fall back to the normal
-    /// generic per-statement lowering", distinguished from
-    /// `tile_gemm_operands`'s 3/4-param F16 shapes by both param COUNT (5)
-    /// and TYPE (F32 GlobalMemory for A/B here, vs F16 there) - no ambiguity.
-    /// Emit an exact int8 tensor-core GEMM over `mma.sync.m16n8k32.s32.s8.s8.s32`.
-    ///
-    /// One warp owns one 16x8 output tile and walks the whole K range; the grid
-    /// is `(N/8, M/16, 1)` with a 32-thread block. Fragments are loaded
-    /// **straight from global memory**, not staged through shared memory.
-    ///
-    /// **That is a deliberate choice for this milestone, not an oversight.**
-    /// The fragment layout is the part that silently produces wrong answers
-    /// (see `tests/ptx_int8_mma_layout.rs`, where four mutations all yield
-    /// plausible matrices), and it is validated in exactly this
-    /// straight-from-global form. Adding CTA tiling and shared-memory staging
-    /// changes the addressing and would have to be re-validated; doing it in
-    /// the same step would mean never knowing which half was wrong. This kernel
-    /// is bandwidth-bound and re-reads A and B once per output tile — it is
-    /// correct and reproducible, not fast.
-    ///
-    /// Layouts, fixed by the instruction rather than chosen:
-    /// - `A`: row-major `[M][K]` int8.
-    /// - `B`: **`[N][K]`** int8, i.e. column-major in the mma's terms. This is
-    ///   the natural layout for an inference weight matrix and is what `.col`
-    ///   means; passing a `[K][N]` buffer computes a different function.
-    /// - `C`: row-major `[M][N]` int32, **overwritten**, not accumulated.
-    ///
-    /// Returns the thread count per CTA.
-    /// `epi` is `Some((scale_a, scale_b, bias))` for the fused scaled shape.
-    ///
-    /// The mainloop is shared with the plain int8 GEMM deliberately: the two
-    /// differ only in what happens to the four accumulators at the end, and a
-    /// second copy of a tensor-core mainloop is the kind of duplicate the
-    /// design-rule table is full of.
-    /// The WARP TILE: how many `m16n8k32` mma one warp issues per K step.
-    ///
-    /// **This is a pure traffic decision and it is the largest single lever on
-    /// this kernel.** A warp reads its own A rows and B columns straight from
-    /// global, so a 16x8 tile moves `16*32 + 8*32 = 768` bytes per 32-wide K
-    /// step to retire 4096 MACs - 0.1875 bytes per MAC. Issuing `mt*nt` mma
-    /// from the SAME fragments amortises both halves: a 64x64 warp tile moves
-    /// 4096 bytes for 131,072 MACs, 0.03125 B/MAC, a **6x** reduction - and it
-    /// needs no shared memory, no barrier, and no instruction this backend does
-    /// not already emit.
-    ///
-    /// Measured on an RTX 4070 Ti SUPER against `torch._int_mm`'s CUTLASS
-    /// kernel, same session, interleaved, ramped, every configuration
-    /// correctness-checked against that kernel's own output:
-    ///
-    /// ```text
-    ///   4096^3   16x8   14,571 G MAC/s  1.00x   0.09x cuBLASLt    8% of ISA peak
-    ///            64x64  61,374          4.21x   0.40x            34%
-    ///   8192^3   16x8    4,912          1.00x   0.03x
-    ///            64x64  38,897          7.92x   0.24x
-    /// ```
-    ///
-    /// The remaining ~2.5x to cuBLASLt is the shared-memory staging this kernel
-    /// still does not have - its kernel is `cutlass_80_tensorop_i16832gemm_s8`
-    /// at 256x128x64 over a 3-stage pipeline. Register tiling is HALF that
-    /// lever (6x of the 12x a 128x128 staged tile would move) for none of the
-    /// machinery, which is why it comes first.
-    ///
-    /// How many output tiles the big warp tile must leave before it is taken.
-    ///
-    /// **A PERFORMANCE FALLBACK, NOT A CORRECTNESS ONE** - the recorded
-    /// distinction. Every tile this selector can return computes the same
-    /// matrix; a wrong constant here gives a slower kernel, never an incorrect
-    /// one, which is why it is a fixed number rather than something probed from
-    /// the local device. *A compiler that probes the local machine bakes that
-    /// machine into its output*, and this decision does not need to.
-    ///
-    /// 64 is roughly one warp per SM on a mid-range card (this one has 66) and
-    /// is where the measured crossover sits: at 512x512 the big tile leaves
-    /// exactly 64 tiles and wins 1.62x; at 256x256 it leaves 16 and loses 2.4x.
-    /// It leaves ~1.3x on the table at 512x512, where 64x32 measures 2.10x
-    /// against 64x64's 1.62x - a graded search would recover that and is not
-    /// worth a second tuning axis for one shape.
-    const INT8_MIN_WARP_TILES: u32 = 64;
 
     /// The largest K whose exact product an int32 accumulator can hold.
     ///
-    /// **THIS IS A CORRECTNESS GATE, NOT A PERFORMANCE ONE**, and it is the
-    /// distinction the constant above turns on. `mma...s32.s8.s8.s32`
+    /// **THIS IS A CORRECTNESS GATE, NOT A PERFORMANCE ONE**: every tile the
+    /// kernel can choose computes the same matrix, but no int32 kernel can hold
+    /// a product past this bound. `mma...s32.s8.s8.s32`
     /// accumulates into int32, this kernel has NO FLUSH, and the OUTPUT is
     /// int32 too - so unlike the CPU's exact GEMM, which widens to int64 every
     /// `Fl` k-pairs, there is nowhere to widen to. The bound is therefore on
@@ -10278,13 +10191,14 @@ declare it as a Q format.\n{}",
     /// pretending otherwise.
     ///
     /// **THE BOUND IS ABOUT A ZEROED `C`, AND THAT IS A PRECONDITION THE
-    /// COMPILER CANNOT CHECK.** This kernel accumulates into `C` with
-    /// `red.global.add.s32` - which is what lets `gridDim.z` split the
-    /// contraction at all - so the quantity that must fit int32 is
-    /// `C_initial + sum`, not `sum`. Splitting K across LAUNCHES into the same
-    /// int32 `C` is therefore the one obvious use of that accumulate which the
-    /// licence does NOT cover: every launch is individually accepted and the
-    /// accumulation is not. Measured, M=16 N=8, every operand 127,
+    /// COMPILER CANNOT CHECK.** A launch that splits K over `gridDim.z` adds
+    /// its partial sums into `C` with `red.global.add.s32`, so the quantity
+    /// that must fit int32 is `C_initial + sum`, not `sum`. (Since 2026-11-06 a
+    /// launch with `gridDim.z = 1` stores instead; until then every launch
+    /// reduced, and this was measured then.) Splitting K across LAUNCHES into
+    /// the same int32 `C` was therefore the one obvious use of that accumulate
+    /// which the licence does NOT cover: every launch is individually accepted
+    /// and the accumulation is not. Measured, M=16 N=8, every operand 127,
     /// K = 66,560 per launch (inside the licence, so each launch compiles),
     /// `C` zeroed once before the first:
     ///
@@ -10303,42 +10217,19 @@ declare it as a Q format.\n{}",
     /// Tied to `proofs/Int8GemmExact.v` by `tests/int8_gemm_exactness.rs`.
     const INT8_MAX_EXACT_K: u32 = 131_040;
 
-    /// **A BIG TILE IS A LOSS AT A SMALL SHAPE, AND THE LOSS IS LARGER THAN THE
-    /// WIN.** A tile is one WARP, so taking the largest tile the shape admits
-    /// hands a 64x64 GEMM to a single warp. Measured, three runs agreeing to
-    /// within 1%, against the 16x8 schedule that shipped:
+    /// The exact int8 tensor-core GEMM, `mma.sync.m16n8k32.s32.s8.s8.s32`:
+    /// A `[M][K]`, B `[N][K]` int8 (K-contiguous: B is column-major in the
+    /// mma's terms, the natural layout of an inference weight), C `[M][N]`
+    /// int32, or f32 through the scaled epilogue (`epi` is `Some((scale_a,
+    /// scale_b, bias))`). The licence and the shape are refused here; the
+    /// kernel is `emit_int8_staged_gemm_kernel` (`ptx_emitter/int8_staged_gemm.rs`).
     ///
-    /// ```text
-    ///     64x64   max tile 0.14x     128x128  max tile 0.18x
-    ///    256x256  max tile 0.42x     512x256  max tile 0.74x
-    /// ```
+    /// Until 2026-11-06 this function emitted a kernel that gave each warp
+    /// its own output tile and read A and B straight from global memory, 0.40x
+    /// cuBLASLt at 4096^3 (README, "The int8 GEMM is 4.29x faster"); its
+    /// launch-contract history is in `tests/int8_gemm_launch_contract.rs`.
     ///
-    /// So the tile is taken only when it leaves enough output tiles to fill the
-    /// machine, and otherwise the schedule stays at one mma per warp. The
-    /// fallback is to 16x8 outright rather than to the next size down, because
-    /// the intermediate tiles do not win either: at 256x256 the largest tile
-    /// with 64 tiles left is 32x32, and it measures **0.89x**.
-    ///
-    /// Validated on 14 shapes, 8 of them not used to derive the rule, including
-    /// rectangular and decode-shaped ones: **worst case 1.00x — it never
-    /// regresses** — while keeping 1.57x to 3.62x wherever the win exists.
-    ///
-    /// The tile is chosen from the shape alone, so **the set of programs that
-    /// compile is exactly what it was**: any `M % 16 == 0` admits `mt = 1`.
-    fn int8_warp_tile(m: u32, n: u32) -> (u32, u32) {
-        // Capped at 4x8 = 32 mma, i.e. 128 accumulator + 32 fragment registers.
-        // At that cap the emitted 4096^3 kernel uses 199 registers with
-        // `STACK:0 LOCAL:0` - zero spill. Past it ptxas spills, and a spilling
-        // tensor-core loop is slower than the smaller tile it was meant to beat.
-        let mt = [4u32, 2, 1].into_iter().find(|c| m % (16 * c) == 0).unwrap_or(1);
-        let nt = [8u32, 4, 2, 1].into_iter().find(|c| n % (8 * c) == 0).unwrap_or(1);
-        if (m / (16 * mt)) * (n / (8 * nt)) >= Self::INT8_MIN_WARP_TILES {
-            (mt, nt)
-        } else {
-            (1, 1)
-        }
-    }
-
+    /// Returns the thread count per CTA.
     fn emit_int8_gemm_kernel(
         &mut self,
         m: u32,
@@ -10350,9 +10241,6 @@ declare it as a Q format.\n{}",
         kernel_name: &str,
         epi: Option<(&str, &str, &str)>,
     ) -> u32 {
-        // Refused rather than padded: a partial tile would need predication on
-        // every fragment load, and silently rounding the shape up would compute
-        // a different matrix than the source asked for.
         // THE LICENCE. Refusing is the only honest answer: the exact product
         // does not fit the int32 output, so no int32 kernel can be correct
         // here, and the alternative to a named refusal is a plausible-looking
@@ -10369,9 +10257,10 @@ declare it as a Q format.\n{}",
                  returns the wrapped value with no error. Reduce K, or split the \
                  GEMM and accumulate the partials in a WIDER TYPE ON THE HOST - \
                  calling this kernel repeatedly into the same int32 C does NOT \
-                 work, because it accumulates into C and the bound is on \
-                 C_initial + sum. Declaring a narrower operand range is not \
-                 expressible for this kernel.",
+                 work: a launch with gridDim.z = 1 overwrites C, and one that \
+                 splits K accumulates into C, where the bound is on C_initial + sum. \
+                 Declaring a narrower operand range is not expressible for this \
+                 kernel.",
                 kernel_name,
                 k,
                 Self::INT8_MAX_EXACT_K,
@@ -10381,6 +10270,9 @@ declare it as a Q format.\n{}",
             return 32;
         }
 
+        // The mma's shape. The staged kernel copies rows past M and N as
+        // zeros and predicates its stores per m16 and n8 block, which is exact
+        // only for whole blocks; K is walked in 32-wide steps.
         if m % 16 != 0 || n % 8 != 0 || k % 32 != 0 {
             self.emit_errors.push(format!(
                 "[PTX] `{}`: an int8 tensor-core GEMM needs M % 16 == 0, N % 8 == 0 and \
@@ -10390,418 +10282,13 @@ declare it as a Q format.\n{}",
             return 32;
         }
 
-        let (mt, nt) = Self::int8_warp_tile(m, n);
-        let (tm, tn) = (16 * mt, 8 * nt);
-        let (tiles_y, tiles_x) = (m / tm, n / tn);
-
-        writeln!(
-            &mut self.ptx_buffer,
-            "    // [Y INT8 TENSOR CORE GEMM] M={} N={} K={} | mma.sync.m16n8k32.row.col.s32.s8.s8.s32\n\
-             \x20   // warp tile {}x{} ({} mma per K step, fragments shared across it)\n\
-             \x20   // {} x {} output tiles, grid-strided: ANY grid works, ({}, {}, z) is exact\n\
-             \x20   // block (32,1,1); A row-major [M][K], B [N][K], C row-major [M][N] int32",
-            m, n, k, tm, tn, mt * nt, tiles_y, tiles_x, tiles_x, tiles_y
-        )
-        .unwrap();
-
-        let ga = self.alloc_reg64();
-        let gb = self.alloc_reg64();
-        let gc = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", ga, a_ptr).unwrap();
-        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", gb, b_ptr).unwrap();
-        writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", gc, c_ptr).unwrap();
-        let epi_g = epi.map(|(sa, sb, bi)| {
-            let (gsa, gsb, gbi) = (self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64());
-            writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", gsa, sa).unwrap();
-            writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", gsb, sb).unwrap();
-            writeln!(&mut self.ptx_buffer, "    cvta.to.global.u64 {}, {};", gbi, bi).unwrap();
-            (gsa, gsb, gbi)
-        });
-
-        let tid = self.alloc_reg32();
-        let cx = self.alloc_reg32();
-        let cy = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %tid.x;", tid).unwrap();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.x;", cx).unwrap();
-
-        // THE LAUNCH CONTRACT, ENFORCED RATHER THAN DOCUMENTED. This schedule
-        // gives one output tile to one WARP, so a CTA has exactly 32 threads of
-        // work however many it is launched with. Measured on the device before
-        // this guard existed, M=64 N=32 K=128, correct answer 1920: a 64-thread
-        // block returned 3840 at C[256] - EXACTLY DOUBLE, because warp 1
-        // recomputed a shifted product and `red.global.add.s32` summed it in -
-        // 1344 of 2048 elements wrong. A 128-thread block also read row 79 of a
-        // 64-row A, i.e. out of bounds, without faulting.
-        //
-        // Nothing checked, and this is the one GPU GEMM in this repo whose
-        // whole claim is a bit-identical answer at every launch geometry
-        // (`tests/gpu_batch_invariance.rs`) - a claim a wrong block size
-        // silently falsifies.
-        //
-        // The branch is WARP-UNIFORM by construction (the predicate is
-        // `tid >= 32`, constant across any warp), so `mma.sync.aligned` still
-        // sees all 32 lanes of warp 0 converged.
-        let idle = self.alloc_label("int8_gemm_idle");
-        let idle_p = self.alloc_pred();
-        writeln!(&mut self.ptx_buffer, "    setp.gt.u32 {}, {}, 31;", idle_p, tid).unwrap();
-        writeln!(&mut self.ptx_buffer, "    @{} bra {};", idle_p, idle).unwrap();
-
-        // g = laneid >> 2, t = laneid & 3 - the decomposition validated in
-        // tests/ptx_int8_mma_layout.rs.
-        let g = self.alloc_reg32();
-        let t = self.alloc_reg32();
-        let t4 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    shr.u32 {}, {}, 2;", g, tid).unwrap();
-        writeln!(&mut self.ptx_buffer, "    and.b32 {}, {}, 3;", t, tid).unwrap();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 4;", t4, t).unwrap();
-
-        // THE OUTPUT TILES ARE GRID-STRIDED IN X AND Y, which is what makes the
-        // warp tile safe to change at all. The tile is a compile-time function
-        // of M and N, so a host that launches the previous `(N/8, M/16, z)`
-        // grid would otherwise start `nt*mt` times too many CTAs, each writing a
-        // wider tile, and `red.global.add.s32` would sum the overlaps - a wrong
-        // answer from a host nobody recompiled. Striding makes every grid at
-        // least 1x1 correct and leaves the exact grid one iteration per CTA, so
-        // an old launch still computes the right matrix, merely with idle CTAs.
-        //
-        // Same residue-class decomposition as the K split below and as the
-        // attention kernel, so `proofs/GridStrideSplit.v` covers all three axes.
-        let ncx = self.alloc_reg32();
-        let ncy = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %nctaid.x;", ncx).unwrap();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %nctaid.y;", ncy).unwrap();
-
-        let tx_top = self.alloc_label("int8_gemm_tx");
-        let ty_top = self.alloc_label("int8_gemm_ty");
-        let x_next = self.alloc_label("int8_gemm_xnext");
-        let tx_p = self.alloc_pred();
-        let ty_p = self.alloc_pred();
-        writeln!(&mut self.ptx_buffer, "{}:", tx_top).unwrap();
-        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", tx_p, cx, tiles_x).unwrap();
-        writeln!(&mut self.ptx_buffer, "    @{} bra {};", tx_p, idle).unwrap();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.y;", cy).unwrap();
-        writeln!(&mut self.ptx_buffer, "{}:", ty_top).unwrap();
-        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", ty_p, cy, tiles_y).unwrap();
-        writeln!(&mut self.ptx_buffer, "    @{} bra {};", ty_p, x_next).unwrap();
-
-        let brow = self.alloc_reg32();
-        let bcol = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", brow, cy, tm).unwrap();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", bcol, cx, tn).unwrap();
-
-        // &A[(base_row + mi*16 + g)][4t], one pointer per m-tile.
-        let mut ap = Vec::new();
-        for mi in 0..mt {
-            let row = self.alloc_reg32();
-            let off = self.alloc_reg32();
-            let off64 = self.alloc_reg64();
-            let lane = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row, brow, mi * 16).unwrap();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row, row, g).unwrap();
-            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", off, row, k).unwrap();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off, off, t4).unwrap();
-            writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", off64, off).unwrap();
-            writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", lane, ga, off64).unwrap();
-            ap.push(lane);
-        }
-        // &B[(base_col + ni*8 + g)][4t], one pointer per n-tile.
-        let mut bp = Vec::new();
-        for ni in 0..nt {
-            let col = self.alloc_reg32();
-            let off = self.alloc_reg32();
-            let off64 = self.alloc_reg64();
-            let lane = self.alloc_reg64();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col, bcol, ni * 8).unwrap();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", col, col, g).unwrap();
-            writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", off, col, k).unwrap();
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off, off, t4).unwrap();
-            writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", off64, off).unwrap();
-            writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", lane, gb, off64).unwrap();
-            bp.push(lane);
-        }
-
-        let d: Vec<String> = (0..mt * nt * 4).map(|_| self.alloc_reg32()).collect();
-        for r in &d {
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", r).unwrap();
-        }
-
-        // Split-K over `%ctaid.z`, striped rather than blocked: CTA `z` takes
-        // every `nctaid.z`-th 32-wide K step starting at `z`. Striping means
-        // ANY grid.z divides the work with no divisibility precondition, which
-        // is what lets the batch-invariance harness sweep the split factor
-        // without recompiling.
-        //
-        // **The partial sums combine through `red.global.add.s32`, and that is
-        // the whole demonstration.** An atomic float add is the canonical
-        // reason GPU results are not reproducible: it is non-associative, so
-        // the answer depends on the order CTAs happen to finish. Integer
-        // addition is associative and commutative, so this atomic is
-        // order-independent by construction - the same result for every grid,
-        // every launch, every scheduling accident.
-        //
-        // **THAT ARGUMENT IS ABOUT THE REDUCING EPILOGUE AND THE FUSED ONE
-        // STORES.** `epi.is_some()` dequantises the int32 accumulator to f32
-        // and writes it with `st.global.f32` - a plain store, which combines
-        // nothing. Split K under a store and every z-CTA writes its OWN
-        // residue class's partial to the same address; the last writer wins,
-        // and which one that is varies between launches. Measured before this
-        // guard existed, M=64 N=32 K=128, three launches each:
-        //
-        // ```text
-        //   z = 1     0 of 2048 elements wrong
-        //   z = 2  2048 of 2048 wrong,  C[0] = -3016 | -60724 | -3016
-        //   z = 8  2048 of 2048 wrong,  C[0] = -15591 | -7777 | -15591
-        //                                       (the answer is -63740)
-        // ```
-        //
-        // Not a rounding difference: a different, non-deterministic matrix,
-        // from the kernel whose source header says "the answer does not depend
-        // on how K was walked". The repair is NOT to make the store atomic - a
-        // float atomic add is exactly the non-reproducibility this family
-        // exists to avoid, and the bias would land once per z. It is to make
-        // the launch contract not matter, the same move the attention kernel's
-        // `attn_scores` needed: a storing epilogue walks the WHOLE
-        // contraction, so every z-CTA computes the identical value and writes
-        // identical bytes. The race becomes benign, the answer is right at
-        // every grid, and a caller who passes z > 1 buys redundant work rather
-        // than a wrong matrix - which is the right side of that trade, and the
-        // only side that keeps the module's advertised claim true.
-        //
-        // Tied to `proofs/Int8GemmSchedule.v` by `tests/int8_gemm_launch_contract.rs`.
-        let splits_k = epi.is_none();
-        let cz = self.alloc_reg32();
-        let nz = self.alloc_reg32();
-        if splits_k {
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %ctaid.z;", cz).unwrap();
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, %nctaid.z;", nz).unwrap();
-        } else {
-            writeln!(
-                &mut self.ptx_buffer,
-                "    // [Y INT8 GEMM] the fused epilogue STORES, so this kernel walks the whole"
-            )
-            .unwrap();
-            writeln!(
-                &mut self.ptx_buffer,
-                "    // contraction and ignores %ctaid.z: a store combines no partials."
-            )
-            .unwrap();
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 0;", cz).unwrap();
-            writeln!(&mut self.ptx_buffer, "    mov.u32 {}, 1;", nz).unwrap();
-        }
-
-        let zoff = self.alloc_reg32();
-        let zoff64 = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 32;", zoff, cz).unwrap();
-        writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", zoff64, zoff).unwrap();
-        for p in ap.iter().chain(bp.iter()) {
-            writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", p, p, zoff64).unwrap();
-        }
-
-        let kstep = self.alloc_reg32();
-        let kstep64 = self.alloc_reg64();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 32;", kstep, nz).unwrap();
-        writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", kstep64, kstep).unwrap();
-
-        let kk = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mov.u32 {}, {};", kk, zoff).unwrap();
-        let top = self.alloc_label("int8_gemm_k");
-        let end = self.alloc_label("int8_gemm_end");
-        let pred = self.alloc_pred();
-        writeln!(&mut self.ptx_buffer, "{}:", top).unwrap();
-        writeln!(&mut self.ptx_buffer, "    setp.ge.u32 {}, {}, {};", pred, kk, k).unwrap();
-        writeln!(&mut self.ptx_buffer, "    @{} bra {};", pred, end).unwrap();
-
-        // Four A registers per m-tile and two B registers per n-tile, at the
-        // offsets derived and validated in tests/ptx_int8_mma_layout.rs. `8 * k`
-        // is the byte step to the row-half 8 rows down, because A's rows are k
-        // bytes apart. **These are loaded ONCE and consumed by every mma in
-        // their row/column of the warp tile** - that reuse is the whole saving.
-        let a: Vec<String> = (0..mt * 4).map(|_| self.alloc_reg32()).collect();
-        let b: Vec<String> = (0..nt * 2).map(|_| self.alloc_reg32()).collect();
-        for mi in 0..mt as usize {
-            let p = &ap[mi];
-            writeln!(&mut self.ptx_buffer, "    ld.global.u32 {}, [{}];", a[mi * 4], p).unwrap();
-            writeln!(&mut self.ptx_buffer, "    ld.global.u32 {}, [{}+{}];", a[mi * 4 + 1], p, 8 * k).unwrap();
-            writeln!(&mut self.ptx_buffer, "    ld.global.u32 {}, [{}+16];", a[mi * 4 + 2], p).unwrap();
-            writeln!(&mut self.ptx_buffer, "    ld.global.u32 {}, [{}+{}];", a[mi * 4 + 3], p, 8 * k + 16).unwrap();
-        }
-        for ni in 0..nt as usize {
-            let p = &bp[ni];
-            writeln!(&mut self.ptx_buffer, "    ld.global.u32 {}, [{}];", b[ni * 2], p).unwrap();
-            writeln!(&mut self.ptx_buffer, "    ld.global.u32 {}, [{}+16];", b[ni * 2 + 1], p).unwrap();
-        }
-
-        for mi in 0..mt as usize {
-            for ni in 0..nt as usize {
-                let base = (mi * nt as usize + ni) * 4;
-                writeln!(
-                    &mut self.ptx_buffer,
-                    "    mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 \
-                     {{{}, {}, {}, {}}}, {{{}, {}, {}, {}}}, {{{}, {}}}, {{{}, {}, {}, {}}};",
-                    d[base], d[base + 1], d[base + 2], d[base + 3],
-                    a[mi * 4], a[mi * 4 + 1], a[mi * 4 + 2], a[mi * 4 + 3],
-                    b[ni * 2], b[ni * 2 + 1],
-                    d[base], d[base + 1], d[base + 2], d[base + 3]
-                )
-                .unwrap();
+        match int8_staged_gemm::int8_staged_tile(m, n, k) {
+            Ok(t) => self.emit_int8_staged_gemm_kernel(m, n, k, a_ptr, b_ptr, c_ptr, kernel_name, epi, t),
+            Err(why) => {
+                self.emit_errors.push(format!("[PTX] `{}`: {}", kernel_name, why));
+                32
             }
         }
-
-        for p in ap.iter().chain(bp.iter()) {
-            writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", p, p, kstep64).unwrap();
-        }
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", kk, kk, kstep).unwrap();
-        writeln!(&mut self.ptx_buffer, "    bra {};", top).unwrap();
-        writeln!(&mut self.ptx_buffer, "{}:", end).unwrap();
-
-        // Accumulator (mi, ni)[j] holds C[base_row + mi*16 + g + 8*(j/2)]
-        //                          [base_col + ni*8 + 2t + (j%2)].
-        let t2 = self.alloc_reg32();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 2;", t2, t).unwrap();
-
-        if let Some((gsa, gsb, gbi)) = epi_g {
-            // C[row][col] = acc * scale_a[row] * scale_b[col] + bias[col], f32.
-            //
-            // A plain `st`, not a `red.add`: the grid is 2-D, so K is not split
-            // across CTAs and this lane owns its output elements outright after
-            // the loop. That is what makes a float epilogue sound at all --
-            // scaling PARTIAL sums and adding them in f32 would reintroduce
-            // exactly the order dependence the int32 accumulator exists to
-            // remove. If this kernel ever gains a %ctaid.z K-split, the
-            // epilogue has to move to a separate pass over the finished int32
-            // matrix; it cannot stay here.
-            //
-            // A warp tile touches 2*mt distinct rows and 2*nt distinct columns,
-            // so the scales are fetched once each rather than once per output.
-            let mut sa = Vec::new();
-            for mi in 0..mt {
-                for half in [0u32, 8] {
-                    let off32 = self.alloc_reg32();
-                    let off64 = self.alloc_reg64();
-                    let addr = self.alloc_reg64();
-                    let v = self.alloc_regf32();
-                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off32, brow, mi * 16 + half).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off32, off32, g).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 4;", off32, off32).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", off64, off32).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", addr, gsa, off64).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    ld.global.f32 {}, [{}];", v, addr).unwrap();
-                    sa.push(v);
-                }
-            }
-            let mut sb = Vec::new();
-            let mut bi = Vec::new();
-            for ni in 0..nt {
-                for c in [0u32, 1] {
-                    let off32 = self.alloc_reg32();
-                    let off64 = self.alloc_reg64();
-                    let a1 = self.alloc_reg64();
-                    let a2 = self.alloc_reg64();
-                    let v1 = self.alloc_regf32();
-                    let v2 = self.alloc_regf32();
-                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off32, bcol, ni * 8 + c).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off32, off32, t2).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 4;", off32, off32).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", off64, off32).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", a1, gsb, off64).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    ld.global.f32 {}, [{}];", v1, a1).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", a2, gbi, off64).unwrap();
-                    writeln!(&mut self.ptx_buffer, "    ld.global.f32 {}, [{}];", v2, a2).unwrap();
-                    sb.push(v1);
-                    bi.push(v2);
-                }
-            }
-            // Store, not reduce: this writes a FINAL value, so it may only run
-            // over a complete contraction. That is why the K loop above drops
-            // the `%ctaid.z` stripe when `epi.is_some()` - a store cannot
-            // combine what a split would produce.
-            for mi in 0..mt as usize {
-                for ni in 0..nt as usize {
-                    let base = (mi * nt as usize + ni) * 4;
-                    for j in 0..4usize {
-                        let addr = self.emit_int8_c_address(&brow, &bcol, &g, &t2, &gc, n, mi, ni, j);
-                        let f = self.alloc_regf32();
-                        writeln!(&mut self.ptx_buffer, "    cvt.rn.f32.s32 {}, {};", f, d[base + j]).unwrap();
-                        writeln!(&mut self.ptx_buffer, "    mul.f32 {}, {}, {};", f, f, sa[mi * 2 + j / 2]).unwrap();
-                        // One `fma.rn.f32` rather than a `mul.f32` and an `add.f32`.
-                        // `ptxas` fuses this pair anyway -- the SASS is byte-identical
-                        // either way -- so the two-instruction form was asking for a
-                        // rounding the hardware does not perform.
-                        writeln!(&mut self.ptx_buffer, "    fma.rn.f32 {}, {}, {}, {};", f, f, sb[ni * 2 + j % 2], bi[ni * 2 + j % 2]).unwrap();
-                        writeln!(&mut self.ptx_buffer, "    st.global.f32 [{}], {};", addr, f).unwrap();
-                    }
-                }
-            }
-        } else {
-            // Reduce, not store: with split-K several CTAs own the same output
-            // element. `red.global.add.s32` is the fire-and-forget form (no
-            // result register), and being an INTEGER add it is associative, so
-            // the value in C does not depend on which CTA got there first.
-            //
-            // The cost is that **C must be zero-initialised by the caller**.
-            // This kernel accumulates into it rather than overwriting it, which
-            // is the same contract the CPU exact GEMM has and for the same
-            // reason.
-            for mi in 0..mt as usize {
-                for ni in 0..nt as usize {
-                    let base = (mi * nt as usize + ni) * 4;
-                    for j in 0..4usize {
-                        let addr = self.emit_int8_c_address(&brow, &bcol, &g, &t2, &gc, n, mi, ni, j);
-                        writeln!(&mut self.ptx_buffer, "    red.global.add.s32 [{}], {};", addr, d[base + j]).unwrap();
-                    }
-                }
-            }
-        }
-
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", cy, cy, ncy).unwrap();
-        writeln!(&mut self.ptx_buffer, "    bra {};", ty_top).unwrap();
-        writeln!(&mut self.ptx_buffer, "{}:", x_next).unwrap();
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", cx, cx, ncx).unwrap();
-        writeln!(&mut self.ptx_buffer, "    bra {};", tx_top).unwrap();
-        writeln!(&mut self.ptx_buffer, "{}:", idle).unwrap();
-        writeln!(&mut self.ptx_buffer, "    ret;").unwrap();
-
-        32
-    }
-
-    /// Byte address of accumulator `j` of warp-tile cell `(mi, ni)` in C.
-    ///
-    /// One function rather than an offset added to a base pointer, because the
-    /// rows a warp tile writes are NOT contiguous - `mi` steps 16 rows and `j`
-    /// steps 8 more - so a single base plus a compile-time byte offset only
-    /// works while the tile is one mma wide. Deriving the full address per
-    /// output is what makes the tiled and untiled cases the same code.
-    #[allow(clippy::too_many_arguments)]
-    fn emit_int8_c_address(
-        &mut self,
-        brow: &str,
-        bcol: &str,
-        g: &str,
-        t2: &str,
-        gc: &str,
-        n: u32,
-        mi: usize,
-        ni: usize,
-        j: usize,
-    ) -> String {
-        let row = self.alloc_reg32();
-        let off = self.alloc_reg32();
-        let off64 = self.alloc_reg64();
-        let addr = self.alloc_reg64();
-        let row_off = mi * 16 + 8 * (j / 2);
-        let col_off = ni * 8 + (j % 2);
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row, brow, row_off).unwrap();
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", row, row, g).unwrap();
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, {};", off, row, n).unwrap();
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off, off, bcol).unwrap();
-        writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off, off, t2).unwrap();
-        if col_off != 0 {
-            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", off, off, col_off).unwrap();
-        }
-        writeln!(&mut self.ptx_buffer, "    mul.lo.u32 {}, {}, 4;", off, off).unwrap();
-        writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", off64, off).unwrap();
-        writeln!(&mut self.ptx_buffer, "    add.u64 {}, {}, {};", addr, gc, off64).unwrap();
-        addr
     }
 
     /// Recognise an exact int8 tensor-core GEMM:
@@ -10906,6 +10393,21 @@ declare it as a Q format.\n{}",
         Some((m, n, k, r(0)?, r(1)?, r(2)?, r(3)?, r(4)?, r(5)?))
     }
 
+    /// Returns `(m, n, k, a_reg, b_reg, scale_a_reg, scale_b_reg, c_reg)` if
+    /// `kernel` carries a validated kernel-level `@tile(M, N, K)` directive
+    /// with exactly 5 params: A, B: `GlobalMemory<F32>` (quantized to e4m3
+    /// on the fly - see `emit_fp8_gemm_kernel`), scale_a, scale_b: `F32`
+    /// scalars (per-tensor dequant scale, typically `amax/448.0` - the
+    /// caller's/launcher's job to compute), C: `GlobalMemory<F32>`.
+    /// `type_checker::verify_tile_gemm_kernel` enforces this shape as a hard
+    /// compile error in the normal CLI pipeline (see its own doc comment,
+    /// which this must never disagree with) - re-checked here for the same
+    /// reason `tile_gemm_operands` re-checks its own shape: `PtxEmitter` can
+    /// be driven directly with no type_checker pass at all (this file's own
+    /// unit tests do exactly that). `None` means "fall back to the normal
+    /// generic per-statement lowering", distinguished from
+    /// `tile_gemm_operands`'s 3/4-param F16 shapes by both param COUNT (5)
+    /// and TYPE (F32 GlobalMemory for A/B here, vs F16 there) - no ambiguity.
     /// `elem` is the operands' element type: `F32` for the fused-quantising
     /// GEMM, `E4M3` for the one that takes e4m3 bytes (A `[M][K]`, B
     /// `[N][K]`) - see `emit_fp8_e4m3_gemm_kernel`.

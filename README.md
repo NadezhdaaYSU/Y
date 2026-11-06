@@ -241,9 +241,11 @@ repository's own investigation documents contradict.
   +0.12% perplexity.
 - A C-callable shared library: the crate builds as `cdylib` as well as `rlib`
   (`src/c_api.rs`), so the compiler can be embedded rather than shelled out to.
-- **Machine-checked proofs**: 24 Rocq files, 520 theorems and lemmas under
-  349 `Print Assumptions`, no axioms and nothing admitted, all run by
-  `cargo test`. They cover the ZK backend's control-flow lowering; the exact
+- **Machine-checked proofs**: 25 Rocq files, 550 theorems and lemmas under
+  372 `Print Assumptions`, no axioms and nothing admitted, all run by
+  `cargo test`. (These read 24 / 520 / 349 until 2026-11-06. They were
+  already 25 / 527 / 356 before that day's int8 proofs, counted with the
+  convention in cabb52d.) They cover the ZK backend's control-flow lowering; the exact
   AVX-512 GEMM's schedule end to end, from the source dot product to the
   threaded, tiled, row- or K-split kernel; and seven GPU files, which now
   include the int8 tensor-core GEMM's schedule *and* the value it computes, and
@@ -425,7 +427,7 @@ matters more than any single row below:
 |---|---|---|---|
 | **CPU exact GEMM** (`vpdpwssd`) | **End to end**: the threaded, tiled, row- or K-split kernel holds the source dot products. The operand licence is checked exhaustively over int16, and a compilation emits its own certificate. | not applicable | `vpdpwssd`'s semantics (pinned on hardware, not proved); the ordering `pthread_join` imposes (ThreadSanitizer, dynamic); everything below the LLVM IR |
 | **Exact int8 attention** | Launch schedule byte-identical to the proof; exact at every launch geometry and every order the atomics land; a proved softmax error bound. Certificate emitted. The kernel traps on a `KFix` outside `1..2^31`. | **no** | `ptxas` is trusted; the int8 `V` quantisation is not modelled |
-| **int8 tensor-core GEMM** | Schedule (block-size guard, grid stride) *and* the value: exact in int32, with the emitter refusing `K > 131,040` | **no** — opcode and loop-structure gaps | the proof-to-code tie is transcription plus a gate, not extraction; no shared-memory staging (0.40x cuBLASLt) |
+| **int8 tensor-core GEMM** | Schedule (block-size trap, grid stride, grouped tiles, striped split K) *and* the value through the swizzled shared stages and `ldmatrix`: exact in int32, with the emitter refusing `K > 131,040` | **no** — `cp.async` in the K loop, opcode gaps | the proof-to-code tie is transcription plus a gate, not extraction; `mma.sync`, `ldmatrix` and `cp.async` semantics are trusted. Speed: 0.91–1.77x cuBLASLt (1.03x at 4096³) |
 | **`exact_pv`** | Conditional source-dot-product model; index and accumulator ceilings | **yes, at `-O1`**; checked execution loads the SHA-256-bound cubin directly | Checked Rust/Python launches enforce positive dimensions, ceilings, exact geometry, buffer and device contracts on `sm_89`; model-to-PTX transcription remains trusted; general `-O2`/`-O3` unroll is not matched |
 | **`y_cpu_matmul`** (three nested loops) | nothing | **yes, at `-O1`**, by the nest validator | the first multi-loop kernel validated; at `-O3` it has a SASS opcode gap and `-O2` up unroll |
 | **f16 / fp8 tensor-core GEMMs** | the warp tile partition only (an illegal tile is refused) | no | **the value carries no proof: 923 of the 925 `mma.sync` this repository emits are floating point** |
@@ -1610,6 +1612,9 @@ different baseline.
 | FP32 GEMM, K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.94–0.98x |
 | FP32 GEMM where the tiles overshoot a whole number of waves (768³, 2048 × 768 × 3072), without the workspace `W` | cuBLAS, TF32 off | 0.72–0.87x (with `W`: 0.97–1.25x) |
 | FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time) | cuBLAS, TF32 off | 0.77–0.98x (GPT-2's 1024 × 50257 × 768: 0.85x) |
+| int8 GEMM, 128 × 4096 × 11008 and × 14336 (Llama's MLP), 512 × 11008 × 4096, 512 × 1024 × 4096 with B from DRAM | cuBLASLt (`torch._int_mm`) | 0.91–0.98x (at 128 rows the 64×64 tile gives 0.99x from DRAM but 0.77–0.83x from L2) |
+| int8 GEMM, K % 64 == 32 (4000³, 4096 × 4096 × 4000) | cuBLASLt | 0.93–0.95x |
+| int8 GEMM, 8192³ | cuBLASLt | 0.97–1.00x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
@@ -2252,7 +2257,7 @@ version answers 1100 against its own reference's 1000. Integer addition *is*
 associative, so the relationship is an equality, which is what a proof assistant
 is good at. What exactness costs is measured below, and it is not free.
 
-24 files, 520 theorems and lemmas, **no axioms, nothing admitted** — and
+25 files, 550 theorems and lemmas (counted 2026-11-06), **no axioms, nothing admitted** — and
 `tests/proofs_are_checked.rs` runs `coqc` over all of them in `cargo test`,
 with a content control per file so that "it compiles" and "no axioms" (both
 properties an *empty* file has) are not the whole check.
@@ -2716,6 +2721,84 @@ GEMM is batch-invariant too, while the f16 control differs at 5 of 6 batch
 sizes. Integer accumulation is associative, so *any* int8 GEMM has the property
 for free. What Y adds is that it is proved and stated, not that it is present.
 
+### The int8 GEMM matches cuBLASLt
+
+The warp-tiled kernel above stopped at 0.40x because it had no shared memory.
+Since 2026-11-06 it stages: K tiles copied by `cp.async` into swizzled shared
+stages, fragments loaded by `ldmatrix.x4`, the e4m3 GEMM's mainloop with the
+accumulator chained in int32 (`src/ptx_emitter/int8_staged_gemm.rs`). Against
+`torch._int_mm` (cuBLASLt) on the RTX 4070 Ti SUPER, two runs, every output
+checked against cuBLASLt and a float64 product before anything was timed:
+
+| shape | Y / cuBLASLt | the kernel it replaced |
+|---|---|---|
+| 1024³ | 1.35x | 0.50–0.51x |
+| 2048³ | 1.02x | 0.40–0.42x |
+| 4096³ | **1.03x** (316–318 TOPS) | 0.42x |
+| 8192³ | 0.97–1.00x | 0.23x |
+| 1024 × 1024 × 16384 | 1.38x | 0.49–0.50x |
+| 24 LLM shapes, M = 32–2048, operands in L2 or from DRAM | 0.91–1.68x; 83 of 96 results 0.98x or better | 0.17–0.72x (in L2) |
+| K % 64 == 32 (4000³, 4096 × 4096 × 4000) | 0.93–0.95x | 0.20–0.44x |
+
+**Staging alone measured 0.74x** (this step and the next are single
+development runs at 4096³, not in the record's logs). The old kernel reduced every output into
+`C` with `red.global.add.s32`, so it could split K over `gridDim.z`; at 4096³
+those 16.7M atomics were a quarter of the time. A launch that does not split K
+now **stores** each output (0.97x), and only a split launch reduces. Ordering
+the K loop as CUTLASS's multistage mainloop does — the next substep's fragments
+loaded under this substep's MMAs, the barrier that publishes the next K tile
+after the second-last substep, the next tile's first fragments loaded before
+the last substep's MMAs — took it to 1.03x.
+
+**The first sweep caught the tile rule computing padding.** The rule takes
+128×128 where that leaves at least 64 output tiles, else 64×128, else 64×64.
+At 32 × 11008 × 4096 the 128×128 tile left 86 tiles, three quarters of each
+past M, and ran at **0.60x**, against 1.13x for a 64-row tile. The rule now
+also requires the tile to fit inside the matrix.
+
+**The losses depend on where B lives, and no rule from the shape alone avoids
+both.** At 128 × 4096 × 11008 and × 14336 the rule's 64×128 tile measures
+0.91–0.94x when B streams from DRAM, as a model's weights do, where the 64×64
+tile gives 0.99x. With B in the 48 MB L2, the 64×128 tile measures 0.92–1.00x
+there, and the 64×64 tile is 17–24% slower than it at K = 4096 and 11008. The rule stays as it is, and both regimes are in the record. The
+other losses are 512 × 11008 × 4096 (0.97–0.98x), 512 × 1024 × 4096 from DRAM
+(0.93x), and K % 64 == 32 (0.93–0.95x). In that last case every second row
+starts 32 bytes into a 64-byte segment. K % 32 == 0 is required, so
+K % 64 is 0 or 32, and an LLM's K is a multiple of 128.
+
+**The launch contract changed, so a caller has to change with it:**
+- the block is the header's, 128 threads, and any other block traps
+  (it was 32);
+- any grid computes the same matrix, and the header's is one CTA per output
+  tile;
+- `gridDim.z = 1` overwrites `C`, and `gridDim.z > 1` adds K's partials into
+  a `C` the caller zeroes;
+- the scaled form stores always, so each of its CTAs walks the whole K;
+- A and B must be 16-byte aligned and `C` 8-byte aligned.
+
+**The proofs were restated for the staged kernel, not patched.**
+`proofs/Int8GemmSchedule.v` (39 `Print Assumptions`, no axioms) proves:
+- each output tile has exactly one owner under the grouped raster order and
+  the grid stride; without the 2^32-CTA trap the stride wraps, and the tile
+  id's wrap check detects a wrap;
+- the striped K split sums to the whole contraction at any `gridDim.z`;
+- a storing CTA and a reducing one leave the same `C`.
+
+`proofs/Int8GemmExact.v` (42) proves:
+- each swizzled `cp.async` copy lands where `ldmatrix` reads it;
+- each `ldmatrix` fragment register holds the source element the `mma` needs;
+- each CTA's int32 partial is exact, and the emitted kernel holds the source
+  dot products, split or not.
+
+`ldmatrix`'s lane layout and the `cp.async` wait semantics are ISA facts in
+the trusted base, as `mma.sync`'s already was. `compute-sanitizer` memcheck
+and racecheck are clean on ten runs: ragged M, N and K, every tile, K split,
+and several tiles per CTA. 17 of 17 mutants of the emitter
+(`int8_mutate.py`) are killed. One of them, the missing barrier between
+output tiles, is caught only by racecheck.
+
+Record, raw logs and scripts: `docs/benchmarks/int8_gemm_2026-11-06/`.
+
 ### The GPU warp tiling is proved, and the guard for it was compiled out
 
 Asked when the tensor-core GEMMs get proofs, the measurement moved the plan
@@ -2739,9 +2822,13 @@ all. Counted as **instructions**, not as lines that mention one:
 
 ```
 kernel                lines  mma.sync  cp.async  ldmatrix  bar.sync
-int8_gemm.ptx           134         1         0         0         0
+int8_gemm.ptx           361        16        23        12         3
 gemm_f16_4096.ptx       784        64        30        24         7
 ```
+
+The int8 row read `134 / 1 / 0 / 0 / 0` until 2026-11-06, when the kernel
+began staging its K tiles in shared memory (see "The int8 GEMM matches
+cuBLASLt", above).
 
 The f16 row read `964 / 64 / 21 / 24 / 7` until 2026-10-17, when that
 kernel's K loop began computing its copy addresses once and loading B with one
@@ -2771,7 +2858,11 @@ difference between that and the f16 kernel's 9 / 13 — it imports the whole
 `cp.async` / `ldmatrix` family and the `LDGSTS` / `DEPBAR` / `WARPSYNC` family,
 and adds back edges to a kernel already refused for having three. The perf
 increment and the validation increment point in **opposite directions** here;
-`docs/ptxas_translation_validation.md` carries the table.
+`docs/ptxas_translation_validation.md` carries the table. (It went as
+predicted. Since 2026-11-06 both int8 GEMMs are refused on the `cp.async` in
+their K loop, as the f16 GEMMs are, rather than on the `mma.sync`.
+`int8_gemm_scaled`'s `-O1`/`-O3` SASS opcode gap went from 3 → 4 to
+13 → 13.)
 
 What *is* available is the SCHEDULE half, because `proofs/ExactGemmTiling.v`
 mentions `f16`, `f32`, `float`, `int16` and `i32` **zero times** — it is `nat`

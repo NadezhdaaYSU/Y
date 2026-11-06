@@ -60,6 +60,8 @@ use std::process::Command;
 
 #[path = "common/pinned.rs"]
 mod pinned;
+#[path = "common/int8_launch.rs"]
+mod int8_launch;
 
 /// The compiler's own bound. Parsed from the source rather than restated: a
 /// second copy of the constant is the drift this tie exists to prevent.
@@ -266,7 +268,9 @@ fn the_largest_admitted_k_is_exact_on_the_device() {
     let k = emitter_bound() as usize;
     let (m, n) = (16usize, 8usize);
     let ptx = emit("dev", m, n, k).expect("the fixture must compile");
+    let geo = int8_launch::int8_launch(&ptx);
     let module = ctx.load_ptx(&ptx, "int8_gemm").expect("PTX failed to load");
+    module.set_max_dynamic_smem(geo.smem).unwrap();
 
     let d_a = ctx.alloc(m * k).unwrap();
     let d_b = ctx.alloc(n * k).unwrap();
@@ -277,7 +281,7 @@ fn the_largest_admitted_k_is_exact_on_the_device() {
     ctx.memset_u8(&d_b, 128).unwrap();
     ctx.memset_u8(&d_c, 0).unwrap();
     let args = vec![d_a.device_ptr(), d_b.device_ptr(), d_c.device_ptr()];
-    ctx.launch(&module, (1, 1, 1), (32, 1, 1), 0, &args).unwrap();
+    ctx.launch(&module, (1, 1, 1), (geo.block, 1, 1), geo.smem, &args).unwrap();
     ctx.synchronize().expect("kernel faulted");
 
     let mut raw = vec![0u8; m * n * 4];
@@ -321,7 +325,9 @@ fn the_split_k_accumulation_is_exact_at_the_licensed_maximum() {
     let k = emitter_bound() as usize;
     let (m, n) = (16usize, 8usize);
     let ptx = emit("splitk", m, n, k).expect("the fixture must compile");
+    let geo = int8_launch::int8_launch(&ptx);
     let module = ctx.load_ptx(&ptx, "int8_gemm").expect("PTX failed to load");
+    module.set_max_dynamic_smem(geo.smem).unwrap();
 
     let d_a = ctx.alloc(m * k).unwrap();
     let d_b = ctx.alloc(n * k).unwrap();
@@ -335,7 +341,7 @@ fn the_split_k_accumulation_is_exact_at_the_licensed_maximum() {
     // divisibility precondition and a sweep of powers of two would not say so.
     for nz in [1u32, 2, 3, 8, 17, 64] {
         ctx.memset_u8(&d_c, 0).unwrap();
-        ctx.launch(&module, (1, 1, nz), (32, 1, 1), 0, &args).unwrap();
+        ctx.launch(&module, (1, 1, nz), (geo.block, 1, 1), geo.smem, &args).unwrap();
         ctx.synchronize().expect("kernel faulted");
         let mut raw = vec![0u8; m * n * 4];
         ctx.memcpy_dtoh_at(&mut raw, &d_c, 0).unwrap();
@@ -383,7 +389,9 @@ fn accumulating_across_launches_wraps_although_each_launch_is_licensed() {
 
     // It compiles: the compiler accepts every one of these launches.
     let ptx = emit("half", m, n, k).expect("half the bound must compile");
+    let geo = int8_launch::int8_launch(&ptx);
     let module = ctx.load_ptx(&ptx, "int8_gemm").expect("PTX failed to load");
+    module.set_max_dynamic_smem(geo.smem).unwrap();
 
     let d_a = ctx.alloc(m * k).unwrap();
     let d_b = ctx.alloc(n * k).unwrap();
@@ -398,9 +406,11 @@ fn accumulating_across_launches_wraps_although_each_launch_is_licensed() {
         i32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]) as i64
     };
 
+    // Split K over z = 2, so each launch ADDS into C. Since 2026-11-06 a
+    // launch with z = 1 stores instead - checked last, below.
     let mut seen = Vec::new();
     for _ in 0..3 {
-        ctx.launch(&module, (1, 1, 1), (32, 1, 1), 0, &args).unwrap();
+        ctx.launch(&module, (1, 1, 2), (geo.block, 1, 1), geo.smem, &args).unwrap();
         ctx.synchronize().expect("kernel faulted");
         seen.push(read(&ctx));
     }
@@ -421,6 +431,13 @@ fn accumulating_across_launches_wraps_although_each_launch_is_licensed() {
          licensed; the ACCUMULATION is not, because the bound is on C_initial + sum.",
         seen[2]
     );
+
+    // The control for the other half of the contract: a launch that does not
+    // split K OVERWRITES C, so it leaves exactly one launch's product over the
+    // wrapped value.
+    ctx.launch(&module, (1, 1, 1), (geo.block, 1, 1), geo.smem, &args).unwrap();
+    ctx.synchronize().expect("kernel faulted");
+    assert_eq!(read(&ctx), per, "a launch with gridDim.z = 1 must store, not add");
 }
 
 /// The source-level half, which runs with no GPU: the compiler must warn about

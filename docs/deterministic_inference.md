@@ -541,6 +541,15 @@ work with no divisibility precondition, which is what lets the harness sweep the
 split factor without recompiling. `C` must now be zero-initialised by the
 caller, since the kernel reduces into it rather than overwriting.
 
+> **Since 2026-11-06 only a split launch reduces.** The staged kernel stores
+> each output when `gridDim.z = 1` (one CTA owns it, and storing measured
+> 0.97x cuBLASLt at 4096^3 against 0.74x reducing), so `C` needs zeroing
+> only when K is split. `tests/gpu_batch_invariance.rs` now runs each split
+> on two grids, the header's and the old `(N/8, M/16, z)` one, into a zeroed
+> `C`. That a `gridDim.z = 1` launch overwrites a garbage-filled `C` is
+> checked by `tests/int8_gemm_launch_contract.rs` and
+> `tests/int8_gemm_exactness.rs` (README, "The int8 GEMM matches cuBLASLt").
+
 Mutation-verified — overwrite-instead-of-reduce and an overlapping partition
 are both caught. One mutation (`kstep` from `ctaid.z` rather than `nctaid.z`)
 **hung the GPU**, because CTA 0 then steps by zero; a mutation that makes the

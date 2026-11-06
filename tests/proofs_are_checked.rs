@@ -337,7 +337,12 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             "Int8GemmExact.v",
             &[
                 "Print Assumptions the_lanes_cover_the_a_fragment",
-                "Print Assumptions the_emitted_a_address_is_its_fragment_element",
+                // Since 2026-11-06 the fragments come through a swizzled
+                // shared stage: the copy's swizzle and ldmatrix's lane
+                // addresses must cancel, and no copy may overwrite another.
+                "Print Assumptions the_ldmatrix_a_fragment_is_the_source_element",
+                "Print Assumptions the_ldmatrix_b_fragment_is_the_source_element",
+                "Print Assumptions the_stage_slots_are_disjoint",
                 "Print Assumptions bounded_products_accumulate_exactly",
                 "Print Assumptions the_measured_overflow_is_two_s_complement",
                 "Print Assumptions the_emitted_int8_gemm_holds_the_source_dot_products",
@@ -350,6 +355,9 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "Print Assumptions the_split_k_accumulation_is_exact_in_int32",
                 "Print Assumptions the_combine_needs_a_zeroed_destination",
                 "Print Assumptions from_zero_the_same_partial_is_exact",
+                // The same two folds for any owner map: the staged kernel
+                // stripes K TILES over z, not K steps.
+                "Print Assumptions the_owned_split_is_exact_in_int32",
             ],
         ),
         (
@@ -362,25 +370,27 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             // compiled, holes and all, so the file is pinned to a defect
             // rather than to a symmetry.
             // The int8 tensor-core GEMM's schedule. It is the only GPU GEMM
-            // whose EXACTNESS is available to prove (950 of the 952 emitted
-            // `mma.sync` are floating point), and the three entries are the
-            // three claims: the launch guard confines a warp to its own tile,
-            // the atomic reduction is order-independent, and a rounding
-            // accumulate would break it - without that last one the file is
-            // satisfied by a property nothing violates.
+            // whose EXACTNESS is available to prove (the other `mma.sync`
+            // are floating point). Since 2026-11-06 the kernel is the staged
+            // one, and the entries are its claims, each with the refutation
+            // that makes it load-bearing: the block-size trap confines a warp
+            // to its own tile (a fifth warp lands in the next tile) and gives
+            // every stage row a copier (a short block leaves rows uncopied);
+            // every output element has one owner and every tile is computed
+            // once on any grid; the atomic reduction is order-independent,
+            // and a rounding accumulate would break it.
             "Int8GemmSchedule.v",
             &[
-                "Print Assumptions the_guard_is_what_confines_a_warp_to_its_own_tile",
+                "Print Assumptions the_trap_is_what_confines_a_warp_to_its_own_tile",
+                "Print Assumptions without_the_trap_a_fifth_warp_lands_in_the_next_tile",
+                "Print Assumptions the_copies_cover_the_stage_once",
+                "Print Assumptions without_the_trap_a_short_block_leaves_rows_uncopied",
+                "Print Assumptions c_element_has_exactly_one_owner",
+                "Print Assumptions grouped_is_a_bijection",
+                "Print Assumptions every_output_tile_is_computed_exactly_once",
+                "Print Assumptions the_split_k_sums_to_the_whole_contraction",
                 "Print Assumptions the_atomic_reduction_is_order_independent",
                 "Print Assumptions a_rounding_accumulate_would_break_the_landing_order",
-                // The warp tile, added when the schedule gained one. The
-                // injectivity is what says two mma of one warp never write the
-                // same element of C, and the refutation is what says the tile
-                // guard is load-bearing rather than defensive: a CTA index at
-                // or past the tile count addresses PAST the matrix, so an
-                // ungurded pre-tiling grid does not merely idle.
-                "Print Assumptions warp_row_injective",
-                "Print Assumptions without_the_tile_guard_a_cta_addresses_past_the_matrix",
                 // The FUSED epilogue, added when a device measurement showed
                 // it stores where its sibling reduces. The refutation is the
                 // load-bearing half: it is the defect that was measured (a
@@ -391,6 +401,10 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "Print Assumptions a_split_cta_holds_only_part_of_the_contraction",
                 "Print Assumptions two_split_ctas_would_store_different_values",
                 "Print Assumptions the_reducing_epilogue_still_splits",
+                // The plain form STORES when K is not split: its one class
+                // is the whole contraction, the value a reduction into a
+                // zeroed C would leave.
+                "Print Assumptions the_unsplit_launch_stores_the_whole_contraction",
             ],
         ),
         (

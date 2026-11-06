@@ -26,6 +26,8 @@ use y::cuda_runtime::CudaContext;
 
 #[path = "common/pinned.rs"]
 mod pinned;
+#[path = "common/int8_launch.rs"]
+mod int8_launch;
 
 const MM: usize = 64; // must match the @tile in tests/int8_gemm_scaled.ysu
 const NN: usize = 32;
@@ -83,9 +85,11 @@ fn accum(a: &[i8], b: &[i8]) -> Vec<i32> {
 }
 
 fn run(ctx: &CudaContext, a: &[i8], b: &[i8], sa: &[f32], sb: &[f32], bias: &[f32]) -> Vec<f32> {
+    let geo = int8_launch::int8_launch(ptx());
     let module = ctx
         .load_ptx(ptx(), "int8_gemm_scaled")
         .expect("PTX failed to load");
+    module.set_max_dynamic_smem(geo.smem).unwrap();
     let d_a = ctx.alloc(MM * KK).unwrap();
     let d_b = ctx.alloc(NN * KK).unwrap();
     let d_sa = ctx.alloc(MM * 4).unwrap();
@@ -99,8 +103,8 @@ fn run(ctx: &CudaContext, a: &[i8], b: &[i8], sa: &[f32], sb: &[f32], bias: &[f3
     ctx.memcpy_htod_at(&d_sa, 0, &f32b(sa)).unwrap();
     ctx.memcpy_htod_at(&d_sb, 0, &f32b(sb)).unwrap();
     ctx.memcpy_htod_at(&d_bi, 0, &f32b(bias)).unwrap();
-    // POISON, not zero. This shape STORES rather than reducing (the grid is 2-D,
-    // so K is not split and each lane owns its outputs outright), so a kernel
+    // POISON, not zero. This shape STORES rather than reducing (it walks the
+    // whole contraction whatever the grid's z), so a kernel
     // that writes nothing must fail loudly instead of inheriting a zero that
     // might coincidentally match a bias-only expectation.
     ctx.memset_u8(&d_c, 0xAB).unwrap();
@@ -113,7 +117,7 @@ fn run(ctx: &CudaContext, a: &[i8], b: &[i8], sa: &[f32], sb: &[f32], bias: &[f3
         d_bi.device_ptr(),
         d_c.device_ptr(),
     ];
-    ctx.launch(&module, ((NN / 8) as u32, (MM / 16) as u32, 1), (32, 1, 1), 0, &args)
+    ctx.launch(&module, (geo.tiles, 1, 1), (geo.block, 1, 1), geo.smem, &args)
         .expect("launch failed");
     ctx.synchronize().expect("kernel did not complete");
 

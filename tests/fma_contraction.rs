@@ -608,7 +608,9 @@ fn stating_the_fusion_is_free_and_forbidding_it_is_not() {
 fn the_hand_written_kernels_state_their_fusions() {
     let want: &[(&str, usize)] = &[
         ("rmsnorm_residual_4096", 9),
-        ("int8_gemm_scaled", 4),
+        // 32: the staged kernel's 64x64 tile on 2x2 warps gives each thread
+        // 2 x 4 mma of 4 outputs (it was 4, one 16x8 mma, until 2026-11-06).
+        ("int8_gemm_scaled", 32),
         ("rope_64", 4),
         ("rope_128", 4),
         ("rope_256", 8),

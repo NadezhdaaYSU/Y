@@ -239,6 +239,42 @@ source; each entry there now carries its status. What is still open:
   launch path (the header states block, grid and dynamic shared memory).
 - All in `docs/benchmarks/f32_gemm_2026-11-05/`.
 
+### int8 GEMM limits
+
+- The staged int8 GEMM (2026-11-06) changed the launch contract. A host
+  written for the old kernel has to change:
+  - the block must be the header's (128 threads), and any other block traps
+    (it was 32);
+  - `gridDim.z = 1` now overwrites `C`, where it used to add into a zeroed
+    `C`. Only `gridDim.z > 1` reduces, and it still needs `C` zeroed;
+  - any grid still gives the same matrix.
+
+  `python/y_lang` has no int8 GEMM caller. The scaled form ignores
+  `gridDim.z`: each of its CTAs walks the whole K and stores.
+- A and B must be 16-byte aligned (`cp.async.cg` 16-byte copies; K % 32 == 0
+  keeps every row aligned), and `C` 8-byte aligned (`st.global.v2`). Nothing
+  checks either at run time.
+- Losses against cuBLASLt (`torch._int_mm`):
+  - 0.93-0.95x where K % 64 == 32: every second row starts 32 bytes into a
+    64-byte segment;
+  - 0.91-0.94x at 128 x 4096 x 11008 and x 14336 with B from DRAM, where
+    the 64x64 tile gives 0.99x but loses 17-24% when B is in L2;
+  - 0.97-0.98x at 512 x 11008 x 4096;
+  - 0.93x at 512 x 1024 x 4096 from DRAM;
+  - 0.97-1.00x at 8192^3.
+- The tile is one of three, chosen from M and N by a fixed rule tuned on this
+  card. It does not consider K or whether B is L2-resident, and it does not
+  split K by itself. `Y_INT8_TILE` pins another tile.
+- Trusted, not proved: `ldmatrix`'s lane layout, `mma.sync`'s fragment layout
+  (both pinned on the device by `tests/ptx_int8_mma_layout.rs`), and the
+  ordering `cp.async.wait_group` plus `bar.sync` gives, which
+  `compute-sanitizer` racecheck checks on ten runs.
+- The translation validator refuses both int8 GEMMs on the `cp.async` in
+  their K loop, so the staging widened the validator gap. `docgate.py`
+  fails the same 17 checks it failed before the change. The change moved the measured value of three of them: liftgap 88 -> 86,
+  MATCHED 25 -> 26, REFUSED 17 -> 16 (`docs/ptxas_translation_validation.md`).
+- All in `docs/benchmarks/int8_gemm_2026-11-06/`.
+
 ### Python packaging
 
 - `python/pyproject.toml` cannot be built into a wheel: its `readme =
@@ -358,7 +394,8 @@ source; each entry there now carries its status. What is still open:
   Nsight Compute puts its copies at the ideal 16 sectors an instruction at
   1024^3 and 4096^3 (`docs/benchmarks/retune_2026-10-20/fp8_sectors/`); the
   e4m3-input GEMM was written with a chunk swizzle. The int8 GEMM was not
-  measured.
+  measured; since 2026-11-06 it copies with the e4m3 GEMM's chunk swizzle
+  (see "int8 GEMM limits").
 - The committed F16 GEMM tiles were re-tuned on 2026-10-20 after the
   swizzle, but not by the autotuner alone: `--autotune-force`, which times
   with B streamed from DRAM, picked tiles that were 0.4-0.9% slower than the
@@ -370,7 +407,8 @@ source; each entry there now carries its status. What is still open:
   Discord's GPU process; effects under 1% there are within its noise.
 - The validator and proof-scope items in archive entries 587-2049 are research
   queue, not wrong answers: 923 of the 925 emitted `mma.sync` are floating point
-  and carry no proof; the f16 GEMMs carry no exactness argument; validation is
+  and carry no proof (counted before 2026-11-06, when the staged int8 GEMM
+  took the committed artifacts' `s8` count from 2 to 32); the f16 GEMMs carry no exactness argument; validation is
   at `-O1`, not the shipped `-O3` (unroll matching); the multi-back-edge lift;
   `cvt.rn.f16.f32` unmodelled; `FMUL`/`FMIN` commutativity unassumed; the solver
   wall on carry chains (`bn254_fr_mul_fast`); `mutgate` covers 3 of 14

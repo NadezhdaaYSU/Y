@@ -2602,7 +2602,11 @@ alone — 9/9.
   exactness argument at all, and nothing here changes that.
 - **The staging.** Y's int8 GEMM is still at 0.09x cuBLASLt for the traffic
   reason above, and still falls 3.7x off the L2 cliff. *(Half of that is closed
-  by the warp tiling in the next section, which needs no staging at all.)*
+  by the warp tiling in the next section, which needs no staging at all.
+  Closed on 2026-11-06: the kernel stages its K tiles in shared memory and
+  matches cuBLASLt, and both proofs were restated for the staged schedule,
+  including the `ldmatrix` reads from the swizzled stages; README, "The int8
+  GEMM matches cuBLASLt".)*
 - **The tie is transcription-plus-gate**, as in `GpuWarpTiling`: `ptx_emitter`
   does not go through the `Ix` extraction layer, so the proof is checked
   against emitted text rather than rendered with it. Routing the GEMM path

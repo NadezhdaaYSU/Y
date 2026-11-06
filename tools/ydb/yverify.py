@@ -120,14 +120,18 @@ LOWERINGS = [
         "marker": "[Y INT8 TENSOR CORE GEMM]",
         "name": "Y's int8 tensor-core GEMM",
         "proofs": [
-            ("proofs/Int8GemmSchedule.v", ["the_guard_is_what_confines_a_warp_to_its_own_tile",
+            ("proofs/Int8GemmSchedule.v", ["the_trap_is_what_confines_a_warp_to_its_own_tile",
+                                           "every_output_tile_is_computed_exactly_once",
                                            "the_atomic_reduction_is_order_independent"],
-             "the schedule: each warp writes only its own tile, and the atomic reduction gives the "
-             "same int32 result in any order, for every block size, grid and split factor"),
+             "the schedule: a block of any size but the declared one traps, each warp writes only "
+             "its own tile, every tile is computed once on any grid, and the atomic reduction of a "
+             "split K gives the same int32 result in any order"),
             ("proofs/Int8GemmExact.v", ["the_emitted_int8_gemm_holds_the_source_dot_products",
-                                        "the_split_k_accumulation_is_exact_in_int32"],
-             "the value: C holds the exact int32 dot products - for K up to 133,120, which the "
-             "compiler checks, and into a C the host has zeroed, which nothing checks"),
+                                        "the_ldmatrix_a_fragment_is_the_source_element",
+                                        "the_owned_split_is_exact_in_int32"],
+             "the value: C holds the exact int32 dot products - for K up to 131,040, which the "
+             "compiler checks, and, when K is split, into a C the host has zeroed, which nothing "
+             "checks"),
         ],
         "also": [("[Y INT8 GEMM] the fused epilogue STORES",
                   "the fused epilogue dequantises to f32 after the exact accumulation; its f32 "
@@ -540,9 +544,16 @@ def selftest(repo=REPO):
     check carries a control that perturbs its input and must be reported.
     Returns the failures."""
     bad = []
+    # The emitter and its submodules: the int8 GEMM's header is written by
+    # src/ptx_emitter/int8_staged_gemm.rs since 2026-11-06.
     emitter = os.path.join(repo, "src", "ptx_emitter.rs")
     with open(emitter) as f:
         emitter_src = f.read()
+    subdir = os.path.join(repo, "src", "ptx_emitter")
+    for name in sorted(os.listdir(subdir)) if os.path.isdir(subdir) else []:
+        if name.endswith(".rs"):
+            with open(os.path.join(subdir, name)) as f:
+                emitter_src += f.read()
 
     def theorem_exists(path, name):
         try:
@@ -553,10 +564,10 @@ def selftest(repo=REPO):
 
     for low in LOWERINGS:
         if low["marker"] not in emitter_src:
-            bad.append("the marker %s is not written by src/ptx_emitter.rs" % low["marker"])
+            bad.append("the marker %s is not written by the PTX emitter" % low["marker"])
         for marker, _ in low.get("also", []):
             if marker not in emitter_src:
-                bad.append("the marker %s is not written by src/ptx_emitter.rs" % marker)
+                bad.append("the marker %s is not written by the PTX emitter" % marker)
         for path, theorems, _ in low["proofs"]:
             for t in theorems:
                 if not theorem_exists(path, t):
