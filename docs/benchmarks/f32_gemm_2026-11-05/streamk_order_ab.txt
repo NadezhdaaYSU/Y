@@ -1,0 +1,12 @@
+# 4096^3, where the plan leaves W unused: the three- and four-parameter kernels assembled by the same ptxas
+# into cubins with identical SASS (2536 instructions). In streamk_bench.py's first, fixed order (cuBLAS, Y3,
+# Y4) Y4 measured 2.6-4.8% slower. Alternating which ran first, 16 rounds:
+SASS identical: True 2536
+min time: 3-param 4332.1 us, 4-param 4424.0 us, ratio 1.0212
+# streamk_order_ab.py: 30 rounds in a shuffled order, with the three-parameter kernel run twice as its own
+# control. The kernels are the same; the earlier gaps were the order, at the card's ~285 W power cap.
+SASS identical: True 2536
+3-param        min  4576.3 us  median  4604.5 us
+3-param again  min  4576.3 us  median  4604.4 us
+4-param        min  4576.6 us  median  4604.2 us
+4/3 min 1.0001 median 0.9999 | 3again/3 min 1.0000 median 1.0000

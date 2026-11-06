@@ -4170,11 +4170,13 @@ Add @bounds(min, max) to state the accumulator's real range, or declare it as a 
         // An `@tile` FP32 GEMM has no body in the source: the PTX backend
         // writes it (`ptx_emitter::f32_simt_gemm`). Lowered here it would be
         // an empty function that returns with C unwritten.
-        let global_f32 = |ty: &Type| {
+        let global_of = |ty: &Type, elem: &str| {
             matches!(ty, Type::Generic { base, args, .. }
-                if base == "GlobalMemory" && matches!(args.as_slice(), [GenericArg::Type(Type::Primitive(p, _))] if p == "F32"))
+                if base == "GlobalMemory" && matches!(args.as_slice(), [GenericArg::Type(Type::Primitive(p, _))] if p == elem))
         };
-        if k.tile.is_some() && k.params.len() == 3 && k.params.iter().all(|p| global_f32(&p.ty)) {
+        let f32_gemm = (k.params.len() == 3 || (k.params.len() == 4 && global_of(&k.params[3].ty, "U64")))
+            && k.params[..3].iter().all(|p| global_of(&p.ty, "F32"));
+        if k.tile.is_some() && f32_gemm {
             self.emit_errors.push(format!(
                 "[LLVM host backend] kernel `{}` is an `@tile` FP32 GEMM, whose body only the PTX backend \
                  writes (`--emit-ptx`); compiled for the host it would be an empty function that leaves C unwritten",

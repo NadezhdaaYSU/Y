@@ -1537,6 +1537,21 @@ At 768^3 and on K-heavy shapes with 256-1024 rows (0.94-0.95x), cuBLAS
 splits K. That is faster there and more accurate, but it makes the answer
 depend on the shape, which Y does not do.
 
+**With a workspace, Y splits K too, in order.** `(A, B, C:
+GlobalMemory<F32>, W: GlobalMemory<U64>)` runs as many CTAs as fit at once.
+Each runs whole tiles, then an equal share of the last tiles' K steps. A
+tile cut between two CTAs is continued, not summed: the first stores its
+exact accumulators in C and marks `W`, the next loads them and carries the
+same `fma` chain on, so the bits are the same as without `W`. Where one
+tile per CTA already fills the GPU, `W` goes unused and the kernel is the
+same one (identical SASS). Same card, two runs
+(`docs/benchmarks/f32_gemm_2026-11-05/streamk_final.txt`):
+
+| shape | 768^3 | 1280^3 | 1536^3 | 2304^3 | 3072^3 | 2048 x 768 x 3072 | 1024 x 1028 x 1024 |
+|---|---|---|---|---|---|---|---|
+| **without W** | 0.85-0.86x | 0.93-0.94x | 1.03-1.05x | 0.92x | 0.96-0.97x | 0.72-0.73x | 0.96-0.99x |
+| **with W** | 1.24-1.25x | 1.27-1.31x | 1.20-1.21x | 1.07x | 1.06-1.07x | 0.97-0.98x | 1.11x |
+
 Any M, N and K, still bit-exact:
 - Ragged sizes with N a multiple of 4: 0.91-1.26x, from 1000^3 to 3000^3.
   A nearly empty last tile row or column goes to narrow remainder tiles
@@ -1592,7 +1607,8 @@ different baseline.
 | Square F16 GEMM, 4096³ | cuBLAS | 0.97–0.99x (1.01x under sustained load on random data) |
 | F16 GEMM, M = 128–256 against N or K = 11008 (Llama-2-7B's MLP) | cuBLAS | 0.97–0.98x, the best of eight tiles |
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
-| FP32 GEMM, 768³ and K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.81–0.95x |
+| FP32 GEMM, K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.94–0.98x |
+| FP32 GEMM where the tiles overshoot a whole number of waves (768³, 2048 × 768 × 3072), without the workspace `W` | cuBLAS, TF32 off | 0.72–0.87x (with `W`: 0.97–1.25x) |
 | FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time) | cuBLAS, TF32 off | 0.77–0.98x (GPT-2's 1024 × 50257 × 768: 0.85x) |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in

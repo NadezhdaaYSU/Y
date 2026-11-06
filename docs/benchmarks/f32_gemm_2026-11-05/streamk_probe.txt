@@ -1,0 +1,27 @@
+# probe_sk.py: in-order stream-K in CUDA C++ (garbage-filled, launch-tagged flags); plain = one tile per CTA
+768x768x768 mid (72 tiles):
+   cuBLAS               47.4 us  1.000x cuBLAS
+   plain(72)            58.2 us  0.815x cuBLAS  bits True True
+   sk P=66              39.1 us  1.214x cuBLAS  bits True True
+   sk P=132             62.3 us  0.762x cuBLAS  bits True True
+1536x1536x1536 mid (288 tiles):
+   cuBLAS              300.0 us  1.000x cuBLAS
+   plain(288)          326.4 us  0.919x cuBLAS  bits True True
+   sk P=66             287.8 us  1.042x cuBLAS  bits True True
+   sk P=132            261.6 us  1.147x cuBLAS  bits True True
+384x704x768 small (66 tiles):
+   cuBLAS               24.2 us  1.000x cuBLAS
+   plain(66)            23.2 us  1.043x cuBLAS  bits True True
+   sk P=66              23.7 us  1.020x cuBLAS  bits True True
+768x704x768 small (132 tiles):
+   cuBLAS               39.0 us  1.000x cuBLAS
+   plain(132)           42.6 us  0.916x cuBLAS  bits True True
+   sk P=66              46.4 us  0.840x cuBLAS  bits True True
+   sk P=132             42.9 us  0.909x cuBLAS  bits True True
+1152x704x768 small (198 tiles):
+   cuBLAS               56.3 us  1.000x cuBLAS
+   plain(198)           64.4 us  0.875x cuBLAS  bits True True
+   sk P=66              69.8 us  0.807x cuBLAS  bits True True
+   sk P=132             64.6 us  0.872x cuBLAS  bits True True
+   sk P=198             64.8 us  0.870x cuBLAS  bits True True
+2535 MHz, 282.60 W, 68

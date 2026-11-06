@@ -1,0 +1,20 @@
+# The stream-K emitter code mutated 13 times; tests: the two workspace tests in tests/f32_simt_gemm.rs, then
+# (for mutants that should only read out of bounds) compute_sanitizer_finds_no_invalid_access_and_no_race.
+# A '31s' kill is the 30 s wait trap firing in a launch that could never finish.
+M1 continuation loads start at K tile 0: KILLED (0s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (57251) panicked at tests/f32_simt_gemm.rs:708:21:"]
+M2 a continuation starts from zero: KILLED (0s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (66064) panicked at tests/f32_simt_gemm.rs:708:21:"]
+M3 nfull ignores the K tail: KILLED (0s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (74917) panicked at tests/f32_simt_gemm.rs:708:21:"]
+M4 split tiles not offset by the whole waves: KILLED (31s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (83728) panicked at tests/f32_simt_gemm.rs:701:50:"]
+M6 no launch tag: KILLED (0s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (101581) panicked at tests/f32_simt_gemm.rs:708:21:"]
+M7 no barrier after the wait: KILLED (0s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (110365) panicked at tests/f32_simt_gemm.rs:708:21:"]
+M8 loop loads past the segment: KILLED (sanitizer) (4s) ["thread 'compute_sanitizer_finds_no_invalid_access_and_no_race' (119216) panicked at tests/f32_simt_gemm.rs:492:13:", "thread 'child_sanitized_streamk_runs' (119267) panicked at tests/f32_simt_gemm.rs:750:31:"]
+M9 prologue loads past the segment: KILLED (sanitizer) (4s) ["thread 'compute_sanitizer_finds_no_invalid_access_and_no_race' (128120) panicked at tests/f32_simt_gemm.rs:492:13:", "thread 'child_sanitized_streamk_runs' (128171) panicked at tests/f32_simt_gemm.rs:750:31:"]
+M10 a wait no producer satisfies (the 30 s trap): KILLED (31s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (136938) panicked at tests/f32_simt_gemm.rs:701:50:"]
+M11 plan threshold 0.5: KILLED (1s) ['test the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_kernel ... FAILED', "thread 'the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_kernel' (146005) panicked at tests/f32_simt_gemm.rs:634:25:"]
+M12 whole tiles not grid-strided: KILLED (0s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (154779) panicked at tests/f32_simt_gemm.rs:708:21:"]
+M13 publish the start, not the end: KILLED (31s) ['test the_workspace_form_is_the_in_order_fma_chain_on_every_grid ... FAILED', "thread 'the_workspace_form_is_the_in_order_fma_chain_on_every_grid' (163560) panicked at tests/f32_simt_gemm.rs:701:50:"]
+# M5 survived the first run (its reads past A and B never reached a sanitized shape: those all had at most
+# 3 K tiles, so the prologue, not the loop, loaded the partial tile). Two sanitized shapes with a K tail and
+# many K tiles were added (mid 241x140x200, large 296x928x300); then:
+M5 loop K limit ignores ka: KILLED (sanitizer) (3s) ["thread 'child_sanitized_streamk_runs' panicked at tests/f32_simt_gemm.rs:754:31" (its synchronize, after memcheck's report)]
+# 13 of 13 killed.

@@ -201,10 +201,26 @@ source; each entry there now carries its status. What is still open:
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
   needs sm_80 (`cp.async`); older targets are refused by
   `check_target_features`, so the GTX 1050 Ti (sm_61) has none.
-- Where cuBLAS splits K it is ahead: 0.81-0.87x at 768^3, 0.94-0.95x at
-  1024 x 1024 x 4096 and 256 x 4096 x 4096. By kernel time, 256^3 is about
-  0.92x. Y does not split, by design: the answer would then depend on the
-  shape.
+- Where cuBLAS splits K, the three-parameter form is behind: 0.81-0.87x at
+  768^3. The workspace form (`W: GlobalMemory<U64>`, 2026-11-06) splits K
+  in order and is ahead there (1.24-1.25x). Neither form is ahead on
+  K-heavy shapes whose tiles already fill the SMs: 0.94-0.98x at 1024 x
+  1024 x 4096 and 256 x 4096 x 4096, where cuBLAS's split adds parallelism
+  that an in-order chain cannot. With `W`, 512 x 768 x 768 is still
+  0.92-0.94x (a second small CTA on an SM adds only 8%) and 2048 x 768 x
+  3072 0.97-0.98x. By kernel time, 256^3 is about 0.92x.
+- The workspace form's limits:
+  - only for N % 4 == 0; otherwise `W` is unused;
+  - a grid larger than the CTAs that fit at once relies on CTAs starting
+    in index order (it held on this card at 2P+5, 4P and 1000 CTAs), and
+    a wait over 30 s traps instead of hanging;
+  - one launch at a time per `W`;
+  - a grid of 2^32 CTAs or more traps (its CTA counts are 32-bit);
+  - the plan's per-SM rates were measured on this card only.
+- The three-parameter form's CTA counts are 32-bit too, and nothing
+  refuses a grid of 2^32 CTAs or more: its stride wraps, and at an exact
+  multiple of 2^32 it is 0 and the kernel would never finish. Such a grid
+  is billions of CTAs; the header's grid is one CTA per tile.
 - With N % 4 != 0, B rows that are not 16-byte aligned are copied 8 or 4
   bytes at a time. Each row takes its own widest width only with K a
   multiple of 16, no ragged column edge, and (for N odd) a 256-column tile.

@@ -1,0 +1,9 @@
+# streamk_bench.py (then in fixed order), the first stream-K kernel: EVERY tile's K split evenly over the
+# CTAs, so the tiles in flight were tiles/P apart (12 at 5120^3) and shared no rows of A or columns of B in L2.
+5120x5120x5120 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   9039.9 us  Y3 1.017x  Y4 0.896x  (Y4/Y3 time 1.135)
+2560x2560x2560 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS   1221.5 us  Y3 0.978x  Y4 1.010x  (Y4/Y3 time 0.968)
+
+# The same shapes once whole tiles run first, in waves of P consecutive tiles, and only the last one to two
+# waves' worth are split (the committed kernel; same harness, fixed order):
+5120x5120x5120 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   8977.9 us  Y3 1.010x  Y4 1.035x  (Y4/Y3 time 0.976)
+2560x2560x2560 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS   1220.5 us  Y3 0.978x  Y4 1.049x  (Y4/Y3 time 0.933)
