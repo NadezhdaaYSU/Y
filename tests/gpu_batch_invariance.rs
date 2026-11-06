@@ -23,7 +23,13 @@
 //!
 //! - **Split-K factor** `gridDim.z` ∈ {1, 2, 3, 5, 8, 16, 32} — a different
 //!   number of CTAs contributing to every output element, striped so no
-//!   divisibility is required.
+//!   divisibility is required. K is 1024, 16 of the kernel's 64-wide K tiles,
+//!   so every factor but 32 gives each CTA work (the fixture's K = 128 was
+//!   two tiles once the kernel staged them, 2026-11-06), and 32 leaves half
+//!   the CTAs an empty stripe.
+//! - **Two grids** per factor: one CTA per output tile (what the header
+//!   declares), and the `(N/8, M/16, z)` grid the kernel was launched with
+//!   before it had CTA tiles, which leaves CTAs with no tile.
 //! - **Repeat launches** at each geometry, because atomic contention order is
 //!   not reproducible run to run; a single launch per geometry would not
 //!   exercise the property being claimed.
@@ -44,23 +50,34 @@ use std::process::Command;
 
 #[path = "common/pinned.rs"]
 mod pinned;
+#[path = "common/int8_launch.rs"]
+mod int8_launch;
 
-const M: usize = 64;
-const N: usize = 32;
-const K: usize = 128;
+// 3 x 2 of the 64x64 tiles the rule picks here, the second column half
+// outside the matrix.
+const M: usize = 192;
+const N: usize = 96;
+const K: usize = 1024;
 
-fn compile_fixture() -> String {
+fn compile_kernel() -> String {
     let mut bin = std::env::current_exe().unwrap();
     bin.pop();
     if bin.ends_with("deps") {
         bin.pop();
     }
-    // A COPY, against a PINNED profile. This compiled the fixture IN PLACE with
-    // the repository as working directory - rewriting the committed
-    // `tests/int8_gemm.ptx` for this machine's card - and then read that
-    // committed path back.
+    // In a scratch directory, against a PINNED profile. This once compiled the
+    // fixture IN PLACE with the repository as working directory - rewriting
+    // the committed `tests/int8_gemm.ptx` for this machine's card - and then
+    // read that committed path back.
     let dir = pinned::pinned_scratch("batch_inv", pinned::SM_PINNED);
-    let src = pinned::copy_fixture(&dir, "tests/int8_gemm.ysu");
+    let src = dir.join("int8_gemm.ysu");
+    std::fs::write(
+        &src,
+        format!(
+            "@tile({M}, {N}, {K})\nkernel int8_gemm(A: GlobalMemory<I8>, B: GlobalMemory<I8>, C: GlobalMemory<I32>) {{\n}}\nfn main() {{}}\n"
+        ),
+    )
+    .unwrap();
     let out = Command::new(bin.join("Y"))
         .arg(&src)
         .arg("--emit-ptx")
@@ -84,8 +101,10 @@ fn the_int8_gemm_is_bit_identical_across_every_split_k_geometry() {
         eprintln!("SKIP: no CUDA driver — GPU batch invariance was not demonstrated.");
         return;
     };
-    let ptx = compile_fixture();
+    let ptx = compile_kernel();
+    let geo = int8_launch::int8_launch(&ptx);
     let module = ctx.load_ptx(&ptx, "int8_gemm").expect("PTX failed to load");
+    module.set_max_dynamic_smem(geo.smem).unwrap();
 
     let a: Vec<i8> = (0..M * K)
         .map(|i| (((i * 31 + 5) % 251) as i32 - 125) as i8)
@@ -102,17 +121,11 @@ fn the_int8_gemm_is_bit_identical_across_every_split_k_geometry() {
     ctx.memcpy_htod_at(&d_b, 0, &b.iter().map(|&v| v as u8).collect::<Vec<u8>>())
         .unwrap();
 
-    let run = |splits: u32| -> Vec<i32> {
+    let run = |grid: (u32, u32, u32)| -> Vec<i32> {
         ctx.memset_u8(&d_c, 0).unwrap();
         let args = vec![d_a.device_ptr(), d_b.device_ptr(), d_c.device_ptr()];
-        ctx.launch(
-            &module,
-            ((N / 8) as u32, (M / 16) as u32, splits),
-            (32, 1, 1),
-            0,
-            &args,
-        )
-        .expect("launch failed");
+        ctx.launch(&module, grid, (geo.block, 1, 1), geo.smem, &args)
+            .expect("launch failed");
         ctx.synchronize().expect("kernel did not complete");
         let mut raw = vec![0u8; M * N * 4];
         ctx.memcpy_dtoh_at(&mut raw, &d_c, 0).unwrap();
@@ -134,7 +147,7 @@ fn the_int8_gemm_is_bit_identical_across_every_split_k_geometry() {
         }
     }
 
-    let reference = run(1);
+    let reference = run((geo.tiles, 1, 1));
     assert_eq!(
         reference, want,
         "the single-split launch does not match the CPU reference; nothing below means anything"
@@ -143,22 +156,24 @@ fn the_int8_gemm_is_bit_identical_across_every_split_k_geometry() {
     // Repeat launches matter: atomic contention order is not reproducible run
     // to run, so one launch per geometry would not exercise the claim.
     for splits in [1u32, 2, 3, 5, 8, 16, 32] {
-        for rep in 0..3 {
-            let got = run(splits);
-            let diffs = got
-                .iter()
-                .zip(&reference)
-                .filter(|(g, r)| g != r)
-                .count();
-            assert_eq!(
-                diffs, 0,
-                "split-K = {splits} (repeat {rep}) differs from split-K = 1 on {diffs} of {} \
-                 elements. Exact integer accumulation is supposed to make the launch geometry \
-                 invisible — this is the product claim failing.",
-                M * N
-            );
+        for grid in [(geo.tiles, 1, splits), ((N / 8) as u32, (M / 16) as u32, splits)] {
+            for rep in 0..3 {
+                let got = run(grid);
+                let diffs = got
+                    .iter()
+                    .zip(&reference)
+                    .filter(|(g, r)| g != r)
+                    .count();
+                assert_eq!(
+                    diffs, 0,
+                    "grid {grid:?} (repeat {rep}) differs from split-K = 1 on {diffs} of {} \
+                     elements. Exact integer accumulation is supposed to make the launch geometry \
+                     invisible — this is the product claim failing.",
+                    M * N
+                );
+            }
         }
-        eprintln!("split-K {splits:2}: bit-identical across 3 launches");
+        eprintln!("split-K {splits:2}: bit-identical across 3 launches on each of 2 grids");
     }
 }
 

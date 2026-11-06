@@ -42,6 +42,8 @@
 
 #[path = "common/pinned.rs"]
 mod pinned;
+#[path = "common/int8_launch.rs"]
+mod int8_launch;
 
 /// One warp, one `m16n8k32` tile. Hand-written so the layout under test is
 /// visible rather than generated.
@@ -222,7 +224,9 @@ fn the_emitted_int8_gemm_matches_a_cpu_reference() {
         return;
     };
     let ptx = int8_gemm_ptx();
+    let geo = int8_launch::int8_launch(&ptx);
     let module = ctx.load_ptx(&ptx, "int8_gemm").expect("PTX failed to load");
+    module.set_max_dynamic_smem(geo.smem).unwrap();
 
     // Must match the @tile in the fixture.
     const MM: usize = 64;
@@ -243,20 +247,13 @@ fn the_emitted_int8_gemm_matches_a_cpu_reference() {
         .unwrap();
     ctx.memcpy_htod_at(&d_b, 0, &b.iter().map(|&v| v as u8).collect::<Vec<u8>>())
         .unwrap();
-    // Zero, not poison: with split-K the kernel REDUCES into C
-    // (`red.global.add.s32`) rather than overwriting it. A kernel that writes
-    // nothing still fails, because every expected value here is non-zero.
-    ctx.memset_u8(&d_c, 0).unwrap();
+    // POISON: a launch that does not split K stores every output (since
+    // 2026-11-06), so a kernel that writes nothing reads back 0xA5 bytes.
+    ctx.memset_u8(&d_c, 0xA5).unwrap();
 
     let args = vec![d_a.device_ptr(), d_b.device_ptr(), d_c.device_ptr()];
-    ctx.launch(
-        &module,
-        ((NN / 8) as u32, (MM / 16) as u32, 1),
-        (32, 1, 1),
-        0,
-        &args,
-    )
-    .expect("launch failed");
+    ctx.launch(&module, (geo.tiles, 1, 1), (geo.block, 1, 1), geo.smem, &args)
+        .expect("launch failed");
     ctx.synchronize().expect("kernel did not complete");
 
     let mut raw = vec![0u8; MM * NN * 4];

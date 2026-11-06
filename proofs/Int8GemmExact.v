@@ -51,21 +51,37 @@
       bytes are a BIJECTION onto the 16x32 and 32x8 fragments.  Every element
       is loaded, once, so no fragment position keeps a value from the previous
       K step.  Both are [MixedRadix] - the eighth and ninth consumers.
-    - [the_emitted_a_address_is_its_fragment_element] / [_b_]: the emitted byte
-      offsets - base [(brow + 16*mi + g) * K + 4*t], register steps [8*K] and
-      [16], byte [b] - address exactly the source element that bijection names.
-      This is where a stride/extent confusion would live, and note A is packed
-      so its stride IS K; there is no [lda] to disagree with the extent.
+    - [the_ldmatrix_a_fragment_is_the_source_element] / [_b_] (since
+      2026-11-06, when the kernel began staging K tiles in shared memory):
+      the [cp.async] copies put chunk [c] of a stage row at chunk
+      [c XOR swz row], and the lane addresses [ldmatrix] is given undo it, so
+      register [q], byte [b] of lane [l] is exactly the source element that
+      bijection names.  [the_stage_slots_are_disjoint] says no copy overwrites
+      another; [the_copy_lands_at_its_swizzled_place] that a thread's one
+      swizzle serves all its rows.  They replace the address theorems of the
+      kernel this one replaced, which loaded each register straight from
+      global memory.
     - [the_k_loop_is_the_contraction]: 32 products per step over [K/32] steps
       re-index to the flat [sum over k < K].
     - [bounded_products_accumulate_exactly]: under the licence the int32
       accumulator ([ExactGemmMicro.wsum], wrapping at every step) equals the
       [Z] sum.  This is what makes the licence load-bearing rather than
       paperwork.
-    - [the_emitted_int8_gemm_holds_the_source_dot_products]: the capstone.
+    - [the_owned_split_is_exact_in_int32]: the two wrapping folds - a CTA's
+      register, the atomic combine - for ANY owner map, so for the K TILES
+      the staged kernel stripes over [z] as well as the K steps the old one
+      did ([wclass_is_wpart]).
+    - [the_emitted_int8_gemm_holds_the_source_dot_products]: the capstone -
+      in [Z] over the split's classes, in int32 over both folds, and for the
+      unsplit launch's store.
 
     ** WHAT THIS DOES NOT CLAIM
 
+    - [ldmatrix.sync.aligned.m8n8.x4.shared.b16]'s distribution of a matrix's
+      bytes to lanes is a DEFINITION too ([ldmatrix_x4]), and so is the
+      ordering [cp.async.wait_group] + [bar.sync] gives the stage: that the
+      copies have landed when the fragments are read is [stage_holds], a
+      hypothesis.  The device tests run every tile against an exact oracle.
     - [mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32]'s own semantics are a
       DEFINITION here, not a theorem - the trusted base, exactly as
       [vpdpwssd]'s semantics are on the CPU side.  They are pinned empirically
@@ -320,56 +336,285 @@ Proof.
 Qed.
 
 (* ------------------------------------------------------------------ *)
-(** ** The emitted addresses ARE those fragment elements               *)
+(** ** The staged path: cp.async, a swizzled stage, ldmatrix           *)
 (* ------------------------------------------------------------------ *)
 
-(** The emitted A pointer for m-tile [mi] of the warp tile:
+(** Since 2026-11-06 the fragments do not come straight from global memory
+    ([src/ptx_emitter/int8_staged_gemm.rs]).  A K tile of A - [cta_m] rows of
+    [cta_k = 16 C] bytes - is copied by [cp.async] in 16-byte chunks into a
+    shared stage, chunk [c] of stage row [row] landing at chunk
+    [c XOR swz row], so the eight rows one [ldmatrix] matrix reads fall in
+    eight different bank groups; then [ldmatrix.x4] hands each lane its four
+    fragment registers.  B likewise, its rows being B's [N]-rows.
 
-      add.u32     row, brow, mi*16      add.u32 row, row, g
-      mul.lo.u32  off, row, K           add.u32 off, off, 4*t
-      cvt.u64.u32 / add.u64             ->  &A[brow + 16*mi + g][4*t]
+    This section proves that what a lane receives is the element
+    [the_lanes_cover_the_a_fragment] names: the copy and the swizzle are
+    bookkeeping that cancels.  It replaces the address theorems of the
+    kernel this one replaced, which loaded each register from
+    [(brow + 16 mi + g) * K + 4 t] and [+8K], [+16], [+8K+16] in global
+    memory.  [ldmatrix]'s distribution is, like [mma]'s semantics below, a
+    DEFINITION - the ISA, pinned on the device by the int8 GEMM's tests. *)
 
-    and the four registers are loaded at byte offsets [0], [8*K], [16] and
-    [8*K + 16] - one row-half down is [8*K] because A's rows are K bytes apart,
-    and [16] is sixteen k-values along because A is int8.  Byte [b] of a 32-bit
-    load is the [b]-th of four contiguous k-values.
+Open Scope nat_scope.
 
-    A is PACKED: its row stride IS K.  There is no [lda] here to disagree with
-    the extent, which is exactly where this repository's recorded address bugs
-    live - twelve of them in the CPU GEMM "correct only because [lda == K] made
-    stride and extent the same number".  Here they are the same number by the
-    kernel's own contract rather than by coincidence. *)
-Definition a_emitted_offset (K brow mi kk g t r b : nat) : nat :=
-  ((brow + 16 * mi + g) * K + 4 * t + kk
-   + 8 * K * (r mod 2) + 16 * (r / 2) + b)%nat.
-
-(** B is [N][K] and its two registers are [16] bytes apart - no [8*K] step,
-    because a B lane's k-values are contiguous where an A lane's rows are not.
-    The two offsets are DIFFERENT expressions, and the layout note in
-    [tests/ptx_int8_mma_layout.rs] records that their coincidence at [r = 0] is
-    a coincidence of the two shapes and not a shared rule. *)
-Definition b_emitted_offset (K bcol ni kk g t r b : nat) : nat :=
-  ((bcol + 8 * ni + g) * K + 4 * t + kk + 16 * r + b)%nat.
-
-(** Row-major addressing, as the kernel's own header comment states it:
-    A is [M][K], B is [N][K], both int8. *)
-Definition element (K row col : nat) : nat := (row * K + col)%nat.
-
-Theorem the_emitted_a_address_is_its_fragment_element :
-  forall K brow mi kk g t r b,
-    a_emitted_offset K brow mi kk g t r b
-    = element K (brow + 16 * mi + a_row g r)%nat (kk + a_col t r b)%nat.
+(** Small facts, checked by enumeration rather than derived from the bit
+    library: every value involved is below 32. *)
+Lemma check_below : forall (P : nat -> bool) n,
+  forallb P (seq 0 n) = true -> forall a, a < n -> P a = true.
 Proof.
-  intros. unfold a_emitted_offset, element, a_row, a_col. ring.
+  intros P n H a Ha. rewrite forallb_forall in H. apply H. apply in_seq. lia.
 Qed.
 
-Theorem the_emitted_b_address_is_its_fragment_element :
-  forall K bcol ni kk g t r b,
-    b_emitted_offset K bcol ni kk g t r b
-    = element K (bcol + 8 * ni + b_col g)%nat (kk + b_k t r b)%nat.
+Lemma check_below2 : forall (P : nat -> nat -> bool) n1 n2,
+  forallb (fun a => forallb (fun b => P a b) (seq 0 n2)) (seq 0 n1) = true ->
+  forall a b, a < n1 -> b < n2 -> P a b = true.
 Proof.
-  intros. unfold b_emitted_offset, element, b_col, b_k. ring.
+  intros P n1 n2 H a b Ha Hb.
+  pose proof (check_below _ n1 H a Ha) as H1. cbv beta in H1.
+  exact (check_below _ n2 H1 b Hb).
 Qed.
+
+(** The lane arithmetic the emitter writes with masks and shifts. *)
+Lemma lane_bits : forall L, L < 32 ->
+  Nat.land L 15 = L mod 16 /\ Nat.land L 7 = L mod 8 /\ Nat.shiftr L 4 = L / 16
+  /\ Nat.shiftr (Nat.land L 16) 1 = 8 * (L / 16)
+  /\ Nat.land (Nat.shiftr L 3) 1 = (L / 8) mod 2.
+Proof.
+  intros L HL.
+  pose proof (check_below
+    (fun L => (Nat.land L 15 =? L mod 16) && (Nat.land L 7 =? L mod 8)
+              && (Nat.shiftr L 4 =? L / 16) && (Nat.shiftr (Nat.land L 16) 1 =? 8 * (L / 16))
+              && (Nat.land (Nat.shiftr L 3) 1 =? (L / 8) mod 2))%bool
+    32 ltac:(vm_compute; reflexivity) L HL) as H.
+  cbv beta in H. repeat rewrite Bool.andb_true_iff in H. rewrite !Nat.eqb_eq in H.
+  tauto.
+Qed.
+
+(** XOR on chunk indices (all below 8). *)
+Lemma xor_shift : forall h s x, h < 2 -> s < 8 -> x < 4 ->
+  Nat.lxor (Nat.lxor h s) (2 * x) = Nat.lxor (h + 2 * x) s.
+Proof.
+  intros h s x Hh Hs Hx.
+  assert (H : forall h s, h < 2 -> s < 8 ->
+            forallb (fun x => Nat.lxor (Nat.lxor h s) (2 * x) =? Nat.lxor (h + 2 * x) s) (seq 0 4) = true).
+  { intros h' s' Hh' Hs'.
+    exact (check_below2 (fun h s => forallb (fun x => Nat.lxor (Nat.lxor h s) (2 * x) =? Nat.lxor (h + 2 * x) s) (seq 0 4))
+             2 8 ltac:(vm_compute; reflexivity) h' s' Hh' Hs'). }
+  pose proof (check_below _ 4 (H h s Hh Hs) x Hx) as E. cbv beta in E.
+  apply Nat.eqb_eq. exact E.
+Qed.
+
+Lemma xor_bound : forall C c s, (C = 2 \/ C = 4 \/ C = 8) -> c < C -> s < C -> Nat.lxor c s < C.
+Proof.
+  intros C c s HC Hc Hs.
+  destruct HC as [-> | [-> | ->]];
+    [ pose proof (check_below2 (fun c s => Nat.lxor c s <? 2) 2 2 ltac:(vm_compute; reflexivity) c s Hc Hs)
+    | pose proof (check_below2 (fun c s => Nat.lxor c s <? 4) 4 4 ltac:(vm_compute; reflexivity) c s Hc Hs)
+    | pose proof (check_below2 (fun c s => Nat.lxor c s <? 8) 8 8 ltac:(vm_compute; reflexivity) c s Hc Hs) ];
+    cbv beta in *; apply Nat.ltb_lt; assumption.
+Qed.
+
+Lemma xor_cancel : forall c1 c2 s, Nat.lxor c1 s = Nat.lxor c2 s -> c1 = c2.
+Proof.
+  intros c1 c2 s H.
+  rewrite <- (Nat.lxor_0_r c1), <- (Nat.lxor_0_r c2), <- (Nat.lxor_nilpotent s).
+  rewrite <- !Nat.lxor_assoc, H. reflexivity.
+Qed.
+
+(** The swizzle: [shr.u32 %s, %row, log2 R; and.b32 %s, %s, C-1], with
+    [R = 128 / cta_k] rows to a 128-byte line and [C = cta_k / 16] chunks to
+    a row ([emit_fp8_e4m3_swizzle]).  [R * C = 8] at every [cta_k] the
+    emitter accepts: 32, 64 and 128. *)
+Definition swz (R C row : nat) : nat := (row / R) mod C.
+
+Lemma swz_repeats_every_8_rows : forall R C row x,
+  0 < R -> 0 < C -> R * C = 8 -> swz R C (row + 8 * x) = swz R C row.
+Proof.
+  intros R C row x HR HC H8. unfold swz.
+  replace (row + 8 * x) with (row + (x * C) * R) by nia.
+  rewrite Nat.div_add by lia. apply Nat.Div0.mod_add.
+Qed.
+
+Lemma swz_bound : forall R C row, 0 < C -> swz R C row < C.
+Proof. intros. unfold swz. apply Nat.mod_upper_bound. lia. Qed.
+
+(** Byte [b] of logical chunk [c] of stage row [row]: where the copy put it. *)
+Definition soff (R C row c b : nat) : nat := row * (16 * C) + 16 * Nat.lxor c (swz R C row) + b.
+
+(** **The slots are disjoint**: no two (row, chunk, byte) share a byte of the
+    stage, so no copy overwrites another's. *)
+Theorem the_stage_slots_are_disjoint : forall R C r1 c1 b1 r2 c2 b2,
+  0 < R -> (C = 2 \/ C = 4 \/ C = 8) -> c1 < C -> c2 < C -> b1 < 16 -> b2 < 16 ->
+  soff R C r1 c1 b1 = soff R C r2 c2 b2 -> r1 = r2 /\ c1 = c2 /\ b1 = b2.
+Proof.
+  intros R C r1 c1 b1 r2 c2 b2 HR HC Hc1 Hc2 Hb1 Hb2 H.
+  assert (HC0 : 0 < C) by lia.
+  pose proof (xor_bound C c1 (swz R C r1) HC Hc1 (swz_bound R C r1 HC0)) as X1.
+  pose proof (xor_bound C c2 (swz R C r2) HC Hc2 (swz_bound R C r2 HC0)) as X2.
+  unfold soff in H.
+  destruct (MR.quot_rem_unique (16 * C) r1 (16 * Nat.lxor c1 (swz R C r1) + b1)
+              r2 (16 * Nat.lxor c2 (swz R C r2) + b2) ltac:(lia) ltac:(lia) ltac:(lia) ltac:(lia)) as [Er Ex].
+  subst r2.
+  destruct (MR.quot_rem_unique 16 (Nat.lxor c1 (swz R C r1)) b1 (Nat.lxor c2 (swz R C r1)) b2
+              ltac:(lia) Hb1 Hb2 ltac:(lia)) as [Ec Eb].
+  repeat split; [ | exact Eb ]. exact (xor_cancel c1 c2 _ Ec).
+Qed.
+
+(** The copy.  Copy-role thread [(lr, lc)] (row [tid / cpr], chunk
+    [tid mod cpr]) copies its [u]-th chunk to its shared base
+    [lr * cta_k + 16 * (lc XOR swz lr)] plus [u * rpp * cta_k], from global
+    [&A[row0 + lr + u*rpp][k0 + 16 lc]].  It computes the swizzle ONCE, from
+    [lr]; that is right because [rpp] is a multiple of 8 (the emitter refuses
+    a tile where it is not) and the swizzle repeats every 8 rows. *)
+Definition copy_dst (R C rpp lr lc u : nat) : nat :=
+  lr * (16 * C) + 16 * Nat.lxor lc (swz R C lr) + u * rpp * (16 * C).
+
+Theorem the_copy_lands_at_its_swizzled_place : forall R C rpp lr lc u,
+  0 < R -> 0 < C -> R * C = 8 -> rpp mod 8 = 0 ->
+  copy_dst R C rpp lr lc u = soff R C (lr + u * rpp) lc 0.
+Proof.
+  intros R C rpp lr lc u HR HC H8 Hrpp. unfold copy_dst, soff.
+  pose proof (Nat.div_mod_eq rpp 8) as E. rewrite Hrpp, Nat.add_0_r in E.
+  replace (lr + u * rpp) with (lr + 8 * (u * (rpp / 8))) by nia.
+  rewrite swz_repeats_every_8_rows by assumption. nia.
+Qed.
+
+(** What the copies leave in a stage, once every thread's group has landed
+    and the barrier has published them: stage row [row]'s logical chunk [c],
+    byte [b], holds [G row (16 c + b)] - for A, [A[row0 + row][k0 + 16c + b]]
+    (zero past M or K: a copy past the matrix is zero-sized).  That every
+    (row, chunk) is copied, by one thread, is
+    [Int8GemmSchedule.the_copies_cover_the_stage_once]; that the copies land
+    in disjoint slots is [the_stage_slots_are_disjoint]. *)
+Definition stage_holds (R C rows : nat) (G : nat -> nat -> Z) (mem : nat -> Z) : Prop :=
+  forall row c b, row < rows -> c < C -> b < 16 -> mem (soff R C row c b) = G row (16 * c + b).
+
+(** **[ldmatrix.sync.aligned.m8n8.x4.shared.b16], as a DEFINITION (ISA).**
+    Matrix [q]'s eight 16-byte rows are at the addresses lanes [8q .. 8q+7]
+    supply; lane [l] receives, in register [q], the two b16 elements at row
+    [l / 4], columns [2 (l mod 4)] and [+1] - bytes [4 (l mod 4) .. +3] of
+    that row. *)
+Definition ldmatrix_x4 (mem : nat -> Z) (addr : nat -> nat) (l q b : nat) : Z :=
+  mem (addr (8 * q + l / 4) + 4 * (l mod 4) + b).
+
+(** The address lane [L] supplies for A's m-tile [i] at K step [ks] of the
+    stage, as [emit_fp8_e4m3_ldmatrix_offsets] computes it: row
+    [(L & 15) + warp_row0], K half [L >> 4], chunk
+    [(half XOR swz (L & 7)) XOR 2ks], and [i * 16 * cta_k] as an immediate. *)
+Definition a_lane_addr (R C wr0 i ks L : nat) : nat :=
+  (Nat.land L 15 + wr0) * (16 * C)
+  + 16 * Nat.lxor (Nat.lxor (Nat.shiftr L 4) (swz R C (Nat.land L 7))) (2 * ks)
+  + i * 16 * (16 * C).
+
+(** B's: row [((L & 16) >> 1) + (L & 7) + warp_col0], K half [(L >> 3) & 1],
+    and [jp * 16 * cta_k] for the pair of n8 tiles [jp]. *)
+Definition b_lane_addr (R C wc0 jp ks L : nat) : nat :=
+  (Nat.shiftr (Nat.land L 16) 1 + Nat.land L 7 + wc0) * (16 * C)
+  + 16 * Nat.lxor (Nat.lxor (Nat.land (Nat.shiftr L 3) 1) (swz R C (Nat.land L 7))) (2 * ks)
+  + jp * 16 * (16 * C).
+
+(** **A's fragment.**  Register [q], byte [b] of lane [l] is the A element
+    [(a_row g q, 32 ks + a_col t q b)] of the warp's m-tile [i], with
+    [g = l / 4] and [t = l mod 4] - exactly what the [mma] reads. *)
+Theorem the_ldmatrix_a_fragment_is_the_source_element :
+  forall R C rows G mem wr0 i ks l q b,
+    0 < R -> R * C = 8 -> (C = 2 \/ C = 4 \/ C = 8) ->
+    stage_holds R C rows G mem -> wr0 mod 8 = 0 -> wr0 + 16 * i + 16 <= rows ->
+    2 * ks < C -> l < 32 -> q < 4 -> b < 4 ->
+    ldmatrix_x4 mem (a_lane_addr R C wr0 i ks) l q b
+    = G (wr0 + 16 * i + a_row (l / 4) q) (32 * ks + a_col (l mod 4) q b).
+Proof.
+  intros R C rows G mem wr0 i ks l q b HR H8 HC Hst Hw Hrows Hks Hl Hq Hb.
+  unfold ldmatrix_x4, a_lane_addr.
+  set (g := l / 4). set (t := l mod 4).
+  assert (Hg : g < 8) by (subst g; apply Nat.Div0.div_lt_upper_bound; lia).
+  assert (Ht : t < 4) by (subst t; apply Nat.mod_upper_bound; lia).
+  destruct (lane_bits (8 * q + g) ltac:(lia)) as [B15 [B7 [B4 _]]].
+  rewrite B15, B7, B4.
+  assert (M16 : (8 * q + g) mod 16 = 8 * (q mod 2) + g).
+  { pose proof (Nat.div_mod_eq q 2). pose proof (Nat.mod_upper_bound q 2 ltac:(lia)).
+    replace (8 * q + g) with ((8 * (q mod 2) + g) + (q / 2) * 16) by lia.
+    rewrite Nat.Div0.mod_add. apply Nat.mod_small. lia. }
+  assert (M8 : (8 * q + g) mod 8 = g).
+  { replace (8 * q + g) with (g + q * 8) by lia. rewrite Nat.Div0.mod_add. apply Nat.mod_small. lia. }
+  assert (D16 : (8 * q + g) / 16 = q / 2).
+  { pose proof (Nat.div_mod_eq q 2). pose proof (Nat.mod_upper_bound q 2 ltac:(lia)).
+    replace (8 * q + g) with ((8 * (q mod 2) + g) + (q / 2) * 16) by lia.
+    rewrite Nat.div_add by lia. rewrite Nat.div_small by lia. lia. }
+  rewrite M16, M8, D16.
+  set (row := wr0 + 16 * i + a_row g q).
+  assert (HC0 : 0 < C) by lia.
+  assert (Hsw : swz R C g = swz R C row).
+  { subst row. unfold a_row. pose proof (Nat.div_mod_eq wr0 8) as E. rewrite Hw, Nat.add_0_r in E.
+    replace (wr0 + 16 * i + (g + 8 * (q mod 2))) with (g + 8 * (wr0 / 8 + 2 * i + q mod 2)) by lia.
+    symmetry. apply swz_repeats_every_8_rows; lia. }
+  assert (Hq2 : q / 2 < 2) by (apply Nat.Div0.div_lt_upper_bound; lia).
+  assert (Hsw8 : swz R C g < 8) by (pose proof (swz_bound R C g HC0); lia).
+  rewrite (xor_shift (q / 2) (swz R C g) ks Hq2 Hsw8 ltac:(lia)), Hsw.
+  assert (Hc : q / 2 + 2 * ks < C).
+  { destruct HC as [-> | [-> | ->]]; lia. }
+  assert (Haddr : (8 * (q mod 2) + g + wr0) * (16 * C) + 16 * Nat.lxor (q / 2 + 2 * ks) (swz R C row)
+                  + i * 16 * (16 * C) + 4 * t + b
+                  = soff R C row (q / 2 + 2 * ks) (4 * t + b)).
+  { unfold soff. subst row. unfold a_row. nia. }
+  rewrite Haddr, Hst.
+  - f_equal. unfold a_col. pose proof (Nat.div_mod_eq q 2). lia.
+  - subst row. unfold a_row. pose proof (Nat.mod_upper_bound q 2 ltac:(lia)). lia.
+  - exact Hc.
+  - lia.
+Qed.
+
+(** **B's fragment.**  Register [q] of lane [l] is register [q mod 2] of the
+    fragment of n8 tile [2 jp + q / 2] - the emitter pushes [{r0,r1}] and
+    [{r2,r3}] as the fragments of tiles [2jp] and [2jp+1] - at
+    [(b_col g, 32 ks + b_k t (q mod 2) b)]. *)
+Theorem the_ldmatrix_b_fragment_is_the_source_element :
+  forall R C rows G mem wc0 jp ks l q b,
+    0 < R -> R * C = 8 -> (C = 2 \/ C = 4 \/ C = 8) ->
+    stage_holds R C rows G mem -> wc0 mod 8 = 0 -> wc0 + 16 * jp + 16 <= rows ->
+    2 * ks < C -> l < 32 -> q < 4 -> b < 4 ->
+    ldmatrix_x4 mem (b_lane_addr R C wc0 jp ks) l q b
+    = G (wc0 + 8 * (2 * jp + q / 2) + b_col (l / 4)) (32 * ks + b_k (l mod 4) (q mod 2) b).
+Proof.
+  intros R C rows G mem wc0 jp ks l q b HR H8 HC Hst Hw Hrows Hks Hl Hq Hb.
+  unfold ldmatrix_x4, b_lane_addr.
+  set (g := l / 4). set (t := l mod 4).
+  assert (Hg : g < 8) by (subst g; apply Nat.Div0.div_lt_upper_bound; lia).
+  assert (Ht : t < 4) by (subst t; apply Nat.mod_upper_bound; lia).
+  destruct (lane_bits (8 * q + g) ltac:(lia)) as [_ [B7 [_ [B16 B3]]]].
+  rewrite B7, B16, B3.
+  assert (M8 : (8 * q + g) mod 8 = g).
+  { replace (8 * q + g) with (g + q * 8) by lia. rewrite Nat.Div0.mod_add. apply Nat.mod_small. lia. }
+  assert (D8 : (8 * q + g) / 8 = q).
+  { replace (8 * q + g) with (g + q * 8) by lia. rewrite Nat.div_add by lia. rewrite Nat.div_small by lia. lia. }
+  assert (D16 : (8 * q + g) / 16 = q / 2).
+  { pose proof (Nat.div_mod_eq q 2). pose proof (Nat.mod_upper_bound q 2 ltac:(lia)).
+    replace (8 * q + g) with ((8 * (q mod 2) + g) + (q / 2) * 16) by lia.
+    rewrite Nat.div_add by lia. rewrite Nat.div_small by lia. lia. }
+  rewrite M8, D8, D16.
+  set (row := wc0 + 8 * (2 * jp + q / 2) + b_col g).
+  assert (HC0 : 0 < C) by lia.
+  assert (Hsw : swz R C g = swz R C row).
+  { subst row. unfold b_col. pose proof (Nat.div_mod_eq wc0 8) as E. rewrite Hw, Nat.add_0_r in E.
+    replace (wc0 + 8 * (2 * jp + q / 2) + g) with (g + 8 * (wc0 / 8 + 2 * jp + q / 2)) by lia.
+    symmetry. apply swz_repeats_every_8_rows; lia. }
+  assert (Hq2 : q mod 2 < 2) by (apply Nat.mod_upper_bound; lia).
+  assert (Hsw8 : swz R C g < 8) by (pose proof (swz_bound R C g HC0); lia).
+  rewrite (xor_shift (q mod 2) (swz R C g) ks Hq2 Hsw8 ltac:(lia)), Hsw.
+  assert (Hc : q mod 2 + 2 * ks < C).
+  { destruct HC as [-> | [-> | ->]]; lia. }
+  assert (Haddr : (8 * (q / 2) + g + wc0) * (16 * C) + 16 * Nat.lxor (q mod 2 + 2 * ks) (swz R C row)
+                  + jp * 16 * (16 * C) + 4 * t + b
+                  = soff R C row (q mod 2 + 2 * ks) (4 * t + b)).
+  { unfold soff. subst row. unfold b_col. nia. }
+  rewrite Haddr, Hst.
+  - f_equal. unfold b_k. lia.
+  - subst row. unfold b_col. assert (q / 2 < 2) by (apply Nat.Div0.div_lt_upper_bound; lia). lia.
+  - exact Hc.
+  - lia.
+Qed.
+
+Open Scope Z_scope.
 
 (* ------------------------------------------------------------------ *)
 (** ** The instruction, as a DEFINITION (the trusted base)             *)
@@ -774,59 +1019,254 @@ Proof. vm_compute. reflexivity. Qed.
 
 (* ------------------------------------------------------------------ *)
 
-(** The row the emitted base register addresses IS the row the schedule proof
-    partitions, so every theorem in [Int8GemmSchedule] about [warp_row] applies
-    to the element this file gives a value to. *)
-Lemma the_addressed_row_is_the_schedules_row : forall mt ty mi i,
-  (ty * (mt * 16) + 16 * mi + i)%nat = SCH.warp_row mt ty mi i.
-Proof. intros. unfold SCH.warp_row, SCH.MMA_M. lia. Qed.
+(* ------------------------------------------------------------------ *)
+(** ** K TILES striped over [z], in int32                              *)
+(* ------------------------------------------------------------------ *)
 
-Lemma the_addressed_col_is_the_schedules_col : forall nt tx ni j,
-  (tx * (nt * 8) + 8 * ni + j)%nat = SCH.warp_col nt tx ni j.
-Proof. intros. unfold SCH.warp_col, SCH.MMA_N. lia. Qed.
+(** The staged kernel splits K by TILES of [cta_k = 32 T]: CTA [z] of [nz]
+    takes K tiles [z], [z + nz], ..., so product [k] is CTA
+    [(k / cta_k) mod nz]'s - [Int8GemmSchedule.k_tile_owner].  The theorem
+    above is about the residue classes [k mod n] of the kernel this one
+    replaced; this is the same pair of wrapping folds for ANY owner map, so it
+    covers both ([wclass_is_wpart]). *)
+Fixpoint wpart (owner : nat -> nat) (f : nat -> Z) (w S : nat) : Z :=
+  match S with
+  | O => 0
+  | Datatypes.S k =>
+      if Nat.eqb (owner k) w then MC.wrap32 (wpart owner f w k + f k)
+      else wpart owner f w k
+  end.
+
+Lemma wclass_is_wpart : forall f w n S, wclass f w n S = wpart (fun k => k mod n)%nat f w S.
+Proof.
+  intros f w n S. induction S as [| S IH]; cbn [wclass wpart]; [ reflexivity | now rewrite IH ].
+Qed.
+
+Lemma part_abs_le_total : forall owner f w S,
+  D.part Z.add owner (afun f) w S <= sum_k (afun f) S.
+Proof.
+  intros owner f w S. induction S as [| S IH].
+  - cbn. lia.
+  - cbn [D.part]. unfold sum_k in *. rewrite acc_range_succ.
+    assert (H0 : 0 <= afun f (0 + S)%nat) by (unfold afun; apply Z.abs_nonneg).
+    replace (0 + S)%nat with S in * by lia.
+    destruct (Nat.eqb (owner S) w); lia.
+Qed.
+
+Lemma part_abs_bounds : forall owner f w S,
+  Z.abs (D.part Z.add owner f w S) <= D.part Z.add owner (afun f) w S.
+Proof.
+  intros owner f w S. induction S as [| S IH]; cbn [D.part]; [ simpl; lia | ].
+  destruct (Nat.eqb (owner S) w); [ | exact IH ].
+  pose proof (Z.abs_triangle (D.part Z.add owner f w S) (f S)).
+  unfold afun in *. lia.
+Qed.
+
+(** A CTA's own int32 register does not wrap. *)
+Lemma wpart_exact : forall owner f w S,
+  D.part Z.add owner (afun f) w S <= MC.I32MAX ->
+  wpart owner f w S = D.part Z.add owner f w S.
+Proof.
+  intros owner f w S. induction S as [| S IH]; intros Hb.
+  - reflexivity.
+  - pose proof (part_abs_bounds owner f w (Datatypes.S S)) as Hab.
+    cbn [wpart D.part] in Hab, Hb |- *.
+    assert (Ha : afun f S = Z.abs (f S)) by reflexivity.
+    rewrite Ha in Hab, Hb.
+    remember (Nat.eqb (owner S) w) as bb eqn:E; destruct bb.
+    + assert (Hs : D.part Z.add owner (afun f) w S <= MC.I32MAX).
+      { pose proof (Z.abs_nonneg (f S)). lia. }
+      rewrite (IH Hs).
+      apply MC.wrap32_id.
+      assert (HX : Z.abs (D.part Z.add owner f w S + f S) <= MC.I32MAX) by lia.
+      apply Z.abs_le in HX.
+      unfold MC.in_i32, MC.I32MIN, MC.I32MAX in *. lia.
+    + exact (IH Hb).
+Qed.
+
+(** **Both folds, any owner map, any landing order, from a zeroed C.** *)
+Theorem the_owned_split_is_exact_in_int32 :
+  forall owner f n S order,
+    (0 < n)%nat ->
+    (forall s, (s < S)%nat -> (owner s < n)%nat) ->
+    Permutation order (seq 0 n) ->
+    sum_k (afun f) S <= MC.I32MAX ->
+    wcombine 0 (map (fun w => wpart owner f w S) order) = sum_k f S.
+Proof.
+  intros owner f n S order Hn Hown Hperm Hb.
+  assert (Hc : forall w, D.part Z.add owner (afun f) w S <= MC.I32MAX).
+  { intros w. pose proof (part_abs_le_total owner f w S). lia. }
+  assert (Hmap : map (fun w => wpart owner f w S) order
+                 = map (fun w => D.part Z.add owner f w S) order).
+  { apply map_ext. intros w. apply wpart_exact, Hc. }
+  rewrite Hmap.
+  assert (Hbud : fold_right Z.add 0 (map Z.abs (map (fun w => D.part Z.add owner f w S) order))
+                 <= MC.I32MAX).
+  { rewrite map_map.
+    eapply Z.le_trans.
+    - apply (fold_map_le order (fun w => Z.abs (D.part Z.add owner f w S))
+                               (fun w => D.part Z.add owner (afun f) w S)).
+      intros w. apply part_abs_bounds.
+    - rewrite (GS.fold_right_add_permutation _ (map (fun w => D.part Z.add owner (afun f) w S) (seq 0 n)))
+        by (apply Permutation_map; exact Hperm).
+      rewrite <- SCH.combine_is_fold.
+      rewrite (D.decomposition_exact owner (afun f) S n Hown). exact Hb. }
+  rewrite wcombine_exact by (simpl Z.abs; lia).
+  rewrite Z.add_0_l.
+  rewrite (GS.fold_right_add_permutation _ (map (fun w => D.part Z.add owner f w S) (seq 0 n)))
+    by (apply Permutation_map; exact Hperm).
+  rewrite <- SCH.combine_is_fold.
+  apply (D.decomposition_exact owner f S n Hown).
+Qed.
+
+(* ------------------------------------------------------------------ *)
+(** ** The capstone                                                    *)
+(* ------------------------------------------------------------------ *)
+
+(** The element the epilogue writes for register [j] of lane [(g, t)] of mma
+    [(mi, nj')] of warp [(wm, wn)] of tile [(tm, tn)] IS the schedule's
+    [out_row] / [out_col], so every theorem in [Int8GemmSchedule] about which
+    thread owns it applies to the element this file gives a value to. *)
+Lemma the_written_row_is_the_schedules_row : forall wms ni tm wm mi g j,
+  (tm * (wms * (ni * 16)) + wm * (ni * 16) + 16 * mi + d_row g j)%nat
+  = SCH.out_row wms ni tm wm mi g (j / 2).
+Proof. intros. unfold SCH.out_row, SCH.MMA_M, d_row. ring. Qed.
+
+Lemma the_written_col_is_the_schedules_col : forall wns nj tn wn nj' t j,
+  (tn * (wns * (nj * 8)) + wn * (nj * 8) + 8 * nj' + d_col t j)%nat
+  = SCH.out_col wns nj tn wn nj' t (j mod 2).
+Proof. intros. unfold SCH.out_col, SCH.MMA_N, d_col. ring. Qed.
+
+(** The staged registers ARE [a_frag] / [b_frag] at the K step
+    [s = T * kt + ks]: the stage holds K tile [kt] (byte offset
+    [cta_k * kt = 32 T kt]) of the CTA's rows from [row0]. *)
+Corollary the_staged_a_register_is_the_mma_fragment :
+  forall R C T rows (A : nat -> nat -> Z) mem row0 kt wr0 i ks l q b,
+    (0 < R)%nat -> (R * C = 8)%nat -> (C = 2 \/ C = 4 \/ C = 8)%nat -> C = (2 * T)%nat ->
+    stage_holds R C rows (fun row k => A (row0 + row)%nat (32 * T * kt + k)%nat) mem ->
+    (wr0 mod 8 = 0)%nat -> (wr0 + 16 * i + 16 <= rows)%nat -> (ks < T)%nat ->
+    (l < 32)%nat -> (q < 4)%nat -> (b < 4)%nat ->
+    ldmatrix_x4 mem (a_lane_addr R C wr0 i ks) l q b
+    = a_frag A (row0 + wr0) i (32 * (T * kt + ks)) (a_row (l / 4) q) (a_col (l mod 4) q b).
+Proof.
+  intros. rewrite (the_ldmatrix_a_fragment_is_the_source_element R C rows
+             (fun row k => A (row0 + row)%nat (32 * T * kt + k)%nat) mem wr0 i ks l q b);
+    try assumption; try lia.
+  unfold a_frag. f_equal; lia.
+Qed.
+
+Corollary the_staged_b_register_is_the_mma_fragment :
+  forall R C T rows (B : nat -> nat -> Z) mem col0 kt wc0 jp ks l q b,
+    (0 < R)%nat -> (R * C = 8)%nat -> (C = 2 \/ C = 4 \/ C = 8)%nat -> C = (2 * T)%nat ->
+    stage_holds R C rows (fun row k => B (col0 + row)%nat (32 * T * kt + k)%nat) mem ->
+    (wc0 mod 8 = 0)%nat -> (wc0 + 16 * jp + 16 <= rows)%nat -> (ks < T)%nat ->
+    (l < 32)%nat -> (q < 4)%nat -> (b < 4)%nat ->
+    ldmatrix_x4 mem (b_lane_addr R C wc0 jp ks) l q b
+    = b_frag B (col0 + wc0) (2 * jp + q / 2) (32 * (T * kt + ks)) (b_k (l mod 4) (q mod 2) b) (b_col (l / 4)).
+Proof.
+  intros. rewrite (the_ldmatrix_b_fragment_is_the_source_element R C rows
+             (fun row k => B (col0 + row)%nat (32 * T * kt + k)%nat) mem wc0 jp ks l q b);
+    try assumption; try lia.
+  unfold b_frag. f_equal; lia.
+Qed.
+
+Lemma acc_range_ext_below : forall f h lo len,
+  (forall i, (i < len)%nat -> f (lo + i)%nat = h (lo + i)%nat) ->
+  D.acc_range Z.add f lo len = D.acc_range Z.add h lo len.
+Proof.
+  intros f h lo len H. induction len as [| len IH]; cbn [D.acc_range]; [ reflexivity | ].
+  rewrite IH by (intros; apply H; lia). rewrite H by lia. reflexivity.
+Qed.
+
+Lemma acc_range_zero : forall f lo len,
+  (forall i, (i < len)%nat -> f (lo + i)%nat = 0) -> D.acc_range Z.add f lo len = 0.
+Proof.
+  intros f lo len H. induction len as [| len IH]; cbn [D.acc_range]; [ reflexivity | ].
+  rewrite IH by (intros; apply H; lia). rewrite H by lia. reflexivity.
+Qed.
+
+(** The licence bounds the sum of |products|. *)
+Lemma the_licence_bounds_the_absolute_sum : forall A B m K row col,
+  0 <= m -> (forall r k, Z.abs (A r k) <= m) -> (forall c k, Z.abs (B c k) <= m) ->
+  Z.of_nat K * (m * m) <= MC.I32MAX ->
+  sum_k (afun (prod A B row col)) K <= MC.I32MAX.
+Proof.
+  intros A B m K row col Hm HA HB Hlic.
+  assert (Hself : forall z : Z, z <= Z.abs z)
+    by (intros z; destruct (Z.abs_spec z) as [[? E] | [? E]]; lia).
+  eapply Z.le_trans; [ apply Hself | ]. eapply Z.le_trans; [ | exact Hlic ].
+  apply acc_range_abs_bound; [ nia | ].
+  intros i. unfold afun, prod. rewrite Z.abs_idemp, Z.abs_mul.
+  apply Z.mul_le_mono_nonneg; auto using Z.abs_nonneg.
+Qed.
 
 (** **The theorem this file exists for.**
 
-    For every launch geometry - any split factor [nz] - and every lane of every
-    mma of every warp tile, the emitted kernel's accumulator holds exactly
+    For every launch geometry - any split factor [nz], any order the CTAs'
+    partials land in - and every lane of every mma of every warp of every
+    tile, the emitted kernel holds exactly
 
       sum over k < K of A[row][k] * B[col][k]
 
-    at the [(row, col)] the schedule proof says that lane owns, with no
-    hypothesis that [nz] divides [K/32].  The two conjuncts are the two halves
-    the kernel actually has: the grid-stride split in [Z], and the int32
-    accumulator that carries it not wrapping.
+    at the [(row, col)] the schedule proof says that lane owns.  Three
+    conjuncts, the three things the kernel does:
 
-    The LICENCE is what makes the second conjunct true, and the emitter now
-    refuses a K that violates it. *)
+    - in [Z], the K tiles' mma steps - the zero-filled tail of the last K tile
+      included ([A'], [B'] are A and B with the zeros the copies write past
+      K) - summed over the split's classes;
+    - in int32, each CTA's own register fold and the atomic combine, which the
+      LICENCE keeps from wrapping;
+    - the unsplit launch's STORE, which is its one class.
+
+    The fragments those steps multiply are what the staged path delivers:
+    [the_staged_a_register_is_the_mma_fragment] / [_b_]. *)
 Theorem the_emitted_int8_gemm_holds_the_source_dot_products :
-  forall A B m K S nz mt nt ty tx mi ni g t j,
+  forall (A B : nat -> nat -> Z) m K S T KT nz order wms wns ni nj tm tn wm wn mi nj' g t j,
     0 <= m ->
     (forall r k, Z.abs (A r k) <= m) ->
     (forall c k, Z.abs (B c k) <= m) ->
     Z.of_nat K * (m * m) <= MC.I32MAX ->
-    (K = 32 * S)%nat -> (0 < nz)%nat ->
-    let row := SCH.warp_row mt ty mi (d_row g j) in
-    let col := SCH.warp_col nt tx ni (d_col t j) in
-    GS.combine Z.add
-      (step A B (ty * (mt * 16))%nat (tx * (nt * 8))%nat mi ni (d_row g j) (d_col t j))
-      nz S nz
-    = sum_k (prod A B row col) K
-    /\ MC.wsum (prod A B row col) 0 K = sum_k (prod A B row col) K.
+    (K = 32 * S)%nat -> (0 < T)%nat -> (S <= KT * T)%nat -> (0 < nz)%nat ->
+    Permutation order (seq 0 nz) ->
+    let brow := (tm * (wms * (ni * 16)) + wm * (ni * 16))%nat in
+    let bcol := (tn * (wns * (nj * 8)) + wn * (nj * 8))%nat in
+    let row := SCH.out_row wms ni tm wm mi g (j / 2) in
+    let col := SCH.out_col wns nj tn wn nj' t (j mod 2) in
+    let A' := fun r k => if (k <? K)%nat then A r k else 0 in
+    let B' := fun c k => if (k <? K)%nat then B c k else 0 in
+    D.combine Z.add (SCH.k_tile_owner T nz) (step A' B' brow bcol mi nj' (d_row g j) (d_col t j)) (KT * T) nz
+      = sum_k (prod A B row col) K
+    /\ wcombine 0 (map (fun w => wpart (SCH.k_tile_owner (32 * T) nz) (prod A B row col) w K) order)
+      = sum_k (prod A B row col) K
+    /\ wpart (SCH.k_tile_owner (32 * T) 1) (prod A B row col) 0 K = sum_k (prod A B row col) K.
 Proof.
-  intros A B m K S nz mt nt ty tx mi ni g t j Hm HA HB Hlic HK Hnz row col.
-  subst row col. split.
-  - rewrite (every_split_factor_gives_the_contraction
-               A B (ty * (mt * 16))%nat (tx * (nt * 8))%nat mi ni
-               (d_row g j) (d_col t j) S nz Hnz).
-    rewrite the_addressed_row_is_the_schedules_row,
-            the_addressed_col_is_the_schedules_col, HK.
-    reflexivity.
-  - apply (bounded_products_accumulate_exactly _ _ (m * m)).
-    + nia.
-    + intros i. unfold prod. rewrite Z.abs_mul.
-      apply Z.mul_le_mono_nonneg; try apply Z.abs_nonneg; [ apply HA | apply HB ].
-    + exact Hlic.
+  intros A B m K S T KT nz order wms wns ni nj tm tn wm wn mi nj' g t j
+         Hm HA HB Hlic HK HT HKT Hnz Hperm brow bcol row col A' B'.
+  pose proof (the_licence_bounds_the_absolute_sum A B m K row col Hm HA HB Hlic) as Hbud.
+  split; [ | split ].
+  - rewrite SCH.the_split_k_sums_to_the_whole_contraction by exact Hnz.
+    replace (KT * T)%nat with (S + (KT * T - S))%nat by lia.
+    rewrite SCH.the_zero_filled_tail_adds_nothing.
+    + fold (sum_k (step A' B' brow bcol mi nj' (d_row g j) (d_col t j)) S).
+      rewrite the_k_loop_is_the_contraction.
+      assert (Er : (brow + 16 * mi + d_row g j)%nat = row)
+        by (unfold brow, row; apply the_written_row_is_the_schedules_row).
+      assert (Ec : (bcol + 8 * nj' + d_col t j)%nat = col)
+        by (unfold bcol, col; apply the_written_col_is_the_schedules_col).
+      rewrite Er, Ec, <- HK. unfold sum_k.
+      apply acc_range_ext_below. intros i Hi. unfold prod, A', B'.
+      replace ((0 + i <? K)%nat) with true by (symmetry; apply Nat.ltb_lt; lia).
+      reflexivity.
+    + intros s Hs. unfold step, mma, sum_k.
+      apply acc_range_zero. intros p Hp. unfold a_frag, A'.
+      replace ((32 * s + (0 + p) <? K)%nat) with false by (symmetry; apply Nat.ltb_ge; lia).
+      ring.
+  - apply (the_owned_split_is_exact_in_int32 _ _ nz); try assumption.
+    intros s _. apply SCH.every_k_step_has_exactly_one_owner. exact Hnz.
+  - rewrite wpart_exact.
+    + destruct (SCH.the_unsplit_launch_stores_the_whole_contraction (32 * T) (prod A B row col) K) as [H _].
+      exact H.
+    + pose proof (part_abs_le_total (SCH.k_tile_owner (32 * T) 1) (prod A B row col) 0 K). lia.
 Qed.
 
 (* ------------------------------------------------------------------ *)
@@ -843,8 +1283,6 @@ Print Assumptions a_frag_injective.
 Print Assumptions b_frag_injective.
 Print Assumptions the_lanes_cover_the_a_fragment.
 Print Assumptions the_lanes_cover_the_b_fragment.
-Print Assumptions the_emitted_a_address_is_its_fragment_element.
-Print Assumptions the_emitted_b_address_is_its_fragment_element.
 Print Assumptions the_k_loop_is_the_contraction.
 Print Assumptions every_split_factor_gives_the_contraction.
 Print Assumptions the_bound_is_one_k_step_wide.
@@ -853,12 +1291,27 @@ Print Assumptions the_measured_overflow_is_two_s_complement.
 Print Assumptions the_signed_minimum_exposes_the_old_licence.
 Print Assumptions acc_range_abs_bound.
 Print Assumptions bounded_products_accumulate_exactly.
-Print Assumptions the_addressed_row_is_the_schedules_row.
-Print Assumptions the_addressed_col_is_the_schedules_col.
 Print Assumptions the_split_k_accumulation_is_exact_in_int32.
 Print Assumptions the_split_k_combine_is_exact_in_int32.
 Print Assumptions each_launch_is_licensed_and_three_of_them_wrap.
 Print Assumptions the_third_launch_wraps_to_the_measured_value.
 Print Assumptions the_combine_needs_a_zeroed_destination.
 Print Assumptions from_zero_the_same_partial_is_exact.
+Print Assumptions lane_bits.
+Print Assumptions xor_shift.
+Print Assumptions xor_bound.
+Print Assumptions xor_cancel.
+Print Assumptions swz_repeats_every_8_rows.
+Print Assumptions the_stage_slots_are_disjoint.
+Print Assumptions the_copy_lands_at_its_swizzled_place.
+Print Assumptions the_ldmatrix_a_fragment_is_the_source_element.
+Print Assumptions the_ldmatrix_b_fragment_is_the_source_element.
+Print Assumptions wclass_is_wpart.
+Print Assumptions wpart_exact.
+Print Assumptions the_owned_split_is_exact_in_int32.
+Print Assumptions the_written_row_is_the_schedules_row.
+Print Assumptions the_written_col_is_the_schedules_col.
+Print Assumptions the_staged_a_register_is_the_mma_fragment.
+Print Assumptions the_staged_b_register_is_the_mma_fragment.
+Print Assumptions the_licence_bounds_the_absolute_sum.
 Print Assumptions the_emitted_int8_gemm_holds_the_source_dot_products.

@@ -1146,6 +1146,33 @@ for i in 0..100 {
   its own 16 products in every mode, a bias of about -7.7e-8 of
   `sum |a| |b|` on same-sign inputs
   ([record](benchmarks/f16_kahan_2026-10-20/README.md)).
+* **int8 forms**, on sm_80 and later (`mma.sync.m16n8k32...s32.s8.s8.s32`,
+  `cp.async`), with three parameters `(A, B: GlobalMemory<I8>, C:
+  GlobalMemory<I32>)`, or six for the scaled form `(A, B: GlobalMemory<I8>,
+  scale_a, scale_b, bias: GlobalMemory<F32>, C: GlobalMemory<F32>)`:
+  - A `[M][K]` and B `[N][K]`, both K-contiguous (`torch._int_mm(A, B.t())`'s
+    operands), C `[M][N]` row-major. M % 16, N % 8 and K % 32 must be 0, and
+    K at most 131,040, where a full-range product still fits int32. Anything
+    else is refused by name.
+  - Every int32 output is the exact sum, at every launch geometry
+    (`proofs/Int8GemmExact.v`, `proofs/Int8GemmSchedule.v`). The scaled form
+    gives `f32(sum) * scale_a[row] * scale_b[col] + bias[col]`, rounded as
+    `cvt.rn`, `mul`, then one `fma.rn`.
+  - The PTX header names the launch: a block of exactly 128 threads (any
+    other block traps), any grid (the header's is one CTA per output tile),
+    and the dynamic shared memory. `gridDim.z = 1` overwrites C. With
+    `gridDim.z > 1`, K is split and the partials are added into C, which the
+    caller zeroes. The scaled form ignores `gridDim.z`.
+  - A and B 16-byte aligned, C 8-byte aligned.
+  - The tile is 128x128, 64x128 or 64x64 (2x2 warps, K tiles of 64 bytes in
+    3-4 swizzled `cp.async` stages), the largest that fits inside the matrix
+    and leaves at least 64 output tiles. `Y_INT8_TILE=cta_m,cta_n,cta_k,
+    warps_m,warps_n,stages,ctas_per_sm,group_m` pins another, and a tile the
+    kernel cannot stage is refused.
+  - Against cuBLASLt (`torch._int_mm`) on an RTX 4070 Ti SUPER: 1.03x at
+    4096³, 0.91-1.77x over 37 shapes, with the losses listed in
+    [known issues](known_issues.md)
+    ([record](benchmarks/int8_gemm_2026-11-06/README.md)).
 * **FP8 (e4m3) forms**, on sm_89 and later, with five parameters
   `(A, B, scale_a: F32, scale_b: F32, C: GlobalMemory<F32>)`:
   - A, B: `GlobalMemory<F32>`, A `M`x`K` and B `K`x`N`: each CTA quantises its

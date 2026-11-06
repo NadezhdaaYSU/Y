@@ -9,7 +9,8 @@
 //
 // THAT SENTENCE IS ABOUT THE ACCUMULATION AND WAS READ AS A LAUNCH CONTRACT.
 // This shape STORES its dequantised result (`st.global.f32`) where the plain
-// `int8_gemm` accumulates it (`red.global.add.s32`), and a store combines
+// `int8_gemm` accumulated it (`red.global.add.s32`; since 2026-11-06 the plain
+// kernel stores too unless K is split over `gridDim.z`), and a store combines
 // nothing - so with `gridDim.z > 1` every z-CTA wrote its own residue class's
 // partial to the same address and the last writer won. Measured at 2048 of
 // 2048 elements wrong, with a DIFFERENT wrong answer between launches. The

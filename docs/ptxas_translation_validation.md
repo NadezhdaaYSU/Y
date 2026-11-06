@@ -1613,12 +1613,11 @@ other `loopval` refusal stands.
 48 kernels with PTX control flow; 0 validated
    answered by: loopval 13, nestval 35
 
- 23  PTX loop cross-thread effect: cp.async.cg.shared.global
+ 25  PTX loop cross-thread effect: cp.async.cg.shared.global
   5  UNMODELLED PTX nested lexical scope: the register model does not preserve shadowed declarations
   4  PTX loop cross-thread effect: st.shared.b32
   3  SASS branch form this CFG cannot place: '@P BRA P1, `(.L)'
   2  PTX loop body has more than one branch
-  2  PTX loop cross-thread effect: mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32
   2  PTX module holds more than one entry point
   1  SASS loop cross-thread/reconvergence effect: BSSY
   1  SASS back edge is unconditional
@@ -1636,6 +1635,8 @@ carries none of it, so the loop validators refuse it by name instead of proving
 a relation that ignores it (the 2026-10-03 source audit,
 `docs/verification/deep_audit_2026-10-03.md`). That is all 23 FP16 tensor-core
 GEMMs (a `cp.async` in the K loop), the four `gemm_fp8` and both int8 GEMMs.
+(The two int8 GEMMs were refused on their `mma.sync` until 2026-11-06, when
+they began staging K tiles with `cp.async` and moved to that row: 23 -> 25.)
 Behind it the GEMMs also have three loops, so the recorded "21–27 opcodes each"
 understates them twice over: an opcode gap, a cross-thread refusal, and a
 multi-loop shape.
@@ -1729,7 +1730,10 @@ Two corrections came out of running that cross:
   > `naive_gemm_f32` **2 → 0**. Two more move without changing size, which is
   > the sharper form of the same point: `bn254_fr_mul` **1 → 1**
   > (`CALL.REL.NOINC` out, `CS2R` in) — **the count is not the thing that
-  > moves** — and `int8_gemm_scaled` **3 → 4** (`CS2R` in). These two read
+  > moves** — and `int8_gemm_scaled` **13 → 13** (`LDGSTS.E.BYPASS.LTC128B.128`
+  > at `-O3` is `LDGSTS.E.BYPASS.128` at `-O1`). That figure read 3 → 4
+  > (`CS2R` in) until 2026-11-06, when the kernel began staging K tiles in
+  > shared memory and its vocabulary grew. These two read
   > `2 → 2` and `4 → 4` until 2026-09-19, when `SHF.L.U32` was modelled: it had
   > been one of each kernel's `-O3` blockers, and `int8_gemm_scaled`'s `-O1`
   > build does not contain it.
@@ -1798,9 +1802,14 @@ structural predicates at every level a lift would produce.
 33 multi-back-edge kernels, 115 PTX loop levels
  25  SEQUENTIAL depth 1
   5  MIXED depth 2
-  3  NESTED depth 3
+  2  NESTED depth 2
+  1  NESTED depth 3
   0  left with no named structural refusal
 ```
+
+(The two int8 GEMMs were `NESTED depth 3` - output tiles strided in x, then
+in y, then K - until 2026-11-06; the staged kernel strides one linear tile id
+around its K loop, `NESTED depth 2`.)
 
 **Zero.** Every one of the 33 is still refused by a NAMED check `loopcfg` never
 reached. (This block read 38 kernels and 125 levels, 30 of them `SEQUENTIAL`,
