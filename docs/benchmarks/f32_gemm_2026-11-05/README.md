@@ -1,7 +1,9 @@
 # FP32 GEMM on CUDA cores against cuBLAS (2026-11-05)
 
 `@tile(M, N, K) kernel g(A, B, C: GlobalMemory<F32>)`, emitted by
-`src/ptx_emitter/f32_simt_gemm.rs`. The goal was to **match** cuBLAS, so that a
+`src/ptx_emitter/f32_simt_gemm.rs`, and since 2026-11-06 the same with a
+workspace `W: GlobalMemory<U64>`, which splits K in order
+([below](#k-split-in-order-2026-11-06)). The goal was to **match** cuBLAS, so that a
 Y program does not give up speed for Y's checks; beating it was not the aim.
 
 - NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs), driver 615.78.08
@@ -263,6 +265,118 @@ same bits on every shape:
 The last two rows' SASS is identical before and after. Their differences
 are the card's run-to-run spread (it sits at its power cap).
 
+## K split in order (2026-11-06)
+
+The losses at 768^3 and similar shapes were idle SMs, not slow tiles. The
+three-parameter kernel alone, mid tiles at K = 768 (`streamk_why.txt`, and
+an earlier run of the same in brackets):
+
+| mid tiles | per SM | Y time |
+| :--- | :--- | ---: |
+| 66 | one | 51.1 us (38.1) |
+| 72 (768^3) | one, six SMs two | 88.7 us (67.7) |
+| 132 | two | 90.8 us (67.2) |
+| 198 | three only fit two at a time | 145.4 us (119.4) |
+
+So at 768^3, 60 SMs finished and waited while six ran a second tile. A
+second mid CTA on an SM adds only 13-14% throughput. cuBLAS splits K there,
+which changes the summation order.
+
+**This splits K in order.** A fourth parameter, the workspace
+`W: GlobalMemory<U64>` (one word per tile), lets the kernel run P CTAs,
+the number that fit at once. Each CTA:
+1. runs whole tiles grid-strided, so each wave is P consecutive tiles, as
+   in the three-parameter kernel;
+2. takes an equal share of the (tile, K tile) units of the last tiles, one
+   to two waves' worth.
+
+A tile cut between two CTAs is continued, not summed. The first stores its
+exact f32 accumulators in C and writes in `W[tile]` how far it got. The
+next waits for that, loads them, and carries the same `fma` chain on. So
+every element is still the one chain over k = 0..K-1, the same bits as the
+three-parameter form.
+
+- **Order of a CTA's work.** The head of its last tile first (it waits on
+  nothing, and the next CTA needs it), then whole tiles, then the
+  continuation of its first tile. A CTA waits only on lower-numbered CTAs,
+  each of which has published before it waits.
+- **`W` needs no clearing.** Each word is tagged with the launch's
+  `%gridid`, so a word left by an earlier launch, or garbage, never matches.
+  The tests fill it with garbage and never clear it.
+- **A wait over 30 s traps** instead of hanging (a grid larger than the
+  CTAs that fit at once whose CTAs did not start in index order, or two
+  launches sharing one `W`).
+
+Before building it, a CUDA C++ probe of the same kernel showed the gain
+(`streamk_probe.py`, `streamk_probe.txt`): 768^3 0.815x cuBLAS one tile
+per CTA, 1.214x split on 66 CTAs, bit for bit. Split on 132 CTAs it was
+0.762x: with less than a tile per CTA, a tile is cut in three and the
+pieces wait on each other.
+
+**The first kernel split every tile's K evenly and lost at 5120^3**: 0.896x
+cuBLAS, against 1.017x for one tile per CTA (`streamk_even_split.txt`). The
+tiles in flight were 12 apart, so they shared no rows of A or columns of B
+in L2. Running whole tiles in waves first and splitting only the last ones
+fixed it: 1.035x in the same harness.
+
+**The plan** (`f32_gemm_streamk_plan`) is a model with this card's SM
+rates (a second mid CTA +14%, a second or third small CTA +8%): one tile
+per CTA in waves, the remainder tiles at their measured cost, against
+stream-K on P = SMs x j CTAs. It takes stream-K where the model says at
+least 4% faster, and only where each CTA's share is at least a tile. Only
+for N % 4 == 0: with N % 4 != 0 the plain path's remainder tiles are what
+let B's rows take their own widths. Elsewhere `W` is unused, and the kernel
+is the three-parameter one: identical SASS (a test checks it), and 0.01%
+apart in time (`streamk_order_ab.txt`).
+
+### Result
+
+`streamk_final.txt` (`streamk_bench.py`), two runs. Run 1 timed the
+kernels in a fixed order, which at the card's power cap handicaps the last
+one, here the workspace form: with W unused and identical SASS it measured
+2.6-4.8% slower at 4096^3, and 0.01% apart in a shuffled order
+(`streamk_order_ab.txt`). Run 2 shuffles the order every round. Every
+output is bit-exact against the in-order oracle on four grids (the plan's,
+half of it, 1 and 3 CTAs), with `W` full of garbage, and again after the
+timing's hundreds of launches on one `W`.
+
+| shape | tile, grid | without W (run 1, 2) | with W (run 1, 2) | time with / without (run 2) |
+| :--- | :--- | ---: | ---: | ---: |
+| 768^3 | mid, 66 | 0.850, 0.857 | 1.239, 1.247 | 0.687 |
+| 896^3 | mid, 66 | 0.994, 0.993 | 1.089, 1.089 | 0.912 |
+| 1152^3 | mid, 132 | 1.009, 0.993 | 1.211, 1.194 | 0.832 |
+| 1280^3 | mid, 132 | 0.930, 0.944 | 1.310, 1.274 | 0.741 |
+| 1536^3 | mid, 132 | 1.051, 1.028 | 1.207, 1.203 | 0.855 |
+| 1500^3 (ragged, K tail) | mid, 132 | 0.956, 0.964 | 1.098, 1.119 | 0.862 |
+| 2304^3 | large, 66 | 0.924, 0.919 | 1.073, 1.072 | 0.858 |
+| 2560^3 | mid, 132 | 0.974, 0.980 | 1.039, 1.049 | 0.934 |
+| 3072^3 | large, 66 | 0.958, 0.967 | 1.061, 1.068 | 0.905 |
+| 3000^3 (ragged, K tail) | large, 66 | 0.956, 0.966 | 0.992, 1.000 | 0.966 |
+| 5120^3 | large, 66 | 0.998, 1.070 | 1.036, 1.144 | 0.935 |
+| 640^3 | small, 66 | 0.945, 0.946 | 1.038, 1.045 | 0.906 |
+| 512 x 768 x 768 | small, 66 | 0.806, 0.805 | 0.940, 0.920 | 0.875 |
+| 1024 x 1028 x 1024 | mid, 132 | 0.987, 0.959 | 1.110, 1.113 | 0.862 |
+| 2048 x 768 x 3072 | mid, 132 | 0.719, 0.725 | 0.973, 0.976 | 0.743 |
+| 512 x 3072 x 768 | mid, 132 | 1.050, 1.072 | 1.114, 1.116 | 0.961 |
+| 1024^3 | W unused | 1.258, 1.242 | 1.264, 1.243 | 0.999 |
+| 4096^3 | W unused | 0.987, 1.075 | 0.942, 1.077 | 0.998 |
+| 1024 x 1024 x 4096 | W unused | 0.961, 0.978 | 0.963, 0.982 | 0.996 |
+| 256 x 4096 x 4096 | W unused | 0.941, 0.948 | 0.941, 0.951 | 0.997 |
+
+cuBLAS itself moved 6% between the runs at 4096^3 and 5120^3 (the power
+cap), so the last column, from one shuffled run, is the steadier measure.
+
+Still behind cuBLAS with `W`: 512 x 768 x 768 (0.92-0.94x), 2048 x 768 x
+3072 (0.97-0.98x, from 0.72x), and the K-heavy shapes whose tiles already
+fill the SMs (0.94-0.98x), where cuBLAS's split adds parallelism that an
+in-order chain cannot. N % 4 != 0 is unchanged.
+
+**Grids larger than the CTAs that fit at once** finish with the same bits
+on this card (`streamk_oversubscribed.txt`: 2P + 5, 4P and 1000 CTAs; 1000
+cuts each of 768^3's tiles into about 14 pieces). That rests on CTAs
+starting in index order, which CUDA does not promise; the 30 s trap is the
+fail-safe if they do not.
+
 ## Checks
 
 `tests/f32_simt_gemm.rs`:
@@ -281,7 +395,19 @@ are the card's run-to-run spread (it sits at its power cap).
 - a ragged K keeping a -0.0 sum;
 - the block-size trap, run in a child process;
 - compute-sanitizer memcheck and racecheck clean on 17 shapes, 13 of them
-  ragged.
+  ragged;
+- the workspace form (2026-11-06):
+  - the plan's choice on 11 shapes, and ptxas with no spills;
+  - where `W` is unused, SASS identical to the three-parameter kernel;
+  - bit-exact on 16 shapes (each tile; ragged M and N; a K tail; one, two
+    and many K tiles), each on 7 grids: the plan's twice (the second launch
+    finds the first's words in `W`), 1, 2 and 3 CTAs, the plan's + 5, and
+    more CTAs than tiles. `W` holds garbage and is never cleared;
+  - memcheck and racecheck clean on 8 of them, `W` exactly as large as the
+    header says;
+  - a grid of 8.6e9 CTAs (65536 x 65535 x 2, legal in CUDA) traps at once;
+    with the check removed it ran for a minute and returned;
+  - the host backend refuses it, and a `W` of U32 is refused.
 
 The emitter was mutated 52 times (11 against the remainder sets, 11
 against the per-row B widths), and 50 of the mutants were killed. Most
@@ -297,3 +423,18 @@ Each test gap a survivor exposed was closed by adding a shape:
 - leftover rows that exactly fill their strips;
 - several B widths with K past the prologue;
 - an edge with no K tail.
+
+The stream-K code was mutated 13 times (`streamk_mutate.py`,
+`streamk_mutants.txt`), and all 13 were killed:
+- wrong bits: continuation loads from K tile 0, a continuation starting
+  from zero, the K tail run as a full tile, no launch tag, no barrier after
+  the wait, whole tiles not grid-strided;
+- the 30 s trap, each in a launch that could never finish: a wait no
+  producer satisfies, split tiles not offset past the whole waves,
+  publishing where a segment started instead of where it stopped;
+- the plan test: a threshold of 0.5 instead of 1.04;
+- the sanitizer: loads past a segment's end in the loop and in the
+  prologue, and a loop K limit that forgot where its segment started. That
+  last one survived the first run (every sanitized shape had at most 3 K
+  tiles, so the prologue loaded the partial tile) and was killed once two
+  shapes with a K tail and many K tiles were added.

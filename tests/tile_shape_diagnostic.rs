@@ -107,6 +107,11 @@ const SHAPES: &[(&str, &str, &str)] = &[
         "64, 32, 128",
         "A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>",
     ),
+    (
+        "FP32 GEMM, K split in order",
+        "64, 32, 128",
+        "A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>, W: GlobalMemory<U64>",
+    ),
 ];
 
 #[test]
@@ -140,6 +145,7 @@ fn the_rejection_message_names_every_accepted_shape() {
         "Bias",
         "scaled epilogue",
         "FP32 GEMM (CUDA cores)",
+        "FP32 GEMM, K split in order",
     ] {
         assert!(
             text.contains(needle),

@@ -1,0 +1,48 @@
+# Run 1 orders each round cuBLAS, Y3 (three parameters), Y4 (with W): at the card's power cap that fixed
+# order handicaps the last kernel (streamk_order_ab.txt), here Y4. Run 2 shuffles the order every round.
+# Y3, Y4 are speed relative to cuBLAS (TF32 off); 'bits' is Y4 against the in-order fmaf oracle on each grid, W full of garbage.
+# run 1: skrun.py
+768x768x768 mid   stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     47.6 us  Y3 0.850x  Y4 1.239x  (Y4/Y3 time 0.686)
+896x896x896 mid   stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     64.6 us  Y3 0.994x  Y4 1.089x  (Y4/Y3 time 0.913)
+1152x1152x1152 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    133.7 us  Y3 1.009x  Y4 1.211x  (Y4/Y3 time 0.833)
+1280x1280x1280 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    202.6 us  Y3 0.930x  Y4 1.310x  (Y4/Y3 time 0.710)
+1536x1536x1536 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    309.8 us  Y3 1.051x  Y4 1.207x  (Y4/Y3 time 0.871)
+1500x1500x1500 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    301.1 us  Y3 0.956x  Y4 1.098x  (Y4/Y3 time 0.871)
+2304x2304x2304 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS    833.3 us  Y3 0.924x  Y4 1.073x  (Y4/Y3 time 0.861)
+2560x2560x2560 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS   1228.8 us  Y3 0.974x  Y4 1.039x  (Y4/Y3 time 0.937)
+3072x3072x3072 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   1945.6 us  Y3 0.958x  Y4 1.061x  (Y4/Y3 time 0.903)
+3000x3000x3000 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   1859.2 us  Y3 0.956x  Y4 0.992x  (Y4/Y3 time 0.963)
+5120x5120x5120 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   9096.1 us  Y3 0.998x  Y4 1.036x  (Y4/Y3 time 0.963)
+640x640x640 small stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     33.6 us  Y3 0.945x  Y4 1.038x  (Y4/Y3 time 0.911)
+512x768x768 small stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     33.0 us  Y3 0.806x  Y4 0.940x  (Y4/Y3 time 0.858)
+1024x1028x1024 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    105.4 us  Y3 0.987x  Y4 1.110x  (Y4/Y3 time 0.889)
+2048x768x3072 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    331.4 us  Y3 0.719x  Y4 0.973x  (Y4/Y3 time 0.738)
+512x3072x768 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    100.1 us  Y3 1.050x  Y4 1.114x  (Y4/Y3 time 0.942)
+1024x1024x1024 mid   plain (W unused)       bits {1: True, 3: True, 64: True, 128: True} after-timing True | cuBLAS     99.5 us  Y3 1.258x  Y4 1.264x  (Y4/Y3 time 0.995)
+4096x4096x4096 large plain (W unused)       bits {1: True, 3: True, 256: True, 512: True} after-timing True | cuBLAS   4367.0 us  Y3 0.987x  Y4 0.942x  (Y4/Y3 time 1.048)
+1024x1024x4096 mid   plain (W unused)       bits {1: True, 3: True, 64: True, 128: True} after-timing True | cuBLAS    293.3 us  Y3 0.961x  Y4 0.963x  (Y4/Y3 time 0.998)
+256x4096x4096 mid   plain (W unused)       bits {1: True, 3: True, 64: True, 128: True} after-timing True | cuBLAS    304.2 us  Y3 0.941x  Y4 0.941x  (Y4/Y3 time 1.000)
+2130 MHz, 206.40 W, 79
+
+# run 2 (order shuffled every round): skrun.py
+768x768x768 mid   stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     47.6 us  Y3 0.857x  Y4 1.247x  (Y4/Y3 time 0.687)
+896x896x896 mid   stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     64.2 us  Y3 0.993x  Y4 1.089x  (Y4/Y3 time 0.912)
+1152x1152x1152 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    131.0 us  Y3 0.993x  Y4 1.194x  (Y4/Y3 time 0.832)
+1280x1280x1280 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    189.8 us  Y3 0.944x  Y4 1.274x  (Y4/Y3 time 0.741)
+1536x1536x1536 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    304.5 us  Y3 1.028x  Y4 1.203x  (Y4/Y3 time 0.855)
+1500x1500x1500 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    303.5 us  Y3 0.964x  Y4 1.119x  (Y4/Y3 time 0.862)
+2304x2304x2304 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS    822.7 us  Y3 0.919x  Y4 1.072x  (Y4/Y3 time 0.858)
+2560x2560x2560 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS   1219.9 us  Y3 0.980x  Y4 1.049x  (Y4/Y3 time 0.934)
+3072x3072x3072 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   1936.4 us  Y3 0.967x  Y4 1.068x  (Y4/Y3 time 0.905)
+3000x3000x3000 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   1851.7 us  Y3 0.966x  Y4 1.000x  (Y4/Y3 time 0.966)
+5120x5120x5120 large stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS   9656.7 us  Y3 1.070x  Y4 1.144x  (Y4/Y3 time 0.935)
+640x640x640 small stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     33.3 us  Y3 0.946x  Y4 1.045x  (Y4/Y3 time 0.906)
+512x768x768 small stream-K grid 66       bits {1: True, 3: True, 33: True, 66: True} after-timing True | cuBLAS     32.6 us  Y3 0.805x  Y4 0.920x  (Y4/Y3 time 0.875)
+1024x1028x1024 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    104.1 us  Y3 0.959x  Y4 1.113x  (Y4/Y3 time 0.862)
+2048x768x3072 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    327.7 us  Y3 0.725x  Y4 0.976x  (Y4/Y3 time 0.743)
+512x3072x768 mid   stream-K grid 132      bits {1: True, 3: True, 66: True, 132: True} after-timing True | cuBLAS    100.5 us  Y3 1.072x  Y4 1.116x  (Y4/Y3 time 0.961)
+1024x1024x1024 mid   plain (W unused)       bits {1: True, 3: True, 64: True, 128: True} after-timing True | cuBLAS     96.8 us  Y3 1.242x  Y4 1.243x  (Y4/Y3 time 0.999)
+4096x4096x4096 large plain (W unused)       bits {1: True, 3: True, 256: True, 512: True} after-timing True | cuBLAS   4643.7 us  Y3 1.075x  Y4 1.077x  (Y4/Y3 time 0.998)
+1024x1024x4096 mid   plain (W unused)       bits {1: True, 3: True, 64: True, 128: True} after-timing True | cuBLAS    295.9 us  Y3 0.978x  Y4 0.982x  (Y4/Y3 time 0.996)
+256x4096x4096 mid   plain (W unused)       bits {1: True, 3: True, 64: True, 128: True} after-timing True | cuBLAS    301.0 us  Y3 0.948x  Y4 0.951x  (Y4/Y3 time 0.997)
+2235 MHz, 255.38 W, 71

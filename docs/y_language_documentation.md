@@ -1207,6 +1207,31 @@ for i in 0..100 {
   GPT-2's 1024 x 50257 x 768: 0.85x); one row (1 x 50257 x 768), 0.98x
   ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The host backend
   refuses the kernel: it has no body there.
+* **FP32 form with a workspace (since 2026-11-06)**, `(A, B, C:
+  GlobalMemory<F32>, W: GlobalMemory<U64>)`: the same GEMM, which **splits K
+  in order** where one tile per CTA would leave SMs idle
+  (`f32_gemm_streamk_plan`). The grid is the CTAs that fit at once (the
+  header states it). Each CTA runs whole tiles grid-strided, then an equal
+  share of the (tile, K tile) units of the last tiles, one to two waves'
+  worth. A tile cut between two CTAs is continued, not summed: the first
+  stores its exact f32 accumulators in C and writes in `W[tile]` how far it
+  got; the next waits for that, loads them and carries the same `fma` chain
+  on. So every element is still the one chain over k = 0..K-1, the same
+  bits as the three-parameter form, on any grid of fewer than 2^32 CTAs (a
+  larger one traps). A CTA runs the head of its
+  last tile first and the continuation of its first tile last, so it waits
+  only on lower-numbered CTAs, each of which has published first. `W`
+  holds one word per tile (the header states how many) and needs no
+  clearing: each word is tagged with the launch's `%gridid`. One launch at
+  a time per `W`. A grid larger than the CTAs that fit at once relies on
+  CTAs starting in index order, and a wait over 30 s traps. Where the plan
+  keeps one tile per CTA, and for N % 4 != 0, `W` is unused and the kernel
+  is the three-parameter one (the same SASS). Against cuBLAS on an RTX 4070
+  Ti SUPER, three-parameter form then workspace form: 768^3 0.85-0.86x and
+  1.24-1.25x, 1280^3 0.93-0.94x and 1.27-1.31x, 1536^3 1.03-1.05x and
+  1.20-1.21x, 2304^3 0.92x and 1.07x, 3072^3 0.96-0.97x and 1.06-1.07x,
+  2048 x 768 x 3072 0.72-0.73x and 0.97-0.98x
+  ([record](benchmarks/f32_gemm_2026-11-05/README.md#k-split-in-order-2026-11-06)).
 * **Split K**, with four parameters `(A, B: GlobalMemory<F16>, C, Partial:
   GlobalMemory<F32>)` and a kernel name ending in `_splitk<S>`, S from 1 to
   64: K is cut into S equal parts, each a multiple of 8, and N must be a

@@ -1,0 +1,5 @@
+# ytime.py (sgemm/, this card's profile): the three-parameter kernel alone, mid tiles at K = 768
+704x768x768 mid   grid 66x1:     51.1 us
+768x768x768 mid   grid 72x1:     88.7 us
+1408x768x768 mid   grid 132x1:     90.8 us
+2112x768x768 mid   grid 198x1:    145.4 us

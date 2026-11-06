@@ -14,6 +14,14 @@
 //! binary, re-run with `Y_F32_GEMM_CHILD_BLOCK`), since a trap leaves the
 //! device unusable for the rest of its process.
 //!
+//! The same GEMM with a workspace, `(A, B, C: GlobalMemory<F32>, W:
+//! GlobalMemory<U64>)`, splits K in order where one tile per CTA would leave
+//! SMs idle (`f32_gemm_streamk_plan`): a tile cut between two CTAs is
+//! continued from the exact accumulators the first stored in C, so its
+//! claim is the same chain, checked the same way - on grids from one CTA to
+//! more CTAs than units (a tile cut in many pieces), on a W of garbage that
+//! is never cleared between launches.
+//!
 //! Speed is not tested here (it is measured, not asserted); the module doc
 //! of `f32_simt_gemm.rs` has the numbers.
 
@@ -53,8 +61,12 @@ fn source(name: &str, m: u32, n: u32, k: u32) -> String {
 
 /// Compile in `dir` (pinned profile: SM 8.0, 66 SMs). Ok(PTX) or Err(log).
 fn compile(dir: &Path, name: &str, m: u32, n: u32, k: u32, backend: &str) -> Result<String, String> {
+    compile_text(dir, name, &source(name, m, n, k), backend)
+}
+
+fn compile_text(dir: &Path, name: &str, text: &str, backend: &str) -> Result<String, String> {
     let src = dir.join(format!("{name}.ysu"));
-    std::fs::write(&src, source(name, m, n, k)).unwrap();
+    std::fs::write(&src, text).unwrap();
     let out_path = dir.join(format!("{name}.out"));
     let out = Command::new(env!("CARGO_BIN_EXE_Y"))
         .arg(&src)
@@ -192,6 +204,12 @@ fn what_cannot_be_addressed_is_refused_and_so_is_the_host_backend() {
     // The source has no body; on the host it would be an empty function.
     let log = compile(&dir, "host", 128, 128, 64, "--emit-llvm").expect_err("the host backend compiled an empty FP32 GEMM");
     assert!(log.contains("is an `@tile` FP32 GEMM, whose body only the PTX backend"), "{log}");
+    let log = compile_text(&dir, "hostw", &source_w("hostw", 128, 128, 64), "--emit-llvm").expect_err("the host backend compiled an empty FP32 GEMM with W");
+    assert!(log.contains("is an `@tile` FP32 GEMM, whose body only the PTX backend"), "{log}");
+    // The workspace is U64 words; any other element type is not the shape.
+    let wrong = source_w("wrongw", 128, 128, 64).replace("W: GlobalMemory<U64>", "W: GlobalMemory<U32>");
+    let log = compile_text(&dir, "wrongw", &wrong, "--emit-ptx").expect_err("a U32 workspace was accepted");
+    assert!(log.contains("FP32 GEMM, K split in order"), "{log}");
     // The signature is accepted by the type checker (the list names it) and
     // a near miss still gets the list.
     let src = dir.join("near.ysu");
@@ -456,21 +474,24 @@ fn compute_sanitizer_finds_no_invalid_access_and_no_race() {
         eprintln!("SKIP: no compute-sanitizer - the kernels were not checked for invalid accesses or races.");
         return;
     };
-    // memcheck: every read inside A and B, every write inside C. racecheck:
-    // no shared-memory hazard, including a stage reused by the next tile.
+    // memcheck: every read inside A, B and W, every write inside C and W.
+    // racecheck: no shared-memory hazard, including a stage reused by the
+    // next tile or the next stream-K segment.
     for (check, summary) in [("memcheck", "ERROR SUMMARY: 0 errors"), ("racecheck", "RACECHECK SUMMARY: 0 hazards displayed")] {
-        let out = Command::new(tool)
-            .args(["--tool", check, "--print-limit", "0"])
-            .arg(std::env::current_exe().unwrap())
-            .args(["child_sanitized_runs", "--exact", "--nocapture", "--test-threads=1"])
-            .env("Y_F32_GEMM_SANITIZE", "1")
-            .output()
-            .unwrap();
-        let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
-        // Every shape ran (a child that died early prints a clean summary
-        // for the launches it made).
-        assert_eq!(text.matches("SANITIZED_RUN").count(), 17, "{check}: not every shape ran:\n{text}");
-        assert!(out.status.success() && text.contains(summary), "{check} found something:\n{text}");
+        for (child, mark, runs) in [("child_sanitized_runs", "SANITIZED_RUN", 17), ("child_sanitized_streamk_runs", "SANITIZED_SK_RUN", STREAMK_SANITIZED.len())] {
+            let out = Command::new(tool)
+                .args(["--tool", check, "--print-limit", "0"])
+                .arg(std::env::current_exe().unwrap())
+                .args([child, "--exact", "--nocapture", "--test-threads=1"])
+                .env("Y_F32_GEMM_SANITIZE", "1")
+                .output()
+                .unwrap();
+            let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+            // Every shape ran (a child that died early prints a clean summary
+            // for the launches it made).
+            assert_eq!(text.matches(mark).count(), runs, "{check} {child}: not every shape ran:\n{text}");
+            assert!(out.status.success() && text.contains(summary), "{check} {child} found something:\n{text}");
+        }
     }
 }
 
@@ -504,4 +525,312 @@ fn a_ragged_k_keeps_the_sign_of_a_zero_sum() {
         assert_eq!(positive, 0, "{m}x{n}x{k} ({}): {positive} of {} elements are not -0.0", h.tile, m * n);
     }
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+// ---------------------------------------------------------------------------
+// The workspace form: K split in order where the plan takes it.
+// ---------------------------------------------------------------------------
+
+fn source_w(name: &str, m: u32, n: u32, k: u32) -> String {
+    format!("@tile({m}, {n}, {k})\nkernel {name}(A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>, W: GlobalMemory<U64>) {{\n}}\n\nfn main() {{\n}}\n")
+}
+
+/// A scratch directory whose profile has `sms` SMs and 100 KB of shared
+/// memory per SM. The pinned profile states no shared memory, and the
+/// compiler's default of 48 KB holds one mid CTA where the card holds two,
+/// which is a different plan.
+fn profile_dir(tag: &str, sms: u32) -> std::path::PathBuf {
+    let dir = pinned::pinned_scratch(tag, pinned::SM_PINNED);
+    let text = pinned::profile_text(pinned::SM_PINNED).replace("SM_COUNT=66", &format!("SM_COUNT={sms}")) + "MAX_SMEM_PER_SM_BYTES=102400\n";
+    std::fs::write(dir.join(".ysu_hw_profile"), text).unwrap();
+    dir
+}
+
+/// What a stream-K kernel's header states, or None for one tile per CTA.
+struct SkHeader {
+    tile: String,
+    block: u32,
+    p: u32,
+    tiles: u32,
+    w_words: usize,
+    smem: u32,
+}
+
+fn sk_header(ptx: &str) -> Option<SkHeader> {
+    let line = |pat: &str| ptx.lines().find(|l| l.contains(pat)).unwrap_or_else(|| panic!("no `{}` in the PTX", pat)).to_string();
+    let sk = ptx.lines().find(|l| l.contains("// Stream-K, in order: "))?;
+    let tiles: u32 = sk.split("in order: ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+    let h = line("[Y F32 SIMT GEMM]");
+    let tile = h.split("tile `").nth(1).unwrap().split('`').next().unwrap().to_string();
+    let launch = line("Launch: block (");
+    let block: u32 = launch.split("block (").nth(1).unwrap().split(',').next().unwrap().parse().unwrap();
+    let p: u32 = launch.split("Grid (").nth(1).unwrap().split(',').next().unwrap().parse().unwrap();
+    let w_words: usize = line("Workspace W: ").split("Workspace W: ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+    let smem: u32 = line("Dynamic shared memory required:").split("required: ").nth(1).unwrap().split(' ').next().unwrap().parse().unwrap();
+    Some(SkHeader { tile, block, p, tiles, w_words, smem })
+}
+
+/// The plan on this machine's numbers (66 SMs, 100 KB of shared memory an
+/// SM): stream-K where one tile per CTA leaves SMs idle, on the CTAs that
+/// fit at once; one tile per CTA elsewhere, as the very kernel the
+/// three-parameter form compiles to (its SASS, where cuobjdump is found).
+#[test]
+fn the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_kernel() {
+    let dir = profile_dir("f32_gemm_sk_plan", 66);
+    let cases: [((u32, u32, u32), Option<(&str, u32)>); 11] = [
+        // 72 mid tiles: one tile per CTA runs six SMs at two (0.82x cuBLAS
+        // against 1.21x split).
+        ((768, 768, 768), Some(("mid", 66))),
+        // 288 tiles: two whole waves on 132 CTAs, the rest split.
+        ((1536, 1536, 1536), Some(("mid", 132))),
+        ((1500, 1500, 1500), Some(("mid", 132))),
+        ((3072, 3072, 3072), Some(("large", 66))),
+        ((512, 768, 768), Some(("small", 66))),
+        ((1024, 1028, 1024), Some(("mid", 132))),
+        // 128 tiles in 132 slots; 7.8 waves of the large tile (3%, under
+        // the 4% bar); N % 4 != 0, where the plain path's remainder tiles
+        // let B's rows take their own widths; 64 tiles for 66 SMs.
+        ((1024, 1024, 1024), None),
+        ((4096, 4096, 4096), None),
+        ((1024, 1024, 4096), None),
+        ((1024, 1026, 1024), None),
+        ((512, 512, 512), None),
+    ];
+    let ptxas = ptxas::ptxas();
+    let cuobjdump = ptxas.as_ref().map(|p| p.with_file_name("cuobjdump")).filter(|c| c.exists());
+    let sass = |ptx: &str, name: &str| -> Option<Vec<String>> {
+        let (ptxas, cuobjdump) = (ptxas.as_ref()?, cuobjdump.as_ref()?);
+        let (pp, cb) = (dir.join(format!("{name}.ptx")), dir.join(format!("{name}.cubin")));
+        std::fs::write(&pp, ptx).unwrap();
+        let out = Command::new(ptxas).args(["-arch=sm_89", "-v", "-o"]).arg(&cb).arg(&pp).output().unwrap();
+        let log = String::from_utf8_lossy(&out.stderr).to_string();
+        assert!(out.status.success(), "{name}: ptxas refused it:\n{log}");
+        assert!(log.contains("0 bytes spill stores, 0 bytes spill loads"), "{name} spills:\n{log}");
+        let out = Command::new(cuobjdump).arg("-sass").arg(&cb).output().unwrap();
+        // Instructions only, without their encodings' line numbers.
+        Some(String::from_utf8_lossy(&out.stdout).lines().filter(|l| l.trim_start().starts_with("/*") && l.contains(';')).map(|l| l.split("/* 0x").next().unwrap().trim().to_string()).collect())
+    };
+    for ((m, n, k), want) in cases {
+        let ptx = compile_text(&dir, "g", &source_w("g", m, n, k), "--emit-ptx").unwrap_or_else(|log| panic!("{m}x{n}x{k}:\n{log}"));
+        match (sk_header(&ptx), want) {
+            (Some(h), Some((tile, p))) => {
+                assert_eq!((h.tile.as_str(), h.p), (tile, p), "{m}x{n}x{k}");
+                assert_eq!(h.w_words, h.tiles as usize, "{m}x{n}x{k}: one W word a tile");
+                // The handoff's instructions, and still nothing but fma on
+                // the values.
+                for needle in ["ld.acquire.gpu.global.u64", "st.release.gpu.global.u64", "%gridid", "ld.global.cg.v4.f32"] {
+                    assert!(ptx.contains(needle), "{m}x{n}x{k}: no `{needle}`");
+                }
+                assert!(!ptx.contains("add.f32") && !ptx.contains("mul.f32") && !ptx.contains("add.rn.f32"), "{m}x{n}x{k}");
+                let _ = sass(&ptx, "sk");
+            }
+            (None, None) => {
+                assert!(ptx.contains("// Workspace W: not used at this shape"), "{m}x{n}x{k}");
+                let plain = compile(&dir, "g", m, n, k, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
+                if let (Some(a), Some(b)) = (sass(&ptx, "w"), sass(&plain, "p")) {
+                    assert!(a == b && !a.is_empty(), "{m}x{n}x{k}: with W unused the kernel is not the three-parameter one");
+                }
+            }
+            (got, _) => panic!("{m}x{n}x{k}: wanted {want:?}, got {}", got.map_or("one tile per CTA".to_string(), |h| format!("{} on {}", h.tile, h.p))),
+        }
+    }
+    if ptxas.is_none() || cuobjdump.is_none() {
+        eprintln!("SKIP (assembly): no ptxas or cuobjdump - not assembled, and the unused-W kernels' SASS was not compared.");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// (M, N, K, SMs of the profile, tile): small shapes made to take stream-K by
+/// a profile of few SMs, so every element can be checked. Ragged M and N,
+/// a K tail, one, two and many K tiles, each tile. The schedule depends on
+/// the GRID, not the profile, so each runs on several.
+const STREAMK_SHAPES: [(u32, u32, u32, u32, &str); 15] = [
+    (241, 140, 80, 5, "mid"),
+    (241, 140, 200, 5, "mid"),
+    (144, 388, 7, 8, "mid"),
+    (174, 84, 17, 2, "mid"),
+    (130, 444, 40, 4, "mid"),
+    (215, 180, 32, 6, "mid"),
+    (260, 72, 20, 6, "small"),
+    (258, 80, 15, 6, "small"),
+    (180, 100, 48, 4, "small"),
+    (35, 220, 40, 3, "small"),
+    (296, 928, 33, 5, "large"),
+    (296, 928, 300, 5, "large"),
+    (590, 812, 15, 8, "large"),
+    (683, 1036, 48, 8, "large"),
+    (384, 1188, 40, 6, "large"),
+];
+
+#[test]
+fn the_workspace_form_is_the_in_order_fma_chain_on_every_grid() {
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - no stream-K GEMM was executed.");
+        return;
+    };
+    let mut cases: Vec<(u32, u32, u32, u32, &str)> = STREAMK_SHAPES.to_vec();
+    // And at this machine's size, where the grid is 66 CTAs.
+    cases.push((768, 768, 768, 66, "mid"));
+    for (si, &(m, n, k, sms, tile)) in cases.iter().enumerate() {
+        let dir = profile_dir(&format!("f32_gemm_sk_run{si}"), sms);
+        let name = format!("sk{si}");
+        let ptx = compile_text(&dir, &name, &source_w(&name, m, n, k), "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
+        let h = sk_header(&ptx).unwrap_or_else(|| panic!("{m}x{n}x{k} on {sms} SMs: no stream-K"));
+        assert_eq!(h.tile, tile, "{m}x{n}x{k}");
+        let (m, n, k) = (m as usize, n as usize, k as usize);
+        let module = ctx.load_ptx(&ptx, &name).unwrap_or_else(|e| panic!("{m}x{n}x{k} did not load: {e}"));
+        module.set_max_dynamic_smem(h.smem).unwrap();
+        let a = operand(m * k, 211 + si as u64);
+        let b = operand(k * n, 307 + si as u64);
+        let (da, db, dc) = (ctx.alloc(m * k * 4).unwrap(), ctx.alloc(k * n * 4).unwrap(), ctx.alloc(m * n * 4).unwrap());
+        let dw = ctx.alloc(h.w_words * 8).unwrap();
+        ctx.memcpy_htod_at(&da, 0, &as_bytes(&a)).unwrap();
+        ctx.memcpy_htod_at(&db, 0, &as_bytes(&b)).unwrap();
+        // W holds garbage and is never cleared: every launch's words are
+        // tagged with its own grid id.
+        ctx.memset_u8(&dw, 0xa5).unwrap();
+        let rows: Vec<usize> = (0..m).filter(|&i| m <= 700 || i < 64 || i >= m - 64 || i % 7 == 0).collect();
+        let want: Vec<Vec<f32>> = rows.iter().map(|&i| (0..n).map(|j| oracle(&a, &b, n, k, i, j)).collect()).collect();
+        // The header's grid, twice (the second launch finds the first's
+        // words in W); one CTA (every tile whole, in turn); two and three
+        // (tiles cut between them); more CTAs than tiles (each tile cut into
+        // several pieces, each waiting on the last).
+        for grid in [h.p, h.p, 1, 2, 3, h.p + 5, 3 * h.tiles + 1] {
+            ctx.memset_u8(&dc, 0xff).unwrap(); // NaN everywhere
+            ctx.launch(&module, (grid, 1, 1), (h.block, 1, 1), h.smem, &[da.device_ptr(), db.device_ptr(), dc.device_ptr(), dw.device_ptr()]).unwrap();
+            ctx.synchronize().unwrap_or_else(|e| panic!("{m}x{n}x{k} grid {grid}: {e}"));
+            let mut raw = vec![0u8; m * n * 4];
+            ctx.memcpy_dtoh_at(&mut raw, &dc, 0).unwrap();
+            for (ri, &i) in rows.iter().enumerate() {
+                for j in 0..n {
+                    let g = f32::from_le_bytes(raw[(i * n + j) * 4..(i * n + j) * 4 + 4].try_into().unwrap());
+                    let w = want[ri][j];
+                    assert!(
+                        g.to_bits() == w.to_bits(),
+                        "{m}x{n}x{k} ({tile}, stream-K) grid {grid}: C[{i}][{j}] = {g:e} ({:#010x}), the in-order fma chain gives {w:e} ({:#010x})",
+                        g.to_bits(),
+                        w.to_bits()
+                    );
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// The stream-K shapes compute-sanitizer runs: each tile, a K tail, one and
+/// two K tiles, ragged edges - and a K tail with many K tiles on the mid and
+/// large tiles, where a continuation loads the partial last tile in the
+/// loop, not the prologue. A loop K limit that forgot where its segment
+/// started still gave the right bits (the tail never reads past K) and read
+/// past A and B; only this run sees it.
+const STREAMK_SANITIZED: [usize; 8] = [0, 1, 2, 3, 6, 10, 11, 12];
+
+/// Child: stream-K runs for compute-sanitizer, W exactly as large as the
+/// header says.
+#[test]
+fn child_sanitized_streamk_runs() {
+    if std::env::var("Y_F32_GEMM_SANITIZE").is_err() {
+        return;
+    }
+    let ctx = CudaContext::new().expect("the parent checked for a driver");
+    for &si in &STREAMK_SANITIZED {
+        let (m, n, k, sms, _) = STREAMK_SHAPES[si];
+        let dir = profile_dir(&format!("f32_gemm_sk_san{si}"), sms);
+        let name = format!("sks{si}");
+        let ptx = compile_text(&dir, &name, &source_w(&name, m, n, k), "--emit-ptx").unwrap();
+        let h = sk_header(&ptx).unwrap();
+        let (m, n, k) = (m as usize, n as usize, k as usize);
+        let module = ctx.load_ptx(&ptx, &name).unwrap();
+        module.set_max_dynamic_smem(h.smem).unwrap();
+        let (a, b) = (operand(m * k, 5 + si as u64), operand(k * n, 7 + si as u64));
+        let (da, db, dc) = (ctx.alloc(m * k * 4).unwrap(), ctx.alloc(k * n * 4).unwrap(), ctx.alloc(m * n * 4).unwrap());
+        let dw = ctx.alloc(h.w_words * 8).unwrap();
+        ctx.memcpy_htod_at(&da, 0, &as_bytes(&a)).unwrap();
+        ctx.memcpy_htod_at(&db, 0, &as_bytes(&b)).unwrap();
+        ctx.memset_u8(&dw, 0).unwrap();
+        for grid in [h.p, 1, 3, 3 * h.tiles + 1] {
+            ctx.launch(&module, (grid, 1, 1), (h.block, 1, 1), h.smem, &[da.device_ptr(), db.device_ptr(), dc.device_ptr(), dw.device_ptr()]).unwrap();
+            ctx.synchronize().unwrap();
+            let mut raw = vec![0u8; m * n * 4];
+            ctx.memcpy_dtoh_at(&mut raw, &dc, 0).unwrap();
+            for i in [0, m / 2, m - 1] {
+                for j in 0..n {
+                    let g = f32::from_le_bytes(raw[(i * n + j) * 4..(i * n + j) * 4 + 4].try_into().unwrap());
+                    assert_eq!(g.to_bits(), oracle(&a, &b, n, k, i, j).to_bits(), "{m}x{n}x{k} grid {grid} C[{i}][{j}]");
+                }
+            }
+        }
+        println!("SANITIZED_SK_RUN {m}x{n}x{k} {}", h.tile);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+/// Child: launch a stream-K kernel on the grid in `Y_F32_GEMM_CHILD_GRID`
+/// (`x,y,z`) and print whether the launch was refused or the kernel stopped.
+#[test]
+fn child_streamk_launch_on_a_given_grid() {
+    let Ok(grid) = std::env::var("Y_F32_GEMM_CHILD_GRID") else { return };
+    let g: Vec<u32> = grid.split(',').map(|v| v.parse().unwrap()).collect();
+    let ctx = CudaContext::new().expect("the parent checked for a driver");
+    let (m, n, k, sms, _) = STREAMK_SHAPES[0];
+    let dir = profile_dir("f32_gemm_sk_child", sms);
+    let ptx = compile_text(&dir, "skchild", &source_w("skchild", m, n, k), "--emit-ptx").unwrap();
+    let h = sk_header(&ptx).unwrap();
+    let module = ctx.load_ptx(&ptx, "skchild").unwrap();
+    module.set_max_dynamic_smem(h.smem).unwrap();
+    let (m, n, k) = (m as usize, n as usize, k as usize);
+    let (da, db, dc, dw) = (ctx.alloc(m * k * 4).unwrap(), ctx.alloc(k * n * 4).unwrap(), ctx.alloc(m * n * 4).unwrap(), ctx.alloc(h.w_words * 8).unwrap());
+    for d in [&da, &db, &dc, &dw] {
+        ctx.memset_u8(d, 0).unwrap();
+    }
+    let r = match ctx.launch(&module, (g[0], g[1], g[2]), (h.block, 1, 1), h.smem, &[da.device_ptr(), db.device_ptr(), dc.device_ptr(), dw.device_ptr()]) {
+        Err(e) => format!("launch refused {e}"),
+        Ok(()) => match ctx.synchronize() {
+            Ok(()) => "ok".to_string(),
+            Err(e) => format!("stopped {e}"),
+        },
+    };
+    println!("CHILD_RESULT grid={grid}: {r}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The CTA counts are 32-bit; a grid of 2^32 CTAs or more would wrap them
+/// (a wrapped count of 0 divides by zero), so the kernel traps. The grid is
+/// legal (CUDA accepts it), so it is the trap that stops it, not the launch:
+/// a kernel without the check would grind through 8.6e9 CTAs, which the
+/// deadline turns into a failure.
+#[test]
+fn a_streamk_grid_of_2_to_the_32_ctas_traps() {
+    if CudaContext::new().is_none() {
+        eprintln!("SKIP: no CUDA driver - the grid check was not exercised.");
+        return;
+    }
+    let run = |grid: &str| {
+        let mut child = Command::new(std::env::current_exe().unwrap())
+            .args(["child_streamk_launch_on_a_given_grid", "--exact", "--nocapture", "--test-threads=1"])
+            .env("Y_F32_GEMM_CHILD_GRID", grid)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let start = std::time::Instant::now();
+        while child.try_wait().unwrap().is_none() {
+            if start.elapsed() > std::time::Duration::from_secs(120) {
+                let _ = child.kill();
+                panic!("grid {grid}: the child ran for 2 minutes, so nothing stopped it");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let out = child.wait_with_output().unwrap();
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        text.lines()
+            .find_map(|l| l.find("CHILD_RESULT").map(|at| l[at..].to_string()))
+            .unwrap_or_else(|| panic!("grid {grid}: the child printed no result:\n{text}{}", String::from_utf8_lossy(&out.stderr)))
+    };
+    // The control: the plan's grid runs.
+    assert_eq!(run("5,1,1"), "CHILD_RESULT grid=5,1,1: ok");
+    // 65536 x 65535 x 2 = 8,589,803,520 CTAs.
+    let r = run("65536,65535,2");
+    assert!(r.starts_with("CHILD_RESULT grid=65536,65535,2: stopped"), "a grid of 2^32+ CTAs was not stopped by the kernel: {r}");
 }

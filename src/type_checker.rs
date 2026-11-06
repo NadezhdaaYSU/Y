@@ -1769,7 +1769,13 @@ not know its length",
         // - (A, B, C: GlobalMemory<F32>): the FP32 GEMM on CUDA cores
         //   (`ptx_emitter::f32_simt_gemm`), recognised there by
         //   `tile_gemm_f32_operands` on the same three element types.
-        if kernel.params.len() == 3 && (0..3).all(|i| is_global_memory_of(&kernel.params[i].ty, "F32")) {
+        // - (A, B, C: GlobalMemory<F32>, W: GlobalMemory<U64>): the same GEMM
+        //   with a workspace, which lets it split K in order
+        //   (`f32_gemm_streamk_plan`). Told apart from every other 4-parameter
+        //   shape by its element types: the others start with two F16s.
+        if (kernel.params.len() == 3 || (kernel.params.len() == 4 && is_global_memory_of(&kernel.params[3].ty, "U64")))
+            && (0..3).all(|i| is_global_memory_of(&kernel.params[i].ty, "F32"))
+        {
             return;
         }
 
@@ -1805,6 +1811,7 @@ not know its length",
                  \x20 4  (X, W_gate, W_up: GlobalMemory<F16>, Out: GlobalMemory<F32>)                     fused Linear+SwiGLU\n\
                  \x20 3  (A, B: GlobalMemory<I8>, C: GlobalMemory<I32>)                                   int8 Tensor Core GEMM\n\
                  \x20 3  (A, B, C: GlobalMemory<F32>)                                                     FP32 GEMM (CUDA cores)\n\
+                 \x20 4  (A, B, C: GlobalMemory<F32>, W: GlobalMemory<U64>)                              FP32 GEMM, K split in order\n\
                  \x20 5  (A, B: GlobalMemory<F32>, scale_a, scale_b: F32, C: GlobalMemory<F32>)           fused FP8 (e4m3) GEMM\n\
                  \x20 5  (A, B: GlobalMemory<E4M3>, scale_a, scale_b: F32, C: GlobalMemory<F32>)          FP8 GEMM, e4m3 A [M][K], B [N][K]\n\
                  \x20 6  (A, B: GlobalMemory<I8>, Sa, Sb, Bias, C: GlobalMemory<F32>)                     int8 GEMM + scaled epilogue\n\
