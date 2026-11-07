@@ -170,71 +170,124 @@ _Y_PV = {}
 # once already, for an O(1) KV cache that was 550x slower under compile. A
 # custom op with a registered fake lets dynamo keep ONE graph: it sees an
 # opaque node with known shape and dtype and traces straight past it.
-@torch.library.custom_op("y::exact_pv", mutates_args=())
-def _y_pv_op(p: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-    return _y_exact_pv(p, v)
+#
+# Until 2026-11-07 it was a `torch.library.custom_op` taking the int64 weight
+# and returning float64, built by running the compiler binary and launched
+# through `ptx_bridge.launch`. Four costs went with that, none of them the
+# kernel's:
+# - `launch` synchronised the context after every call, 24 times a decode
+#   step at 0.5B, so the host could never queue ahead of the GPU;
+# - `custom_op` wraps each call in Python-side dispatch (9.1 us against 5.8
+#   through `torch.library.Library`, docs/benchmarks/exact_y_gemm_2026-11-07/);
+# - the int32 and float64 casts ran inside the opaque op as two more eager
+#   kernels. Outside it, Inductor fuses them into the neighbouring pointwise;
+# - the ctypes launch took 7.8 us and torch's stream object 2.4 us more.
+#   `y_lang`'s `TorchKernel`, which Y's int8 GEMM launches through, does both
+#   in one C call.
+# It also wrote the committed tests/exact_pv.ptx on every first call. The
+# record is docs/benchmarks/exact_pv_library_op_2026-11-07/.
+def _pv_kernel(dev):
+    """The `exact_pv` `TorchKernel` for `dev`, compiled from tests/exact_pv.ysu
+    through this checkout's `python/y_lang` (and so its `liby.so`) on first
+    use, and kept for the process. Its PTX is the CLI's, byte for byte, which
+    tests/exact_pv.ptx records.
 
-
-@_y_pv_op.register_fake
-def _(p, v):
-    return torch.empty(
-        (*p.shape[:-1], v.shape[-1]), dtype=torch.float64, device=p.device
-    )
+    If it cannot be built this RAISES rather than falling back to the digit
+    split: a fallback would silently reinstate the whole-cache cast and quietly
+    halve the throughput this path exists for, and a silent fallback to a
+    slower-but-correct route is exactly the shape CLAUDE.md's design rule is
+    about -- the build stays green and the claim stops being true.
+    """
+    index = dev.index if dev.index is not None else torch.cuda.current_device()
+    kern = _Y_PV.get(index)
+    if kern is None:
+        from pathlib import Path
+        repo = Path(__file__).resolve().parent.parent
+        pkg = str(repo / "python")
+        if pkg not in sys.path:
+            sys.path.insert(0, pkg)
+        try:
+            from y_lang.torch_interop import TorchKernel
+            major, minor = torch.cuda.get_device_capability(index)
+            kern = TorchKernel((repo / "tests" / "exact_pv.ysu").read_text(),
+                               kernel_name="exact_pv", target_sm=f"sm_{major}{minor}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Y_EXACT_V_INT8 needs Y's compiler library ({pkg}/y_lang, "
+                "target/release/liby.so; build it with `cargo build --release`), "
+                f"and it failed: {e}. Not falling back to the digit split: that "
+                "would cast the whole cache every step and report a number for "
+                "a path nobody asked for."
+            ) from e
+        _Y_PV[index] = kern
+    return index, kern
 
 
 def _y_exact_pv(p, v):
     """`p @ v` through tests/exact_pv.ysu -- one launch, int64 accumulation.
 
-    `p` is [..., Q, T] and `v` is [..., T, D]; the leading dimensions flatten
-    into the grid's `b`. Returns float64, matching the digit split, so callers
-    and their `assert_exact_range` checks are unchanged.
-
-    Loads the PTX once per process. If it cannot be loaded this RAISES rather
-    than falling back to the digit split: a fallback would silently reinstate
-    the whole-cache cast and quietly halve the throughput this path exists for,
-    and a silent fallback to a slower-but-correct route is exactly the shape
-    CLAUDE.md's design rule is about -- the build stays green and the claim
-    stops being true.
+    `p` is int32 [..., Q, T] and `v` int8 [..., T, D], on one CUDA device;
+    the leading dimensions flatten into the grid's `b`. Returns int64
+    [..., Q, D]. `exact_pv` does the casts on either side. Launched on torch's
+    current stream, without a synchronisation.
     """
-    import ptx_bridge as PB
-
+    if p.dtype != torch.int32 or v.dtype != torch.int8:
+        raise TypeError(f"exact_pv's kernel takes int32 p and int8 v, "
+                        f"not {p.dtype} and {v.dtype}")
     dev = p.device
-    if "fn" not in _Y_PV:
-        import subprocess
-        from pathlib import Path
-        repo = Path(__file__).resolve().parent.parent
-        ybin = repo / "target" / "release" / "Y"
-        if not ybin.exists():
-            raise RuntimeError(
-                f"Y_EXACT_V_INT8 needs the compiler at {ybin}; build it with "
-                "`cargo build --release`. Not falling back to the digit split: "
-                "that would cast the whole cache every step and report a "
-                "number for a path nobody asked for."
-            )
-        torch.zeros(1, device=dev)          # torch makes its context lazily
-        subprocess.run([str(ybin), str(repo / "tests" / "exact_pv.ysu"),
-                        "--emit-ptx"], capture_output=True, check=True, cwd=repo)
-        ptx = (repo / "tests" / "exact_pv.ptx").read_text()
-        _Y_PV["mod"] = PB.Module(ptx)
-        _Y_PV["fn"] = _Y_PV["mod"].fn("exact_pv")
-
-    import ctypes
+    if dev.type != "cuda" or v.device != dev:
+        raise RuntimeError(f"exact_pv's kernel runs on one CUDA device; "
+                           f"got p on {dev} and v on {v.device}")
     lead = p.shape[:-2]
     B = 1
     for x in lead:
         B *= x
     Qn, T = p.shape[-2], p.shape[-1]
     Dh = v.shape[-1]
-    assert v.shape[-2] == T, f"key length disagrees: p has {T}, v has {v.shape[-2]}"
-    p32 = p.reshape(B, Qn, T).to(torch.int32).contiguous()
+    if v.shape[:-2] != lead or v.shape[-2] != T:
+        raise ValueError(f"exact_pv: p is {tuple(p.shape)}, v is {tuple(v.shape)}")
+    if max(B * Qn * T, B * T * Dh, B * Qn * Dh) >= 1 << 31:
+        # The kernel forms its offsets in 32-bit signed arithmetic.
+        raise ValueError(f"exact_pv: p {tuple(p.shape)} and v {tuple(v.shape)} "
+                         f"need offsets past 2^31, which the kernel cannot form")
+    index, kern = _pv_kernel(dev)
+    p32 = p.reshape(B, Qn, T).contiguous()
     v8 = v.reshape(B, T, Dh).contiguous()
     out = torch.empty(B * Qn * Dh, dtype=torch.int64, device=dev)
-    PB.launch(_Y_PV["fn"], (Qn, B, 1), (Dh, 1, 1),
-              [PB.dptr(p32), PB.dptr(v8), PB.dptr(out),
-               ctypes.c_uint(T), ctypes.c_uint(Dh), ctypes.c_uint(Qn),
-               ctypes.c_uint(B * Qn * T), ctypes.c_uint(B * T * Dh),
-               ctypes.c_uint(B * Qn * Dh)])
-    return out.view(*lead, Qn, Dh).to(torch.float64)
+    args = [p32, v8, out, T, Dh, Qn, B * Qn * T, B * T * Dh, B * Qn * Dh]
+    if index == torch.cuda.current_device():
+        kern.launch((Qn, B, 1), (Dh, 1, 1), args)
+    else:
+        with torch.cuda.device(index):
+            kern.launch((Qn, B, 1), (Dh, 1, 1), args)
+    return out.view(*lead, Qn, Dh)
+
+
+def _fake_y_exact_pv(p, v):
+    return p.new_empty((*p.shape[:-1], v.shape[-1]), dtype=torch.int64)
+
+
+# The registration lasts as long as the `Library` object, so it is kept here;
+# a reload of this module finds it again (as in python/y_lang/int8_gemm.py).
+_PV_LIB = globals().get("_PV_LIB")
+
+
+def _register_pv_op():
+    """`torch.ops.y.exact_pv` through the low-level `torch.library.Library`:
+    a schema, the body for CUDA tensors and for CPU ones (which it refuses with
+    its own message), and a fake for `torch.compile`."""
+    global _PV_LIB
+    if not hasattr(torch.ops.y, "exact_pv"):
+        lib = torch.library.Library("y", "FRAGMENT")
+        lib.define("exact_pv(Tensor p, Tensor v) -> Tensor")
+        lib.impl("exact_pv", _y_exact_pv, "CUDA")
+        lib.impl("exact_pv", _y_exact_pv, "CPU")
+        torch.library.register_fake("y::exact_pv", _fake_y_exact_pv, lib=lib)
+        _PV_LIB = lib
+    return torch.ops.y.exact_pv
+
+
+_PV_OP = _register_pv_op()
 
 
 def exact_pv(p, v):
@@ -265,7 +318,14 @@ def exact_pv(p, v):
     # int8 exists to delete, and would do it silently. Refusing is the fix if
     # the kernel cannot be loaded -- see `_y_exact_pv`.
     if v.dtype == torch.int8:
-        return torch.ops.y.exact_pv(p, v)
+        # p is at most 2^P_BITS, so int32 holds it. Under `torch.compile` the
+        # op stays one graph node; called directly it skips the dispatcher.
+        p32 = p.to(torch.int32)
+        if torch.compiler.is_compiling():
+            acc = _PV_OP(p32, v)
+        else:
+            acc = _y_exact_pv(p32, v)
+        return acc.to(torch.float64)
     T = v.shape[-2]
     dbits = digit_width(T)
     if dbits == 0:                      # absurdly long context; stay correct

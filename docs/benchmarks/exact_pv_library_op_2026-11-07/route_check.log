@@ -1,0 +1,8 @@
+Y_EXACT_V_INT8=1  V cache dtype torch.int8
+kernel loaded on devices [0]; eager body calls 0, op calls 192, V dtypes handed to the kernel ['torch.int8']
+dynamo stats: {'calls_captured': 31952, 'unique_graphs': 3}
+graph breaks: 0 {}
+Y_EXACT_V_INT8=0  V cache dtype torch.float32
+kernel loaded on devices []; eager body calls 0, op calls 0, V dtypes handed to the kernel []
+dynamo stats: {'calls_captured': 34256, 'unique_graphs': 3}
+graph breaks: 0 {}

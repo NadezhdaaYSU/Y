@@ -1,0 +1,11 @@
+torch 2.13.0+cu130, NVIDIA GeForce RTX 4070 Ti SUPER, p (32, 2, 7, 64) v (32, 2, 64, 64)
+eager: old body (casts in, synchronising launch), direct         35.65 us/call
+eager: old body, no synchronisation, direct                      20.42 us/call
+eager: custom_op, synchronising (the route until 2026-11-07)     36.85 us/call
+eager: D.exact_pv as now (direct, TorchKernel launch)            12.12 us/call
+eager: D._y_exact_pv alone (int32 in, int64 out) + .double()      9.02 us/call
+compiled: custom_op, synchronising, casts in (until 2026-11-07) + one pointwise   66.92 us/call
+compiled: custom_op, no synchronisation, casts in + one pointwise   61.21 us/call
+compiled: Library, no synchronisation, casts in + one pointwise   54.05 us/call
+compiled: Library, casts out, TorchKernel launch (D.exact_pv now) + one pointwise   36.07 us/call
+compiled: digit split (float32 V) + one pointwise                46.84 us/call
