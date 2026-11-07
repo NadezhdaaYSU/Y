@@ -45,7 +45,7 @@ class TestGpuProbeBesideTheLibrary(unittest.TestCase):
         self.addCleanup(self.directory.cleanup)
         self.scratch = Path(self.directory.name)
 
-    def compile_beside(self, tag, with_stub):
+    def compile_beside(self, tag, with_stub, extra_env=None):
         root = self.scratch / tag
         lib_dir = root / "target" / "release"
         lib_dir.mkdir(parents=True)
@@ -65,12 +65,31 @@ class TestGpuProbeBesideTheLibrary(unittest.TestCase):
             "Y_LIB_PATH": str(library),
             "PATH": "/usr/bin:/bin",
             "YSU_CACHE_DIR": str(cwd / "cache"),
+            **(extra_env or {}),
         }
         result = subprocess.run(
             [sys.executable, "-c", PROGRAM], cwd=cwd, env=env, capture_output=True, text=True, timeout=600
         )
         profile = (cwd / ".ysu_hw_profile").read_text() if (cwd / ".ysu_hw_profile").exists() else ""
         return result, marker.exists(), profile
+
+    def test_a_library_call_is_quiet_but_says_it_probed(self):
+        # The profile's 24 lines used to land on the caller's stdout at every
+        # compile; a library call now prints nothing there, and one line on
+        # stderr when it measures the machine.
+        result, ran, profile = self.compile_beside("quiet", with_stub=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(ran)
+        self.assertIn("measuring this machine once (ysu_gpu_probe)", result.stderr)
+        self.assertEqual([l for l in result.stdout.splitlines() if l.strip()],
+                         ["TARGET .target sm_86"], result.stdout)
+
+    def test_y_verbose_prints_the_profile(self):
+        result, ran, profile = self.compile_beside("verbose", with_stub=True,
+                                                   extra_env={"Y_VERBOSE": "1"})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("Saving hardware topology to .ysu_hw_profile", result.stdout)
+        self.assertNotIn("measuring this machine once", result.stderr)
 
     def test_the_probe_beside_the_library_runs(self):
         result, ran, profile = self.compile_beside("stub", with_stub=True)

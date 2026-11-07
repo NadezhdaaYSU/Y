@@ -88,6 +88,9 @@ directory.
 - A `.ysu_hw_profile` in the working directory is used instead, if present.
 - `YSU_HW_PROFILE=<file>` names the profile outright.
 - Delete the profile after changing the GPU or driver, so it is measured again.
+- Compiles print nothing on stdout; a compile that measures the machine says
+  so in one line on stderr. `Y_VERBOSE=1` prints the profile as the `Y`
+  command line does.
 
 ## Licence
 

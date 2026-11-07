@@ -313,6 +313,15 @@ fn forced_config() -> Option<AutotuneCandidate> {
 // by key and ignores lines it does not recognise, so appending here cannot
 // disturb it.
 
+/// `println!`, unless a library call asked for quiet (`sentinel::quiet`).
+macro_rules! say {
+    ($($arg:tt)*) => {
+        if !crate::sentinel::quiet() {
+            println!($($arg)*);
+        }
+    };
+}
+
 /// The profile file, wherever `sentinel::hw_profile_path` puts it.
 fn profile_path() -> String {
     crate::sentinel::hw_profile_path().to_string_lossy().into_owned()
@@ -1391,7 +1400,7 @@ impl Autotuner {
             }
             let fitted = Self::fit_f16_block_sums(m, k, tile.clone());
             if fitted != tile {
-                println!(
+                say!(
                     "         [Y autotuner] M={} N={} K={}: the {} tile {}x{}x{} {}x{} s{} has no room for \
                      the block sums K >= 8192 keeps; it runs on {}x{} warps, s{}",
                     m, n, k, source, tile.cta_m, tile.cta_n, tile.cta_k, tile.warps_m, tile.warps_n,
@@ -1421,7 +1430,7 @@ impl Autotuner {
         if mode.may_use_cache() {
             if let Some(cached) = load_persisted(m, n, k, &tag, hw_profile) {
                 let cached = fit(cached, "measured");
-                println!(
+                say!(
                     "         [Y autotuner] measured tile from {} for M={} N={} K={} ({}): {}x{}x{} {}x{} s{}",
                     profile_path(),
                     m, n, k, tag,
@@ -1491,7 +1500,7 @@ impl Autotuner {
                 load_persisted_nearest(m, n, k, k_split, &tag, hw_profile)
             {
                 let borrowed = fit(borrowed, "borrowed");
-                println!(
+                say!(
                     "         [Y autotuner] no measurement for M={} N={} K={} ({}); borrowing the \
                      measured tile from the nearest shape M={} N={} K={}: {}x{}x{} {}x{} s{} \
                      (run with --autotune to measure this shape directly)",
