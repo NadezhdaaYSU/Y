@@ -1198,8 +1198,8 @@ for i in 0..100 {
   - From PyTorch (since 2026-11-07): `y_lang.int8_gemm.int8_mm(a, b)` takes
     int8 CUDA tensors `a` `[M][K]` and `b` `[N][K]` and returns the int32
     `[M][N]` product. It compiles this kernel for the tensor's device and
-    launches it as its header says. Under `torch.compile` it is the custom op
-    `torch.ops.y_lang.int8_mm`. M is free: rows are zero-padded to a multiple
+    launches it as its header says. Under `torch.compile` it is the op
+    `torch.ops.y_lang.int8_mm`, registered through `torch.library`. M is free: rows are zero-padded to a multiple
     of 16 (up to 128 rows) or of 128, and dropped. The other limits above are
     refused by name. `tools/exact_model.py` runs its linear layers on it with
     `Y_EXACT_GEMM=y`.

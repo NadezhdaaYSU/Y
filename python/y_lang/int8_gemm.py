@@ -40,8 +40,8 @@ compile still reads `.ysu_hw_profile` from the working directory, as every
 kernel's PTX depends only on the target, the shape and `Y_INT8_TILE` if set
 (`tests/test_int8_mm.py` checks two profiles give the same PTX).
 
-Under `torch.compile` the call is the custom op `torch.ops.y_lang.int8_mm`, so
-dynamo keeps it in the graph rather than breaking at the launch.
+Under `torch.compile` the call is the op `torch.ops.y_lang.int8_mm`, so dynamo
+keeps it in the graph rather than breaking at the launch.
 """
 
 import re
@@ -205,18 +205,38 @@ def _int8_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return c if mb == m else c[:m]
 
 
+def _fake_int8_mm(a, b):
+    return a.new_empty((a.shape[0], b.shape[0]), dtype=torch.int32)
+
+
+# A registration made through `torch.library.Library` lasts as long as the
+# library object does, so the object is kept here. A reload of this module
+# runs in the same namespace and finds it again instead of dropping it.
+_LIB = globals().get("_LIB")
+
+
 def _register_op():
-    """`torch.ops.y_lang.int8_mm`, or None on a torch without custom ops. A
-    module reloaded in the same process finds it registered and reuses it."""
-    if not hasattr(torch, "library") or not hasattr(torch.library, "custom_op"):
+    """`torch.ops.y_lang.int8_mm`, or None on a torch without `torch.library`.
+
+    Registered through the low-level `torch.library.Library`: a schema, the
+    body above for CUDA tensors and for CPU ones (which it refuses with its
+    own message rather than the dispatcher's), and a fake for
+    `torch.compile`. `torch.library.custom_op`, used until 2026-11-07, wraps
+    every call in Python-side dispatch. That cost 9.1 us of host time a call
+    against 5.8, and inside a compiled graph 34.7 against 28.3, where a Triton
+    launch took 32.4 (docs/benchmarks/exact_y_gemm_2026-11-07/dispatch/). A
+    module reloaded in the same process finds the op registered and reuses
+    it."""
+    global _LIB
+    if not hasattr(torch, "library") or not hasattr(torch.library, "Library"):
         return None
     if not hasattr(torch.ops.y_lang, "int8_mm"):
-        op = torch.library.custom_op("y_lang::int8_mm", _int8_mm, mutates_args=())
-
-        @op.register_fake
-        def _(a, b):
-            return a.new_empty((a.shape[0], b.shape[0]), dtype=torch.int32)
-
+        lib = torch.library.Library("y_lang", "FRAGMENT")
+        lib.define("int8_mm(Tensor a, Tensor b) -> Tensor")
+        lib.impl("int8_mm", _int8_mm, "CUDA")
+        lib.impl("int8_mm", _int8_mm, "CPU")
+        torch.library.register_fake("y_lang::int8_mm", _fake_int8_mm, lib=lib)
+        _LIB = lib
     return torch.ops.y_lang.int8_mm
 
 

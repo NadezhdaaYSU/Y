@@ -116,6 +116,33 @@ class TheRefusals(unittest.TestCase):
         self.refused(i8(4, 64), i8(8, 64), "one CUDA device")
         self.refused(i8(4, G.MAX_K), i8(8, G.MAX_K), "one CUDA device")
 
+    @unittest.skipIf(G._OP is None, "this torch has no torch.library")
+    def test_the_registered_op_refuses_with_the_same_messages(self):
+        # Host tensors reach the op's own body (it is registered for CPU
+        # too), not the dispatcher's "could not run" error.
+        i8 = lambda *s: torch.zeros(s, dtype=torch.int8)
+        for a, b, needle in ((i8(4, 64), i8(8, 64), "one CUDA device"),
+                             (i8(4, 48), i8(8, 48), "K = 48"),
+                             (i8(4, 64), i8(8, 32), "b must be [N][64]")):
+            with self.assertRaises(ValueError) as cm:
+                G._OP(a, b)
+            self.assertIn(needle, str(cm.exception))
+
+    @unittest.skipIf(G._OP is None, "this torch has no torch.library")
+    def test_a_reload_keeps_the_registration(self):
+        # The registration lives as long as its `torch.library.Library`
+        # object; a reload that dropped it would remove the op.
+        import gc
+        import importlib
+        lib = G._LIB
+        importlib.reload(G)
+        gc.collect()
+        self.assertIs(G._LIB, lib)
+        self.assertTrue(hasattr(torch.ops.y_lang, "int8_mm"))
+        i8 = lambda *s: torch.zeros(s, dtype=torch.int8)
+        with self.assertRaises(ValueError):
+            torch.ops.y_lang.int8_mm(i8(4, 64), i8(8, 64))
+
 
 class ThePtx(unittest.TestCase):
     """The kernel the op compiles, read without a GPU."""
