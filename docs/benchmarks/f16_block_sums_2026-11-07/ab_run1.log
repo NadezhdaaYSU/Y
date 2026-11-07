@@ -1,0 +1,6 @@
+BF16 8192x8192x8192 cuBLAS 12352.2 us (maxn 4.1e-07 relF 3.4e-06) | chain 2x2w [0 adds] 1.006x cuBLAS, maxn 1.2e-06 relF 1.1e-05, same bits 0.2% | blocked 4x2w [64 adds] 1.008x cuBLAS, maxn 3.4e-08 relF 2.7e-07, same bits 0.5% | blocked/chain speed 1.002
+BF16 4096x4096x4096 cuBLAS 1544.4 us (maxn 7.0e-07 relF 5.3e-06) | chain 2x2w [0 adds] 0.979x cuBLAS, maxn 7.0e-07 relF 5.3e-06, same bits 100.0% | blocked 4x2w [64 adds] 0.977x cuBLAS, maxn 3.9e-08 relF 2.6e-07, same bits 0.4% | blocked/chain speed 0.998
+BF16 2048x4096x14336 cuBLAS 2716.2 us (maxn 1.3e-06 relF 2.1e-05) | chain 2x2w [0 adds] 0.990x cuBLAS, maxn 1.3e-06 relF 2.1e-05, same bits 100.0% | blocked 4x2w [64 adds] 0.998x cuBLAS, maxn 2.8e-08 relF 2.8e-07, same bits 0.1% | blocked/chain speed 1.008
+BF16 2048x11008x4096 cuBLAS 2152.9 us (maxn 7.4e-07 relF 5.3e-06) | chain 2x2w [0 adds] 1.044x cuBLAS, maxn 7.4e-07 relF 5.3e-06, same bits 100.0% | blocked 4x2w [64 adds] 1.022x cuBLAS, maxn 4.2e-08 relF 2.6e-07, same bits 0.4% | blocked/chain speed 0.979
+BF16 2048x4096x4096 cuBLAS 789.0 us (maxn 7.8e-07 relF 5.3e-06) | chain 2x2w [0 adds] 1.004x cuBLAS, maxn 7.8e-07 relF 5.3e-06, same bits 100.0% | blocked 4x2w [64 adds] 0.993x cuBLAS, maxn 4.2e-08 relF 2.6e-07, same bits 0.4% | blocked/chain speed 0.990
+# 2745 MHz, 241.22 W, 76, 100 %

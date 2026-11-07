@@ -141,6 +141,16 @@ pub struct AutotuneCandidate {
 }
 
 impl AutotuneCandidate {
+    /// Whether the F16 GEMM on this tile has room for a block sum beside each
+    /// accumulator register (`PtxEmitter::f16_block_sums_fit`): 8 float32
+    /// registers for each m16n16 fragment of a warp's tile, as
+    /// `emit_tensor_core_gemm_kernel` counts them.
+    pub fn holds_f16_block_sums(&self) -> bool {
+        let (wm, wn) = (self.warps_m.max(1), self.warps_n.max(1));
+        let accumulators = (self.cta_m / wm / 16) * (self.cta_n / wn / 16) * 8;
+        crate::ptx_emitter::PtxEmitter::f16_block_sums_fit(accumulators, wm * wn * 32)
+    }
+
     pub fn to_cta_tile_config(&self) -> CtaTileConfig {
         CtaTileConfig {
             cta_m: self.cta_m,
@@ -1263,6 +1273,46 @@ impl Autotuner {
         }
     }
 
+    /// `tile`, or, where an unsplit F16 or BF16 GEMM of `m` rows and depth
+    /// `k` keeps block sums (`PtxEmitter::f16_block_sums_required`) and
+    /// `tile` has no room for them, the same CTA tile on twice the warps (on
+    /// M where that tiles and leaves room, else on N) and at least 3 stages.
+    /// Where neither warp split does, `tile`, and the K sum chains as before.
+    ///
+    /// The stages: the wider tile's registers hold one CTA an SM, so only
+    /// its own pipeline hides the copies. On 2 stages the 128x128 tile on
+    /// 4x2 warps measured 0.82-0.84x cuBLAS at 8192^3, 2048 x 2048 x 8192 and
+    /// 2048 x 4096 x 14336 (BF16), against 0.99-1.01x on 3 or 4, level with
+    /// 2x2 warps on 3 (docs/benchmarks/f16_block_sums_2026-11-07/). A
+    /// stage count shared memory cannot hold is clamped where the kernel is
+    /// emitted, as any is.
+    ///
+    /// `resolve_split` fits every tile it returns for such a GEMM except
+    /// `Y_CTA_OVERRIDE`'s, which is taken as given, and a forced candidate's,
+    /// which it fitted before timing it. So the sum a shape gets no longer
+    /// depends on which tile a profile recorded: 8192^3 and 16384^3 chained,
+    /// 3x cuBLAS's largest error, on the analytic model's 2x2 warps.
+    pub fn fit_f16_block_sums(m: u32, k: u32, tile: AutotuneCandidate) -> AutotuneCandidate {
+        if tile.holds_f16_block_sums() || !crate::ptx_emitter::PtxEmitter::f16_block_sums_required(m, k) {
+            return tile;
+        }
+        for (warps_m, warps_n) in [(tile.warps_m * 2, tile.warps_n), (tile.warps_m, tile.warps_n * 2)] {
+            let wider = AutotuneCandidate {
+                warps_m,
+                warps_n,
+                num_warps: warps_m * warps_n,
+                num_stages: tile.num_stages.max(3),
+                ..tile.clone()
+            };
+            if validate_warp_tiling(wider.cta_m, wider.cta_n, wider.cta_k, warps_m, warps_n, 16, 16, 16).is_ok()
+                && wider.holds_f16_block_sums()
+            {
+                return wider;
+            }
+        }
+        tile
+    }
+
     fn resolve_split(m: u32, n: u32, k: u32, splits: u32, hw_profile: &HardwareProfile, precision: Precision, planned: Option<&AutotuneCandidate>) -> CtaTileConfig {
         let splits = splits.max(1);
         let k_split = k / splits;
@@ -1327,6 +1377,25 @@ impl Autotuner {
             Self::generate_candidates(m, n, k, precision)
         };
         let mode = tuning_mode();
+        // Every tile below, for an unsplit F16 or BF16 GEMM, keeps the block
+        // sums its depth needs (`fit_f16_block_sums`), and a measurement
+        // times only such tiles, so it ranks the kernels it can emit.
+        let fits_sums = splits == 1 && matches!(precision, Precision::F16 | Precision::BF16);
+        let fit = |tile: AutotuneCandidate, source: &str| -> AutotuneCandidate {
+            if !fits_sums {
+                return tile;
+            }
+            let fitted = Self::fit_f16_block_sums(m, k, tile.clone());
+            if fitted != tile {
+                println!(
+                    "         [Y autotuner] M={} N={} K={}: the {} tile {}x{}x{} {}x{} s{} has no room for \
+                     the block sums K >= 8192 keeps; it runs on {}x{} warps, s{}",
+                    m, n, k, source, tile.cta_m, tile.cta_n, tile.cta_k, tile.warps_m, tile.warps_n,
+                    tile.num_stages, fitted.warps_m, fitted.warps_n, fitted.num_stages
+                );
+            }
+            fitted
+        };
 
         // (4) A previously persisted measurement for this exact (shape,
         // precision, GPU).
@@ -1347,6 +1416,7 @@ impl Autotuner {
         // builds that must not depend on what is on this machine's disk.
         if mode.may_use_cache() {
             if let Some(cached) = load_persisted(m, n, k, &tag, hw_profile) {
+                let cached = fit(cached, "measured");
                 println!(
                     "         [Y autotuner] measured tile from {} for M={} N={} K={} ({}): {}x{}x{} {}x{} s{}",
                     PROFILE_PATH,
@@ -1364,7 +1434,14 @@ impl Autotuner {
         // (5) Fresh measurement on the real device - not for a planned split,
         // whose tile the split's own measurement chose (`split_k_plan`).
         if mode.may_measure() && planned.is_none() {
-            match crate::empirical_autotune::tune_gemm_f16_split(m, n, k, splits, hw_profile, &candidates, true) {
+            let mut timed: Vec<AutotuneCandidate> = Vec::with_capacity(candidates.len());
+            for c in &candidates {
+                let c = if fits_sums { Self::fit_f16_block_sums(m, k, c.clone()) } else { c.clone() };
+                if !timed.contains(&c) {
+                    timed.push(c);
+                }
+            }
+            match crate::empirical_autotune::tune_gemm_f16_split(m, n, k, splits, hw_profile, &timed, true) {
                 Ok(measured) if !measured.is_empty() => {
                     let best = measured[0].candidate.clone();
                     store_persisted(m, n, k, &tag, hw_profile, &best);
@@ -1409,6 +1486,7 @@ impl Autotuner {
             if let Some((borrowed, (bm, bn, bk))) =
                 load_persisted_nearest(m, n, k, k_split, &tag, hw_profile)
             {
+                let borrowed = fit(borrowed, "borrowed");
                 println!(
                     "         [Y autotuner] no measurement for M={} N={} K={} ({}); borrowing the \
                      measured tile from the nearest shape M={} N={} K={}: {}x{}x{} {}x{} s{} \
@@ -1436,6 +1514,10 @@ impl Autotuner {
                 best_candidate = cand.clone();
             }
         }
+        // The block sums are fitted after the pick: the model still chooses
+        // among its own candidates, and fitting only adds warps (and stages,
+        // up to 3) to the pick.
+        let best_candidate = fit(best_candidate, "analytic");
 
         if let Ok(mut cache) = get_cache().lock() {
             cache.insert(key, (best_candidate.clone(), false));

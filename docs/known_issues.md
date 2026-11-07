@@ -260,8 +260,14 @@ source; each entry there now carries its status. What is still open:
   - 128 rows against N = 11008 or 14336 with K = 4096 (0.95-0.99x);
   - 512 rows against K = 11008 or 14336 (0.95-0.98x).
 
-  At 8192³ its largest error is 3x cuBLAS's: it chains there, and cuBLAS
-  evidently does not.
+  At 8192³ its largest error was 3x cuBLAS's, because the tile it was
+  given had no room for block sums, so it chained. Since 2026-11-07 the
+  compiler widens such a tile from K = 8192. It is now 9x below cuBLAS's,
+  at 1.01–1.02x cuBLAS's speed
+  (`docs/benchmarks/f16_block_sums_2026-11-07/`).
+- This machine's `.ysu_hw_profile` predates the 2026-10-20 re-tune: 9 of
+  its 13 F16 tile lines are older ones. The BF16 table was measured
+  against it. `--autotune-force` re-measures them.
 - sm_90's direct conversions (`cvt.f32.bf16`, `cvt.rn.bf16.f64`) are not
   used. Every target goes through f32: exactly for loads, and with round to
   odd for f64 and integer stores.

@@ -998,8 +998,11 @@ SASS instructions per 16-byte copy.
 **In short: at every shape measured, Y's default output is at least as close
 to the exact product as cuBLAS's** in relative Frobenius error and in maximum
 error normalized by `sum |a| |b|` (below). Where K is at most 2048, at 4096³
-and at 2048 x 4096 x 14336, Y chains K in the tensor core as cuBLAS does
-there, and the two give the same bits. Elsewhere Y's relative Frobenius error
+and at 2048 rows with K = 4096, Y chains K in the tensor core as cuBLAS does
+there, and the two give the same bits; 2048 x 4096 x 14336 did too until
+2026-11-07, and is now blocked, as every shape from K = 8192 is, at 34x
+below cuBLAS's largest error (`docs/benchmarks/f16_block_sums_2026-11-07/`).
+Elsewhere Y's relative Frobenius error
 is the smaller: 7.9–16x at 8192³, 2.5–38x at 512 x 512 x K ≥ 4096 and
 2.8–9.4x at 64 x 4096 x 4096, where cuBLAS used to be the more accurate, and
 11–79x at three more LLM layer shapes (blocked summation, since
@@ -1105,7 +1108,13 @@ than on all of K.
 The block sums take one register per accumulator, and the chain is kept where
 they would not fit: 4096³ and the 128x128 tiles of the larger LLM shapes,
 whose 64 x 64 warp tiles hold 128 accumulators a thread (blocked, 844 bytes
-of spill stores). There cuBLAS chains too. `Y_F16_ACCUMULATE=blocked` blocks
+of spill stores). There cuBLAS chains too. From K = 8192 such a tile runs
+on twice the warps and at least 3 stages instead (since 2026-11-07,
+`docs/benchmarks/f16_block_sums_2026-11-07/`), at 0.99–1.02x the chain's
+speed. Until then the analytic model gave 8192³ and 16384³ 2x2 warps, so a
+compile without a measured tile chained there, at 3x cuBLAS's largest
+error; only the committed kernels, emitted from a re-tuned profile, were
+blocked. `Y_F16_ACCUMULATE=blocked` blocks
 every shape and `Y_F16_BLOCK_K` sets the block, a power of two. On the
 record's fourteen shapes and nine distributions, blocked everywhere:
 
@@ -2827,10 +2836,15 @@ element type, and the F16 tensor-core GEMM takes bf16 operands:
 - **Speed.** Against cuBLAS's bf16 GEMM with f32 output, the GEMM is
   0.93–1.51x over 30 shapes, 21 of them 0.98x or better.
 - **Bits.** Wherever both chain the tensor core's accumulator, from 256³ to
-  4096³ and at 2048 rows, every output is bit-identical to cuBLAS's.
+  4096³ and at 2048 rows with K = 4096, every output is bit-identical to
+  cuBLAS's. From K = 8192 Y sums in blocks instead, and at 2048 rows its
+  largest error is 50x below cuBLAS's at 0.99x its speed.
 - **Accuracy.** At 32 rows, and at 128–512 rows with K of 4096 and up, Y's
   compensated and blocked sums are 6–200x closer to the exact product. At
-  8192³ cuBLAS's largest error is 3x smaller.
+  8192³ the first measurement chained, at 3x cuBLAS's largest error: its
+  tile had no room for the block sums. Since the compiler widens such a
+  tile from K = 8192, Y's is 9x below cuBLAS's there (4.5e-8 against
+  4.2e-7), at 1.01–1.02x its speed.
 
 Records: `docs/benchmarks/bf16_gemm_2026-11-07/`; tests: `tests/ptx_bf16.rs`
 and `python/y_lang/tests/test_bf16.py`.
