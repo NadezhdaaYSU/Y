@@ -9,6 +9,34 @@ toolchain.
 The project is under active, single-developer development. It is a research
 compiler, not a production toolchain.
 
+## At a glance
+
+Measured on one RTX 4070 Ti SUPER (sm_89) and a Zen 5 CPU. Above 1 means Y is
+faster. Each linked section gives the conditions, how the outputs were checked
+and where the raw data is.
+
+| | result | section |
+|---|---|---|
+| Reproducible LLM decoding | The same tokens on a CPU and a GPU: exact changed 0 of 5 cases, stock bf16 5 of 5 (Qwen2.5 0.5B and 7B). The same tokens in 16 batch compositions, where stock changed 16 of 16. | [Deterministic inference](#deterministic-inference) |
+| FP32 GEMM vs cuBLAS (TF32 off) | 0.96–1.20x at 512³–8192³ (powers of two), every output bit-identical to an in-order `fmaf` reference | [FP32 GEMM](#fp32-gemm-vs-cublas) |
+| int8 GEMM vs cuBLASLt | 1.03x at 4096³; a Coq proof that the kernel stores every exact dot product | [int8 GEMM](#the-int8-gemm-matches-cublaslt) |
+| FP16 GEMM vs cuBLAS | 0.99–1.50x at 256³–16384³, and at least as accurate at every shape measured | [FP16 GEMM](#square-fp16-gemm-vs-cublas) |
+| BF16 GEMM vs cuBLAS | 0.93–1.51x over 30 shapes | [BF16](#bf16-matches-cublas-2026-11-07) |
+| BN254 NTT vs icicle | 0.56 against 0.608 ms at N = 2^20; 2.47 against 2.834 ms at 2^22 | [BN254 kernels](#bn254-field-kernels-ntt-and-msm) |
+| circom 2.x front end | compiles circomlib 31/31 and circom-ecdsa 17/17 | [circom front end](#circom-front-end) |
+
+Where Y loses is measured too, for example FP32 at 768³ without the
+workspace (0.81–0.87x) and MSM, still 2.8–4.8x behind icicle:
+[Where the GPU backend loses](#where-the-gpu-backend-loses).
+
+**Start here:** [Building](#building) ·
+[the Python package](python/README.md) ·
+[the language manual](docs/y_language_documentation.md) ·
+[bit-identical decode](docs/bit_identical_decode.md) ·
+[known issues](docs/known_issues.md)
+
+## Recent work
+
 An opt-in [adaptive GPU JIT runtime](docs/adaptive_jit.md) now caches compiled
 FP16 GEMMs and tunes repeatedly used shapes. Rust, C, and Python APIs provide
 warmup preparation and defers tuning to explicit maintenance calls by default. Optional
