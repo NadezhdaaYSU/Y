@@ -18,6 +18,8 @@ license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES"]
 requires-python = ">=3.8"
 dependencies = [
     "torch",
+    # CPUInterpreter; loaded on first use, so `import y_lang` does not need it.
+    "numpy",
 ]
 
 [project.optional-dependencies]
