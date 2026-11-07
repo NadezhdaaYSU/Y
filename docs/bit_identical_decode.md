@@ -5,6 +5,13 @@
 Model: Qwen2.5-0.5B-Instruct · GPU: RTX 4070 Ti SUPER · Stack: PyTorch + Triton
 prototype (not the compiler's own PTX kernels)
 
+*Where the code is (2026-11-08): `exact_model`, `exact_kv`, `w8a8_gemv`,
+`batch_invariance_demo` and `exact_large_model`'s builders moved to
+`python/y_lang/exact/` (`model`, `kv`, `w8a8_gemv`, `attention`,
+`large_model`); the `tools/` files named below still import them under those
+names, and `y_lang.exact.load` / `generate` are the public entry. On the CPU
+the moved code records the same tokens as before, digest `30eec169d2f38da4`.*
+
 *Later sections extend this report: CPU against GPU and Qwen2.5-7B (Finding 12,
 to 2026-11-07), and the linear layers and `p·V` on the compiler's own kernels
 (`Y_EXACT_GEMM=y`, `Y_EXACT_V_INT8=1`).*

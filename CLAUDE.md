@@ -81,7 +81,8 @@ cargo run --bin Y -- tests/paged_decode_attention_128_32_8_16.ysu --emit-ptx -o 
 - Hardware/tuning: `sentinel.rs`, `ysu_gpu_probe.rs`, `autotuner.rs`,
   `empirical_autotune.rs`, `bank_conflict.rs`, `coprocessor_scheduler.rs`.
 - CPU JIT: `src/cpu_jit.rs`, `src/cpu_jit/`, `src/cpu_jit_ffi.rs`;
-  APIs: `src/c_api.rs`, `python/y_lang/`; GPU library: `crates/y-gpu/`.
+  APIs: `src/c_api.rs`, `python/y_lang/` (exact inference: `y_lang/exact/`,
+  which `tools/exact_model.py` etc. alias); GPU library: `crates/y-gpu/`.
 - Self-hosted compiler: `self_hosted/`; runtime: `c_src/`; workloads: `tests/`.
 
 ## Subsystem contracts

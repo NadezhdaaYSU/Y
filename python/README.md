@@ -27,6 +27,37 @@ Requirements:
   go through a small native module built on first use; without them, through
   ctypes, which is slower per call.
 
+## Reproducible inference
+
+```bash
+python3 -m pip install dist/y_lang-*.whl transformers
+```
+
+```python
+from y_lang.exact import load, generate
+
+model, tokenizer = load("Qwen/Qwen2.5-0.5B-Instruct", device="cuda")
+tokens = generate(model, tokenizer, "The capital of France is", max_new_tokens=32)
+```
+
+The same prompt decodes to the same tokens whatever else is in its batch, and
+the same tokens on a CPU and a GPU: every reduction whose order can change is
+done in integers. The model is quantised (int8 weights, and quantised
+activations and K/V cache), so its tokens are not the bf16 model's. Measured
+results and their limits are in the repository's
+`docs/bit_identical_decode.md`.
+
+- Qwen2-architecture checkpoints only; another architecture is refused.
+- `load(..., low_memory=True)` builds a bf16 checkpoint layer by layer, for
+  models such as Qwen2.5-7B.
+- On a GPU, `Y_EXACT_GEMM=y` runs the linear layers on Y's proved int8 kernel
+  (default: Triton) and `Y_EXACT_V_INT8=1` runs attention's p.V on Y's
+  `exact_pv` kernel; every choice gives the same bits. Set them before
+  importing `y_lang.exact.model`.
+- Loading replaces `transformers`' Qwen2 eager attention for the whole
+  process, and importing the model module sets two `torch.compile` rounding
+  flags process-wide; see `y_lang.exact`'s docstring.
+
 ## Exact int8 matrix multiply
 
 ```python

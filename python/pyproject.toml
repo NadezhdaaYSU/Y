@@ -21,6 +21,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# y_lang.exact: reproducible inference for Qwen2 models (Hugging Face models;
+# tested with transformers 5.15, torch 2.13, and triton 3.7 on the GPU).
+exact = [
+    "transformers",
+    "huggingface_hub",
+]
 dev = [
     "pytest",
     "cupy-cuda12x",
@@ -32,3 +38,5 @@ version = {attr = "y_lang.__version__"}
 [tool.setuptools.package-data]
 # Compiled on first use by torch_interop's native launch path.
 y_lang = ["_launch.c"]
+# The exact_pv kernel's Y source; in the repository a link to tests/exact_pv.ysu.
+"y_lang.exact" = ["exact_pv.ysu"]
