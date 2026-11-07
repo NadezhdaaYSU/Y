@@ -1086,6 +1086,24 @@ fn get_generic_fallback_profile() -> GpuLatencies {
     }
 }
 
+/// An NVIDIA card seen without a usable CUDA driver (lspci, /sys/class/drm,
+/// wmic). Nothing there says which architecture it is, so none is claimed:
+/// the profile records `SM_VERSION=0.0`, and PTX then targets the floor
+/// (sm_80), which every supported card loads.
+///
+/// This returned 8.9 (Ada) for every NVIDIA card. A profile written while the
+/// driver was missing or out of reach - a container without libcuda sees the
+/// host's card in /sys - made every kernel target sm_89, which an older card
+/// cannot load once CUDA works (found running the wheel on glibc 2.28 in a
+/// container, tools/wheel_glibc228/).
+fn nvidia_without_cuda() -> (String, String, String) {
+    (
+        "NVIDIA GPU (no CUDA driver; architecture unknown)".to_string(),
+        "NVIDIA".to_string(),
+        "0.0".to_string(),
+    )
+}
+
 fn detect_alternative_gpus() -> Option<(String, String, String)> {
     #[cfg(unix)]
     {
@@ -1096,7 +1114,7 @@ fn detect_alternative_gpus() -> Option<(String, String, String)> {
                     let line_lower = line.to_lowercase();
                     if line_lower.contains("vga compatible controller") || line_lower.contains("3d controller") {
                         if line_lower.contains("nvidia") {
-                            return Some(("NVIDIA GPU".to_string(), "NVIDIA".to_string(), "8.9".to_string()));
+                            return Some(nvidia_without_cuda());
                         } else if line_lower.contains("amd") || line_lower.contains("radeon") {
                             return Some(("AMD Radeon GPU".to_string(), "AMD".to_string(), "gfx1100".to_string()));
                         } else if line_lower.contains("intel") {
@@ -1116,7 +1134,7 @@ fn detect_alternative_gpus() -> Option<(String, String, String)> {
                         if let Ok(vendor_hex) = std::fs::read_to_string(vendor_path) {
                             let vendor_hex = vendor_hex.trim();
                             if vendor_hex == "0x10de" {
-                                return Some(("NVIDIA GPU".to_string(), "NVIDIA".to_string(), "8.9".to_string()));
+                                return Some(nvidia_without_cuda());
                             } else if vendor_hex == "0x1002" {
                                 return Some(("AMD Radeon GPU".to_string(), "AMD".to_string(), "gfx1100".to_string()));
                             } else if vendor_hex == "0x8086" {
@@ -1137,7 +1155,7 @@ fn detect_alternative_gpus() -> Option<(String, String, String)> {
                 for line in stdout.lines() {
                     let line_lower = line.to_lowercase();
                     if line_lower.contains("nvidia") {
-                        return Some(("NVIDIA GPU".to_string(), "NVIDIA".to_string(), "8.9".to_string()));
+                        return Some(nvidia_without_cuda());
                     } else if line_lower.contains("amd") || line_lower.contains("radeon") {
                         return Some(("AMD Radeon GPU".to_string(), "AMD".to_string(), "gfx1100".to_string()));
                     } else if line_lower.contains("intel") {
@@ -1458,4 +1476,21 @@ fn main() {
 
     println!("FMA_ILP_THROUGHPUT={:.4}", profile.fma_ilp_throughput);
     println!("FMA_ILP_CYCLES_PER_OP={:.2}", 1.0 / profile.fma_ilp_throughput);
+}
+
+#[cfg(test)]
+mod fallback_tests {
+    use super::*;
+
+    /// Without the CUDA driver nothing names the architecture, so the
+    /// fallback must not: it used to say 8.9 for any NVIDIA card.
+    #[test]
+    fn an_nvidia_card_seen_without_cuda_claims_no_architecture() {
+        let (name, vendor, arch) = nvidia_without_cuda();
+        assert_eq!((vendor.as_str(), arch.as_str()), ("NVIDIA", "0.0"));
+        assert!(name.contains("architecture unknown"), "{name}");
+        let profile = build_cuda_profile(name, arch, 8192);
+        assert_eq!(profile.sm_version, "0.0");
+        assert_eq!(profile.compute_capability, "0.0");
+    }
 }
