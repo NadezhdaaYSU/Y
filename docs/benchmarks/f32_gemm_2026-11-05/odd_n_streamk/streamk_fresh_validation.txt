@@ -1,0 +1,24 @@
+# streamk_bench.py (../streamk_bench.py), the build with the spread clamp and stream-K at N odd on a 1.04x bar (every shape split), 2026-11-07, idle GPU, two runs. Y3: three-parameter (plain) kernel; Y4: with W (stream-K). The bits on each grid were all True (removed for width); after-timing bits True.
+# A fresh set chosen after the 1.25x bar was set: the model gives 1000x1153x2000 1.29x and 960x1281x960 1.25x (taken under the bar), the rest 1.05-1.22x (not taken).
+1200x1201x1000 mid   stream-K grid 132       cuBLAS    127.3 us  Y3 0.731x  Y4 0.908x  (Y4/Y3 time 0.805)
+800x1537x1024 mid   stream-K grid 132       cuBLAS    126.2 us  Y3 0.912x  Y4 1.043x  (Y4/Y3 time 0.874)
+1792x1025x768 mid   stream-K grid 132       cuBLAS    129.9 us  Y3 0.978x  Y4 0.915x  (Y4/Y3 time 1.069)
+1000x1153x2000 mid   stream-K grid 132       cuBLAS    219.4 us  Y3 0.797x  Y4 1.011x  (Y4/Y3 time 0.789)
+960x1281x960 mid   stream-K grid 132       cuBLAS    112.3 us  Y3 0.841x  Y4 0.983x  (Y4/Y3 time 0.855)
+1300x1025x1300 mid   stream-K grid 132       cuBLAS    162.7 us  Y3 0.886x  Y4 0.933x  (Y4/Y3 time 0.950)
+1024x1409x1024 mid   stream-K grid 132       cuBLAS    143.2 us  Y3 1.058x  Y4 0.973x  (Y4/Y3 time 1.088)
+700x1025x3000 mid   stream-K grid 66        cuBLAS    199.2 us  Y3 0.776x  Y4 0.928x  (Y4/Y3 time 0.836)
+1152x1153x1152 mid   stream-K grid 132       cuBLAS    144.4 us  Y3 0.951x  Y4 0.927x  (Y4/Y3 time 1.026)
+1408x1025x1024 mid   stream-K grid 132       cuBLAS    140.1 us  Y3 1.017x  Y4 1.000x  (Y4/Y3 time 1.018)
+2475 MHz, 190.96 W, 68
+1200x1201x1000 mid   stream-K grid 132       cuBLAS    124.4 us  Y3 0.801x  Y4 0.885x  (Y4/Y3 time 0.905)
+800x1537x1024 mid   stream-K grid 132       cuBLAS    127.7 us  Y3 0.912x  Y4 1.041x  (Y4/Y3 time 0.876)
+1792x1025x768 mid   stream-K grid 132       cuBLAS    130.6 us  Y3 0.977x  Y4 0.904x  (Y4/Y3 time 1.081)
+1000x1153x2000 mid   stream-K grid 132       cuBLAS    220.2 us  Y3 0.857x  Y4 1.003x  (Y4/Y3 time 0.854)
+960x1281x960 mid   stream-K grid 132       cuBLAS    113.3 us  Y3 0.777x  Y4 0.930x  (Y4/Y3 time 0.835)
+1300x1025x1300 mid   stream-K grid 132       cuBLAS    166.4 us  Y3 0.869x  Y4 0.930x  (Y4/Y3 time 0.934)
+1024x1409x1024 mid   stream-K grid 132       cuBLAS    146.1 us  Y3 1.063x  Y4 0.949x  (Y4/Y3 time 1.120)
+700x1025x3000 mid   stream-K grid 66        cuBLAS    206.3 us  Y3 0.798x  Y4 0.952x  (Y4/Y3 time 0.838)
+1152x1153x1152 mid   stream-K grid 132       cuBLAS    149.2 us  Y3 0.960x  Y4 0.935x  (Y4/Y3 time 1.026)
+1408x1025x1024 mid   stream-K grid 132       cuBLAS    147.3 us  Y3 1.062x  Y4 0.973x  (Y4/Y3 time 1.091)
+2475 MHz, 261.25 W, 70

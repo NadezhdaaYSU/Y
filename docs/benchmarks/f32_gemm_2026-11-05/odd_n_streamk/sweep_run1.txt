@@ -1,0 +1,16 @@
+all 28 kernels equal the in-order oracle bit for bit
+1024x1025x1024   cuBLAS    106.7 us  old    140.9 us 0.757x  new    126.5 us 0.843x
+1023x1025x1027   cuBLAS    119.8 us  old    149.5 us 0.801x  new    132.9 us 0.901x
+1025x1025x1025   cuBLAS    120.0 us  old    174.6 us 0.687x  new    162.5 us 0.738x
+1024x1021x1024   cuBLAS    100.4 us  old    102.8 us 0.977x  new    101.9 us 0.985x
+1024x1028x1024   cuBLAS    106.7 us  old    113.7 us 0.938x  new    114.8 us 0.930x
+1024x897x1024   cuBLAS     97.9 us  old     95.3 us 1.028x  new     98.6 us 0.993x
+1000x1001x1000   cuBLAS     99.6 us  old    108.4 us 0.919x  new    107.0 us 0.931x
+768x1025x768    cuBLAS     73.9 us  old     68.4 us 1.081x  new     68.7 us 1.076x
+2048x2049x1024   cuBLAS    385.1 us  old    398.3 us 0.967x  new    364.8 us 1.056x
+2047x2049x2051   cuBLAS    746.5 us  old    819.9 us 0.910x  new    760.8 us 0.981x
+4095x4097x512    cuBLAS    683.8 us  old    756.1 us 0.904x  new    748.5 us 0.913x
+1024x50257x768    cuBLAS   2727.2 us  old   2888.7 us 0.944x  new   3008.8 us 0.906x
+1024x30522x768    cuBLAS   1681.1 us  old   1753.6 us 0.959x  new   1761.6 us 0.954x
+1024x1024x1024   cuBLAS     99.2 us  old     79.9 us 1.242x  new     80.2 us 1.237x
+# 2520 MHz, 271.52 W, 73, 100 %

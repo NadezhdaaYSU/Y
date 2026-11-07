@@ -323,12 +323,19 @@ impl PtxEmitter {
     ///   The waves of whole tiles do not change this estimate; they keep the
     ///   tiles in flight adjacent (`emit_f32_gemm_streamk_kernel`).
     ///
-    /// Stream-K is taken where the model makes it at least 4% faster. Only
-    /// for N % 4 == 0: it covers ragged edges with whole tiles, and with
-    /// N % 4 != 0 the plain path's narrow tiles are what let B's rows take
-    /// their own widths (`f32_gemm_b_classes`).
+    /// Stream-K is taken where the model makes it at least 4% faster. It
+    /// covers ragged edges with whole tiles, so with N % 4 != 0 its one set
+    /// has a ragged column and copies B at one width and stores C without
+    /// the aligned pieces. That costs nothing at N odd on the 64- and
+    /// 128-column tiles, whose plain path copies B 4 bytes at a time and
+    /// stores C 4 bytes at a time anyway; there it is taken (1024 x 1025 x
+    /// 1024: the plain path's 16 one-column remainder tiles were a second
+    /// wave). Elsewhere at N % 4 != 0 the plain path's narrow tiles are what
+    /// let B's rows take their own widths (`f32_gemm_b_classes`) and C its
+    /// pieces, so it is not.
     pub(crate) fn f32_gemm_streamk_plan(t: F32GemmTile, m: u32, n: u32, k: u32, sms: u32, smem_per_sm: u32) -> Option<u32> {
-        if n % 4 != 0 || m == 0 || k == 0 {
+        let odd_narrow = n % 2 == 1 && t.bn < 256;
+        if (n % 4 != 0 && !odd_narrow) || m == 0 || k == 0 {
             return None;
         }
         let sms = if sms == 0 { 66 } else { sms } as u64;
@@ -357,7 +364,15 @@ impl PtxEmitter {
             .filter(|&j| tiles >= sms * j)
             .map(|j| (tiles as f64 / (sms * j) as f64 * time(j), sms * j))
             .min_by(|a, b| a.0.partial_cmp(&b.0).unwrap())?;
-        (plain >= sk * 1.04).then_some(p as u32)
+        // At N odd a split costs more than the model counts: its handoffs
+        // load and store C a float at a time, and each segment's prologue
+        // fills twice the copies. Of 23 odd-N shapes on the mid tile, the 9
+        // given at least 1.25x ran at 0.78-0.97x the plain time; of the 14
+        // under it, 7 ran slower (up to 1.13x) and 6 faster, with no
+        // threshold between them (docs/benchmarks/f32_gemm_2026-11-05/
+        // odd_n_streamk/).
+        let bar = if n % 4 == 0 { 1.04 } else { 1.25 };
+        (plain >= sk * bar).then_some(p as u32)
     }
 
     /// Recognise `@tile(M, N, K) kernel f(A, B, C: GlobalMemory<F32>)`, and
@@ -638,11 +653,16 @@ impl PtxEmitter {
         w_ptr: &str,
         kernel_name: &str,
     ) -> u32 {
-        assert_eq!(n % 4, 0, "stream-K covers ragged edges with whole tiles, which needs N % 4 == 0");
+        assert!(
+            n % 4 == 0 || (n % 2 == 1 && t.bn < 256),
+            "stream-K covers ragged edges with whole tiles: N % 4 == 0, or N odd on a tile narrower than 256 columns (`f32_gemm_streamk_plan`)"
+        );
         let nt = t.threads();
         let kt = k.div_ceil(t.bk);
         let tiles = m.div_ceil(t.bm) * n.div_ceil(t.bn);
         let smem = t.smem_bytes();
+        let b_bytes: Vec<String> = Self::f32_gemm_b_classes(t, n, n % t.bn != 0, k % t.bk != 0).iter().map(|c| c.bytes.to_string()).collect();
+        let b_desc = format!("{}-byte", b_bytes.join("/"));
         let edges = {
             let mut e = Vec::new();
             if m % t.bm != 0 {
@@ -650,6 +670,9 @@ impl PtxEmitter {
             }
             if n % t.bn != 0 {
                 e.push(format!("columns past N={n} are not stored"));
+            }
+            if n % 4 != 0 {
+                e.push("N odd: C stored, and a continuation's accumulators loaded, 4 bytes at a time".to_string());
             }
             if k % t.bk != 0 {
                 e.push(format!("the last K tile runs its {} valid steps", k % t.bk));
@@ -660,7 +683,7 @@ impl PtxEmitter {
             &mut self.ptx_buffer,
             "    // ========================================================\n\
              \x20   // [Y F32 SIMT GEMM] M={m} N={n} K={k} | CTA {}x{}x{} | {}x{} warps of {}x{}, {}x{} outputs per thread | tile `{}`\n\
-             \x20   // {} stages of cp.async, A transposed by 4-byte copies, B by 16-byte copies, grouped raster of {} tile rows.\n\
+             \x20   // {} stages of cp.async, A transposed by 4-byte copies, B by {b_desc} copies, grouped raster of {} tile rows.\n\
              \x20   // Stream-K, in order: {tiles} tiles of {kt} K tiles. Each CTA runs whole tiles grid-strided, then the last tiles (one to two waves' worth) are split evenly over the CTAs. A tile cut between two CTAs is continued, not summed: the first stores its exact f32 accumulators in C and sets W[tile]; the next loads them and carries the same fma chain on.\n\
              \x20   // Ragged edges: {edges}.\n\
              \x20   // Each C element is one fma.rn.f32 chain over k = 0..K-1 in order: the same bits for every shape, tile and grid.\n\
@@ -1077,11 +1100,20 @@ impl PtxEmitter {
                 w(self, format!("add.u32 {}, {}, {};", tmp, tmp, col_origin));
             }
             if rag_n {
-                // The last chunk of this width inside the row: with an edge
-                // the width divides N (`f32_gemm_b_classes`), so no chunk
-                // straddles it and the clamped one is whole.
+                // A chunk past N copies one inside the row instead: column
+                // `col - N`, at most the last chunk. Its values feed only C
+                // columns past N, which are not stored. With an edge the
+                // width divides N (`f32_gemm_b_classes`), so no chunk
+                // straddles it and the one copied is whole. (Every such
+                // lane used to copy the last chunk: at N odd, 4-byte copies,
+                // a 1-column edge tile had 127 of 128 threads reading one
+                // address, and its CTAs ran 1.8x as long as the others.)
                 assert_eq!(n % e, 0, "a B chunk would straddle N");
-                w(self, format!("min.u32 {}, {}, {};", tmp, tmp, n - e));
+                let (past, p_past) = (r(self), self.alloc_pred());
+                w(self, format!("setp.ge.u32 {}, {}, {};", p_past, tmp, n));
+                w(self, format!("sub.u32 {}, {}, {};", past, tmp, n));
+                w(self, format!("min.u32 {}, {}, {};", past, past, n - e));
+                w(self, format!("selp.u32 {}, {}, {}, {};", tmp, past, tmp, p_past));
             }
             w(self, format!("mul.wide.u32 {}, {}, 4;", off64b, tmp));
             w(self, format!("add.u64 {}, {}, {};", off64, off64, off64b));
@@ -1108,7 +1140,12 @@ impl PtxEmitter {
             // goes on as if it had never stopped. The elements past M or N
             // were never stored, are not loaded, and are never stored. `.cg`:
             // another SM wrote them, and its lines may be stale in this L1.
-            assert!(vec_n, "a stream-K tile loads its accumulators as float4, which needs N % 4 == 0");
+            // At N odd a row is 4-byte aligned only, so they are loaded one
+            // float at a time, under the guards the epilogue stores with.
+            assert!(
+                vec_n || (n % 2 == 1 && t.bn < 256),
+                "a stream-K tile loads its accumulators as float4 (N % 4 == 0) or, at N odd off the 256-column tiles, as the epilogue stores them"
+            );
             let fresh = self.alloc_label("f32_gemm_sk_fresh");
             let pz = self.alloc_pred();
             w(self, format!("setp.eq.u32 {}, {}, 0;", pz, ka));
@@ -1143,6 +1180,25 @@ impl PtxEmitter {
                         let dcol = cj * ln * 4;
                         let off = (drow as u64 * n as u64 + dcol as u64) * 4;
                         let j = (cj * 4) as usize;
+                        if !vec_n {
+                            // N odd: element by element, as the scalar
+                            // epilogue below stores them.
+                            for e in 0..4u32 {
+                                let guard = if rag_n {
+                                    w(self, format!("setp.lt.s32 {}, {}, {};", lp_col, lcol0, n as i64 - (dcol + e) as i64));
+                                    if rag_m {
+                                        w(self, format!("and.pred {}, {}, {};", lp_col, lp_col, lp_row));
+                                    }
+                                    format!("@{} ", lp_col)
+                                } else if rag_m {
+                                    format!("@{} ", lp_row)
+                                } else {
+                                    String::new()
+                                };
+                                w(self, format!("{}ld.global.cg.f32 {}, [{}+{}];", guard, acc[i][j + e as usize], gcl, off + e as u64 * 4));
+                            }
+                            continue;
+                        }
                         let guard = match (rag_m, rag_n) {
                             (false, false) => String::new(),
                             (true, false) => format!("@{} ", lp_row),

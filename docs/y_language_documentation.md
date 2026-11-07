@@ -1260,8 +1260,9 @@ for i in 0..100 {
   0.81-0.87x at 768^3, where cuBLAS splits K in three; ragged with N a
   multiple of 4, 0.91-1.26x (1000^3 to 3000^3, 1024 x 1028 x 1024,
   1025 x 1024 x 1024); N = 2 mod 4, 0.79-1.02x (BERT's 1024 x 30522 x 768:
-  1.00x); N odd, 0.77-0.98x (1023 x 1025 x 1027 to 4096 x 4097 x 4096;
-  GPT-2's 1024 x 50257 x 768: 0.85x); one row (1 x 50257 x 768), 0.98x
+  1.00x); N odd, 0.73-1.11x (1025^3 0.73-0.75x, 1023 x 1025 x 1027
+  0.89-0.90x; GPT-2's 1024 x 50257 x 768: 0.89-0.99x); one row
+  (1 x 50257 x 768), 0.98x
   ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The host backend
   refuses the kernel: it has no body there.
 * **FP32 form with a workspace (since 2026-11-06)**, `(A, B, C:
@@ -1282,8 +1283,14 @@ for i in 0..100 {
   clearing: each word is tagged with the launch's `%gridid`. One launch at
   a time per `W`. A grid larger than the CTAs that fit at once relies on
   CTAs starting in index order, and a wait over 30 s traps. Where the plan
-  keeps one tile per CTA, and for N % 4 != 0, `W` is unused and the kernel
-  is the three-parameter one (the same SASS). Against cuBLAS on an RTX 4070
+  keeps one tile per CTA, and for N % 4 != 0 except N odd on the 128- and
+  64-column tiles (there the plan asks the model for 1.25x, not 1.04x, and
+  a continuation loads C a float at a time), `W` is unused and the kernel
+  is the three-parameter one (the same SASS). With `W` at N odd, where it
+  splits: 1023 x 1025 x 1027 0.98-1.00x, 1025^3 0.97-0.98x, 0.91-1.05x
+  over 9 shapes ([record](benchmarks/f32_gemm_2026-11-05/odd_n_streamk/README.md)).
+  It assumes all its CTAs resident at once; on a GPU other programs are
+  drawing on it can be several times slower than the three-parameter form. Against cuBLAS on an RTX 4070
   Ti SUPER, three-parameter form then workspace form: 768^3 0.85-0.86x and
   1.24-1.25x, 1280^3 0.93-0.94x and 1.27-1.31x, 1536^3 1.03-1.05x and
   1.20-1.21x, 2304^3 0.92x and 1.07x, 3072^3 0.96-0.97x and 1.06-1.07x,

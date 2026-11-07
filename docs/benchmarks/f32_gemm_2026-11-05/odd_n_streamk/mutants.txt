@@ -1,0 +1,14 @@
+# mutate.py, 2026-11-07: each mutant alone, cargo test --test f32_simt_gemm, source restored after each.
+KILLED   odd reload reads the wrong element: the_workspace_form_is_the_in_order_fma_chain_on_every_grid, compute_sanitizer_finds_no_invalid_access_and_no_race (32 s)
+KILLED   odd reload without its column guard: compute_sanitizer_finds_no_invalid_access_and_no_race (32 s)
+KILLED   B past N: column N itself not redirected: compute_sanitizer_finds_no_invalid_access_and_no_race (35 s)
+KILLED   B past N: col - N not capped at the last chunk: compute_sanitizer_finds_no_invalid_access_and_no_race (35 s)
+KILLED   bar at N odd back to 1.04: the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_kernel (66 s)
+SURVIVED stream-K at N odd on the 256-column tiles too: - (67 s)
+restored: True
+#
+# The survivor is unreachable as the code stands: the large tile is taken only where its waves are
+# at least 80% full, counting a ragged edge column as whole tiles (f32_gemm_tile), which caps the
+# model's stream-K gain on it near 2/1.8 = 1.11x, under the 1.25x bar at N odd. No large-tile shape of
+# 48 scanned (M 2048-4096, N 2049-4097 odd, plan_model.py) reached the bar. The exclusion stays: the
+# stream-K kernel asserts on it, and the plain path's aligned C pieces and B row widths need it.

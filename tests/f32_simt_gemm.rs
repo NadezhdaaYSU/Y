@@ -614,7 +614,7 @@ fn sk_header(ptx: &str) -> Option<SkHeader> {
 #[test]
 fn the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_kernel() {
     let dir = profile_dir("f32_gemm_sk_plan", 66);
-    let cases: [((u32, u32, u32), Option<(&str, u32)>); 11] = [
+    let cases: [((u32, u32, u32), Option<(&str, u32)>); 17] = [
         // 72 mid tiles: one tile per CTA runs six SMs at two (0.82x cuBLAS
         // against 1.21x split).
         ((768, 768, 768), Some(("mid", 66))),
@@ -624,6 +624,10 @@ fn the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_ke
         ((3072, 3072, 3072), Some(("large", 66))),
         ((512, 768, 768), Some(("small", 66))),
         ((1024, 1028, 1024), Some(("mid", 132))),
+        // N odd on the mid tile, where the model gives at least 1.25x: the
+        // plain path's one-column remainder tiles are a second wave.
+        ((1023, 1025, 1027), Some(("mid", 132))),
+        ((1025, 1025, 1025), Some(("mid", 132))),
         // 128 tiles in 132 slots; 7.8 waves of the large tile (3%, under
         // the 4% bar); N % 4 != 0, where the plain path's remainder tiles
         // let B's rows take their own widths; 64 tiles for 66 SMs.
@@ -632,6 +636,13 @@ fn the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_ke
         ((1024, 1024, 4096), None),
         ((1024, 1026, 1024), None),
         ((512, 512, 512), None),
+        // N odd under the 1.25x bar (1.08x and 1.18x by the model; split,
+        // they ran 1.13x and 1.02x the plain time), and N odd on the large
+        // tile, whose plain path stores C in aligned pieces.
+        ((768, 1025, 768), None),
+        ((2048, 1025, 1024), None),
+        ((4095, 4097, 512), None),
+        ((1024, 50257, 768), None),
     ];
     let ptxas = ptxas::ptxas();
     let cuobjdump = ptxas.as_ref().map(|p| p.with_file_name("cuobjdump")).filter(|c| c.exists());
@@ -655,8 +666,14 @@ fn the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_ke
                 assert_eq!(h.w_words, h.tiles as usize, "{m}x{n}x{k}: one W word a tile");
                 // The handoff's instructions, and still nothing but fma on
                 // the values.
-                for needle in ["ld.acquire.gpu.global.u64", "st.release.gpu.global.u64", "%gridid", "ld.global.cg.v4.f32"] {
+                // A continuation loads C as float4, or at N odd a float at a
+                // time (a row is only 4-byte aligned).
+                let load = if n % 4 == 0 { "ld.global.cg.v4.f32" } else { "ld.global.cg.f32 " };
+                for needle in ["ld.acquire.gpu.global.u64", "st.release.gpu.global.u64", "%gridid", load] {
                     assert!(ptx.contains(needle), "{m}x{n}x{k}: no `{needle}`");
+                }
+                if n % 4 != 0 {
+                    assert!(!ptx.contains("ld.global.cg.v4.f32") && !ptx.contains("st.global.v4.f32"), "{m}x{n}x{k}: a float4 access of C at N odd");
                 }
                 assert!(!ptx.contains("add.f32") && !ptx.contains("mul.f32") && !ptx.contains("add.rn.f32"), "{m}x{n}x{k}");
                 let _ = sass(&ptx, "sk");
@@ -681,7 +698,7 @@ fn the_workspace_form_splits_k_where_the_model_says_and_is_otherwise_the_same_ke
 /// a profile of few SMs, so every element can be checked. Ragged M and N,
 /// a K tail, one, two and many K tiles, each tile. The schedule depends on
 /// the GRID, not the profile, so each runs on several.
-const STREAMK_SHAPES: [(u32, u32, u32, u32, &str); 15] = [
+const STREAMK_SHAPES: [(u32, u32, u32, u32, &str); 20] = [
     (241, 140, 80, 5, "mid"),
     (241, 140, 200, 5, "mid"),
     (144, 388, 7, 8, "mid"),
@@ -697,6 +714,13 @@ const STREAMK_SHAPES: [(u32, u32, u32, u32, &str); 15] = [
     (590, 812, 15, 8, "large"),
     (683, 1036, 48, 8, "large"),
     (384, 1188, 40, 6, "large"),
+    // N odd (the mid and small tiles only): a continuation loads C a float
+    // at a time. 1 and 3 mod 4, a K tail with 2 and 63 K tiles, ragged M.
+    (215, 181, 17, 6, "mid"),
+    (215, 183, 256, 6, "mid"),
+    (197, 181, 1000, 6, "mid"),
+    (35, 221, 33, 3, "small"),
+    (60, 221, 300, 3, "small"),
 ];
 
 #[test]
@@ -760,8 +784,9 @@ fn the_workspace_form_is_the_in_order_fma_chain_on_every_grid() {
 /// large tiles, where a continuation loads the partial last tile in the
 /// loop, not the prologue. A loop K limit that forgot where its segment
 /// started still gave the right bits (the tail never reads past K) and read
-/// past A and B; only this run sees it.
-const STREAMK_SANITIZED: [usize; 8] = [0, 1, 2, 3, 6, 10, 11, 12];
+/// past A and B; only this run sees it. The N odd shapes: a continuation's
+/// element loads past N, unguarded, read past C only here.
+const STREAMK_SANITIZED: [usize; 12] = [0, 1, 2, 3, 6, 10, 11, 12, 15, 17, 18, 19];
 
 /// Child: stream-K runs for compute-sanitizer, W exactly as large as the
 /// header says.

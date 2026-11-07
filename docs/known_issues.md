@@ -210,7 +210,15 @@ source; each entry there now carries its status. What is still open:
   0.92-0.94x (a second small CTA on an SM adds only 8%) and 2048 x 768 x
   3072 0.97-0.98x. By kernel time, 256^3 is about 0.92x.
 - The workspace form's limits:
-  - only for N % 4 == 0; otherwise `W` is unused;
+  - only for N % 4 == 0, and since 2026-11-07 for N odd on the 128- and
+    64-column tiles where the model gives at least 1.25x; otherwise `W` is
+    unused. That bar leaves wins below it: of 14 odd-N shapes under it, 6
+    ran faster split and 7 slower, and the model does not tell them apart
+    (`docs/benchmarks/f32_gemm_2026-11-05/odd_n_streamk/`);
+  - it assumes every CTA of the grid is resident at once. On the desktop
+    GPU, while other programs drew, 1024 x 1028 x 1024 with `W` measured
+    94.6-516 us across runs, where the three-parameter form held steady.
+    Its speedups are measured on an idle card;
   - a grid larger than the CTAs that fit at once relies on CTAs starting
     in index order (it held on this card at 2P+5, 4P and 1000 CTAs), and
     a wait over 30 s traps instead of hanging;
@@ -231,9 +239,17 @@ source; each entry there now carries its status. What is still open:
   widest aligned pieces, and GPT-2's 1024 x 50257 x 768 went from 0.85x to
   0.96-0.99x, 4095 x 4097 x 512 from 0.77x to 0.92x
   (`docs/benchmarks/f32_gemm_2026-11-05/odd_n_stores/`). The 128-column
-  tile keeps 4-byte stores, where the pieces measured 1.02-1.09x slower:
-  1023 x 1025 x 1027 is 0.80-0.86x. Left at N odd: B's 4-byte rows, and
-  2.8x C's sectors in L2 writes.
+  tile keeps 4-byte stores, where the pieces measured 1.02-1.09x slower.
+  There 1023 x 1025 x 1027 went from 0.80x to 0.89-0.90x on 2026-11-07,
+  when B chunks past N stopped being copied from one address, and with
+  `W` to 0.98-1.00x (`docs/benchmarks/f32_gemm_2026-11-05/odd_n_streamk/`).
+  Left at N odd: B's 4-byte rows and C's 4-byte stores on the 128- and
+  64-column tiles (about 12% within one wave: 1024 x 897 x 1024 against
+  N = 900), 2.8x C's sectors in L2 writes on the large tile, and a second
+  wave without `W` where a one-column remainder follows a full wave
+  (1025^3: 0.73-0.75x). 1024 x 897 x 1024 lost 2-3% to the B change
+  (1.03x to 1.00x cuBLAS), and zero-filling those copies instead measured
+  the same; the cause is not known.
 - Remainder tiles take a leftover of at most half a tile on a side of at
   most 50 tiles. Leftovers past that stay in ragged whole tiles, which can
   still add a mostly empty wave. Three whole-tile sizes do not fit every
