@@ -1,9 +1,37 @@
 use std::fs;
 use std::path::Path;
 
+static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// A library call (the C API, so the Python package) does not print the
+/// profile it loads or the probe's progress: that was 24 lines on the
+/// caller's stdout for every kernel compiled. The `Y` executable never sets
+/// this, and `Y_VERBOSE=1` prints them for a library call too. A probe that
+/// runs still says so, once, on stderr.
+pub fn set_quiet(quiet: bool) {
+    QUIET.store(quiet, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether this module's (and the autotuner's) progress lines are suppressed.
+pub(crate) fn quiet() -> bool {
+    QUIET.load(std::sync::atomic::Ordering::Relaxed)
+        && !std::env::var("Y_VERBOSE").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 macro_rules! log_info {
     ($($arg:tt)*) => {
-        println!("\x1b[1;36m[*]\x1b[0m {}", format_args!($($arg)*));
+        if !quiet() {
+            println!("\x1b[1;36m[*]\x1b[0m {}", format_args!($($arg)*));
+        }
+    };
+}
+
+/// `println!`, unless `quiet()`.
+macro_rules! say {
+    ($($arg:tt)*) => {
+        if !quiet() {
+            println!($($arg)*);
+        }
     };
 }
 
@@ -665,7 +693,7 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
             None => decided.arch.clone(),
             Some(_) => format!("no GPU architecture recorded; PTX targets {}", decided.arch),
         };
-        println!(
+        say!(
             "[*] Found existing {}, skipping Sentinel Probe (assuming {} / {}).",
             profile_path,
             parse_profile_value(&contents, "GPU_NAME").unwrap_or("unknown GPU"),
@@ -698,7 +726,7 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
         let live_avx = host_has_avx();
         let live_avx512 = host_has_avx512();
         if cached_avx != live_avx || cached_avx512 != live_avx512 {
-            println!(
+            say!(
                 "    -> NOTE: {} says AVX={} AVX512={}, this machine reports AVX={} AVX512={}. \
                  Using the machine. Delete the file to re-probe.",
                 profile_path, cached_avx, cached_avx512, live_avx, live_avx512
@@ -820,60 +848,60 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
             fma_ilp_cycles_per_op: parse_f64_field(&contents, "FMA_ILP_CYCLES_PER_OP").unwrap_or(4.5),
         };
 
-        println!("    -> Loaded AVX: {}", profile.has_avx);
-        println!("    -> Loaded AVX-512: {}", profile.has_avx512);
-        println!(
+        say!("    -> Loaded AVX: {}", profile.has_avx);
+        say!("    -> Loaded AVX-512: {}", profile.has_avx512);
+        say!(
             "    -> Loaded L2 Cache Line Size: {} bytes",
             profile.l2_line_size
         );
-        println!(
+        say!(
             "    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): {} / {} / {} / {} cycles",
             profile.l1_latency_cycles, profile.l2_latency_cycles, profile.l3_latency_cycles, profile.mem_latency_cycles
         );
-        println!("    -> Loaded CPU AVX-512 Instruction Throughput: {:.2} cycles per op", profile.avx512_throughput_cycles);
-        println!("    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: {} cycles", profile.thread_scheduling_cost_cycles);
-        println!("    -> Loaded GPU Name: {}", profile.gpu_name);
-        println!("    -> Loaded GPU Vendor: {}", profile.gpu_vendor);
-        println!("    -> Loaded SM Version / Compute Capability: {} / {}", profile.sm_version, profile.compute_capability);
-        println!("    -> Loaded SM (Multiprocessor) Count: {}", profile.sm_count);
-        println!(
+        say!("    -> Loaded CPU AVX-512 Instruction Throughput: {:.2} cycles per op", profile.avx512_throughput_cycles);
+        say!("    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: {} cycles", profile.thread_scheduling_cost_cycles);
+        say!("    -> Loaded GPU Name: {}", profile.gpu_name);
+        say!("    -> Loaded GPU Vendor: {}", profile.gpu_vendor);
+        say!("    -> Loaded SM Version / Compute Capability: {} / {}", profile.sm_version, profile.compute_capability);
+        say!("    -> Loaded SM (Multiprocessor) Count: {}", profile.sm_count);
+        say!(
             "    -> GPU FMA/IMAD/MUFU Latencies: {} / {} / {}",
             profile.fma_latency_cycles,
             profile.imad_latency_cycles,
             profile.mufu_rcp_latency_cycles
         );
-        println!(
+        say!(
             "    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): {} / {} / {} / {}",
             profile.smem_latency_cycles,
             profile.l1_gpu_latency_cycles,
             profile.l2_gpu_latency_cycles,
             profile.vram_latency_cycles
         );
-        println!(
+        say!(
             "    -> GPU Tensor Core Latencies (F16/TF32): {} / {}",
             profile.hmma_f16_latency_cycles, profile.tf32_latency_cycles
         );
-        println!(
+        say!(
             "    -> Warp Shuffle vs SMEM Exchange: {} / {} cycles",
             profile.shfl_sync_latency_cycles, profile.smem_exchange_latency_cycles
         );
-        println!(
+        say!(
             "    -> Bit-Field (BFE/BFI vs AND+SHIFT): {} / {} vs {}",
             profile.bfe_latency_cycles,
             profile.bfi_latency_cycles,
             profile.and_shift_latency_cycles
         );
-        println!(
+        say!(
             "    -> Branch Divergence Penalty: {} cycles (uniform={}, divergent={})",
             profile.branch_divergence_penalty_cycles,
             profile.branch_uniform_cycles,
             profile.branch_divergent_cycles
         );
-        println!(
+        say!(
             "    -> Texture Unit (TEX1D): {} cycles",
             profile.tex1d_latency_cycles
         );
-        println!(
+        say!(
             "    -> IMAD.WIDE: {} cycles | SFU (EX2/SIN/RSQ/LG2): {} / {} / {} / {}",
             profile.imad_wide_latency_cycles,
             profile.mufu_ex2_latency_cycles,
@@ -881,20 +909,20 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
             profile.mufu_rsq_latency_cycles,
             profile.mufu_lg2_latency_cycles
         );
-        println!(
+        say!(
             "    -> Reduced Precision (HFMA2/BF16x2): {} / {} | LOP3.LUT: {}",
             profile.hfma2_latency_cycles,
             profile.bf16x2_fma_latency_cycles,
             profile.lop3_lut_latency_cycles
         );
-        println!(
+        say!(
             "    -> FP64 DADD: {} | REDUX.SUM: {} | MEMBAR.GPU: {} | LDC: {}",
             profile.dadd_latency_cycles,
             profile.redux_sum_latency_cycles,
             profile.membar_gpu_latency_cycles,
             profile.ldc_latency_cycles
         );
-        println!(
+        say!(
             "    -> HW Limits: {} regs/thread, {} regs/SM, warp={}, {}KB smem/SM, {}MB VRAM",
             profile.max_regs_per_thread,
             profile.max_regs_per_sm,
@@ -902,12 +930,18 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
             profile.max_smem_per_sm_bytes / 1024,
             profile.total_global_mem_mb
         );
-        println!("    -> Zero Drift Types: {:?}", profile.drift_free_types);
+        say!("    -> Zero Drift Types: {:?}", profile.drift_free_types);
 
         return profile;
     }
 
     log_info!("First boot detected! Running Sentinel Hardware Probe...");
+    if quiet() {
+        eprintln!(
+            "y: no hardware profile at {profile_path}; measuring this machine once \
+             (ysu_gpu_probe) and saving it there"
+        );
+    }
 
     let mut features = [0u32; 4];
 
@@ -926,7 +960,7 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
     let has_avx512 = host_has_avx512();
     let l2_line_size = features[3] & 0xFF;
 
-    println!("      -> CPU Features: AVX={}, AVX-512={}, L2 Cache Line Size={}", has_avx, has_avx512, l2_line_size);
+    say!("      -> CPU Features: AVX={}, AVX-512={}, L2 Cache Line Size={}", has_avx, has_avx512, l2_line_size);
     
     log_info!("Running Analytical CPU Memory Bus Latency Sweep...");
     let l1_latency_cycles = measure_cache_latency(16 * 1024);
@@ -1107,10 +1141,10 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
                 .filter(|s| !s.is_empty())
                 .collect();
 
-            println!("    -> GPU Probe returned successfully.");
+            say!("    -> GPU Probe returned successfully.");
         }
         _ => {
-            println!("    -> [!] Failed to run GPU microbenchmark probe. Falling back to generic profile.");
+            say!("    -> [!] Failed to run GPU microbenchmark probe. Falling back to generic profile.");
         }
     }
 
@@ -1204,55 +1238,55 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
         fma_ilp_cycles_per_op: parse_f64_field(&stdout_content, "FMA_ILP_CYCLES_PER_OP").unwrap_or(4.5),
     };
 
-    println!("    -> Detected AVX: {}", profile.has_avx);
-    println!("    -> Detected AVX-512: {}", profile.has_avx512);
-    println!("    -> L2 Cache Line Size: {} bytes", profile.l2_line_size);
-    println!(
+    say!("    -> Detected AVX: {}", profile.has_avx);
+    say!("    -> Detected AVX-512: {}", profile.has_avx512);
+    say!("    -> L2 Cache Line Size: {} bytes", profile.l2_line_size);
+    say!(
         "    -> CPU Memory Latency Sweep (L1/L2/L3/Mem): {} / {} / {} / {} cycles",
         profile.l1_latency_cycles, profile.l2_latency_cycles, profile.l3_latency_cycles, profile.mem_latency_cycles
     );
-    println!("    -> CPU AVX-512 Instruction Throughput: {:.2} cycles per op", profile.avx512_throughput_cycles);
-    println!("    -> CPU Thread Scheduling/Context Switch Handoff Cost: {} cycles", profile.thread_scheduling_cost_cycles);
-    println!("    -> Detected GPU: {}", profile.gpu_name);
-    println!("    -> Detected SM (Multiprocessor) Count: {}", profile.sm_count);
-    println!(
+    say!("    -> CPU AVX-512 Instruction Throughput: {:.2} cycles per op", profile.avx512_throughput_cycles);
+    say!("    -> CPU Thread Scheduling/Context Switch Handoff Cost: {} cycles", profile.thread_scheduling_cost_cycles);
+    say!("    -> Detected GPU: {}", profile.gpu_name);
+    say!("    -> Detected SM (Multiprocessor) Count: {}", profile.sm_count);
+    say!(
         "    -> GPU FMA/IMAD/MUFU Latencies: {} / {} / {}",
         profile.fma_latency_cycles, profile.imad_latency_cycles, profile.mufu_rcp_latency_cycles
     );
-    println!(
+    say!(
         "    -> GPU Thermal Latency Gradient (40C/60C/80C): {} / {} / {}",
         profile.thermal_latency_40c, profile.thermal_latency_60c, profile.thermal_latency_80c
     );
-    println!(
+    say!(
         "    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): {} / {} / {} / {}",
         profile.smem_latency_cycles,
         profile.l1_gpu_latency_cycles,
         profile.l2_gpu_latency_cycles,
         profile.vram_latency_cycles
     );
-    println!(
+    say!(
         "    -> GPU Tensor Core Latencies (F16/TF32): {} / {}",
         profile.hmma_f16_latency_cycles, profile.tf32_latency_cycles
     );
-    println!(
+    say!(
         "    -> Warp Shuffle vs SMEM Exchange: {} / {} cycles",
         profile.shfl_sync_latency_cycles, profile.smem_exchange_latency_cycles
     );
-    println!(
+    say!(
         "    -> Bit-Field (BFE/BFI vs AND+SHIFT): {} / {} vs {}",
         profile.bfe_latency_cycles, profile.bfi_latency_cycles, profile.and_shift_latency_cycles
     );
-    println!(
+    say!(
         "    -> Branch Divergence Penalty: {} cycles (uniform={}, divergent={})",
         profile.branch_divergence_penalty_cycles,
         profile.branch_uniform_cycles,
         profile.branch_divergent_cycles
     );
-    println!(
+    say!(
         "    -> Texture Unit (TEX1D): {} cycles",
         profile.tex1d_latency_cycles
     );
-    println!(
+    say!(
         "    -> IMAD.WIDE: {} cycles | SFU (EX2/SIN/RSQ/LG2): {} / {} / {} / {}",
         profile.imad_wide_latency_cycles,
         profile.mufu_ex2_latency_cycles,
@@ -1260,20 +1294,20 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
         profile.mufu_rsq_latency_cycles,
         profile.mufu_lg2_latency_cycles
     );
-    println!(
+    say!(
         "    -> Reduced Precision (HFMA2/BF16x2): {} / {} | LOP3.LUT: {}",
         profile.hfma2_latency_cycles,
         profile.bf16x2_fma_latency_cycles,
         profile.lop3_lut_latency_cycles
     );
-    println!(
+    say!(
         "    -> FP64 DADD: {} | REDUX.SUM: {} | MEMBAR.GPU: {} | LDC: {}",
         profile.dadd_latency_cycles,
         profile.redux_sum_latency_cycles,
         profile.membar_gpu_latency_cycles,
         profile.ldc_latency_cycles
     );
-    println!(
+    say!(
         "    -> HW Limits: {} regs/thread, {} regs/SM, warp={}, {}KB smem/SM, {}MB VRAM",
         profile.max_regs_per_thread,
         profile.max_regs_per_sm,
@@ -1281,12 +1315,12 @@ pub fn check_or_probe_hardware() -> HardwareProfile {
         profile.max_smem_per_sm_bytes / 1024,
         profile.total_global_mem_mb
     );
-    println!(
+    say!(
         "    -> Verified Zero Drift Types: {:?}",
         profile.drift_free_types
     );
 
-    println!("[*] Saving hardware topology to {}...", profile_path);
+    say!("[*] Saving hardware topology to {}...", profile_path);
     let serialized = format!(
         "AVX={}\nAVX512={}\nL2_LINE={}\nL1_CYCLES={}\nL2_CYCLES={}\nL3_CYCLES={}\nMEM_CYCLES={}\nAVX512_THROUGHPUT={}\nTHREAD_SCHEDULING_COST={}\nGPU_NAME={}\n\
          GPU_VENDOR={}\nSM_VERSION={}\nCOMPUTE_CAPABILITY={}\nSM_COUNT={}\n\

@@ -135,7 +135,9 @@ unsafe fn compile_to_ptx(
         return ptr::null_mut();
     }
 
-    // Step 4: Hardware-Sentient Probe & Target Selection
+    // Step 4: Hardware-Sentient Probe & Target Selection. A library call does
+    // not print the profile on the caller's stdout (`sentinel::set_quiet`).
+    crate::sentinel::set_quiet(true);
     let mut hw_profile = crate::sentinel::check_or_probe_hardware();
     if !sm_str.is_empty() && sm_str != "auto" {
         // The caller NAMED a target. One that names no architecture is the
