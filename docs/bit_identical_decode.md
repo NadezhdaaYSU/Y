@@ -5,6 +5,10 @@
 Model: Qwen2.5-0.5B-Instruct · GPU: RTX 4070 Ti SUPER · Stack: PyTorch + Triton
 prototype (not the compiler's own PTX kernels)
 
+*Later sections extend this report: CPU against GPU and Qwen2.5-7B (Finding 12,
+to 2026-11-07), and the linear layers and `p·V` on the compiler's own kernels
+(`Y_EXACT_GEMM=y`, `Y_EXACT_V_INT8=1`).*
+
 A quantized transformer whose output does not depend on who else is in the
 batch — now measured against its accuracy cost, its speed cost, and the things
 it still cannot claim.
@@ -1101,28 +1105,34 @@ record. That is at short contexts, where the kernel gains least.
 Written at the same length as the findings, because a status report that buries
 this is worth nothing to the person reading it.
 
-### The alternative has no baseline — never measured
+### The fixed-order baseline is naive, and the int8 one is missing
 
-Every comparison here is exact-versus-stock. **Nobody has measured exact versus
-fixed-order float** — keeping bf16 and pinning the reduction schedule, which is
-what a competitor shipping "batch-invariant kernels" would do. That is the
-control that actually answers whether exactness is necessary. My expectation is
-that it wins on accuracy and loses on throughput, because pinning the order
-forfeits autotuning and split-K; but this project's record on predictions is one
-2x forecast that measured 1.06x. It is the single strongest experiment left.
+This section used to say exact against fixed-order float was never measured.
+Finding 11 measured it: pinned-order fp32 is also 0/16, at 6.85x slower than
+stock where exact is 1.03x. Two gaps remain:
+- **That arm is the naive construction.** It pins the order with chunked
+  loops in Python. A hand-written fixed-order CUDA kernel would be far faster,
+  and none has been measured.
+- **No int8 engine without exactness has been measured.** At 7B, exact is
+  1.50x faster than stock bf16 because its weights are int8 (Finding 12, At
+  7B). What prices determinism there is a non-deterministic int8 engine on the
+  same card.
 
-### One model, one GPU, one stack — narrow evidence
+### One model family, one GPU — narrow evidence
 
-Qwen2.5-0.5B-Instruct on an RTX 4070 Ti SUPER, in a PyTorch prototype rather
-than the compiler's own PTX kernels. Head dimension 64 here. At 128 the
-exactness budget (1032) still admits the default 1023 K levels, and Qwen2.5-7B
-has run at that width on a CPU and a GPU (Finding 12), though only for agreement,
-not accuracy; at 256 it forces 511, untested on a real model. The cross-GPU claim — the strongest thing exactness buys over
-pinning the order — has never been run on a second GPU.
+Qwen2.5-0.5B-Instruct on an RTX 4070 Ti SUPER, in a PyTorch prototype. Two of
+its products can run on the compiler's own kernels: the linear layers on Y's
+int8 GEMM (`Y_EXACT_GEMM=y`) and, with the int8 V cache, `p·V` on
+`tests/exact_pv.ysu` (`Y_EXACT_V_INT8=1`); the rest is torch and Triton. Head
+dimension 64 here. At 128 the exactness budget (1032) still admits the default
+1023 K levels, and Qwen2.5-7B has run at that width on a CPU and a GPU
+(Finding 12), though only for agreement, not accuracy; at 256 it forces 511,
+untested on a real model.
 
-`tools/exact_cross_device.py` is the harness for it, built and self-tested but
-**not yet run against a second card**, which is the only reason this paragraph
-still says what it says. `--record` writes a per-device artifact (tokens, the
+The cross-device claim, the strongest thing exactness buys over pinning the
+order, is measured CPU against GPU (Finding 12: exact 0/5, stock 5/5, at 0.5B
+and 7B). **It has never been run on a second GPU.** `tools/exact_cross_device.py`
+is the harness for both; `--record` writes a per-device artifact (tokens, the
 integer-exp domain digest, a CPU-side weight fingerprint, the sanity-gate
 verdict, and a same-card re-run check); `--compare` is pure Python and refuses
 six ways for a comparison to be vacuous — same device, a control that did not
