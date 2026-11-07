@@ -538,9 +538,15 @@ pub struct HardwareProfile {
 ///
 /// The temp file is a sibling, so the rename stays on one filesystem and is
 /// atomic, and its name is unique to this process and call.
+///
+/// The profile can live in a cache directory that does not exist yet
+/// (`hw_profile_path`), so the parent is created first.
 pub(crate) fn write_profile_atomically(path: &str, contents: &str) -> std::io::Result<()> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static NEXT: AtomicUsize = AtomicUsize::new(0);
+    if let Some(parent) = Path::new(path).parent().filter(|p| !p.as_os_str().is_empty()) {
+        fs::create_dir_all(parent)?;
+    }
     let tmp = format!("{path}.tmp.{}.{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
     let result = fs::write(&tmp, contents).and_then(|_| fs::rename(&tmp, path));
     if result.is_err() {
@@ -580,8 +586,63 @@ fn parse_f64_field(contents: &str, key: &str) -> Option<f64> {
     parse_profile_value(contents, key)?.parse().ok()
 }
 
+/// The file the wheel puts beside an installed `liby.so` (`python/setup.py`).
+/// That copy keeps its profile in the user's cache directory, so a package
+/// installed with pip does not write into whatever directory it runs from.
+pub const USER_CACHE_MARKER: &str = "PROFILE_IN_USER_CACHE";
+
+/// Where the hardware profile is read and written, in order:
+/// 1. `YSU_HW_PROFILE`, if set and not empty;
+/// 2. `.ysu_hw_profile` in the working directory, if it exists (a pinned
+///    profile, a harness's copy, the repository's own);
+/// 3. for a library with `USER_CACHE_MARKER` beside it, `hw_profile` in
+///    `YSU_CACHE_DIR`, else `$XDG_CACHE_HOME/y-lang`, else `~/.cache/y-lang`;
+/// 4. otherwise `.ysu_hw_profile` in the working directory, as always: the
+///    `Y` executable and a `liby.so` built in the repository carry no marker.
+///
+/// Every reader and writer of the profile (the probe, the autotuner's
+/// persisted tiles, `@ZeroDrift`'s measured costs) goes through this, and
+/// the Python package asks for it through `y_hw_profile_path` to key its
+/// PTX cache on the same file.
+pub fn hw_profile_path() -> std::path::PathBuf {
+    let installed = crate::type_checker::own_object_path()
+        .and_then(|object| object.parent().map(|dir| dir.join(USER_CACHE_MARKER)))
+        .is_some_and(|marker| marker.is_file());
+    resolve_profile_path(
+        std::env::var("YSU_HW_PROFILE").ok().as_deref(),
+        Path::new(".ysu_hw_profile").exists(),
+        installed,
+        user_cache_dir(),
+    )
+}
+
+fn user_cache_dir() -> Option<std::path::PathBuf> {
+    let set = |key: &str| std::env::var_os(key).filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
+    set("YSU_CACHE_DIR")
+        .or_else(|| set("XDG_CACHE_HOME").map(|d| d.join("y-lang")))
+        .or_else(|| set("HOME").map(|d| d.join(".cache").join("y-lang")))
+}
+
+fn resolve_profile_path(
+    variable: Option<&str>,
+    local_exists: bool,
+    installed: bool,
+    cache: Option<std::path::PathBuf>,
+) -> std::path::PathBuf {
+    if let Some(path) = variable.filter(|p| !p.is_empty()) {
+        return path.into();
+    }
+    let local = std::path::PathBuf::from(".ysu_hw_profile");
+    match cache {
+        Some(dir) if installed && !local_exists => dir.join("hw_profile"),
+        _ => local,
+    }
+}
+
 pub fn check_or_probe_hardware() -> HardwareProfile {
-    let profile_path = ".ysu_hw_profile";
+    let profile_path_buf = hw_profile_path();
+    let profile_path_owned = profile_path_buf.to_string_lossy().into_owned();
+    let profile_path: &str = &profile_path_owned;
 
     if Path::new(profile_path).exists() {
         let contents = fs::read_to_string(profile_path).unwrap_or_default();
@@ -1387,5 +1448,38 @@ mod profile_write_tests {
         let leftovers: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
         assert_eq!(leftovers.len(), 1, "temp files were left behind: {leftovers:?}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The profile may live in a cache directory nobody has created yet.
+    #[test]
+    fn a_profile_is_written_into_a_directory_that_does_not_exist_yet() {
+        let dir = std::env::temp_dir().join(format!("y_profile_mkdir_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("y-lang").join("hw_profile");
+        write_profile_atomically(&path.to_string_lossy(), "SM_VERSION=8.9\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "SM_VERSION=8.9\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Each rule of `hw_profile_path`, and the order between them.
+    #[test]
+    fn the_profile_path_rules() {
+        use super::resolve_profile_path as resolve;
+        use std::path::PathBuf;
+        let local = PathBuf::from(".ysu_hw_profile");
+        let cache = || Some(PathBuf::from("/c/y-lang"));
+        // The variable wins over everything, a local file included.
+        assert_eq!(resolve(Some("/p/prof"), true, true, cache()), PathBuf::from("/p/prof"));
+        assert_eq!(resolve(Some("/p/prof"), false, false, None), PathBuf::from("/p/prof"));
+        // An empty variable is unset.
+        assert_eq!(resolve(Some(""), false, false, cache()), local);
+        // Installed, with no local profile: the user's cache.
+        assert_eq!(resolve(None, false, true, cache()), PathBuf::from("/c/y-lang/hw_profile"));
+        // Installed, but the working directory has one: that one.
+        assert_eq!(resolve(None, true, true, cache()), local);
+        // Not installed (the `Y` executable, a repository build): the working directory.
+        assert_eq!(resolve(None, false, false, cache()), local);
+        // Installed with no HOME, XDG_CACHE_HOME or YSU_CACHE_DIR: nowhere better.
+        assert_eq!(resolve(None, false, true, None), local);
     }
 }

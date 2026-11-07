@@ -313,7 +313,10 @@ fn forced_config() -> Option<AutotuneCandidate> {
 // by key and ignores lines it does not recognise, so appending here cannot
 // disturb it.
 
-const PROFILE_PATH: &str = ".ysu_hw_profile";
+/// The profile file, wherever `sentinel::hw_profile_path` puts it.
+fn profile_path() -> String {
+    crate::sentinel::hw_profile_path().to_string_lossy().into_owned()
+}
 
 /// `AUTOTUNE_F16_4096x4096x4096_NVIDIAGeForceRTX4070TiSUPER`.
 ///
@@ -447,7 +450,7 @@ fn load_persisted(
 
 /// The profile's value for `key`, if it has one.
 fn load_profile_value(key: &str) -> Option<String> {
-    let contents = std::fs::read_to_string(PROFILE_PATH).ok()?;
+    let contents = std::fs::read_to_string(profile_path()).ok()?;
     contents
         .lines()
         .filter_map(|line| line.split_once('='))
@@ -506,7 +509,7 @@ fn load_persisted_nearest(
     let prefix = format!("AUTOTUNE_{}_", tag);
     let suffix = format!("_{}", gpu);
 
-    let contents = std::fs::read_to_string(PROFILE_PATH).ok()?;
+    let contents = std::fs::read_to_string(profile_path()).ok()?;
     let mut best: Option<(f64, AutotuneCandidate, (u32, u32, u32))> = None;
 
     for line in contents.lines() {
@@ -580,7 +583,8 @@ fn store_profile_value(key: &str, value: &str) {
     let key = key.to_string();
     let entry = format!("{}={}", key, value);
 
-    let existing = std::fs::read_to_string(PROFILE_PATH).unwrap_or_default();
+    let path = profile_path();
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
     if existing.is_empty() {
         // No hardware profile yet - do not create a half-written one that
         // `check_or_probe_hardware` would then treat as a completed probe and
@@ -609,8 +613,8 @@ fn store_profile_value(key: &str, value: &str) {
     // profile, and a torn write does not merely lose a cached tile: a
     // truncated `.ysu_hw_profile` still *exists*, so `check_or_probe_hardware`
     // would skip probing and silently compile against half-parsed defaults.
-    if let Err(e) = crate::sentinel::write_profile_atomically(PROFILE_PATH, &out) {
-        eprintln!("[Y autotuner] could not persist tuning result to {}: {}", PROFILE_PATH, e);
+    if let Err(e) = crate::sentinel::write_profile_atomically(&path, &out) {
+        eprintln!("[Y autotuner] could not persist tuning result to {}: {}", path, e);
     }
 }
 
@@ -1419,7 +1423,7 @@ impl Autotuner {
                 let cached = fit(cached, "measured");
                 println!(
                     "         [Y autotuner] measured tile from {} for M={} N={} K={} ({}): {}x{}x{} {}x{} s{}",
-                    PROFILE_PATH,
+                    profile_path(),
                     m, n, k, tag,
                     cached.cta_m, cached.cta_n, cached.cta_k,
                     cached.warps_m, cached.warps_n, cached.num_stages

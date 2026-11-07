@@ -137,6 +137,30 @@ class YCompilerLib:
         self.lib.y_free_string.argtypes = [ctypes.c_void_p]
         self.lib.y_free_string.restype = None
 
+        # char* y_hw_profile_path(void). Absent from a library built before
+        # it, which always used `.ysu_hw_profile` in the working directory.
+        profile_fn = getattr(self.lib, "y_hw_profile_path", None)
+        if profile_fn is not None:
+            profile_fn.argtypes = []
+            profile_fn.restype = ctypes.c_void_p
+
+    def hw_profile_path(self) -> Path:
+        """The hardware profile this library reads and writes, as the compiler
+        resolves it (`sentinel::hw_profile_path`): `YSU_HW_PROFILE`, else the
+        working directory's `.ysu_hw_profile` if it exists, else, for a wheel's
+        library, `hw_profile` in the user cache directory."""
+        profile_fn = getattr(self.lib, "y_hw_profile_path", None)
+        if profile_fn is None:
+            return Path.cwd() / ".ysu_hw_profile"
+        ptr = profile_fn()
+        if not ptr:
+            raise RuntimeError("y_hw_profile_path returned no path")
+        try:
+            raw = ctypes.cast(ptr, ctypes.c_char_p).value.decode("utf-8", "surrogateescape")
+        finally:
+            self.lib.y_free_string(ptr)
+        return Path.cwd() / raw
+
     @classmethod
     def get_instance(cls):
         if cls._instance is None:
@@ -168,9 +192,32 @@ _CACHE_STATS = {
     "misses": 0,
 }
 
+# `python/setup.py` puts this file beside the wheel's `liby.so`. That copy
+# keeps its caches, and the compiler its hardware profile
+# (`sentinel::USER_CACHE_MARKER`), in the user cache directory rather than in
+# whatever directory it runs from.
+USER_CACHE_MARKER = "PROFILE_IN_USER_CACHE"
+
+
+def _installed_library() -> bool:
+    try:
+        return (Path(_find_liby()).parent / USER_CACHE_MARKER).is_file()
+    except RuntimeError:
+        return False
+
+
+def _user_cache_root() -> Path:
+    base = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    return Path(base) / "y-lang"
+
+
 def get_cache_dir() -> Path:
+    """`YSU_CACHE_DIR`; else, for a wheel's library, `ptx` in the user cache
+    directory; else `.ysu/cache` in the working directory."""
     if "YSU_CACHE_DIR" in os.environ:
         path = Path(os.environ["YSU_CACHE_DIR"]).resolve()
+    elif _installed_library():
+        path = _user_cache_root() / "ptx"
     else:
         path = Path.cwd() / ".ysu" / "cache"
     path.mkdir(parents=True, exist_ok=True)
@@ -206,11 +253,12 @@ def clear_disk_cache() -> int:
     return count
 
 
-def _ptx_cache_context():
+def _ptx_cache_context(lib):
     # The C API reads this profile even for explicit SM targets: the remaining
     # hardware/tuning fields still affect lowering. With no readable profile,
     # a live probe may pick a different GPU, so caching cannot be safe yet.
-    profile = Path.cwd() / ".ysu_hw_profile"
+    # The file is the one the compiler names, not a guess at it.
+    profile = lib.hw_profile_path()
     try:
         profile_identity = hashlib.sha256(profile.read_bytes()).hexdigest()
     except OSError:
@@ -298,7 +346,7 @@ def compile_to_ptx(source: str, target_sm: str = "auto", debug=None,
         source_path.parent.mkdir(parents=True, exist_ok=True)
         if not source_path.exists() or source_path.read_text(encoding="utf-8") != source:
             source_path.write_text(source, encoding="utf-8")
-    context = _ptx_cache_context()
+    context = _ptx_cache_context(lib)
     cache_key = json.dumps(
         ["y-ptx-cache-v2", lib.compiler_identity, lib.lib_path, target_sm, context, source]
         + ([mode, str(source_path)] if mode is not None else []),
@@ -353,10 +401,10 @@ def compile_to_ptx(source: str, target_sm: str = "auto", debug=None,
 
     # A probe can create/update the profile during compilation. Such a result
     # must not be stored under the hardware context observed before the probe.
-    if context is None or context != _ptx_cache_context():
+    if context is None or context != _ptx_cache_context(lib):
         return ptx_str
 
-    # Persist to .ysu/cache disk cache
+    # Persist to the disk cache (get_cache_dir)
     try:
         tmp_file = cache_dir / f"{key_hash}.tmp"
         tmp_file.write_text(ptx_str, encoding="utf-8")
