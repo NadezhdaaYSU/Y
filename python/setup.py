@@ -40,6 +40,8 @@ except ImportError:  # setuptools < 70.1
 HERE = Path(__file__).resolve().parent
 CARGO_ROOT = HERE.parent
 SOURCE_DIRS = ("src", "crates")
+# `sentinel::USER_CACHE_MARKER` and `y_lang.compiler.USER_CACHE_MARKER`.
+USER_CACHE_MARKER = "PROFILE_IN_USER_CACHE"
 SOURCE_FILES = ("Cargo.toml", "Cargo.lock")
 
 
@@ -111,6 +113,14 @@ class BuildPy(build_py):
             shutil.copyfile(built_artifact(name, variable, what), dest)
             os.chmod(dest, 0o755)
         shutil.copyfile(rust_std_notice(), package / "RUST_STD_COPYRIGHT.html")
+        # Beside liby.so, this sends the hardware profile and the PTX cache
+        # to the user cache directory instead of the working directory
+        # (`sentinel::hw_profile_path`, `compiler.get_cache_dir`).
+        (package / USER_CACHE_MARKER).write_text(
+            "This copy of the Y compiler keeps its hardware profile and caches in\n"
+            "$YSU_CACHE_DIR, else $XDG_CACHE_HOME/y-lang, else ~/.cache/y-lang.\n"
+            "A .ysu_hw_profile in the working directory is still used if present,\n"
+            "and YSU_HW_PROFILE names a profile file outright.\n", encoding="utf-8")
 
 
 class NativeDistribution(Distribution):

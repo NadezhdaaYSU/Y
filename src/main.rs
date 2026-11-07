@@ -565,16 +565,17 @@ fn compile_circom(path: &str, args: &[String]) {
     println!("\n\x1b[1;32mCompilation Successful!\x1b[0m\n");
 }
 
-/// Measured accumulate costs for `@ZeroDrift`, cached in `.ysu_hw_profile`.
+/// Measured accumulate costs for `@ZeroDrift`, cached in the hardware profile
+/// (`sentinel::hw_profile_path`).
 ///
 /// Measuring costs a couple of seconds of GPU time, so it happens once per
 /// device and is then read back. Without any measurement the selector still
 /// works - it falls back to the narrowest representation that fits, which is
 /// deterministic - so a machine with no GPU compiles fine, just less informed.
 fn load_or_measure_drift_costs(gpu_name: &str) -> zero_drift::CostTable {
-    const PROFILE: &str = ".ysu_hw_profile";
+    let profile = sentinel::hw_profile_path();
 
-    if let Ok(contents) = fs::read_to_string(PROFILE) {
+    if let Ok(contents) = fs::read_to_string(&profile) {
         let cached = zero_drift::parse_costs(&contents, gpu_name);
         if !cached.is_empty() {
             return cached;
@@ -607,7 +608,7 @@ fn load_or_measure_drift_costs(gpu_name: &str) -> zero_drift::CostTable {
     if let Ok(mut f) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(PROFILE)
+        .open(&profile)
     {
         let _ = writeln!(f, "{}", zero_drift::serialize_costs(&costs, gpu_name));
     }

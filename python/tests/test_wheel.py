@@ -15,6 +15,7 @@ into the repository. The probe is a script that prints a fake card, so no
 GPU is needed.
 """
 
+import json
 import os
 from pathlib import Path
 import re
@@ -39,16 +40,26 @@ kernel vec_add(A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>,
 """
 
 INSTALLED_CHECK = """
-import os, sys
+import json, os, sys
 import y_lang
 from y_lang import compiler
-site, target, expected = sys.argv[1:4]
+site, target = sys.argv[1:3]
 assert y_lang.__file__.startswith(site), y_lang.__file__
 lib = compiler._find_liby()
 assert lib == os.path.join(site, "y_lang", "liby.so"), lib
-ptx = y_lang.compile_to_ptx(sys.stdin.read(), target_sm=target)
-targets = [l.split()[1] for l in ptx.splitlines() if l.startswith(".target")]
-print("ENTRY" if ".visible .entry vec_add(" in ptx else "NO ENTRY", *targets)
+src = sys.stdin.read()
+seen = []
+for _ in range(3):
+    ptx = y_lang.compile_to_ptx(src, target_sm=target)
+    seen.append([l.split()[1] for l in ptx.splitlines() if l.startswith(".target")]
+                + (["ENTRY"] if ".visible .entry vec_add(" in ptx else []))
+stats = compiler.get_cache_stats()
+print("RESULT " + json.dumps({
+    "ptx": seen[0], "same": all(s == seen[0] for s in seen),
+    "profile": str(compiler.YCompilerLib.get_instance().hw_profile_path()),
+    "cache_dir": stats["cache_dir"],
+    "hits": stats["mem_hits"] + stats["disk_hits"], "misses": stats["misses"],
+}))
 """
 
 FAKE_PROBE = """#!/bin/sh
@@ -127,16 +138,22 @@ class TestWheel(unittest.TestCase):
              "--target", str(site), str(self.wheel())], capture_output=True, text=True, timeout=300)
         self.assertEqual(installed.returncode, 0, installed.stderr[-3000:])
         work.mkdir()
-        env = {k: v for k, v in os.environ.items() if k not in ("Y_LIB_PATH", "PYTHONPATH")}
+        # The user cache is a scratch directory: these runs must never write
+        # into the real ~/.cache, least of all a stub probe's fake card.
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("Y_LIB_PATH", "PYTHONPATH", "YSU_CACHE_DIR", "YSU_HW_PROFILE")}
         env["PYTHONPATH"] = str(site)
-        env["YSU_CACHE_DIR"] = str(self.tmp / "cache")
+        env["XDG_CACHE_HOME"] = str(self.tmp / "xdg")
 
-        def run(target):
-            ran = subprocess.run([sys.executable, "-c", INSTALLED_CHECK, str(site), target, ""],
-                                 input=VEC_ADD, cwd=work, env=env, capture_output=True,
-                                 text=True, timeout=300)
+        def run(target, **extra):
+            ran = subprocess.run([sys.executable, "-c", INSTALLED_CHECK, str(site), target],
+                                 input=VEC_ADD, cwd=work, env={**env, **extra},
+                                 capture_output=True, text=True, timeout=300)
             self.assertEqual(ran.returncode, 0, ran.stdout[-2000:] + ran.stderr[-3000:])
-            return ran.stdout.strip().splitlines()[-1]
+            line = [l for l in ran.stdout.splitlines() if l.startswith("RESULT ")][-1]
+            result = json.loads(line[len("RESULT "):])
+            self.assertTrue(result["same"], result)
+            return result
         return site, work, run
 
     def wheel(self):
@@ -153,6 +170,7 @@ class TestWheel(unittest.TestCase):
         with zipfile.ZipFile(whl) as z:
             names = z.namelist()
             self.assertIn("y_lang/liby.so", names, "the library must sit in the package, not under .data/")
+            self.assertIn("y_lang/PROFILE_IN_USER_CACHE", names)
             self.assertEqual(z.read("y_lang/liby.so"), LIB.read_bytes())
             self.assertEqual(z.read("y_lang/ysu_gpu_probe"), FAKE_PROBE.encode())
             self.assertTrue((z.getinfo("y_lang/ysu_gpu_probe").external_attr >> 16) & 0o100,
@@ -167,18 +185,51 @@ class TestWheel(unittest.TestCase):
             self.assertIn("License-Expression: BUSL-1.1", meta)
             self.assertIn("Root-Is-Purelib: false", z.read(f"{info}/WHEEL").decode())
 
-        # A pinned profile: the compile neither probes nor needs a GPU.
+        # A profile in the working directory is still the one used: the
+        # compile neither probes nor needs a GPU, and nothing is written to
+        # the user cache's profile.
         (work / ".ysu_hw_profile").write_text("SM_VERSION=8.9\nSM_COUNT=66\n", encoding="utf-8")
-        self.assertEqual(run("sm_89"), "ENTRY sm_89")
+        result = run("auto")
+        self.assertEqual(result["ptx"], ["sm_89", "ENTRY"])
+        self.assertEqual(result["profile"], str(work / ".ysu_hw_profile"))
+        self.assertFalse((self.tmp / "xdg" / "y-lang" / "hw_profile").exists())
 
-    def test_installed_package_runs_its_own_probe(self):
+    def test_installed_package_probes_into_the_user_cache(self):
         # No profile in the working directory, and no probe there: the one
-        # found must be the one beside the installed liby.so. Without it the
-        # profile says SM_VERSION=0.0 and the kernel targets sm_80.
+        # run must be the one beside the installed liby.so (without it the
+        # profile says SM_VERSION=0.0 and the kernel targets sm_80), and the
+        # profile and the PTX cache go to the user cache, not the working
+        # directory.
         site, work, run = self.install()
-        self.assertEqual(run("auto"), "ENTRY sm_86")
-        profile = (work / ".ysu_hw_profile").read_text(encoding="utf-8")
-        self.assertIn("GPU_NAME=FakeProbeGPU", profile)
+        cache = self.tmp / "xdg" / "y-lang"
+        result = run("auto")
+        self.assertEqual(result["ptx"], ["sm_86", "ENTRY"])
+        self.assertEqual(result["profile"], str(cache / "hw_profile"))
+        self.assertIn("GPU_NAME=FakeProbeGPU", (cache / "hw_profile").read_text(encoding="utf-8"))
+        self.assertEqual(result["cache_dir"], str(cache / "ptx"))
+        self.assertEqual(sorted(os.listdir(work)), [], "the working directory must stay empty")
+        # The first compile probed, so it was not cached; the second was
+        # keyed on the new profile and stored; the third is a hit.
+        self.assertEqual((result["misses"], result["hits"]), (2, 1), result)
+        self.assertTrue(list((cache / "ptx").glob("*.ptx")))
+
+    def test_ysu_hw_profile_names_the_profile(self):
+        site, work, run = self.install()
+        (work / ".ysu_hw_profile").write_text("SM_VERSION=8.9\nSM_COUNT=66\n", encoding="utf-8")
+        named = self.tmp / "named_profile"
+        named.write_text("SM_VERSION=8.0\nSM_COUNT=10\n", encoding="utf-8")
+        result = run("auto", YSU_HW_PROFILE=str(named))
+        self.assertEqual(result["ptx"], ["sm_80", "ENTRY"])
+        self.assertEqual(result["profile"], str(named))
+
+    def test_ysu_cache_dir_holds_the_profile_too(self):
+        site, work, run = self.install()
+        cache = self.tmp / "ysu_cache"
+        result = run("auto", YSU_CACHE_DIR=str(cache))
+        self.assertEqual(result["ptx"], ["sm_86", "ENTRY"])
+        self.assertEqual(result["profile"], str(cache / "hw_profile"))
+        self.assertEqual(result["cache_dir"], str(cache))
+        self.assertEqual(sorted(os.listdir(work)), [])
 
     def test_refuses_a_library_older_than_a_source(self):
         self.age(self.lib, 0)

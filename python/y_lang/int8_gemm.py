@@ -35,8 +35,10 @@ any order, so the factor - which depends on the SM count - changes the time,
 not the bits.
 
 The PTX targets the tensor's device (`sm_XY` from its compute capability). The
-compile still reads `.ysu_hw_profile` from the working directory, as every
-`y_lang` compile does, and probes the machine where there is none; the int8
+compile still reads the hardware profile, as every `y_lang` compile does
+(`YCompilerLib.hw_profile_path`: the working directory's `.ysu_hw_profile`,
+or for a wheel's library the user cache), and probes the machine where there
+is none; the int8
 kernel's PTX depends only on the target, the shape and `Y_INT8_TILE` if set
 (`tests/test_int8_mm.py` checks two profiles give the same PTX).
 

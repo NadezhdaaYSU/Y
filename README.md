@@ -3522,14 +3522,15 @@ PYTHONPATH=python python3 -m unittest discover -s python/y_lang/tests -p "test_*
 **Neither `cargo test` command runs the Python tests**, and the second Python
 command does not collect `python/y_lang/tests/test_triton_parity_features.py`:
 its tests are plain functions and `discover` collects only `TestCase` classes.
-**The working directory gets a `.ysu_hw_profile`.** `compile_to_ptx`'s
-default `target_sm="auto"` reads `.ysu_hw_profile` from the working
-directory. Where there is none, the compiler runs `ysu_gpu_probe` from beside
-the loaded `liby.so` (it used to look beside the Python interpreter, and from
-outside the repository wrote `SM_VERSION=0.0`, so every kernel targeted
-`sm_80`; fixed in 8fa8beb, `python/tests/test_gpu_probe_lookup.py`) and writes
-the profile into the working directory. Writing into the caller's directory
-is an open defect, recorded rather than fixed.
+**A repository build writes `.ysu_hw_profile` into the working directory.**
+`compile_to_ptx`'s default `target_sm="auto"` reads `.ysu_hw_profile` from the
+working directory. Where there is none, the compiler runs `ysu_gpu_probe` from
+beside the loaded `liby.so` (it used to look beside the Python interpreter,
+and from outside the repository wrote `SM_VERSION=0.0`, so every kernel
+targeted `sm_80`; fixed in 8fa8beb, `python/tests/test_gpu_probe_lookup.py`)
+and writes the profile into the working directory. That is still what the `Y`
+executable and a `liby.so` built here do. `YSU_HW_PROFILE=<file>` names the
+profile outright, for every build (`sentinel::hw_profile_path`).
 
 **To use the package outside the repository, install it as a wheel.** The
 wheel carries `liby.so` and `ysu_gpu_probe`, and its build refuses either one
@@ -3543,8 +3544,13 @@ python3 -m pip install dist/y_lang-*.whl
 ```
 
 [`python/README.md`](python/README.md) gives the requirements and an example.
-Installed, the package still writes `.ysu_hw_profile` into the working
-directory, as above.
+Installed, the package writes nothing into the working directory: the wheel
+puts a `PROFILE_IN_USER_CACHE` file beside its `liby.so`, and that copy keeps
+its profile as `hw_profile` in `$YSU_CACHE_DIR`, else in
+`$XDG_CACHE_HOME/y-lang`, else in `~/.cache/y-lang`. The PTX cache goes in
+`$YSU_CACHE_DIR` itself if set, else in `ptx/` beside the profile. A
+`.ysu_hw_profile` in the working directory still wins, so a pinned profile
+works as before.
 
 **Many gates are conditional on an external tool or a device, and a missing one
 makes them SKIP AND REPORT `ok`.** Each prints a notice; the green summary line

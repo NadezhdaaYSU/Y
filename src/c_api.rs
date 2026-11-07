@@ -339,6 +339,23 @@ pub extern "C" fn y_block_cdiv(a: u32, b: u32) -> u32 {
     (a + b - 1) / b
 }
 
+/// The hardware profile this library reads and writes
+/// (`sentinel::hw_profile_path`), relative to the working directory unless
+/// absolute. The Python package keys its PTX cache on this file, so it must
+/// name the one the compiler uses rather than guess it.
+///
+/// # Safety
+/// The returned pointer must be freed using `y_free_string`. It is null only
+/// if the path cannot be a C string.
+#[no_mangle]
+pub unsafe extern "C" fn y_hw_profile_path() -> *mut c_char {
+    let path = crate::sentinel::hw_profile_path();
+    match CString::new(path.to_string_lossy().into_owned()) {
+        Ok(s) => s.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
 /// Frees a string allocated by Y C-API functions.
 ///
 /// # Safety

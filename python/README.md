@@ -45,12 +45,18 @@ to 131,040, and both operands contiguous and 16-byte aligned; anything else is
 refused before it runs. Under `torch.compile` it is the op
 `torch.ops.y_lang.int8_mm`.
 
-## Known limitation
+## Hardware profile and caches
 
-A compile reads `.ysu_hw_profile` from the working directory. Where there is
-none, it runs the bundled `ysu_gpu_probe`, which runs microbenchmarks on the
-GPU, and writes the profile into the working directory, so each new directory
-is probed once. Delete the file after changing the GPU or driver.
+The first compile runs the bundled `ysu_gpu_probe`, which runs
+microbenchmarks on the GPU, and saves what it measured as `hw_profile` in
+`$YSU_CACHE_DIR`, else `$XDG_CACHE_HOME/y-lang`, else `~/.cache/y-lang`. Later
+compiles read it. Compiled PTX is cached in `$YSU_CACHE_DIR` itself if set,
+else in `ptx/` beside the profile. Nothing is written into the working
+directory.
+
+- A `.ysu_hw_profile` in the working directory is used instead, if present.
+- `YSU_HW_PROFILE=<file>` names the profile outright.
+- Delete the profile after changing the GPU or driver, so it is measured again.
 
 ## Licence
 
