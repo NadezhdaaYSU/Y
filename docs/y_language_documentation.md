@@ -1160,7 +1160,9 @@ for i in 0..100 {
     (`torch.mm(A, B, out_dtype=torch.float32)`) at 512³ to 4096³. At 32 rows
     the compensated sums (`kahan`) were up to 400x closer to the float64
     product on positive inputs.
-  - Speed against cuBLAS: [record](benchmarks/bf16_gemm_2026-11-07/README.md).
+  - Against cuBLAS's bf16 GEMM on an RTX 4070 Ti SUPER: 0.93-1.51x over 30
+    shapes, 21 of them 0.98x or better
+    ([record](benchmarks/bf16_gemm_2026-11-07/README.md)).
 * **int8 forms**, on sm_80 and later (`mma.sync.m16n8k32...s32.s8.s8.s32`,
   `cp.async`), with three parameters `(A, B: GlobalMemory<I8>, C:
   GlobalMemory<I32>)`, or six for the scaled form `(A, B: GlobalMemory<I8>,
