@@ -225,10 +225,15 @@ source; each entry there now carries its status. What is still open:
   bytes at a time. Each row takes its own widest width only with K a
   multiple of 16, no ragged column edge, and (for N odd) a 256-column tile.
   Otherwise one width is used, because the guards spilled registers and
-  odd N measured slower on the narrower tiles. The 4-byte copies fill the
-  global-load queue (`lg_throttle` 0.57 against 0.04): N odd 0.77-0.98x,
-  GPT-2's 1024 x 50257 x 768 0.85x, 1023 x 1025 x 1027 0.77x. N = 2 mod 4
-  is 0.79-1.02x.
+  odd N measured slower on the narrower tiles. N = 2 mod 4 is 0.79-1.02x.
+  At N odd C was also stored 4 bytes at a time, five times C's sectors in
+  L2 writes. Since 2026-11-07 the 256-column tiles store each float4 in its
+  widest aligned pieces, and GPT-2's 1024 x 50257 x 768 went from 0.85x to
+  0.96-0.99x, 4095 x 4097 x 512 from 0.77x to 0.92x
+  (`docs/benchmarks/f32_gemm_2026-11-05/odd_n_stores/`). The 128-column
+  tile keeps 4-byte stores, where the pieces measured 1.02-1.09x slower:
+  1023 x 1025 x 1027 is 0.80-0.86x. Left at N odd: B's 4-byte rows, and
+  2.8x C's sectors in L2 writes.
 - Remainder tiles take a leftover of at most half a tile on a side of at
   most 50 tiles. Leftovers past that stay in ragged whole tiles, which can
   still add a mostly empty wave. Three whole-tile sizes do not fit every
