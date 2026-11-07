@@ -2,7 +2,8 @@
 
 Python bindings for the Y compiler: compile Y kernels to PTX, launch them on
 PyTorch tensors, JIT-compile Y for the CPU, and run Y's exact int8 matrix
-multiply. The compiler itself is `liby.so`, which the wheel carries.
+multiply. The compiler itself is `liby.so`, which the wheel carries with its
+GPU probe, `ysu_gpu_probe`.
 
 ## Install
 
@@ -14,9 +15,9 @@ python3 -m pip wheel ./python --no-deps -w dist
 python3 -m pip install dist/y_lang-*.whl
 ```
 
-The wheel build refuses a missing `liby.so`, and one older than the compiler
-sources beside it. `Y_WHEEL_LIBY=/path/to/liby.so` names a library built
-elsewhere.
+The wheel build refuses a missing `liby.so` or `ysu_gpu_probe`, and one older
+than the compiler sources beside it. `Y_WHEEL_LIBY` and `Y_WHEEL_PROBE` name
+files built elsewhere.
 
 Requirements:
 - Linux on x86-64. A library built on a current distribution needs glibc
@@ -46,11 +47,10 @@ refused before it runs. Under `torch.compile` it is the op
 
 ## Known limitation
 
-A compile reads `.ysu_hw_profile` from the working directory and, where there
-is none, writes one there. Outside the repository the hardware probe is not
-found, so that file names an unknown GPU and kernels that take their target
-from it are built for `sm_80`. `int8_mm` takes its target from the tensor's
-device instead.
+A compile reads `.ysu_hw_profile` from the working directory. Where there is
+none, it runs the bundled `ysu_gpu_probe`, which runs microbenchmarks on the
+GPU, and writes the profile into the working directory, so each new directory
+is probed once. Delete the file after changing the GPU or driver.
 
 ## Licence
 

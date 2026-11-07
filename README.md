@@ -3494,18 +3494,18 @@ PYTHONPATH=python python3 -m unittest discover -s python/y_lang/tests -p "test_*
 **Neither `cargo test` command runs the Python tests**, and the second Python
 command does not collect `python/y_lang/tests/test_triton_parity_features.py`:
 its tests are plain functions and `discover` collects only `TestCase` classes.
-**Run the package from the repository root.** `compile_to_ptx`'s default
-`target_sm="auto"` reads `.ysu_hw_profile` from the working directory. From any
-other directory the hardware probe cannot run (it is looked for beside the
-Python interpreter, not the compiler), so a `.ysu_hw_profile` naming an
-`Unknown GPU` (`SM_VERSION=0.0`) is written there and the module declares the
-floor, `.target sm_80`, whatever card is present: it loads on every supported
-GPU and uses nothing newer than Ampere. Writing into the caller's directory,
-and ignoring the card, is an open defect, recorded rather than fixed.
+**The working directory gets a `.ysu_hw_profile`.** `compile_to_ptx`'s
+default `target_sm="auto"` reads `.ysu_hw_profile` from the working
+directory. Where there is none, the compiler runs `ysu_gpu_probe` from beside
+the loaded `liby.so` (it used to look beside the Python interpreter, and from
+outside the repository wrote `SM_VERSION=0.0`, so every kernel targeted
+`sm_80`; fixed in 8fa8beb, `python/tests/test_gpu_probe_lookup.py`) and writes
+the profile into the working directory. Writing into the caller's directory
+is an open defect, recorded rather than fixed.
 
 **To use the package outside the repository, install it as a wheel.** The
-wheel carries `liby.so`, and its build refuses a missing library or one older
-than the compiler sources (`python/setup.py`, tested by
+wheel carries `liby.so` and `ysu_gpu_probe`, and its build refuses either one
+missing or older than the compiler sources (`python/setup.py`, tested by
 `python/tests/test_wheel.py`):
 
 ```bash
@@ -3515,8 +3515,8 @@ python3 -m pip install dist/y_lang-*.whl
 ```
 
 [`python/README.md`](python/README.md) gives the requirements and an example.
-The wheel does not carry the hardware probe, so the working-directory
-`.ysu_hw_profile` defect above applies to it.
+Installed, the package still writes `.ysu_hw_profile` into the working
+directory, as above.
 
 **Many gates are conditional on an external tool or a device, and a missing one
 makes them SKIP AND REPORT `ok`.** Each prints a notice; the green summary line
