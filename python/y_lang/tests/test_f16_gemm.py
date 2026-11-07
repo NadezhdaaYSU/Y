@@ -91,7 +91,6 @@ def gpu_has_tensor_cores():
     return torch.cuda.is_available() and torch.cuda.get_device_capability() >= (8, 9)
 
 
-@unittest.skipUnless(gpu_has_tensor_cores(), "needs an sm_89 or later GPU")
 def remainder_of(reg, c, text):
     """Whether `text` computes `reg % c` in a form the emitter writes: `rem.u32`,
     or, since the module pass reduces divisions by a constant (2026-10-19),
@@ -106,6 +105,9 @@ def remainder_of(reg, c, text):
                 and re.search(rf"sub\.u32 {q.group(1)}, {reg}, {q.group(1)};", text))
 
 
+# This decorator sat on `remainder_of` once that helper was inserted above the
+# class (81c055f), so without a GPU the class ran and raised instead of skipping.
+@unittest.skipUnless(gpu_has_tensor_cores(), "needs an sm_89 or later GPU")
 class F16GemmIsExact(unittest.TestCase):
     def run_shape(self, m, n, k, tile, extra_ctas=0):
         a, b = operands(m, n, k, m * 7 + n * 3 + k)
