@@ -12,8 +12,9 @@ dynamic = ["version"]
 description = "Python bindings and PyTorch JIT compiler interop for the Y programming language"
 readme = "README.md"
 license = "BUSL-1.1"
-# Links to the repository's own files, so the wheel carries the same text.
-license-files = ["LICENSE", "NOTICE"]
+# LICENSE and NOTICE link to the repository's own files, so the wheel carries
+# the same text. THIRD_PARTY_NOTICES: the crates in liby.so and the probe.
+license-files = ["LICENSE", "NOTICE", "THIRD_PARTY_NOTICES"]
 requires-python = ">=3.8"
 dependencies = [
     "torch",

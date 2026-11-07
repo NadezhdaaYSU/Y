@@ -13,6 +13,12 @@ whatever the card. So this build refuses:
     `Cargo.toml`, `Cargo.lock`): it would answer with an older compiler, and
     nothing at run time would say so.
 
+Both binaries contain the Rust standard library, whose notice depends on the
+toolchain, so the build copies the toolchain's `COPYRIGHT-library.html` in as
+`RUST_STD_COPYRIGHT.html` (or `Y_WHEEL_RUST_NOTICE`), and refuses without
+it. The crates' notices are `THIRD_PARTY_NOTICES`, kept current by
+`tools/third_party_notices.py`.
+
 The wheel is tagged `py3-none-<platform>`. The library is native code, so
 the wheel is not pure, but Python loads it through ctypes, so it does not
 depend on the Python version.
@@ -20,6 +26,7 @@ depend on the Python version.
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
 
 from setuptools import Distribution, setup
@@ -75,15 +82,35 @@ def built_artifact(name, variable, what, root=CARGO_ROOT):
     return path
 
 
+def rust_std_notice():
+    """The toolchain's notice for the Rust standard library."""
+    named = os.environ.get("Y_WHEEL_RUST_NOTICE")
+    if named:
+        path = Path(named)
+    else:
+        try:
+            sysroot = subprocess.run(["rustc", "--print", "sysroot"], check=True,
+                                     capture_output=True, text=True).stdout.strip()
+        except (OSError, subprocess.CalledProcessError) as e:
+            raise SystemExit(f"y-lang wheel: `rustc --print sysroot` failed ({e}); "
+                             "name the standard library's notice in Y_WHEEL_RUST_NOTICE.")
+        path = Path(sysroot) / "share" / "doc" / "rust" / "COPYRIGHT-library.html"
+    if not path.is_file():
+        raise SystemExit(f"y-lang wheel: no Rust standard library notice at {path}; "
+                         "name it in Y_WHEEL_RUST_NOTICE.")
+    return path
+
+
 class BuildPy(build_py):
     def run(self):
         super().run()
+        package = Path(self.build_lib) / "y_lang"
+        package.mkdir(parents=True, exist_ok=True)
         for name, variable, what in ARTIFACTS:
-            source = built_artifact(name, variable, what)
-            dest = Path(self.build_lib) / "y_lang" / name
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, dest)
+            dest = package / name
+            shutil.copyfile(built_artifact(name, variable, what), dest)
             os.chmod(dest, 0o755)
+        shutil.copyfile(rust_std_notice(), package / "RUST_STD_COPYRIGHT.html")
 
 
 class NativeDistribution(Distribution):
