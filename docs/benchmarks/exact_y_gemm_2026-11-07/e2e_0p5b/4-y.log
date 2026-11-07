@@ -1,0 +1,12 @@
+10 %, 210 MHz, 5.41 W, 2149 MiB
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Qwen2.5-0.5B-Instruct  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  80%|████████  | 232/290 [00:00<00:00, 2300.07it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2328.23it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1107 14:49:19.395000 28918 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  sanity exact        canary ok, 40 distinct tokens in reference
+exact  int8, order-independent           0.333       192.1       6147.1     0.8%

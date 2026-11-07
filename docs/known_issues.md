@@ -280,6 +280,9 @@ source; each entry there now carries its status. What is still open:
   and stores.
 - From Python the plain form is `y_lang.int8_gemm.int8_mm(a, b)` (since
   2026-11-07), and `tools/exact_model.py` runs it with `Y_EXACT_GEMM=y`.
+  Compiled, Qwen2.5-0.5B decodes at 0.87-0.91x the default Triton path's
+  speed in that mode (batch 32). The custom-op call costs 9.4 us of host
+  time, and the small layers' GEMMs take 4-6 us.
   The op compiles one kernel per row bucket and shape: rows are zero-padded
   to a multiple of 16 up to 128 rows and of 128 above, up to 127 rows of
   wasted work per call. Nothing calls the scaled form from Python.

@@ -2812,8 +2812,9 @@ for stock bf16 (`docs/bit_identical_decode.md`,
 `docs/benchmarks/exact_y_gemm_2026-11-07/`). Per layer, eager, against the
 Triton kernel: faster on most prefill shapes (1.25-1.76x) and on the decode
 layers with few output tiles. It is 0.90x on 7B's large decode layers, where
-its epilogue takes four unfused torch passes. Compiled decode throughput is
-not measured yet.
+its epilogue takes four unfused torch passes. Compiled, at Qwen2.5-0.5B decode
+(batch 32), the pipeline on Y's kernel runs at 0.87-0.91x its Triton speed,
+and 1.03-1.06x the cuBLASLt path.
 
 ### BF16 matches cuBLAS (2026-11-07)
 
