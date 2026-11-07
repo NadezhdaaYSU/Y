@@ -445,7 +445,7 @@ Y supports parametric polymorphism (generics) for structs, implementations, and 
 Y divides data types into two main categories: primitive scalar types and hardware-aware layout types.
 
 ### 5.1 Scalar and Compound Types
-* **Floating-Point**: `F16` (half precision), `BF16` (bfloat16), `TF32` (TensorFloat-32), `F32` (single float), `F64` (double float). What each one means inside a PTX kernel - `F64` is a full value type there, `F16` is a buffer element type only - is in §20.5.
+* **Floating-Point**: `F16` (half precision), `BF16` (bfloat16), `TF32` (TensorFloat-32), `F32` (single float), `F64` (double float). What each one means inside a PTX kernel - `F64` is a full value type there, `F16` and `BF16` are buffer element types only - is in §20.5.
 * **Integers**: `I8` through `I64` (signed), `U8` through `U64` (unsigned) (e.g., standard sizing from 8-bit to 64-bit).
 * **Fixed-Point**: `QFixed` types represent values using fixed fractional scaling. For example, `Q32.32` reserves 32 bits for the integer part and 32 bits for the fraction.
 * **References**: `&T` represents an immutable reference; `&mut T` represents a mutable reference.
@@ -1101,7 +1101,7 @@ for i in 0..100 {
 ### 9.12 `@tile` — **on a `kernel` only**
 * **Syntax**: `@tile(M, N, K)` immediately before a `kernel`.
 * **Function**: selects a GEMM lowering for that kernel: on tensor cores
-  for the F16, int8 and FP8 forms, on CUDA cores for the FP32 form (below).
+  for the F16, BF16, int8 and FP8 forms, on CUDA cores for the FP32 form (below).
   `M`, `N` and `K` are the matrices' dimensions, not a block shape: for the
   F16 form `C = A @ B` with A `M`x`K` and B `K`x`N` in `F16` and C `M`x`N`
   in `F32`, row-major; see
@@ -1146,6 +1146,21 @@ for i in 0..100 {
   its own 16 products in every mode, a bias of about -7.7e-8 of
   `sum |a| |b|` on same-sign inputs
   ([record](benchmarks/f16_kahan_2026-10-20/README.md)).
+* **BF16 forms (since 2026-11-07)**, on sm_80 and later: the plain, bias and
+  split-K F16 shapes with A and B as `GlobalMemory<BF16>`. That is `(A, B, C)`,
+  `(A, B, Bias, C)` (bias and ReLU), and `<name>_splitk<S>` with
+  `(A, B, C, Partial)`. A is `M`x`K`, B `K`x`N`, row-major, and C `F32`. The
+  fused SwiGLU has no BF16 form.
+  - The kernel is the F16 GEMM with `.bf16` mmas: the same tiles (the
+    autotuner measures them as F16), staging, accumulation modes and
+    `Y_F16_ACCUMULATE`. Its PTX differs from the F16 one only in the type
+    names.
+  - Above 32 rows, where both chain the tensor core's accumulator, every
+    output measured bit-identical to cuBLAS's bf16 GEMM with f32 output
+    (`torch.mm(A, B, out_dtype=torch.float32)`) at 512³ to 4096³. At 32 rows
+    the compensated sums (`kahan`) were up to 400x closer to the float64
+    product on positive inputs.
+  - Speed against cuBLAS: [record](benchmarks/bf16_gemm_2026-11-07/README.md).
 * **int8 forms**, on sm_80 and later (`mma.sync.m16n8k32...s32.s8.s8.s32`,
   `cp.async`), with three parameters `(A, B: GlobalMemory<I8>, C:
   GlobalMemory<I32>)`, or six for the scaled form `(A, B: GlobalMemory<I8>,
@@ -4019,7 +4034,7 @@ Y supports the following primitive numeric types. GPU types are only valid in ke
 | :---: | :---: | :---: | :---: | :--- | :--- |
 | `F16` | 16 | 5 | 10 | Volta+ (SM 7.0+) | Half precision. Tensor Core input type. |
 | `E4M3` | 8 | 4 | 3 | Ada+ (SM 8.9+) | FP8 (`torch.float8_e4m3fn`): finite to +-448, no infinity. A `GlobalMemory` element type only (§20.5). |
-| `BF16` | 16 | 8 | 7 | Ampere+ (SM 8.0+) | Brain float. Same range as F32, less precision. |
+| `BF16` | 16 | 8 | 7 | Ampere+ (SM 8.0+) | bfloat16 (`torch.bfloat16`): F32's range, an 8-bit significand. A `GlobalMemory` element type only (§20.5). |
 | `TF32` | 19 | 8 | 10 | Ampere+ (SM 8.0+) | TensorFloat-32. Tensor Core accumulator intermediate. |
 | `F32` | 32 | 8 | 23 | All | Single precision. Default GPU accumulator type. |
 | `F64` | 64 | 11 | 52 | All | Double precision. High latency on consumer GPUs. |
@@ -4079,7 +4094,7 @@ and Y prints no such message.
 | RT Core outputs (`rt_nearest_neighbor`) | `I32` (neighbor indices) + implicit `F32` distances in SMEM |
 | `@ZeroDrift` accumulator | `Q32.32`, `Q16.48` |
 | Kernel values - `let`, scalar parameters (PTX) | `F32`, `F64`, `I32`, `U32`, `I64`, `U64`, `bool` (a 0/1 `U32`) |
-| Buffer element types - `GlobalMemory<T>` (PTX) | `F16`, `E4M3` (sm_89+), `F32`, `F64`, `I8`, `I16`, `I32`, `I64`, `U8`, `U16`, `U32`, `U64` |
+| Buffer element types - `GlobalMemory<T>` (PTX) | `F16`, `BF16` (sm_80+), `E4M3` (sm_89+), `F32`, `F64`, `I8`, `I16`, `I32`, `I64`, `U8`, `U16`, `U32`, `U64` |
 | `@atomic` fields | `I32`, `U32`, `U64`, `bool` |
 
 **`F64` is a full value type in a PTX kernel**: `%fd` registers, `.f64`
@@ -4118,6 +4133,25 @@ the tie and gives 1.0. An `E4M3` local or parameter is refused, as `F16`'s is.
 consecutive elements as one 4-byte access, so `row * stride + col` must be a
 multiple of 4. The conversions need sm_89 and PTX ISA 8.1; below sm_89 an
 `E4M3` buffer is refused by name. The LLVM and `--emit-cpu` backends refuse it.
+
+**`BF16` (bfloat16) is a buffer element type only** (since 2026-11-07), like
+`F16`:
+- A load widens it exactly: its bits become the f32's high half
+  (`mov.b32 %f, {0, %h}`, the form CUDA's own header uses below sm_90, which
+  has no `cvt.f32.bf16`).
+- A store rounds to nearest-even (`cvt.rn.bf16.f32`). NaN becomes `0x7fff`.
+  For every one of the 2^32 float32 bit patterns that is the bfloat16 torch
+  gives on CUDA, checked.
+- sm_80 and sm_89 convert to bf16 from f32 only, so an `F64` or a float literal
+  is first rounded to f32 toward zero with the lowest bit set when inexact,
+  and rounded once. A 32-bit integer reaches f64 exactly and takes the same
+  path; a 64-bit one is rounded to odd into f64 first. Rounding through the
+  nearest float32 instead got 32,644 of 1.18M f64 values near bf16 midpoints
+  wrong.
+- A `BF16` local or parameter is refused, as `F16`'s is, and so are
+  `block_ptr2d_load_v4` and `block_ptr2d_store_v4`.
+- Below sm_80 a `BF16` buffer is refused by name. The LLVM and `--emit-cpu`
+  backends refuse it, and the CPU interpreter refuses the store's conversion.
 
 Quantising a float32 matrix for the e4m3 GEMM (§9.12), A as it is and B
 transposed to `[N][K]`:
