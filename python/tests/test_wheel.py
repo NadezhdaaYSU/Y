@@ -60,6 +60,12 @@ echo SM_COUNT=12
 """
 
 
+def rust_std_notice():
+    sysroot = subprocess.run(["rustc", "--print", "sysroot"], check=True,
+                             capture_output=True, text=True).stdout.strip()
+    return Path(sysroot) / "share" / "doc" / "rust" / "COPYRIGHT-library.html"
+
+
 def _setuptools_too_old():
     try:
         import setuptools
@@ -154,6 +160,9 @@ class TestWheel(unittest.TestCase):
             info = f"y_lang-{version}.dist-info"
             self.assertEqual(z.read(f"{info}/licenses/LICENSE"), (ROOT / "LICENSE").read_bytes())
             self.assertEqual(z.read(f"{info}/licenses/NOTICE"), (ROOT / "NOTICE").read_bytes())
+            self.assertEqual(z.read(f"{info}/licenses/THIRD_PARTY_NOTICES"),
+                             (PKG / "THIRD_PARTY_NOTICES").read_bytes())
+            self.assertEqual(z.read("y_lang/RUST_STD_COPYRIGHT.html"), rust_std_notice().read_bytes())
             meta = z.read(f"{info}/METADATA").decode()
             self.assertIn("License-Expression: BUSL-1.1", meta)
             self.assertIn("Root-Is-Purelib: false", z.read(f"{info}/WHEEL").decode())
@@ -185,6 +194,15 @@ class TestWheel(unittest.TestCase):
         self.assertNotEqual(built.returncode, 0)
         self.assertIn(f"no compiler library at {self.lib}", built.stdout + built.stderr)
 
+    def test_refuses_without_the_rust_std_notice(self):
+        self.age(self.source, 0)
+        self.age(self.lib, 10)
+        self.age(self.probe, 10)
+        missing = self.tmp / "no-such-notice.html"
+        built = self.build(Y_WHEEL_RUST_NOTICE=str(missing))
+        self.assertNotEqual(built.returncode, 0)
+        self.assertIn(f"no Rust standard library notice at {missing}", built.stdout + built.stderr)
+
     def test_refuses_a_missing_probe(self):
         self.age(self.source, 0)
         self.age(self.lib, 10)
@@ -208,6 +226,25 @@ class TestWheel(unittest.TestCase):
         built = self.build(Y_WHEEL_LIBY=str(named))
         self.assertNotEqual(built.returncode, 0)
         self.assertIn("is older than src/lib.rs", built.stdout + built.stderr)
+
+
+@unittest.skipIf(shutil.which("cargo") is None, "cargo is not installed")
+class TestThirdPartyNotices(unittest.TestCase):
+    def test_notices_match_the_linked_crates(self):
+        # Fails when Cargo.lock changes the crates in the binaries and the
+        # notices were not regenerated.
+        ran = subprocess.run([sys.executable, str(ROOT / "tools" / "third_party_notices.py"), "--check"],
+                             capture_output=True, text=True, timeout=300)
+        self.assertEqual(ran.returncode, 0, ran.stdout + ran.stderr)
+
+    def test_every_linked_crate_has_its_licence_text(self):
+        text = (PKG / "THIRD_PARTY_NOTICES").read_text(encoding="utf-8")
+        sections = text.split("=" * 78)[1:]
+        self.assertGreaterEqual(len(sections) // 2, 1)
+        for head, body in zip(sections[0::2], sections[1::2]):
+            name = head.strip().splitlines()[0]
+            self.assertTrue("Permission is hereby granted" in body or "Apache License" in body,
+                            f"{name} has no licence text")
 
 
 if __name__ == "__main__":
