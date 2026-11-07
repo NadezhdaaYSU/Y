@@ -73,10 +73,22 @@ projections (7 ways).
 Against cuBLASLt (`torch._int_mm` and the same epilogue), Y is 0.88-2.5x,
 mostly above 0.95x.
 
-**Decode throughput, compiled, is not measured yet.** Under `torch.compile`
-the epilogue fuses into one kernel, so the eager penalties above should
-shrink. `e2e.sh` measures it, but each process took 13 minutes on this card,
-and the run was stopped after one.
+**Decode throughput, compiled** (`e2e.sh`, `e2e_0p5b/`). Qwen2.5-0.5B,
+batch 32, 64 new tokens, best of 5, one mode per process in ABCCBA order,
+idle GPU (2026-11-07, 14:21-15:06). The spreads were 0.1-1.4%:
+
+| GEMM under the exact arm | tok/s per sequence |
+|---|---|
+| Triton (`w8a8_gemv`, the default) | 214.5, 222.2 |
+| cuBLASLt (`torch._int_mm`) | 186.4, 183.8 |
+| Y's kernel | 195.3, 192.1 |
+
+On Y's kernel the pipeline runs at 0.87-0.91x its Triton speed, and at
+1.03-1.06x the cuBLASLt path. A token step takes about 0.6 ms longer than on
+Triton over 168 GEMM calls, about 3.6 us a call. That is the scale of the
+custom-op dispatch (9.4 us of host time against 4.8 called directly) and of
+the small layers' kernel times above. The 7B model, where the large layers
+dominate, is not measured.
 
 ## How the op launches the kernel
 
