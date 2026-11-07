@@ -2808,8 +2808,11 @@ the card idle. `Y_EXACT_GEMM=y` puts every `ExactLinear` product on it. On
 Qwen2.5-0.5B, 5 cases x 160 tokens, the GPU in that mode decodes to the CPU's
 exact token digest, eager and compiled: 0 of 5 cases changed, against 5 of 5
 for stock bf16 (`docs/bit_identical_decode.md`,
-`docs/benchmarks/exact_y_gemm_2026-11-07/`). Its speed against the Triton
-kernel is not measured yet.
+`docs/benchmarks/exact_y_gemm_2026-11-07/`). Per layer, eager, against the
+Triton kernel: faster on most prefill shapes (1.25-1.76x) and on the decode
+layers with few output tiles. It is 0.90x on 7B's large decode layers, where
+its epilogue takes four unfused torch passes. Compiled decode throughput is
+not measured yet.
 
 ### The GPU warp tiling is proved, and the guard for it was compiled out
 

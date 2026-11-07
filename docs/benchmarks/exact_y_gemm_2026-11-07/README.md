@@ -45,15 +45,38 @@ Its control is a changed weight, which must change the output. The other
 checks already build their layers in the active mode, so in Y mode the
 compiled-GPU-against-CPU check runs Y's kernel too.
 
-## Speed: not yet recorded
+## Speed
 
-`layer_bench.py` times one `ExactLinear` in each mode at the 0.5B and 7B
-shapes, with M from 1 to 2048. `split_sweep.py` times Y's kernel at decode
-shapes for each split factor of K, and shows how `split_factor`'s choice
-compares with the best. `e2e.sh` measures decode throughput in each mode,
-compiled, one mode per process in ABCCBA order. All three need an idle GPU;
-the card was in use when these records were made, so no timing is recorded
-here yet.
+Idle GPU, two runs each (`split_sweep_run*.log`, `layer_run*.log`), the runs
+within about 1% of each other.
+
+**The split factor** (`split_sweep.py`, Y's kernel alone, decode shapes):
+`split_factor` picks the fastest factor, or one within 7% of it, at every
+shape but one. That shape is the 7B down projection (56 tiles, K = 18944):
+the rule leaves it unsplit, where 6 ways measured 13-15% faster. Its 4- and
+8-way splits gain only 3-7%, so no rule was taken from it. Splitting gives
+1.6-1.8x on the 0.5B down projection (4 ways) and on the 7B key and value
+projections (7 ways).
+
+**One ExactLinear, eager** (`layer_bench.py`), Y against Triton:
+- faster on most prefill shapes, 1.25-1.76x at M = 256-2048;
+- faster on the 0.5B down projection at decode (1.00-1.24x) and the 7B key
+  and value projections (1.04-1.21x);
+- slower on the 7B gate/up and down layers at decode (0.90-0.91x: 144 us
+  against 131 us). The kernel alone is 115 us there. The rest is the eager
+  epilogue, four torch passes where Triton fuses its scaling;
+- 0.53x on the 0.5B up projection at M = 2048, the same epilogue over a
+  40 MB tensor;
+- 0.74-0.97x on the small 0.5B layers at decode, where every mode spends
+  about 50 us on eager launches around a GEMM of about 5 us.
+
+Against cuBLASLt (`torch._int_mm` and the same epilogue), Y is 0.88-2.5x,
+mostly above 0.95x.
+
+**Decode throughput, compiled, is not measured yet.** Under `torch.compile`
+the epilogue fuses into one kernel, so the eager penalties above should
+shrink. `e2e.sh` measures it, but each process took 13 minutes on this card,
+and the run was stopped after one.
 
 ## How the op launches the kernel
 

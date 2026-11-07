@@ -1,0 +1,27 @@
+20 %, 2760 MHz, 224.93 W
+# NVIDIA GeForce RTX 4070 Ti SUPER, 66 SMs; torch 2.13.0+cu130
+0.5B M= 1 N=  896 K=  896 ctas= 14 ktiles= 14 | z1:   3.2  z2:   3.8  z3:   4.7  z4:   3.7  z6:   3.9  z8:   4.7  z12:   5.1 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M= 8 N=  896 K=  896 ctas= 14 ktiles= 14 | z1:   3.2  z2:   4.7  z3:   4.7  z4:   4.7  z6:   4.7  z8:   4.7  z12:   5.1 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M=32 N=  896 K=  896 ctas= 14 ktiles= 14 | z1:   3.3  z2:   4.1  z3:   4.7  z4:   4.3  z6:   4.8  z8:   5.6  z12:   6.8 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M= 1 N=  128 K=  896 ctas=  2 ktiles= 14 | z1:   3.2  z2:   4.7  z3:   4.8  z4:   4.8  z6:   4.8  z8:   4.8  z12:   3.4 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M= 8 N=  128 K=  896 ctas=  2 ktiles= 14 | z1:   3.2  z2:   4.7  z3:   3.5  z4:   4.8  z6:   4.8  z8:   4.8  z12:   4.8 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M=32 N=  128 K=  896 ctas=  2 ktiles= 14 | z1:   3.2  z2:   3.9  z3:   4.7  z4:   3.6  z6:   4.7  z8:   4.8  z12:   4.8 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M= 1 N= 4864 K=  896 ctas= 76 ktiles= 14 | z1:   4.8  z2:   6.4  z3:   7.4  z4:   7.7  z6:   8.8  z8:  10.4  z12:  13.3 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M= 8 N= 4864 K=  896 ctas= 76 ktiles= 14 | z1:   4.9  z2:   6.6  z3:   7.4  z4:   7.9  z6:   9.1  z8:  10.6  z12:  13.5 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M=32 N= 4864 K=  896 ctas= 76 ktiles= 14 | z1:   5.0  z2:   8.4  z3:  10.0  z4:  11.3  z6:  13.9  z8:  16.9  z12:  22.6 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+0.5B M= 1 N=  896 K= 4864 ctas= 14 ktiles= 76 | z1:  10.2  z2:   7.3  z3:   6.0  z4:   5.5  z6:   5.9  z8:   5.6  z12:   6.6  z16:   7.4 | best z4 1.84x over z1; split_factor z4 1.00x the best  bits ok
+0.5B M= 8 N=  896 K= 4864 ctas= 14 ktiles= 76 | z1:  10.2  z2:   7.3  z3:   6.0  z4:   5.5  z6:   5.9  z8:   5.8  z12:   6.6  z16:   7.5 | best z4 1.84x over z1; split_factor z4 1.00x the best  bits ok
+0.5B M=32 N=  896 K= 4864 ctas= 14 ktiles= 76 | z1:  10.2  z2:   7.5  z3:   6.6  z4:   6.3  z6:   6.9  z8:   7.3  z12:   8.6  z16:   9.9 | best z4 1.61x over z1; split_factor z4 1.00x the best  bits ok
+7B   M= 1 N= 3584 K= 3584 ctas= 56 ktiles= 56 | z1:   8.4  z2:   9.6  z3:  10.0  z4:  10.7  z6:  11.0  z8:  12.5  z12:  14.4  z16:  16.5 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+7B   M= 8 N= 3584 K= 3584 ctas= 56 ktiles= 56 | z1:   8.4  z2:   9.7  z3:   9.9  z4:  10.7  z6:  11.0  z8:  12.4  z12:  14.3  z16:  16.4 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+7B   M=32 N= 3584 K= 3584 ctas= 56 ktiles= 56 | z1:   9.5  z2:  11.8  z3:  12.9  z4:  14.0  z6:  15.3  z8:  17.7  z12:  21.8  z16:  26.1 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+7B   M= 1 N=  512 K= 3584 ctas=  8 ktiles= 56 | z1:   7.9  z2:   6.1  z3:   5.1  z4:   4.7  z6:   4.7  z7:   4.6  z8:   4.7  z12:   4.7  z16:   5.3 | best z7 1.74x over z1; split_factor z7 1.00x the best  bits ok
+7B   M= 8 N=  512 K= 3584 ctas=  8 ktiles= 56 | z1:   7.9  z2:   6.1  z3:   5.1  z4:   4.7  z6:   4.3  z7:   4.8  z8:   4.8  z12:   4.5  z16:   4.9 | best z6 1.83x over z1; split_factor z7 1.09x the best  bits ok
+7B   M=32 N=  512 K= 3584 ctas=  8 ktiles= 56 | z1:   7.9  z2:   6.3  z3:   5.3  z4:   4.9  z6:   4.9  z7:   4.9  z8:   5.0  z12:   5.7  z16:   6.5 | best z7 1.61x over z1; split_factor z7 1.00x the best  bits ok
+7B   M= 1 N=18944 K= 3584 ctas=296 ktiles= 56 | z1: 114.7  z2: 179.8  z3: 148.9  z4: 120.7  z6: 122.4  z8: 124.7  z12: 129.5  z16: 135.4 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+7B   M= 8 N=18944 K= 3584 ctas=296 ktiles= 56 | z1: 115.1  z2: 181.1  z3: 148.9  z4: 120.7  z6: 122.4  z8: 124.8  z12: 129.5  z16: 135.8 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+7B   M=32 N=18944 K= 3584 ctas=296 ktiles= 56 | z1: 117.4  z2: 191.8  z3: 160.1  z4: 129.3  z6: 133.6  z8: 139.2  z12: 151.4  z16: 164.8 | best z1 1.00x over z1; split_factor z1 1.00x the best  bits ok
+7B   M= 1 N= 3584 K=18944 ctas= 56 ktiles=296 | z1: 115.7  z2: 115.4  z3: 114.2  z4: 111.6  z6: 100.8  z8: 107.7  z12: 112.8  z16: 112.5 | best z6 1.15x over z1; split_factor z1 1.15x the best  bits ok
+7B   M= 8 N= 3584 K=18944 ctas= 56 ktiles=296 | z1: 115.5  z2: 115.5  z3: 114.4  z4: 111.9  z6: 100.9  z8: 107.8  z12: 112.5  z16: 112.6 | best z6 1.14x over z1; split_factor z1 1.14x the best  bits ok
+7B   M=32 N= 3584 K=18944 ctas= 56 ktiles=296 | z1: 118.5  z2: 117.7  z3: 119.2  z4: 114.7  z6: 103.3  z8: 110.0  z12: 114.9  z16: 115.1 | best z6 1.15x over z1; split_factor z1 1.15x the best  bits ok
+# 2760 MHz, 236.96 W, 72
