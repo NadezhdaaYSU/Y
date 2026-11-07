@@ -1612,6 +1612,10 @@ impl Parser {
                 self.advance();
                 return Ok(Type::Primitive("E4M3".into(), span));
             }
+            TokenKind::BF16 => {
+                self.advance();
+                return Ok(Type::Primitive("BF16".into(), span));
+            }
             TokenKind::QFixed(s) => {
                 self.advance();
                 return Ok(Type::Primitive(s.clone(), span));

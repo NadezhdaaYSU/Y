@@ -1344,7 +1344,7 @@ not know its length",
             name,
             "I8" | "I16" | "I32" | "I64"
                 | "U8" | "U16" | "U32" | "U64"
-                | "F16" | "F32" | "F64"
+                | "F16" | "BF16" | "F32" | "F64"
                 | "i8" | "i16" | "i32" | "i64"
                 | "u8" | "u16" | "u32" | "u64"
                 | "f16" | "f32" | "f64"
@@ -1653,8 +1653,9 @@ not know its length",
         // GEMM's.
         if let Some(split) = crate::ptx_emitter::PtxEmitter::gemm_split_k(&kernel.name) {
             let shape_ok = kernel.params.len() == 4
-                && is_global_memory_of(&kernel.params[0].ty, "F16")
-                && is_global_memory_of(&kernel.params[1].ty, "F16")
+                && ["F16", "BF16"].iter().any(|e| {
+                    is_global_memory_of(&kernel.params[0].ty, e) && is_global_memory_of(&kernel.params[1].ty, e)
+                })
                 && is_global_memory_of(&kernel.params[2].ty, "F32")
                 && is_global_memory_of(&kernel.params[3].ty, "F32");
             let dims = (
@@ -1665,7 +1666,7 @@ not know its length",
             let why = match split {
                 Err(why) => Some(why),
                 Ok(_) if !shape_ok => Some(format!(
-                    "a split-K GEMM (`_splitk<S>` or `_splitk`) takes exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>); found {} parameter(s)",
+                    "a split-K GEMM (`_splitk<S>` or `_splitk`) takes exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), or the same with A, B: GlobalMemory<BF16>; found {} parameter(s)",
                     kernel.params.len()
                 )),
                 Ok(split) => match (dims, split) {
@@ -1792,8 +1793,12 @@ not know its length",
             return;
         }
 
-        let is_swiglu_shape = kernel.params.len() == 4 && is_global_memory_of(&kernel.params[2].ty, "F16");
-        let expected_elem = |i: usize| if i < 2 || (is_swiglu_shape && i == 2) { "F16" } else { "F32" };
+        // A, B: F16, or BF16 for the plain, bias and split-K shapes (the
+        // fused SwiGLU has no BF16 form). A's element picks the operand type,
+        // as `ptx_emitter::tile_gemm_operands` reads it.
+        let ab = if kernel.params.first().is_some_and(|p| is_global_memory_of(&p.ty, "BF16")) { "BF16" } else { "F16" };
+        let is_swiglu_shape = ab == "F16" && kernel.params.len() == 4 && is_global_memory_of(&kernel.params[2].ty, "F16");
+        let expected_elem = |i: usize| if i < 2 { ab } else if is_swiglu_shape && i == 2 { "F16" } else { "F32" };
         let bad_params: Vec<String> = kernel
             .params
             .iter()
@@ -1806,6 +1811,7 @@ not know its length",
             self.errors.push(format!(
                 "Line {}: Kernel-level @tile(M, N, K) on `{}` accepts these shapes, and codegen binds them POSITIONALLY:\n\
                  \x20 3  (A, B: GlobalMemory<F16>, C: GlobalMemory<F32>)                                  plain GEMM\n\
+                 \x20 3  (A, B: GlobalMemory<BF16>, C: GlobalMemory<F32>)                                 plain BF16 GEMM (also the bias and split-K shapes)\n\
                  \x20 4  (A, B: GlobalMemory<F16>, Bias, C: GlobalMemory<F32>)                            fused GEMM+Bias+ReLU\n\
                  \x20 4  (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), named <name>_splitk<S> split-K GEMM\n\
                  \x20 4  (X, W_gate, W_up: GlobalMemory<F16>, Out: GlobalMemory<F32>)                     fused Linear+SwiGLU\n\

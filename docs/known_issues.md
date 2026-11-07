@@ -239,6 +239,24 @@ source; each entry there now carries its status. What is still open:
   launch path (the header states block, grid and dynamic shared memory).
 - All in `docs/benchmarks/f32_gemm_2026-11-05/`.
 
+### BF16 limits
+
+- `BF16` (2026-11-07) is a `GlobalMemory` element type and the operand type of
+  the F16 tile GEMM's plain, bias and split-K shapes. There is no BF16 form of:
+  - the fused SwiGLU GEMM;
+  - `block_ptr2d_load_v4` / `block_ptr2d_store_v4`;
+  - the LLVM and `--emit-cpu` backends (the LLVM refusal is its generic
+    unknown-element message);
+  - a `BF16` value or parameter.
+- The CPU interpreter (`Y_INTERPRETER`, `Y_DEBUG`) runs a BF16 load but
+  refuses the store's `cvt.rn.bf16.f32` by name.
+- The BF16 GEMM takes the F16 GEMM's tiles, which the autotuner measures as
+  F16 and labels "(F16)" in its messages. The two kernels differ only in the
+  `mma` type, so the measurements carry over; they are not re-measured.
+- sm_90's direct conversions (`cvt.f32.bf16`, `cvt.rn.bf16.f64`) are not
+  used. Every target goes through f32: exactly for loads, and with round to
+  odd for f64 and integer stores.
+
 ### int8 GEMM limits
 
 - The staged int8 GEMM (2026-11-06) changed the launch contract. A host

@@ -1036,6 +1036,11 @@ pub(crate) enum ScalarTy {
     /// backend's `half` rounds after every operation and a promoted f32
     /// register would not.
     F16,
+    /// bfloat16 (`torch.bfloat16`), a memory format like `F16`: a load
+    /// widens it to `F32` exactly (its bits are the f32's high half), and a
+    /// store rounds to nearest-even (`cvt.rn.bf16.f32`, sm_80 and later).
+    /// Never a register type; a `BF16` local or parameter is refused.
+    BF16,
     /// FP8 `e4m3` (`torch.float8_e4m3fn`), a memory format like `F16`: a
     /// load widens it to `F32` exactly (`cvt.rn.f16x2.e4m3x2`, then
     /// `cvt.f32.f16`), and a store rounds to nearest-even and saturates to
@@ -1058,6 +1063,7 @@ impl ScalarTy {
             "F32" => ScalarTy::F32,
             "F64" => ScalarTy::F64,
             "F16" => ScalarTy::F16,
+            "BF16" => ScalarTy::BF16,
             "E4M3" => ScalarTy::E4M3,
             "U32" => ScalarTy::U32,
             "I32" => ScalarTy::I32,
@@ -1072,7 +1078,7 @@ impl ScalarTy {
     }
 
     fn is_float(self) -> bool {
-        matches!(self, ScalarTy::F32 | ScalarTy::F64 | ScalarTy::F16 | ScalarTy::E4M3)
+        matches!(self, ScalarTy::F32 | ScalarTy::F64 | ScalarTy::F16 | ScalarTy::BF16 | ScalarTy::E4M3)
     }
 
     /// Eight bytes wide. Decides the `.b64` bitwise suffix, the `.param .b64`
@@ -1103,7 +1109,7 @@ impl ScalarTy {
     fn is_subword(self) -> bool {
         matches!(
             self,
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::BF16 | ScalarTy::E4M3
         )
     }
 
@@ -1124,7 +1130,7 @@ impl ScalarTy {
         match self {
             ScalarTy::U8 | ScalarTy::U16 => ScalarTy::U32,
             ScalarTy::I8 | ScalarTy::I16 => ScalarTy::I32,
-            ScalarTy::F16 | ScalarTy::E4M3 => ScalarTy::F32,
+            ScalarTy::F16 | ScalarTy::BF16 | ScalarTy::E4M3 => ScalarTy::F32,
             other => other,
         }
     }
@@ -1141,7 +1147,7 @@ impl ScalarTy {
     fn bytes(self) -> u32 {
         match self {
             ScalarTy::U8 | ScalarTy::I8 | ScalarTy::E4M3 => 1,
-            ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 => 2,
+            ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::BF16 => 2,
             ScalarTy::F32 | ScalarTy::U32 | ScalarTy::I32 => 4,
             ScalarTy::U64 | ScalarTy::I64 | ScalarTy::F64 => 8,
         }
@@ -1182,7 +1188,7 @@ impl ScalarTy {
         match self {
             ScalarTy::F32 => "f32",
             ScalarTy::F64 => "f64",
-            ScalarTy::F16 => "b16",
+            ScalarTy::F16 | ScalarTy::BF16 => "b16",
             ScalarTy::E4M3 => "u8",
             ScalarTy::U32 | ScalarTy::I32 => "u32",
             ScalarTy::U64 | ScalarTy::I64 => "u64",
@@ -1214,7 +1220,7 @@ impl ScalarTy {
             ScalarTy::F64 => "f64",
             ScalarTy::U64 | ScalarTy::I64 => "u64",
             ScalarTy::U32 | ScalarTy::I32 => "u32",
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3 => {
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::BF16 | ScalarTy::E4M3 => {
                 unreachable!("reg_mem() promotes memory formats to a register width first")
             }
         }
@@ -1235,7 +1241,7 @@ impl ScalarTy {
             // this arm is unreachable. It is spelled out rather than `_ =>`
             // so that adding a width without deciding its arithmetic type is
             // a compile error, per the design rule.
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3 => {
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::BF16 | ScalarTy::E4M3 => {
                 unreachable!("promoted() must map sub-word types to a register width")
             }
         }
@@ -1270,6 +1276,7 @@ impl ScalarTy {
             ScalarTy::F32 => "F32",
             ScalarTy::F64 => "F64",
             ScalarTy::F16 => "F16",
+            ScalarTy::BF16 => "BF16",
             ScalarTy::E4M3 => "E4M3",
             ScalarTy::U32 => "U32",
             ScalarTy::I32 => "I32",
@@ -1496,6 +1503,9 @@ pub struct PtxEmitter {
     /// K-tile's 16-deep steps.
     f16_kahan: Vec<KahanAccumulator>,
     f16_kahan_tile_mmas: u32,
+    /// The tensor-core GEMM being emitted takes bf16 A and B, so its `mma`s
+    /// are `.bf16.bf16` (`emit_f16_mma`). Set for one GEMM's emission.
+    gemm_bf16: bool,
     /// Under `F16Accumulation::Blocked`, each accumulator register and the
     /// block sum its mmas chain into (`emit_f16_block_sums`), how many
     /// K-tiles a block spans, and the K loop's inner top and the register
@@ -1837,6 +1847,7 @@ impl PtxEmitter {
             f16_mma_zero: None,
             f16_kahan: Vec::new(),
             f16_kahan_tile_mmas: 1,
+            gemm_bf16: false,
             f16_blocks: Vec::new(),
             f16_block_comps: Vec::new(),
             f16_block_tiles: 1,
@@ -3784,7 +3795,7 @@ impl PtxEmitter {
             ScalarTy::F64 => self.alloc_regf64(),
             ScalarTy::U64 | ScalarTy::I64 => self.alloc_reg64(),
             ScalarTy::U32 | ScalarTy::I32 => self.alloc_reg32(),
-            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::E4M3 => {
+            ScalarTy::U8 | ScalarTy::I8 | ScalarTy::U16 | ScalarTy::I16 | ScalarTy::F16 | ScalarTy::BF16 | ScalarTy::E4M3 => {
                 unreachable!("promoted() must map sub-word types to a register width")
             }
         };
@@ -3872,6 +3883,8 @@ impl PtxEmitter {
     fn emit_store_operand(&mut self, val: &str, elem: ScalarTy) -> String {
         if elem == ScalarTy::F16 {
             self.emit_f16_bits(val)
+        } else if elem == ScalarTy::BF16 {
+            self.emit_bf16_bits(val)
         } else if elem == ScalarTy::E4M3 {
             self.emit_e4m3_bits(val)
         } else {
@@ -3912,6 +3925,21 @@ impl PtxEmitter {
                 }
             }
             writeln!(&mut self.ptx_buffer, "    cvt.f32.f16 {}, {};", res, h).unwrap();
+            return;
+        }
+        // `BF16` likewise, widened by putting its bits in the f32's high half.
+        if elem == ScalarTy::BF16 {
+            let h = self.alloc_reg16();
+            match pred {
+                Some(p) => {
+                    writeln!(&mut self.ptx_buffer, "    @{} ld.global{}.b16 {}, [{}]{};", p, qual, h, addr, pol).unwrap();
+                    writeln!(&mut self.ptx_buffer, "    @!{} mov.b16 {}, 0;", p, h).unwrap();
+                }
+                None => {
+                    writeln!(&mut self.ptx_buffer, "    ld.global{}.b16 {}, [{}]{};", qual, h, addr, pol).unwrap();
+                }
+            }
+            self.emit_bf16_widen(res, &h);
             return;
         }
         // `E4M3` too: the byte is widened to f16 (`cvt.rn.f16x2.e4m3x2`
@@ -4147,6 +4175,66 @@ impl PtxEmitter {
         f
     }
 
+    /// `reg` rounded to nearest-even into the bits of a bf16, in a `.b16`
+    /// register: what `st.global.b16` stores and `emit_bf16_widen` reads.
+    ///
+    /// sm_80 and sm_89 convert to bf16 from f32 only (`cvt.rn.bf16.f32`; the
+    /// f64 and integer sources are sm_90), so everything reaches f32 first
+    /// without a second rounding (`emit_bf16_source`).
+    fn emit_bf16_bits(&mut self, reg: &str) -> String {
+        let f = self.emit_bf16_source(reg);
+        let h = self.alloc_reg16();
+        writeln!(&mut self.ptx_buffer, "    cvt.rn.bf16.f32 {}, {};", h, f).unwrap();
+        h
+    }
+
+    /// The f32 a bf16 conversion of `reg` starts from. An f32 is itself. An
+    /// f64 - a float literal is its exact double - is rounded to f32 toward
+    /// zero with the lowest bit set when that was inexact (round to odd),
+    /// which keeps a bf16 tie broken, since f32 has 16 bits beyond bf16's 8;
+    /// rounding it to nearest f32 first could land on a tie and round twice.
+    /// A 32-bit integer reaches f64 exactly and takes the same path; a 64-bit
+    /// one is first rounded to odd into f64, which has 45 bits beyond bf16's.
+    fn emit_bf16_source(&mut self, reg: &str) -> String {
+        if let Some(v) = self.unowned_float_lit(reg) {
+            let d = self.alloc_ty(ScalarTy::F64);
+            writeln!(&mut self.ptx_buffer, "    mov.f64 {}, {};", d, Self::ptx_f64(v)).unwrap();
+            return self.emit_f32_round_to_odd(&d);
+        }
+        let from = self.ty_of(reg);
+        match from {
+            ScalarTy::F32 => reg.to_string(),
+            ScalarTy::F64 => self.emit_f32_round_to_odd(reg),
+            t if t.is_64() => {
+                let d = self.alloc_ty(ScalarTy::F64);
+                writeln!(&mut self.ptx_buffer, "    cvt.rz.f64.{} {}, {};", t.arith(), d, reg).unwrap();
+                let back = self.alloc_ty(t);
+                writeln!(&mut self.ptx_buffer, "    cvt.rzi.{}.f64 {}, {};", t.arith(), back, d).unwrap();
+                let p = self.alloc_pred();
+                writeln!(&mut self.ptx_buffer, "    setp.ne.{} {}, {}, {};", t.arith(), p, back, reg).unwrap();
+                let bits = self.alloc_reg64();
+                writeln!(&mut self.ptx_buffer, "    mov.b64 {}, {};", bits, d).unwrap();
+                writeln!(&mut self.ptx_buffer, "    @{} or.b64 {}, {}, 1;", p, bits, bits).unwrap();
+                let odd = self.alloc_ty(ScalarTy::F64);
+                writeln!(&mut self.ptx_buffer, "    mov.b64 {}, {};", odd, bits).unwrap();
+                self.emit_f32_round_to_odd(&odd)
+            }
+            _ => {
+                let d = self.emit_convert(reg, ScalarTy::F64);
+                self.emit_f32_round_to_odd(&d)
+            }
+        }
+    }
+
+    /// The bf16 in `.b16` register `h`, widened exactly into the f32 register
+    /// `res`: its bits become the f32's high half (`mov.b32 res, {0, h}`, as
+    /// CUDA's own header widens it below sm_90, which has no `cvt.f32.bf16`).
+    fn emit_bf16_widen(&mut self, res: &str, h: &str) {
+        let z = self.alloc_reg16();
+        writeln!(&mut self.ptx_buffer, "    mov.b16 {}, 0;", z).unwrap();
+        writeln!(&mut self.ptx_buffer, "    mov.b32 {}, {{{}, {}}};", res, z, h).unwrap();
+    }
+
     /// The e4m3 byte in the low half of `.b16` register `b` (high byte zero),
     /// widened exactly into the f32 register `res`.
     fn emit_e4m3_widen(&mut self, res: &str, b: &str) {
@@ -4171,6 +4259,12 @@ impl PtxEmitter {
             let h = self.emit_f16_bits(reg);
             let dst = self.alloc_ty(ScalarTy::F32);
             writeln!(&mut self.ptx_buffer, "    cvt.f32.f16 {}, {};", dst, h).unwrap();
+            return dst;
+        }
+        if to == ScalarTy::BF16 {
+            let h = self.emit_bf16_bits(reg);
+            let dst = self.alloc_ty(ScalarTy::F32);
+            self.emit_bf16_widen(&dst, &h);
             return dst;
         }
         if to == ScalarTy::E4M3 {
@@ -4684,7 +4778,7 @@ impl PtxEmitter {
                         "[PTX] `{}: {}<{}>` cannot be lowered: this backend has no \
                          lowering for a {} element, and without one every load and store \
                          of it would read `.f32` at a 4-byte stride. Element types are \
-                         F16, E4M3, F32, F64 and the integers I8..I64 / U8..U64.",
+                         F16, BF16, E4M3, F32, F64 and the integers I8..I64 / U8..U64.",
                         param.name, base, name, name
                     ));
                     continue;
@@ -4695,6 +4789,15 @@ impl PtxEmitter {
                 // requires PTX ISA .version 8.1 or later"); below sm_89 the
                 // module would not load, so it is refused here by name, as
                 // the FP8 tensor cores are.
+                // `cvt.rn.bf16.f32` exists from sm_80 (PTX ISA 7.0).
+                if name == "BF16" && self.sm_level() < 80 {
+                    let lvl = self.target_desc();
+                    self.emit_errors.push(format!(
+                        "[PTX] `{}: {}<BF16>` needs the bf16 conversion `cvt.rn.bf16.f32`, which \
+                         exists only on sm_80 (Ampere) and later; this build targets {}.",
+                        param.name, base, lvl
+                    ));
+                }
                 if name == "E4M3" {
                     if self.sm_level() >= 89 {
                         self.require_ptx_version("8.1");
@@ -4759,6 +4862,13 @@ impl PtxEmitter {
          performs and this one would not. Declare it F32 (or F64) and let the buffer's element \
          type do the conversion.";
 
+    const BF16_VALUE_REFUSAL: &'static str =
+        "`BF16` is a buffer element type in this backend, not a value type: a load from a \
+         `GlobalMemory<BF16>` widens it to F32 exactly and a store rounds it to nearest-even \
+         (`cvt.rn.bf16.f32`). A BF16 value would be an f32 register whose declared type \
+         promises bf16 rounding after every operation, which this backend would not perform. \
+         Declare it F32 and let the buffer's element type do the conversion.";
+
     const E4M3_VALUE_REFUSAL: &'static str =
         "`E4M3` is a buffer element type, not a value type: a load from a \
          `GlobalMemory<E4M3>` widens it to F32 exactly and a store rounds it to nearest-even, \
@@ -4789,6 +4899,9 @@ impl PtxEmitter {
         }
         if p == "E4M3" {
             return Some(Self::E4M3_VALUE_REFUSAL.to_string());
+        }
+        if p == "BF16" {
+            return Some(Self::BF16_VALUE_REFUSAL.to_string());
         }
         if Self::is_q_format(p) {
             return Some(format!(
@@ -4843,6 +4956,8 @@ impl PtxEmitter {
                     DeclaredValue::Refused(Self::F16_VALUE_REFUSAL.to_string())
                 } else if t == ScalarTy::E4M3 {
                     DeclaredValue::Refused(Self::E4M3_VALUE_REFUSAL.to_string())
+                } else if t == ScalarTy::BF16 {
+                    DeclaredValue::Refused(Self::BF16_VALUE_REFUSAL.to_string())
                 } else if t.is_subword() {
                     DeclaredValue::Refused(
                         "PTX has no sub-word register class, so this would be a 32-bit value \
@@ -5481,7 +5596,7 @@ or `shared_alloc_u32` for a shared-memory array.",
                 // Refused by `emit_kernel` (see `refused_param_type`); the slot
                 // only has to keep the signature well-formed, and a refused
                 // compile writes no module.
-                Some(ScalarTy::F16) => ".param .b16",
+                Some(ScalarTy::F16 | ScalarTy::BF16) => ".param .b16",
                 _ => ".param .b32",
             },
             other => {
@@ -5853,14 +5968,15 @@ or `shared_alloc_u32` for a shared-memory array.",
             match Self::gemm_split_k(&kernel.name) {
                 Some(Err(why)) => self.emit_errors.push(format!("[PTX] {}", why)),
                 Some(Ok(_)) if self.tile_gemm_operands(kernel).is_none() => self.emit_errors.push(format!(
-                    "[PTX] split-K GEMM `{}` must take exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>)",
+                    "[PTX] split-K GEMM `{}` must take exactly (A, B: GlobalMemory<F16>, C, Partial: GlobalMemory<F32>), or the same with A, B: GlobalMemory<BF16>",
                     kernel.name
                 )),
                 _ => {}
             }
         }
         let tile_gemm_threads_per_cta = if let Some((m, n, k, a_ptr, b_ptr, c_ptr, bias_ptr, split)) = self.tile_gemm_operands(kernel) {
-            match split {
+            self.gemm_bf16 = Self::gemm_operand_elem(kernel) == "BF16";
+            let threads = match split {
                 None => Some(self.emit_tensor_core_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &c_ptr, bias_ptr.as_deref(), GemmSplit::Unsplit, hw_profile, &kernel.name)),
                 Some(SplitK::Fixed(s)) => {
                     if Self::gemm_split_k_shape(m, n, k, s).is_ok() {
@@ -5881,7 +5997,9 @@ or `shared_alloc_u32` for a shared-memory array.",
                     };
                     Some(self.emit_tensor_core_gemm_kernel(m, n, k, &a_ptr, &b_ptr, &out, None, GemmSplit::Auto(&plan), hw_profile, &kernel.name))
                 }
-            }
+            };
+            self.gemm_bf16 = false;
+            threads
         } else if let Some((m, n, k, a, b, sa, sb, bi, c)) =
             self.tile_gemm_int8_scaled_operands(kernel)
         {
@@ -8575,12 +8693,12 @@ declare it as a Q format.\n{}",
                             // `.v4.b16` into four f32 registers - raw half bits
                             // read back as floats. (Four E4M3 lanes are one
                             // 32-bit word, converted two at a time below.)
-                            if elem == ScalarTy::F16 {
+                            if elem == ScalarTy::F16 || elem == ScalarTy::BF16 {
                                 self.unsupported_intrinsic(
                                     fname,
-                                    "has no F16 form: its lanes are 32-bit registers, and an \
-                                     F16 element must be widened with `cvt.f32.f16` one at a \
-                                     time. Use block_ptr2d_load / block_ptr2d_store.",
+                                    "has no F16 form and no BF16 form: its lanes are 32-bit \
+                                     registers, and a 16-bit float element must be widened one at \
+                                     a time. Use block_ptr2d_load / block_ptr2d_store.",
                                 );
                                 return "".into();
                             }
@@ -10039,6 +10157,18 @@ declare it as a Q format.\n{}",
     /// is Partial's register (what a split main entry writes) and `bias_reg`
     /// is `None`.
     #[allow(clippy::type_complexity)]
+    /// The tensor-core GEMM's operand element: "BF16" when A is a
+    /// `GlobalMemory<BF16>`, else "F16". `tile_gemm_operands` requires B to
+    /// match, and the type checker reads A the same way.
+    fn gemm_operand_elem(kernel: &KernelDecl) -> &'static str {
+        let bf16 = kernel.params.first().is_some_and(|p| {
+            matches!(&p.ty, Type::Generic { base, args, .. }
+                if base == "GlobalMemory"
+                    && matches!(args.as_slice(), [GenericArg::Type(Type::Primitive(e, _))] if e == "BF16"))
+        });
+        if bf16 { "BF16" } else { "F16" }
+    }
+
     fn tile_gemm_operands(&self, kernel: &KernelDecl) -> Option<(u32, u32, u32, String, String, String, Option<String>, Option<SplitK>)> {
         let tile = kernel.tile.as_ref()?;
         let split = match Self::gemm_split_k(&kernel.name) {
@@ -10075,9 +10205,11 @@ declare it as a Q format.\n{}",
         // type_checker for its own sake - the codegen below is only correct
         // for exactly this shape).
         let has_bias = kernel.params.len() == 4 && split.is_none();
+        // A and B are both F16 or both BF16 (`gemm_operand_elem`).
+        let ab = Self::gemm_operand_elem(kernel);
         if (kernel.params.len() != 3 && kernel.params.len() != 4)
-            || !is_global_memory_of(&kernel.params[0].ty, "F16")
-            || !is_global_memory_of(&kernel.params[1].ty, "F16")
+            || !is_global_memory_of(&kernel.params[0].ty, ab)
+            || !is_global_memory_of(&kernel.params[1].ty, ab)
             || !is_global_memory_of(&kernel.params[2].ty, "F32")
             || (kernel.params.len() == 4 && !is_global_memory_of(&kernel.params[3].ty, "F32"))
         {
@@ -13960,6 +14092,8 @@ declare it as a Q format.\n{}",
     /// `F16Accumulation::Blocked` the chain runs in `d`'s block sums
     /// (`emit_f16_block_sums`) instead.
     fn emit_f16_mma(&mut self, d: &[String], a: &[String], b: &[String]) {
+        // bf16 operands take the same fragments and the same f32 accumulators.
+        let ab = if self.gemm_bf16 { "bf16" } else { "f16" };
         let Some(z) = self.f16_mma_zero.clone() else {
             let d: Vec<&String> = d.iter().map(|r| match self.f16_blocks.iter().find(|(acc, _)| acc == r) {
                 Some((_, block)) => block,
@@ -13968,7 +14102,7 @@ declare it as a Q format.\n{}",
             let d = d.iter().map(|r| r.as_str()).collect::<Vec<_>>().join(",");
             writeln!(
                 &mut self.ptx_buffer,
-                "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
+                "    mma.sync.aligned.m16n8k16.row.col.f32.{ab}.{ab}.f32 {{{}}}, {{{}}}, {{{}}}, {{{}}};",
                 d, a.join(","), b.join(","), d
             ).unwrap();
             return;
@@ -13976,7 +14110,7 @@ declare it as a Q format.\n{}",
         let t: Vec<String> = (0..4).map(|_| self.alloc_regf32()).collect();
         writeln!(
             &mut self.ptx_buffer,
-            "    mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {{{}}}, {{{}}}, {{{}}}, {{{z},{z},{z},{z}}};",
+            "    mma.sync.aligned.m16n8k16.row.col.f32.{ab}.{ab}.f32 {{{}}}, {{{}}}, {{{}}}, {{{z},{z},{z},{z}}};",
             t.join(","), a.join(","), b.join(",")
         ).unwrap();
         for (r, tr) in d.iter().zip(&t) {
@@ -14606,7 +14740,7 @@ declare it as a Q format.\n{}",
         total_dyn_smem_bytes = total_dyn_smem_bytes.max(smem_c_bytes);
 
         writeln!(&mut self.ptx_buffer, "    // ========================================================").unwrap();
-        writeln!(&mut self.ptx_buffer, "    // [Y TENSOR CORE GEMM] M={} N={} K={} | CTA {}x{}x{} | {}x{} warps | wmma.sync.m16n16k16.f16->f32", m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n).unwrap();
+        writeln!(&mut self.ptx_buffer, "    // [Y TENSOR CORE GEMM] M={} N={} K={} | CTA {}x{}x{} | {}x{} warps | wmma.sync.m16n16k16.{}->f32", m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n, if self.gemm_bf16 { "bf16" } else { "f16" }).unwrap();
         if let Some(s) = split {
             writeln!(
                 &mut self.ptx_buffer,

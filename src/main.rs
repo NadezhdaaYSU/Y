@@ -2125,7 +2125,9 @@ fn main() {
         let mut printed_any_tune = false;
         for item in &ast.items {
             if let Item::Kernel(k) = item {
-                // Only the F16 tile GEMMs take their tile from the autotuner.
+                // Only the F16 and BF16 tile GEMMs take their tile from the
+                // autotuner (a BF16 GEMM is the F16 one with `.bf16` mmas: the
+                // same operand size, mma shape and rate, so the same tiles).
                 // The int8 and FP8 forms choose their own (the PTX's header
                 // says which), so asking it for them printed an F16 tile they
                 // do not use, and `--autotune` measured F16 candidates for it.
@@ -2133,7 +2135,7 @@ fn main() {
                     k.params.first().map(|p| &p.ty),
                     Some(ast::Type::Generic { base, args, .. })
                         if base == "GlobalMemory"
-                            && matches!(args.as_slice(), [ast::GenericArg::Type(ast::Type::Primitive(e, _))] if e == "F16")
+                            && matches!(args.as_slice(), [ast::GenericArg::Type(ast::Type::Primitive(e, _))] if e == "F16" || e == "BF16")
                 );
                 if let (Some(t), true) = (&k.tile, f16_operands) {
                     fn as_u32(e: &ast::Expr) -> Option<u32> {
