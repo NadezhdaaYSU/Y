@@ -40,6 +40,7 @@ shuffled every round, each a batch of 3 to 500 calls.
 | 2048 × 2048 × 2048 | 208.8 | 82 | 128x128x32 2x2w s2 | 0.99–1.01 | 100.0% | 6.5e-07 | 6.5e-07 |
 | 4096 × 4096 × 4096 | 1593.0 | 86 | 128x128x32 2x2w s2 | 0.98–0.99 | 100.0% | 1.0e-06 | 1.0e-06 |
 | 8192 × 8192 × 8192 | 12677.5 | 87 | 128x128x32 2x2w s2 | 1.00–1.01 | 0.2% | 1.3e-06 | 4.3e-07 |
+| 8192³, since the tile fit (below) | 12515.4 | 88 | 128x128x32 4x2w s3 | 1.013–1.018 | 0.5% | 4.5e-08 | 4.2e-07 |
 | 1000 × 1000 × 1000 | 29.0 | 69 | 64x128x32 2x2w s3 | 0.93–0.96 | 24.6% | 4.2e-07 | 4.2e-07 |
 | 4000 × 4000 × 4000 | 1559.2 | 82 | 128x128x32 2x2w s2 | 0.98 | 100.0% | 1.0e-06 | 1.0e-06 |
 | 768 × 768 × 768 | 22.3 | 41 | 64x128x32 2x2w s3 | 1.02 | 100.0% | 4.2e-07 | 4.2e-07 |
@@ -81,5 +82,27 @@ shuffled every round, each a batch of 3 to 500 calls.
   - at 32 rows the compensated sums (`kahan`) are 80-200x closer to the
     float64 product;
   - at 128-512 rows with K of 4096 and up, the blocked sums are 6-53x closer;
-  - at 8192³ cuBLAS's largest error is 3x smaller (4.3e-7 against 1.3e-6).
-    Its kernel there evidently accumulates differently; Y chains at 8192³.
+  - at 8192³ cuBLAS's largest error was 3x smaller (4.3e-7 against 1.3e-6).
+    cuBLAS splits K there. Y chained, because this machine's profile (dated
+    2026-10-17, before the re-tune) gave 8192³ 2x2 warps, which have no
+    room for block sums. The analytic model gives the same.
+
+## Since 2026-11-07: the tile fit
+
+From K = 8192 the compiler runs such a tile on twice the warps and at
+least 3 stages (`../f16_block_sums_2026-11-07/`). Three rows above had such
+a tile, and now sum in blocks. Measured with `bf16_bench.py` as before:
+three runs at 8192³ (the third is `run3_8192_block_sums.log`) and two at
+2048 rows (`run1_2048_block_sums.log`, `run2_2048_block_sums.log`):
+
+| M × N × K | Y's tile now | Y / cuBLAS | same bits | max error, Y | max error, cuBLAS |
+|---|---|---|---|---|---|
+| 8192 × 8192 × 8192 | 128x128x32 4x2w s3 | 1.013-1.018 | 0.5% | 4.5e-08 | 4.2e-07 |
+| 2048 × 4096 × 11008 | 128x128x32 4x2w s3 | 0.993 | 0.1% | 3.5e-08 | 1.8e-06 |
+| 2048 × 4096 × 14336 | 128x128x32 4x2w s3 | 0.993 | 0.1% | 3.2e-08 | 1.6e-06 |
+
+At 8192³ the profile's 2x2/s2 line is fitted to 4x2/s3; at 2048 rows the
+analytic model's 2x2/s3 tile. Every other row is as above: its K is below
+8192, or its tile already held the block sums. The two 2048-row shapes
+gave cuBLAS's bits before and are now 50x below its largest error, at the
+speed they had (0.98-1.00x).

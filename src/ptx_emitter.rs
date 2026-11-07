@@ -14217,6 +14217,32 @@ declare it as a Q format.\n{}",
         2 * accumulators + 100 <= (65536 / threads.max(1)).min(255)
     }
 
+    /// Whether an unsplit F16 or BF16 GEMM of `m` rows and depth `k` keeps
+    /// block sums whatever tile the profile, a measurement or the analytic
+    /// model gives it: above 32 rows from K = 8192, unless `Y_F16_ACCUMULATE`
+    /// chooses the mode. `Autotuner::fit_f16_block_sums` then runs a tile with
+    /// no room for them (a 64 x 64 warp tile) on twice the warps and at least
+    /// 3 stages.
+    ///
+    /// Measured on 2026-11-07 (docs/benchmarks/f16_block_sums_2026-11-07/),
+    /// the 128x128 tile on 2x2 warps (chained) against 4x2 (blocked), both
+    /// on 3 stages:
+    /// - from K = 8192 the blocked tile ran 0.994-1.015x the chained one's
+    ///   speed, F16 and BF16, at 8192^3, 16384^3 and 2048 x 4096 x 11008 and
+    ///   x 14336. The chain's largest error was 3x cuBLAS's at 8192^3 and
+    ///   16384^3, where cuBLAS splits K (a memset before its kernel); the
+    ///   blocked sum's was 12-46x below cuBLAS's everywhere.
+    /// - at K = 4096 the blocked tile took 0.983-0.998x the speed, and the
+    ///   chain gives cuBLAS's own bits on every large shape measured, so a
+    ///   tile with no room for block sums still chains there.
+    ///
+    /// Until then the 3x loss appeared whenever the tile had no room: the
+    /// analytic model gives 8192^3 and 16384^3 2x2 warps, and so did a
+    /// profile measured before the 2026-10-20 re-tune.
+    pub fn f16_block_sums_required(m: u32, k: u32) -> bool {
+        std::env::var_os("Y_F16_ACCUMULATE").is_none() && m > 32 && k >= 8192 && k > Self::f16_block_k()
+    }
+
     /// How much of K a block sum takes under `F16Accumulation::Blocked`.
     pub fn f16_block_k() -> u32 {
         match std::env::var("Y_F16_BLOCK_K") {

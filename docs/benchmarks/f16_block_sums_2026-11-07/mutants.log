@@ -1,0 +1,11 @@
+never_required: KILLED ['from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps', 'the_fitted_tile_counts_every_product_once_and_beats_the_chain_on_the_gpu']
+from_k_4096: KILLED ['blocks_start_at_k_4096_above_32_rows_where_the_block_sums_fit', 'from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps']
+ignores_the_knob: KILLED ['from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps', 'the_fitted_tile_counts_every_product_once_and_beats_the_chain_on_the_gpu']
+widens_n_first: KILLED ['from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps']
+always_widens: KILLED ['blocks_start_at_k_4096_above_32_rows_where_the_block_sums_fit']
+measured_not_fitted: KILLED ['from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps']
+analytic_not_fitted: KILLED ['from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps', 'the_fitted_tile_counts_every_product_once_and_beats_the_chain_on_the_gpu']
+override_fitted: KILLED ['from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps']
+8 of 8 killed; survived: []
+exit 0
+keeps_2_stages: KILLED ['from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps']  (run alone after the stage rule was added: 1 of 1 killed)

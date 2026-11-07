@@ -1,0 +1,19 @@
+BF16 8192x8192x8192 cuBLAS 12506.5 us (maxn 4.1e-07 relF 3.4e-06)
+   2x2w s2 [0 adds] 1.006x cuBLAS, maxn 1.2e-06 relF 1.1e-05, same bits 0.2%
+   2x2w s3 [0 adds] 1.010x cuBLAS, maxn 1.2e-06 relF 1.1e-05, same bits 0.2%
+   4x2w s2 [64 adds] 0.836x cuBLAS, maxn 3.4e-08 relF 2.7e-07, same bits 0.5%
+   4x2w s3 [64 adds] 1.010x cuBLAS, maxn 3.4e-08 relF 2.7e-07, same bits 0.5%
+   4x2w s4 [64 adds] 1.006x cuBLAS, maxn 3.4e-08 relF 2.7e-07, same bits 0.5%
+BF16 2048x4096x14336 cuBLAS 2715.3 us (maxn 1.4e-06 relF 2.1e-05)
+   2x2w s2 [0 adds] 0.973x cuBLAS, maxn 1.4e-06 relF 2.1e-05, same bits 100.0%
+   2x2w s3 [0 adds] 0.992x cuBLAS, maxn 1.4e-06 relF 2.1e-05, same bits 100.0%
+   4x2w s2 [64 adds] 0.821x cuBLAS, maxn 2.7e-08 relF 2.8e-07, same bits 0.1%
+   4x2w s3 [64 adds] 0.988x cuBLAS, maxn 2.7e-08 relF 2.8e-07, same bits 0.1%
+   4x2w s4 [64 adds] 0.998x cuBLAS, maxn 2.7e-08 relF 2.8e-07, same bits 0.1%
+BF16 2048x2048x8192 cuBLAS 786.0 us (maxn 1.2e-06 relF 1.1e-05)
+   2x2w s2 [0 adds] 0.978x cuBLAS, maxn 1.2e-06 relF 1.1e-05, same bits 100.0%
+   2x2w s3 [0 adds] 0.990x cuBLAS, maxn 1.2e-06 relF 1.1e-05, same bits 100.0%
+   4x2w s2 [64 adds] 0.827x cuBLAS, maxn 3.1e-08 relF 2.7e-07, same bits 0.2%
+   4x2w s3 [64 adds] 0.993x cuBLAS, maxn 3.1e-08 relF 2.7e-07, same bits 0.2%
+   4x2w s4 [64 adds] 0.995x cuBLAS, maxn 3.1e-08 relF 2.7e-07, same bits 0.2%
+# 2760 MHz, 270.95 W, 69, 100 %

@@ -341,6 +341,127 @@ fn blocks_start_at_k_4096_above_32_rows_where_the_block_sums_fit() {
     assert!(block_folds(&ptx).is_empty() && !accumulates_in_f32(&ptx), "SwiGLU with 2 x 64 accumulators a thread is not the chain");
 }
 
+/// The GEMM's parameters with `elem` operands.
+fn gemm_params(elem: &str) -> String {
+    format!("A: GlobalMemory<{elem}>, B: GlobalMemory<{elem}>, C: GlobalMemory<F32>")
+}
+
+/// The stage count in a pipelined GEMM's header.
+fn stages(ptx: &str) -> u32 {
+    let at = ptx.find("Autotuner selected ").expect("no stage count in the header") + "Autotuner selected ".len();
+    ptx[at..].split(' ').next().unwrap().parse().unwrap()
+}
+
+#[test]
+fn from_k_8192_a_tile_with_no_room_for_the_block_sums_runs_on_twice_the_warps() {
+    let dir = pinned::pinned_scratch("f16_acc_fit", pinned::SM_PINNED);
+    // The pinned profile holds no measured tile, so the analytic model picks
+    // a 128x128 tile on 2x2 warps for each shape here: 128 accumulators a
+    // thread, whose block sums would take 2 x 128 registers. From K = 8192
+    // the tile runs on 4x2 warps, 64 a thread, and its sum is blocked.
+    for (m, n, k, elem) in [(8192u32, 8192u32, 8192u32, "F16"), (2048, 4096, 14336, "F16"), (2048, 2048, 8192, "BF16")] {
+        let what = format!("{elem} {m}x{n}x{k}, no knob");
+        let ptx = compile_kernel(&dir, &format!("fit_{elem}_{m}x{n}x{k}"), m, n, k, &gemm_params(elem), None).unwrap();
+        assert!(ptx.contains("| CTA 128x128x32 | 4x2 warps"), "{what}: not the analytic tile on twice the warps");
+        assert_eq!(accumulators_and_threads(&ptx), (64, 256), "{what}");
+        assert!(!accumulates_in_f32(&ptx), "{what}");
+        assert_blocked(&ptx, 8, &what);
+    }
+    // The control, the same tile at K = 4096: 2x2 warps and the chain, which
+    // gives cuBLAS's bits at such shapes and is 1-2% faster there.
+    let ptx = compile(&dir, "fit_ctl_4096", 2048, 2048, 4096, None).unwrap();
+    assert_eq!(accumulators_and_threads(&ptx), (128, 128), "K = 4096: the tile moved");
+    assert!(block_folds(&ptx).is_empty() && !accumulates_in_f32(&ptx), "K = 4096: not the chain");
+    // 32 rows are compensated, not blocked, so their tile is left as it is.
+    let ptx = compile(&dir, "fit_ctl_32", 32, 4096, 8192, None).unwrap();
+    assert!(compensated(&ptx), "M = 32: not compensated");
+    // The knob chooses the mode, so no tile is fitted: `mma` chains on 2x2.
+    let ptx = compile(&dir, "fit_mma", 8192, 8192, 8192, Some("mma")).unwrap();
+    assert_eq!(accumulators_and_threads(&ptx), (128, 128), "Y_F16_ACCUMULATE=mma: the tile moved");
+    assert!(block_folds(&ptx).is_empty(), "Y_F16_ACCUMULATE=mma: blocked");
+
+    // A measured tile with no room is fitted too: the line this machine's
+    // profile held from before the 2026-10-20 re-tune. Its 2 stages become
+    // 3 (on 2 the wider tile measured 0.82-0.84x cuBLAS); a measured 4 stays.
+    let measured = pinned::pinned_scratch("f16_acc_fit_measured", pinned::SM_PINNED);
+    let profile = measured.join(".ysu_hw_profile");
+    let mut text = std::fs::read_to_string(&profile).unwrap();
+    text.push_str(&format!("AUTOTUNE_F16_8192x8192x8192_{}=128,128,32,2,2,2\n", pinned::GPU_NAME));
+    text.push_str(&format!("AUTOTUNE_F16_4096x4096x8192_{}=128,128,32,2,2,4\n", pinned::GPU_NAME));
+    std::fs::write(&profile, text).unwrap();
+    for (m, n, k, elem, want_stages) in [(8192u32, 8192u32, 8192u32, "F16", 3u32), (8192, 8192, 8192, "BF16", 3), (4096, 4096, 8192, "F16", 4)] {
+        let what = format!("{elem} {m}x{n}x{k}, measured 2x2 warps");
+        let ptx = compile_kernel(&measured, &format!("fit_measured_{elem}_{m}x{n}x{k}"), m, n, k, &gemm_params(elem), None).unwrap();
+        assert!(ptx.contains("| CTA 128x128x32 | 4x2 warps"), "{what}: not fitted");
+        assert_eq!(stages(&ptx), want_stages, "{what}: stages");
+        assert_blocked(&ptx, 8, &what);
+    }
+
+    // `Y_CTA_OVERRIDE` is taken as given: 2x2 warps, the chain.
+    let src = measured.join("fit_override.ysu");
+    std::fs::write(&src, format!("@tile(8192, 8192, 8192)\nkernel fit_override({}) {{\n}}\n\nfn main() {{\n}}\n", gemm_params("F16"))).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_Y"))
+        .arg(&src).arg("--emit-ptx").current_dir(&measured)
+        .env("Y_CTA_OVERRIDE", "128,128,32,2,2,3").env_remove("Y_F16_ACCUMULATE").env_remove("Y_F16_BLOCK_K")
+        .output().expect("run Y");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let ptx = std::fs::read_to_string(src.with_extension("ptx")).unwrap();
+    assert_eq!(accumulators_and_threads(&ptx), (128, 128), "Y_CTA_OVERRIDE: the tile moved");
+    assert!(block_folds(&ptx).is_empty(), "Y_CTA_OVERRIDE's 2x2 warps: blocked");
+}
+
+#[test]
+fn the_fitted_tile_counts_every_product_once_and_beats_the_chain_on_the_gpu() {
+    use y::cuda_runtime::CudaContext;
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - no F16 GEMM was executed.");
+        return;
+    };
+    let dir = pinned::pinned_scratch("f16_fit_gpu", pinned::SM_PINNED);
+    // 1024 x 2048 x 8192 takes the analytic 128x128 tile on 2x2 warps, so
+    // by default it runs on 4x2; `Y_F16_ACCUMULATE=mma` is the chain on 2x2,
+    // the control. Outputs are checked on a lattice that crosses every CTA
+    // row and column and both halves of each warp's rows, plus the last row
+    // and column.
+    let (m, n, k) = (1024u32, 2048u32, 8192u32);
+    let (mu, nu, ku) = (m as usize, n as usize, k as usize);
+    let rows: Vec<usize> = (0..mu).step_by(37).chain([mu - 1]).collect();
+    let cols: Vec<usize> = (0..nu).step_by(41).chain([nu - 1]).collect();
+    let mut state = 0xF17_B10Cu64;
+    let ia: Vec<i32> = (0..mu * ku).map(|_| (splitmix(&mut state) % 9) as i32 - 4).collect();
+    let ib: Vec<i32> = (0..ku * nu).map(|_| (splitmix(&mut state) % 9) as i32 - 4).collect();
+    // Positive f16 in [0.25, 2): the chain's truncation shows as a bias.
+    let a: Vec<u16> = (0..mu * ku).map(|_| { let r = splitmix(&mut state); ((13 + r % 2) << 10) as u16 | ((r >> 8) & 0x3FF) as u16 }).collect();
+    let b: Vec<u16> = (0..ku * nu).map(|_| { let r = splitmix(&mut state); ((13 + r % 2) << 10) as u16 | ((r >> 8) & 0x3FF) as u16 }).collect();
+    let mut checked = Vec::new();
+    for &i in &rows {
+        for &j in &cols {
+            let int = (0..ku).map(|kk| (ia[i * ku + kk] * ib[kk * nu + j]) as i64).sum::<i64>() as f32;
+            let exact: f64 = (0..ku).map(|kk| f16_value(a[i * ku + kk]) * f16_value(b[kk * nu + j])).sum();
+            checked.push((i * nu + j, int, exact));
+        }
+    }
+    let mut worst = Vec::new();
+    for knob in [None, Some("mma")] {
+        let tag = format!("fit_gpu_{}", knob.unwrap_or("default"));
+        let ptx = compile(&dir, &tag, m, n, k, knob).unwrap();
+        assert_eq!(accumulators_and_threads(&ptx), if knob.is_none() { (64, 256) } else { (128, 128) }, "{tag}");
+        assert_eq!(block_folds(&ptx).is_empty(), knob.is_some(), "{tag}");
+        let run = launcher(&ctx, &ptx, &tag, m, n, k);
+        let ints = run(&ia.iter().map(|&v| f16_of_int(v)).collect::<Vec<_>>(), &ib.iter().map(|&v| f16_of_int(v)).collect::<Vec<_>>());
+        let wrong = checked.iter().filter(|(at, want, _)| ints[*at].to_bits() != want.to_bits()).count();
+        assert_eq!(wrong, 0, "{tag}: {wrong} of {} integer products checked wrong", checked.len());
+        assert!(ints.iter().all(|v| v.is_finite()), "{tag}: an output was not written (C starts as NaN)");
+        let got = run(&a, &b);
+        worst.push(checked.iter().map(|&(at, _, e)| ((got[at] as f64 - e) / e).abs()).fold(0f64, f64::max));
+    }
+    // Same-sign sums, so the relative error is the normalized one.
+    let (blocked, chained) = (worst[0], worst[1]);
+    eprintln!("1024 x 2048 x 8192, largest relative error: blocked on 4x2 warps {blocked:e}, chained on 2x2 {chained:e}");
+    assert!(chained > 5e-5, "the chain's largest error is only {chained:e}: the control did not fire");
+    assert!(blocked < chained / 8.0, "blocked {blocked:e} against the chain's {chained:e}");
+}
+
 /// The `.maxnreg` a kernel of `ptx` declares.
 fn maxnreg(ptx: &str) -> u32 {
     let at = ptx.find(".maxnreg ").expect("no .maxnreg") + ".maxnreg ".len();

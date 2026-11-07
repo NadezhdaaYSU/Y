@@ -1119,7 +1119,12 @@ for i in 0..100 {
   the accumulator with `add.rn.f32` after every 256 of K and zeroed
   (`blocked`), wherever the block sums, one register per accumulator, fit
   beside the chain's: not for a 64 x 64 warp tile's 128 accumulators a
-  thread ([record](benchmarks/f16_blocked_2026-10-25/README.md)). A split
+  thread ([record](benchmarks/f16_blocked_2026-10-25/README.md)). From
+  K = 8192 (since 2026-11-07) such a tile runs on twice the warps and at
+  least 3 stages instead, so the sum is blocked whichever tile the profile,
+  a measurement or the analytic model gave; a `Y_CTA_OVERRIDE` tile is
+  taken as given
+  ([record](benchmarks/f16_block_sums_2026-11-07/README.md)). A split
   of a split-K GEMM is blocked the same way where it has more than 32 rows
   and a K longer than a block; in any other split each `mma` starts from
   zero and its result is added in float32 (`add.rn.f32`). At most 32 rows,
