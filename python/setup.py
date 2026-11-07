@@ -1,11 +1,15 @@
-"""Build the `y-lang` wheel with the compiler library inside it.
+"""Build the `y-lang` wheel with the compiler library and GPU probe inside it.
 
 Installed, the package loads `liby.so` from beside itself (`_find_liby` in
 `y_lang/compiler.py`). A wheel built without it installed cleanly and failed
-at the first compile, so this build refuses instead:
-  * no library: build it with `cargo build --release` in the cargo project
-    that holds this directory, or name one in `Y_WHEEL_LIBY`;
-  * a library older than any compiler source beside it (`src/`, `crates/`,
+at the first compile. The compiler runs `ysu_gpu_probe` from beside `liby.so`
+when there is no `.ysu_hw_profile` (`sentinel::check_or_probe_hardware`);
+without it the profile names an unknown GPU and kernels target `sm_80`
+whatever the card. So this build refuses:
+  * a missing library or probe: build both with `cargo build --release` in
+    the cargo project that holds this directory, or name them in
+    `Y_WHEEL_LIBY` and `Y_WHEEL_PROBE`;
+  * one older than any compiler source beside it (`src/`, `crates/`,
     `Cargo.toml`, `Cargo.lock`): it would answer with an older compiler, and
     nothing at run time would say so.
 
@@ -44,34 +48,42 @@ def _sources(root):
                 yield Path(top) / f
 
 
-def compiler_library(root=CARGO_ROOT, named=None):
-    """The `liby.so` to put in the wheel; raises SystemExit naming what is wrong."""
-    named = os.environ.get("Y_WHEEL_LIBY") if named is None else named
-    lib = Path(named) if named else root / "target" / "release" / "liby.so"
-    if not lib.is_file():
+# (file in target/release and in the package, variable naming another, what it is)
+ARTIFACTS = (
+    ("liby.so", "Y_WHEEL_LIBY", "compiler library"),
+    ("ysu_gpu_probe", "Y_WHEEL_PROBE", "GPU probe"),
+)
+
+
+def built_artifact(name, variable, what, root=CARGO_ROOT):
+    """The file to put in the wheel; raises SystemExit naming what is wrong."""
+    named = os.environ.get(variable)
+    path = Path(named) if named else root / "target" / "release" / name
+    if not path.is_file():
         raise SystemExit(
-            f"y-lang wheel: no compiler library at {lib}. Run `cargo build "
-            f"--release` in {root}, or name the library in Y_WHEEL_LIBY.")
+            f"y-lang wheel: no {what} at {path}. Run `cargo build --release` "
+            f"in {root}, or name the file in {variable}.")
     if (root / "Cargo.toml").is_file():
-        built = lib.stat().st_mtime_ns
+        built = path.stat().st_mtime_ns
         newer = sorted(str(p.relative_to(root)) for p in _sources(root)
                        if p.stat().st_mtime_ns > built)
         if newer:
             shown = ", ".join(newer[:5]) + (f" and {len(newer) - 5} more" if len(newer) > 5 else "")
             raise SystemExit(
-                f"y-lang wheel: {lib} is older than {shown}. Rebuild it with "
+                f"y-lang wheel: {path} is older than {shown}. Rebuild it with "
                 f"`cargo build --release` in {root}.")
-    return lib
+    return path
 
 
 class BuildPy(build_py):
     def run(self):
         super().run()
-        lib = compiler_library()
-        dest = Path(self.build_lib) / "y_lang" / "liby.so"
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(lib, dest)
-        os.chmod(dest, 0o755)
+        for name, variable, what in ARTIFACTS:
+            source = built_artifact(name, variable, what)
+            dest = Path(self.build_lib) / "y_lang" / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, dest)
+            os.chmod(dest, 0o755)
 
 
 class NativeDistribution(Distribution):
