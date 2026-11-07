@@ -253,6 +253,49 @@ class TestWheel(unittest.TestCase):
         self.assertIn("is older than src/lib.rs", built.stdout + built.stderr)
         self.assertEqual(list(self.out.glob("*.whl")) if self.out.exists() else [], [])
 
+    def dep_info(self, artifact, *sources):
+        """Cargo's dep-info for `artifact`, naming `sources`, with the
+        escaped spaces cargo writes."""
+        esc = lambda p: str(p).replace(" ", "\\ ")
+        artifact.with_suffix(".d").write_text(
+            f"{esc(artifact)}: {' '.join(esc(s) for s in sources)}\n", encoding="utf-8")
+
+    def test_dep_info_limits_the_sources_to_the_ones_used(self):
+        # A file only another binary is built from (here src/main.rs) is newer
+        # than the library; cargo would not rebuild the library for it, so it
+        # must not make the library stale. lib.rs, which the library is built
+        # from, must.
+        main = self.root / "src" / "main.rs"
+        main.write_text("// only the executable\n", encoding="utf-8")
+        self.dep_info(self.lib, self.root / "Cargo.toml", self.source)
+        self.dep_info(self.probe, self.root / "Cargo.toml", self.source)
+        self.age(self.source, 0)
+        self.age(self.lib, 10)
+        self.age(self.probe, 10)
+        self.age(main, 20)
+        built = self.build()
+        self.assertEqual(built.returncode, 0, built.stderr[-3000:])
+        shutil.rmtree(self.out)
+        self.age(self.source, 30)
+        built = self.build()
+        self.assertNotEqual(built.returncode, 0)
+        self.assertIn("is older than src/lib.rs", built.stdout + built.stderr)
+        self.assertNotIn("main.rs", built.stdout + built.stderr)
+
+    def test_dep_info_naming_a_missing_file_falls_back_to_every_source(self):
+        # As a build in a container mounted elsewhere writes it: then every
+        # file under src/ counts, main.rs included.
+        main = self.root / "src" / "main.rs"
+        main.write_text("// only the executable\n", encoding="utf-8")
+        self.dep_info(self.lib, Path("/no/such/checkout/src/lib.rs"))
+        self.age(self.source, 0)
+        self.age(self.lib, 10)
+        self.age(self.probe, 10)
+        self.age(main, 20)
+        built = self.build()
+        self.assertNotEqual(built.returncode, 0)
+        self.assertIn("is older than src/main.rs", built.stdout + built.stderr)
+
     def test_refuses_a_missing_library(self):
         self.lib.unlink()
         built = self.build()

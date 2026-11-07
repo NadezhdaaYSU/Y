@@ -9,9 +9,13 @@ whatever the card. So this build refuses:
   * a missing library or probe: build both with `cargo build --release` in
     the cargo project that holds this directory, or name them in
     `Y_WHEEL_LIBY` and `Y_WHEEL_PROBE`;
-  * one older than any compiler source beside it (`src/`, `crates/`,
-    `Cargo.toml`, `Cargo.lock`): it would answer with an older compiler, and
-    nothing at run time would say so.
+  * one older than a source it was built from: it would answer with an older
+    compiler, and nothing at run time would say so. The sources are the ones
+    cargo's dep-info beside the file names (`liby.d`, `ysu_gpu_probe.d`).
+    Without it, or if it names a file that does not exist here, they are
+    every file under `src/` and `crates/` and `Cargo.toml` and `Cargo.lock`:
+    stricter, and an edit to a file only the `Y` executable uses then
+    refuses a library cargo rightly did not rebuild.
 
 Both binaries contain the Rust standard library, whose notice depends on the
 toolchain, so the build copies the toolchain's `COPYRIGHT-library.html` in as
@@ -25,6 +29,7 @@ depend on the Python version.
 """
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -64,6 +69,32 @@ ARTIFACTS = (
 )
 
 
+def _shown(path, root):
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return str(path)
+
+
+def _dep_info_sources(path):
+    """The source files cargo's dep-info (`<artifact>.d` beside it) says
+    `path` was built from, or None where there is no usable dep-info."""
+    dep_info = path.with_suffix(".d")
+    try:
+        text = dep_info.read_text(encoding="utf-8")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        head, sep, deps = line.partition(": ")
+        if not sep or Path(head.replace("\\ ", " ")).name != path.name:
+            continue
+        sources = [Path(d.replace("\\ ", " ")) for d in re.split(r"(?<!\\) ", deps.strip()) if d]
+        if sources and all(src.is_file() for src in sources):
+            return sources
+        return None
+    return None
+
+
 def built_artifact(name, variable, what, root=CARGO_ROOT):
     """The file to put in the wheel; raises SystemExit naming what is wrong."""
     named = os.environ.get(variable)
@@ -74,8 +105,8 @@ def built_artifact(name, variable, what, root=CARGO_ROOT):
             f"in {root}, or name the file in {variable}.")
     if (root / "Cargo.toml").is_file():
         built = path.stat().st_mtime_ns
-        newer = sorted(str(p.relative_to(root)) for p in _sources(root)
-                       if p.stat().st_mtime_ns > built)
+        sources = _dep_info_sources(path) or list(_sources(root))
+        newer = sorted(_shown(p, root) for p in sources if p.stat().st_mtime_ns > built)
         if newer:
             shown = ", ".join(newer[:5]) + (f" and {len(newer) - 5} more" if len(newer) > 5 else "")
             raise SystemExit(
