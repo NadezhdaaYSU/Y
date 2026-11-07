@@ -91,3 +91,6 @@ tools/ptxas_tval/**/*.cubin
 # `pip wheel ./python` (python/README.md) builds in the package directory.
 python/build/
 python/*.egg-info/
+
+# Wheels built by the commands in python/README.md and tools/wheel_glibc228/.
+/dist/

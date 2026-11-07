@@ -340,9 +340,21 @@ source; each entry there now carries its status. What is still open:
 
 ### Python packaging
 
-- `python/pyproject.toml` cannot be built into a wheel: its `readme =
-  "../README.md"` lies outside the project, and setuptools refuses it
-  (checked 2026-10-17). The package is used through `PYTHONPATH`.
+The wheel builds and installs outside the repository since e94e29a
+(2026-11-07; it used to refuse `readme = "../README.md"`, and then carried no
+`liby.so`). Open:
+- **The CPU JIT does not run on AlmaLinux 8's LLVM 17** (`llvm-compat-libs`
+  17.0.6): the library loads, then creating the JIT fails with `Symbols not
+  found: [ llvm_orc_registerEHFrameSectionWrapper ]`. LLVM's EH-frame
+  registration looks that symbol up in the process, and `liby.so` opens
+  LLVM without `RTLD_GLOBAL`. LLVM 21 (AlmaLinux 8) and 23 (the development
+  machine) run it. The loader, its error message and `tests/cpu_jit_loader.rs`
+  still say 17+; 18 to 20 are untested (2026-11-08,
+  `tools/wheel_glibc228/`).
+- The wheel is tagged `linux_x86_64`, not `manylinux`: nothing runs
+  `auditwheel`. `tools/wheel_glibc228/build.sh` builds the binaries on glibc
+  2.28 (they then need no glibc symbol newer than 2.17) and tests the wheel
+  there; only 2.28 has been tested.
 
 ### `y_lang.ops`
 
