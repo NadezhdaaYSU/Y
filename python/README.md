@@ -16,7 +16,8 @@ python3 -m pip install dist/y_lang-*.whl
 ```
 
 The wheel build refuses a missing `liby.so` or `ysu_gpu_probe`, and one older
-than the compiler sources beside it. `Y_WHEEL_LIBY` and `Y_WHEEL_PROBE` name
+than a source it was built from (as cargo's dep-info beside it lists them;
+without that, any compiler source). `Y_WHEEL_LIBY` and `Y_WHEEL_PROBE` name
 files built elsewhere.
 
 Requirements:
@@ -26,6 +27,14 @@ Requirements:
 - Optional: a C compiler and this Python's headers. With them, kernel launches
   go through a small native module built on first use; without them, through
   ctypes, which is slower per call.
+- For the CPU JIT (`CPUJit`) only: LLVM as a shared library, which it loads
+  when first used (`libLLVM-17.so` to `libLLVM-24.so` are looked for, or
+  `Y_LLVM_LIBRARY=<path>`). LLVM 21 and 23 run it; AlmaLinux 8's LLVM 17
+  compatibility library loads but fails to create the JIT (see the
+  repository's `docs/known_issues.md`).
+- Older Linux: `tools/wheel_glibc228/build.sh` (Docker) builds the binaries
+  on glibc 2.28, where they need no glibc symbol newer than 2.17, and tests
+  the wheel there (only 2.28 is tested).
 
 ## Reproducible inference
 
