@@ -1615,6 +1615,7 @@ different baseline.
 | int8 GEMM, 128 × 4096 × 11008 and × 14336 (Llama's MLP), 512 × 11008 × 4096, 512 × 1024 × 4096 with B from DRAM | cuBLASLt (`torch._int_mm`) | 0.91–0.98x (at 128 rows the 64×64 tile gives 0.99x from DRAM but 0.77–0.83x from L2) |
 | int8 GEMM, K % 64 == 32 (4000³, 4096 × 4096 × 4000) | cuBLASLt | 0.93–0.95x |
 | int8 GEMM, 8192³ | cuBLASLt | 0.97–1.00x |
+| BF16 GEMM: 4096³, the ragged 1000³, and 128 or 512 rows against Llama's 11008/14336 | cuBLAS bf16 → f32 | 0.93–0.99x |
 
 Paged decode attention used to lose by up to 1.3x when the KV cache fits in
 L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
@@ -2813,6 +2814,25 @@ Triton kernel: faster on most prefill shapes (1.25-1.76x) and on the decode
 layers with few output tiles. It is 0.90x on 7B's large decode layers, where
 its epilogue takes four unfused torch passes. Compiled decode throughput is
 not measured yet.
+
+### BF16 matches cuBLAS (2026-11-07)
+
+Until 2026-11-07 the parser rejected `BF16`. It is now a `GlobalMemory`
+element type, and the F16 tensor-core GEMM takes bf16 operands:
+- **Conversions.** A load widens exactly. A store rounds to nearest-even, the
+  bfloat16 torch gives on CUDA for all 2^32 float32 bit patterns. An f64 or
+  an integer is rounded once: through the nearest float32 instead, 32,644 of
+  1.18M values near bf16 midpoints came out wrong.
+- **Speed.** Against cuBLAS's bf16 GEMM with f32 output, the GEMM is
+  0.93–1.51x over 30 shapes, 21 of them 0.98x or better.
+- **Bits.** Wherever both chain the tensor core's accumulator, from 256³ to
+  4096³ and at 2048 rows, every output is bit-identical to cuBLAS's.
+- **Accuracy.** At 32 rows, and at 128–512 rows with K of 4096 and up, Y's
+  compensated and blocked sums are 6–200x closer to the exact product. At
+  8192³ cuBLAS's largest error is 3x smaller.
+
+Records: `docs/benchmarks/bf16_gemm_2026-11-07/`; tests: `tests/ptx_bf16.rs`
+and `python/y_lang/tests/test_bf16.py`.
 
 ### The GPU warp tiling is proved, and the guard for it was compiled out
 

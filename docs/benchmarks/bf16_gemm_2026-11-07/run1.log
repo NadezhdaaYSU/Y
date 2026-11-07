@@ -1,0 +1,733 @@
+# NVIDIA GeForce RTX 4070 Ti SUPER, 66 SMs; torch 2.13.0+cu130; profile /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/.ysu_hw_profile
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] measured tile from .ysu_hw_profile for M=256 N=256 K=256 (F16): 32x64x32 2x2 s4
+256x256x256  cuBLAS       4.5 us    7.4 TFLOPS | Y 32x64x32 2x2w s4 1.363x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 1.8e-07 cuBLAS 1.8e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] measured tile from .ysu_hw_profile for M=512 N=512 K=512 (F16): 64x64x32 4x2 s4
+512x512x512  cuBLAS       5.8 us   46.1 TFLOPS | Y 64x64x32 4x2w s4 1.074x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 3.1e-07 cuBLAS 3.1e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] measured tile from .ysu_hw_profile for M=1024 N=1024 K=1024 (F16): 64x128x32 2x2 s3
+1024x1024x1024  cuBLAS      29.0 us   74.0 TFLOPS | Y 64x128x32 2x2w s3 1.064x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 4.5e-07 cuBLAS 4.5e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] measured tile from .ysu_hw_profile for M=2048 N=2048 K=2048 (F16): 128x128x32 2x2 s2
+2048x2048x2048  cuBLAS     209.7 us   81.9 TFLOPS | Y 128x128x32 2x2w s2 1.009x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 6.5e-07 cuBLAS 6.5e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] measured tile from .ysu_hw_profile for M=4096 N=4096 K=4096 (F16): 128x128x32 2x2 s2
+4096x4096x4096  cuBLAS    1593.0 us   86.3 TFLOPS | Y 128x128x32 2x2w s2 0.979x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 1.0e-06 cuBLAS 1.0e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] measured tile from .ysu_hw_profile for M=8192 N=8192 K=8192 (F16): 128x128x32 2x2 s2
+8192x8192x8192  cuBLAS   12851.5 us   85.6 TFLOPS | Y 128x128x32 2x2w s2 1.008x | same bits as cuBLAS   0.2% | max err/sum|a||b|: Y 1.3e-06 cuBLAS 4.3e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] no measurement for M=1000 N=1000 K=1000 (F16); borrowing the measured tile from the nearest shape M=1024 N=1024 K=1024: 64x128x32 2x2 s3 (run with --autotune to measure this shape directly)
+1000x1000x1000  cuBLAS      29.0 us   69.0 TFLOPS | Y 64x128x32 2x2w s3 0.927x | same bits as cuBLAS  24.6% | max err/sum|a||b|: Y 4.2e-07 cuBLAS 4.2e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] no measurement for M=4000 N=4000 K=4000 (F16); borrowing the measured tile from the nearest shape M=4096 N=4096 K=4096: 128x128x32 2x2 s2 (run with --autotune to measure this shape directly)
+4000x4000x4000  cuBLAS    1559.2 us   82.1 TFLOPS | Y 128x128x32 2x2w s2 0.978x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 1.0e-06 cuBLAS 1.0e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] no measurement for M=768 N=768 K=768 (F16); borrowing the measured tile from the nearest shape M=1024 N=1024 K=1024: 64x128x32 2x2 s3 (run with --autotune to measure this shape directly)
+768x768x768  cuBLAS      22.3 us   40.7 TFLOPS | Y 64x128x32 2x2w s3 1.024x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 4.2e-07 cuBLAS 4.2e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+1024x1024x8192  cuBLAS     198.2 us   86.7 TFLOPS | Y 64x128x32 2x2w s4 0.990x | same bits as cuBLAS   0.1% | max err/sum|a||b|: Y 3.4e-08 cuBLAS 1.2e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] measured tile from .ysu_hw_profile for M=32 N=4096 K=4096 (F16): 32x64x64 2x2 s3
+32x4096x4096  cuBLAS      33.1 us   32.5 TFLOPS | Y 32x64x64 2x2w s3 1.507x | same bits as cuBLAS   0.3% | max err/sum|a||b|: Y 8.1e-09 cuBLAS 6.7e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+32x11008x4096  cuBLAS     176.0 us   16.4 TFLOPS | Y 32x64x32 2x2w s3 1.154x | same bits as cuBLAS   0.3% | max err/sum|a||b|: Y 6.7e-09 cuBLAS 7.1e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+32x4096x11008  cuBLAS     161.3 us   17.9 TFLOPS | Y 32x64x32 2x2w s3 1.007x | same bits as cuBLAS   0.2% | max err/sum|a||b|: Y 3.9e-09 cuBLAS 5.4e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+32x14336x4096  cuBLAS     207.8 us   18.1 TFLOPS | Y 32x64x32 2x2w s3 1.023x | same bits as cuBLAS   0.3% | max err/sum|a||b|: Y 6.0e-09 cuBLAS 6.6e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+32x4096x14336  cuBLAS     210.8 us   17.8 TFLOPS | Y 32x64x32 2x2w s3 0.999x | same bits as cuBLAS   0.2% | max err/sum|a||b|: Y 3.8e-09 cuBLAS 7.6e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+128x4096x4096  cuBLAS      53.5 us   80.3 TFLOPS | Y 64x64x32 2x2w s4 0.978x | same bits as cuBLAS   0.4% | max err/sum|a||b|: Y 4.4e-08 cuBLAS 8.2e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+128x11008x4096  cuBLAS     178.3 us   64.7 TFLOPS | Y 64x64x32 2x2w s4 0.994x | same bits as cuBLAS   1.4% | max err/sum|a||b|: Y 4.1e-08 cuBLAS 2.3e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+128x4096x11008  cuBLAS     176.4 us   65.4 TFLOPS | Y 64x64x32 2x2w s4 1.076x | same bits as cuBLAS   0.1% | max err/sum|a||b|: Y 3.3e-08 cuBLAS 1.2e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+128x14336x4096  cuBLAS     243.3 us   61.8 TFLOPS | Y 64x64x32 2x2w s4 0.964x | same bits as cuBLAS   0.4% | max err/sum|a||b|: Y 4.4e-08 cuBLAS 8.9e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+128x4096x14336  cuBLAS     230.7 us   65.2 TFLOPS | Y 64x64x32 2x2w s4 1.076x | same bits as cuBLAS   0.1% | max err/sum|a||b|: Y 2.6e-08 cuBLAS 1.3e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+512x4096x4096  cuBLAS     208.3 us   82.5 TFLOPS | Y 64x128x32 2x4w s4 0.982x | same bits as cuBLAS   0.4% | max err/sum|a||b|: Y 4.0e-08 cuBLAS 8.7e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+512x11008x4096  cuBLAS     615.1 us   75.1 TFLOPS | Y 64x128x32 2x4w s4 1.050x | same bits as cuBLAS   0.4% | max err/sum|a||b|: Y 5.1e-08 cuBLAS 1.0e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+512x4096x11008  cuBLAS     544.2 us   84.8 TFLOPS | Y 64x128x32 2x4w s4 0.976x | same bits as cuBLAS   0.1% | max err/sum|a||b|: Y 3.4e-08 cuBLAS 1.3e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+512x14336x4096  cuBLAS     805.1 us   74.7 TFLOPS | Y 64x128x32 2x4w s4 1.107x | same bits as cuBLAS   0.4% | max err/sum|a||b|: Y 4.6e-08 cuBLAS 9.2e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+512x4096x14336  cuBLAS     697.5 us   86.2 TFLOPS | Y 64x128x32 2x4w s4 0.964x | same bits as cuBLAS   0.1% | max err/sum|a||b|: Y 3.2e-08 cuBLAS 1.7e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+         [Y autotuner] no measurement for M=2048 N=4096 K=4096 (F16); borrowing the measured tile from the nearest shape M=2048 N=2048 K=2048: 128x128x32 2x2 s2 (run with --autotune to measure this shape directly)
+2048x4096x4096  cuBLAS     804.7 us   85.4 TFLOPS | Y 128x128x32 2x2w s2 0.994x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 9.3e-07 cuBLAS 9.3e-07 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+2048x11008x4096  cuBLAS    2192.4 us   84.2 TFLOPS | Y 128x128x32 2x2w s3 1.050x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 1.0e-06 cuBLAS 1.0e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+2048x4096x11008  cuBLAS    2097.7 us   88.0 TFLOPS | Y 128x128x32 2x2w s3 0.980x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 1.4e-06 cuBLAS 1.4e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+2048x14336x4096  cuBLAS    2847.1 us   84.5 TFLOPS | Y 128x128x32 2x2w s3 1.004x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 1.1e-06 cuBLAS 1.1e-06 | integers exact
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+2048x4096x14336  cuBLAS    2778.3 us   86.6 TFLOPS | Y 128x128x32 2x2w s3 0.996x | same bits as cuBLAS 100.0% | max err/sum|a||b|: Y 2.0e-06 cuBLAS 2.0e-06 | integers exact
+# 2775 MHz, 154.98 W, 64

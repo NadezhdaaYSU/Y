@@ -253,6 +253,15 @@ source; each entry there now carries its status. What is still open:
 - The BF16 GEMM takes the F16 GEMM's tiles, which the autotuner measures as
   F16 and labels "(F16)" in its messages. The two kernels differ only in the
   `mma` type, so the measurements carry over; they are not re-measured.
+- Against cuBLAS (`docs/benchmarks/bf16_gemm_2026-11-07/`) the GEMM loses
+  2-7% at:
+  - 4096³ and 4000³ (0.98x);
+  - the ragged 1000³ (0.93-0.96x);
+  - 128 rows against N = 11008 or 14336 with K = 4096 (0.95-0.99x);
+  - 512 rows against K = 11008 or 14336 (0.95-0.98x).
+
+  At 8192³ its largest error is 3x cuBLAS's: it chains there, and cuBLAS
+  evidently does not.
 - sm_90's direct conversions (`cvt.f32.bf16`, `cvt.rn.bf16.f64`) are not
   used. Every target goes through f32: exactly for loads, and with round to
   odd for f64 and integer stores.
