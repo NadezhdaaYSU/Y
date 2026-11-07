@@ -1,0 +1,27 @@
+== record (Y GEMM, compiled) 01:29:48  util 8%  others: steam Discord chromium 
+exit 0
+== triton 014906  util 48%  others: steam Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.472        43.5       1391.2     1.1%
+== y 020255  util 50%  others: steam Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.368        46.8       1496.8     1.3%
+== y_vint8 020957  util 72%  others: steam Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.250        51.2       1637.8     0.1%
+== y_vint8 022144  util 3%  others: steam Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.322        48.4       1549.4     1.0%
+== y 022808  util 49%  others: steam Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.399        45.7       1463.9     1.0%
+== triton 023519  util 2%  others: steam Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.442        44.4       1419.9     0.6%
+== done 02:43:21

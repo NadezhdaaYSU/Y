@@ -772,6 +772,14 @@ with a machine-checked proof. The rest is tested, not proved:
 - `ptxas`, and the ISA semantics of `mma.sync`, `ldmatrix` and `cp.async`, are
   trusted.
 
+**At 7B (2026-11-08):** with every linear layer on Y's GEMM, compiled, the
+GPU's exact tokens are the CPU record's (digest `7700e3e28f1d21d1`, 0/5
+changed). Decoding at batch 32, Y's GEMM ran 1.03-1.08x the Triton kernel's
+tokens/s, and Y's GEMM with the int8 V cache on `exact_pv` 1.09-1.18x
+(ABCCBA, one arm per process, desktop applications open; the same
+configuration moved up to 6% between processes). Records:
+`docs/benchmarks/exact_y_gemm_7b_2026-11-08/`.
+
 ## Finding 13 — `0/16` is also what a broken arm scores
 
 Finding 11's fixed-order-float arm read **12/16** on its first run. Two of my own
