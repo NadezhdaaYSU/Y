@@ -3503,6 +3503,21 @@ floor, `.target sm_80`, whatever card is present: it loads on every supported
 GPU and uses nothing newer than Ampere. Writing into the caller's directory,
 and ignoring the card, is an open defect, recorded rather than fixed.
 
+**To use the package outside the repository, install it as a wheel.** The
+wheel carries `liby.so`, and its build refuses a missing library or one older
+than the compiler sources (`python/setup.py`, tested by
+`python/tests/test_wheel.py`):
+
+```bash
+cargo build --release
+python3 -m pip wheel ./python --no-deps -w dist
+python3 -m pip install dist/y_lang-*.whl
+```
+
+[`python/README.md`](python/README.md) gives the requirements and an example.
+The wheel does not carry the hardware probe, so the working-directory
+`.ysu_hw_profile` defect above applies to it.
+
 **Many gates are conditional on an external tool or a device, and a missing one
 makes them SKIP AND REPORT `ok`.** Each prints a notice; the green summary line
 does not show it. A green run is therefore not by itself evidence that they

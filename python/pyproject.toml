@@ -1,12 +1,19 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+# 77 reads `license` as an SPDX expression and `license-files` (PEP 639).
+requires = ["setuptools>=77.0"]
 build-backend = "setuptools.build_meta"
+
+# `setup.py` puts the compiler library, `liby.so`, into the wheel and refuses
+# a missing or stale one.
 
 [project]
 name = "y-lang"
-version = "1.0.0"
+dynamic = ["version"]
 description = "Python bindings and PyTorch JIT compiler interop for the Y programming language"
-readme = "../README.md"
+readme = "README.md"
+license = "BUSL-1.1"
+# Links to the repository's own files, so the wheel carries the same text.
+license-files = ["LICENSE", "NOTICE"]
 requires-python = ">=3.8"
 dependencies = [
     "torch",
@@ -17,6 +24,9 @@ dev = [
     "pytest",
     "cupy-cuda12x",
 ]
+
+[tool.setuptools.dynamic]
+version = {attr = "y_lang.__version__"}
 
 [tool.setuptools.package-data]
 # Compiled on first use by torch_interop's native launch path.

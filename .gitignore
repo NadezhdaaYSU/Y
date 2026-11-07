@@ -87,3 +87,7 @@ tools/ptxas_tval/**/*.cubin
 # that is where it now appears. It is keyed on source text only, so a committed
 # one would serve PTX from a compiler that no longer exists.
 .ysu/
+
+# `pip wheel ./python` (python/README.md) builds in the package directory.
+python/build/
+python/*.egg-info/
