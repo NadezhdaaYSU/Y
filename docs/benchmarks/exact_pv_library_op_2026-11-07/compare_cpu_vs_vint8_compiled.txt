@@ -1,0 +1,21 @@
+
+Cross-device bit-identity
+  docs/benchmarks/exact_y_gemm_2026-11-07/cpu_zen5_0p5b.json  vs  /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/docs/benchmarks/exact_pv_library_op_2026-11-07/gpu_sm89_vint8_compiled.json
+  A: cpu:x86_64 (sm_cpu, 32 SMs, driver None)
+  B: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 13
+                 '+3 long, middle' first differs at token 42
+                 'mixed 8, pos 5' first differs at token 13
+                 'mixed 32, pos 17' first differs at token 42
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================

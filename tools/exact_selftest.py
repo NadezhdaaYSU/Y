@@ -389,6 +389,78 @@ def check_all_gemm_configs_agree(dev, fail):
             f"agree bit-for-bit ({runs} runs)")
 
 
+def check_pv_int8_kernel(dev, fail):
+    """`exact_pv` on an int8 V (`Y_EXACT_V_INT8=1`) is the float64 product.
+
+    `check_pv` hands `exact_pv` an int64 V, so it checks the digit split and
+    never the compiler's kernel. Here V is int8, which routes to the kernel:
+    against float64 (exact: |sum| <= T * 2^28 * 127 < 2^53) at the same key
+    lengths, at head_dim 64 and 128; called directly, through the registered
+    op, compiled with no graph break, and on a side stream (the launch must
+    follow torch's current stream). A changed value shows the comparison can
+    fail. Runs only in that mode, the one it vouches for.
+    """
+    if not exact_kv.V_INT8:
+        return "SKIP: Y_EXACT_V_INT8 is not set, so the kernel is not the route"
+    import torch._dynamo
+    bits = lambda t: t.detach().cpu().contiguous().view(torch.uint8)
+    same = lambda a, b: a.shape == b.shape and a.dtype == b.dtype and torch.equal(bits(a), bits(b))
+    torch.manual_seed(11)
+    runs = 0
+    for T in (1, 63, 80, 512, 1039, 1040, 4097):
+        for d, q in ((64, 5), (128, 1)):
+            p = torch.randint(0, (1 << D.P_BITS) + 1, (3, 2, q, T), device=dev,
+                              dtype=torch.int64)
+            p[0, 0, 0, 0] = 1 << D.P_BITS
+            v = torch.randint(-127, 128, (3, 2, T, d), device=dev, dtype=torch.int8)
+            v[0, 0, 0, 0] = -127
+            want = torch.matmul(p.double(), v.double())
+            got = D.exact_pv(p, v)
+            runs += 1
+            if not same(got, want):
+                fail(f"exact_pv's kernel T={T} d={d} disagrees with the float64 matmul")
+            if not same(torch.ops.y.exact_pv(p.to(torch.int32), v).double(), want):
+                fail(f"torch.ops.y.exact_pv T={T} d={d} disagrees with the float64 matmul")
+            bent = v.clone()
+            bent[1, 1, T - 1, d - 1] = 0 if int(v[1, 1, T - 1, d - 1]) != 0 else 1
+            if same(D.exact_pv(p, bent), want):
+                fail(f"control did not fire at T={T}: a changed V gives the same "
+                     f"output, so the comparison is vacuous")
+    torch._dynamo.reset()
+    try:
+        comp = torch.compile(lambda p, v: D.exact_pv(p, v) * 0.5, fullgraph=True,
+                             dynamic=True)
+        for T in (80, 513):
+            p = torch.randint(0, (1 << D.P_BITS) + 1, (32, 2, 7, T), device=dev,
+                              dtype=torch.int64)
+            v = torch.randint(-127, 128, (32, 2, T, 64), device=dev, dtype=torch.int8)
+            if not same(comp(p, v), torch.matmul(p.double(), v.double()) * 0.5):
+                fail(f"compiled exact_pv T={T} disagrees with the float64 matmul")
+    finally:
+        torch._dynamo.reset()
+    side = torch.cuda.Stream()
+    p = torch.randint(0, (1 << D.P_BITS) + 1, (32, 2, 7, 2048), device=dev,
+                      dtype=torch.int64)
+    v = torch.randint(-127, 128, (32, 2, 2048, 64), device=dev, dtype=torch.int8)
+    want = torch.matmul(p.double(), v.double())
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side):
+        got = D.exact_pv(p * 1, v)           # inputs made on the side stream too
+        got = got + 0                        # and read there
+    torch.cuda.current_stream().wait_stream(side)
+    if not same(got, want):
+        fail("exact_pv on a side stream disagrees: the launch is not on torch's "
+             "current stream")
+    try:
+        torch.ops.y.exact_pv(p.cpu().to(torch.int32), v.cpu())
+        fail("torch.ops.y.exact_pv accepted CPU tensors")
+    except RuntimeError as e:
+        if "one CUDA device" not in str(e):
+            fail(f"CPU tensors were refused for the wrong reason: {e}")
+    return (f"exact_pv's kernel (int8 V) == float64 matmul in {runs} products, "
+            f"through the op, compiled with no graph break and on a side stream")
+
+
 def check_y_gemm_agrees(dev, fail):
     """Y's own int8 GEMM (`Y_EXACT_GEMM=y`) gives the bits the `_int_mm` path does.
 
@@ -886,6 +958,7 @@ NEEDS_GPU = {
     "check_all_gemm_configs_agree",
     "check_hilo_gemm_configs_agree",
     "check_y_gemm_agrees",
+    "check_pv_int8_kernel",
     "check_pad_is_load_bearing",
     "check_quantisers_are_device_independent",
     "check_quantisers_survive_compile",
@@ -905,6 +978,7 @@ def main():
     torch.manual_seed(0)
     bad = []
     checks = [check_exp2, check_pv, check_pv_bound_is_load_bearing,
+              check_pv_int8_kernel,
               check_linear, check_bias_is_not_fused, check_quantiser_at_volume,
               check_pad_is_load_bearing, check_all_gemm_configs_agree,
               check_digit_split_is_exact, check_hilo_gemm_configs_agree,

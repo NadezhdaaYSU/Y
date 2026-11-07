@@ -1,0 +1,6 @@
+# mutate.sh output, 2026-11-07: each mutant applied alone, tools/exact_selftest.py run with Y_EXACT_V_INT8=1, file restored
+default_stream ::  FAIL check_pv_int8_kernel  exact_pv on a side stream disagrees: the launch is not on torch's current stream 
+no_op_under_compile ::  FAIL check_pv_int8_kernel  Unsupported: torch.* op returned non-Tensor 
+fake_float64 ::  FAIL check_pv_int8_kernel  compiled exact_pv T=80 disagrees with the float64 matmul 
+short_key ::  FAIL check_pv_int8_kernel  exact_pv's kernel T=63 d=64 disagrees with the float64 matmul 
+no_cpu_refusal :: xec through /tmp/y_exact_nospace so torch.compile can link] /usr/lib/python3.14/multiprocessing/resource_tracker.py:475: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown: {'/mp-edo7wg72'}   warnings.warn( timeout: the monitored command dumped core  (process died: Segmentation fault, exit 139)

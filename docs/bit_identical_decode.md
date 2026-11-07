@@ -1077,6 +1077,25 @@ quoting either. The conclusion that survives contention is the sign, and the
 sign is negative: on this stack the kernel path is not currently worth shipping,
 whatever the census predicted from launch counts alone.
 
+#### Re-measured on an idle card: the rest was the launch, not the fusion
+
+On 2026-11-07 the route was measured again on an idle GPU, against its
+replacement (`docs/benchmarks/exact_pv_library_op_2026-11-07/`). The old route
+ran at 0.87-0.91x the digit split there, not 0.70x. The remaining loss was
+not the fusion guessed above. It was the call around the kernel:
+- `ptx_bridge.launch` synchronised the context after every launch, 24 times a
+  step;
+- `custom_op` dispatch;
+- the int32 and float64 casts inside the opaque op;
+- a ctypes launch of 7.8 us.
+
+The op is now a `torch.library.Library` op, launched through `y_lang`'s
+`TorchKernel` on torch's stream, with the casts in the graph. Compiled, one
+call went from 66.9 to 36.1 us (the digit split's is 46.8). End to end the
+int8 V route runs at **1.00-1.03x the digit split** (218.8 and 224.0
+tok/s/seq against 218.1 and 217.8, ABCCBA), with the same tokens as the CPU
+record. That is at short contexts, where the kernel gains least.
+
 ## What this does not yet claim
 
 Written at the same length as the findings, because a status report that buries
@@ -1225,12 +1244,19 @@ flattering direction.
   CUDA graphs (up to 1.47x, blocked on a library bug), continuous batching with
   paged KV (untested — what is tested is ragged *prefill*), and the
   custom-op-versus-`torch.compile` problem that made `exact_pv` a 0.70x loss in
-  the shipping configuration.
-- **Not more kernel porting.** `exact_pv` is 5x standalone and **0.70x compiled**
-  end to end. `feedback-stateful-optimisations-lose-to-compilers` and
+  the shipping configuration. (That last one is solved, 2026-11-07: a
+  `torch.library.Library` op launched through `TorchKernel`, without a
+  synchronisation, runs the int8 V route at 1.00-1.03x the digit split
+  compiled; see above.)
+- **Not more kernel porting.** `exact_pv` is 5x standalone and was **0.70x
+  compiled** end to end (0.87-0.91x on an idle card).
+  `feedback-stateful-optimisations-lose-to-compilers` and
   `feedback-isolated-benchmarks-cannot-price-epilogues` record the same shape
   twice already; this is the third. Solve "how does a Y kernel survive
-  `torch.compile`" before porting a second one.
+  `torch.compile`" before porting a second one. (Answered for this kernel on
+  2026-11-07: register it with `torch.library.Library`, launch it through
+  `TorchKernel` on torch's stream, and keep the casts in the graph. Both Y
+  kernels in the exact model now ship that way.)
 
 ---
 

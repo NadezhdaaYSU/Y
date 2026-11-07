@@ -1,0 +1,35 @@
+20 %, 210 MHz, 5.87 W, 3078 MiB
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Qwen2.5-0.5B-Instruct  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  51%|█████▏    | 149/290 [00:00<00:00, 1475.51it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1807.99it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1107 19:55:26.963000 370204 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming NVIDIA GeForce RTX 4070 Ti SUPER / sm_89).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: true
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 14 / 53 / 393 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.25 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 1769 cycles
+    -> Loaded GPU Name: NVIDIA GeForce RTX 4070 Ti SUPER
+    -> Loaded GPU Vendor: NVIDIA
+    -> Loaded SM Version / Compute Capability: 8.9 / 8.9
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 6.49 / 2.51 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 37.31 / 37.31 / 92.29 / 52.68
+    -> GPU Tensor Core Latencies (F16/TF32): 42.14 / 66.66
+    -> Warp Shuffle vs SMEM Exchange: 1.02 / 5.1 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.53 / 4.53 vs 6.8
+    -> Branch Divergence Penalty: 4.53 cycles (uniform=4.53, divergent=9.06)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 2.59 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4.54 / 4.01 | LOP3.LUT: 4.53
+    -> FP64 DADD: 48.47 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 100KB smem/SM, 16376MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+  sanity exact        canary ok, 40 distinct tokens in reference
+exact  int8, order-independent           0.292       218.8       7002.3     3.9%
