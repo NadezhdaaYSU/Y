@@ -54,11 +54,17 @@ for _ in range(3):
     seen.append([l.split()[1] for l in ptx.splitlines() if l.startswith(".target")]
                 + (["ENTRY"] if ".visible .entry vec_add(" in ptx else []))
 stats = compiler.get_cache_stats()
+try:
+    from y_lang.exact import w8a8_gemv
+    exact_gemm = w8a8_gemv._PROFILE
+except ImportError:                      # no triton
+    exact_gemm = None
 print("RESULT " + json.dumps({
     "ptx": seen[0], "same": all(s == seen[0] for s in seen),
     "profile": str(compiler.YCompilerLib.get_instance().hw_profile_path()),
     "cache_dir": stats["cache_dir"],
     "hits": stats["mem_hits"] + stats["disk_hits"], "misses": stats["misses"],
+    "exact_gemm": exact_gemm,
 }))
 """
 
@@ -171,6 +177,10 @@ class TestWheel(unittest.TestCase):
             names = z.namelist()
             self.assertIn("y_lang/liby.so", names, "the library must sit in the package, not under .data/")
             self.assertIn("y_lang/PROFILE_IN_USER_CACHE", names)
+            for module in ("__init__", "model", "kv", "attention", "w8a8_gemv", "large_model"):
+                self.assertIn(f"y_lang/exact/{module}.py", names)
+            # The link's target, not the link: the wheel must carry the source.
+            self.assertEqual(z.read("y_lang/exact/exact_pv.ysu"), (ROOT / "tests" / "exact_pv.ysu").read_bytes())
             self.assertEqual(z.read("y_lang/liby.so"), LIB.read_bytes())
             self.assertEqual(z.read("y_lang/ysu_gpu_probe"), FAKE_PROBE.encode())
             self.assertTrue((z.getinfo("y_lang/ysu_gpu_probe").external_attr >> 16) & 0o100,
@@ -212,6 +222,8 @@ class TestWheel(unittest.TestCase):
         # keyed on the new profile and stored; the third is a hit.
         self.assertEqual((result["misses"], result["hits"]), (2, 1), result)
         self.assertTrue(list((cache / "ptx").glob("*.ptx")))
+        if result["exact_gemm"] is not None:
+            self.assertEqual(result["exact_gemm"], str(cache / "exact_gemm"))
 
     def test_ysu_hw_profile_names_the_profile(self):
         site, work, run = self.install()
@@ -229,6 +241,8 @@ class TestWheel(unittest.TestCase):
         self.assertEqual(result["ptx"], ["sm_86", "ENTRY"])
         self.assertEqual(result["profile"], str(cache / "hw_profile"))
         self.assertEqual(result["cache_dir"], str(cache))
+        if result["exact_gemm"] is not None:
+            self.assertEqual(result["exact_gemm"], str(cache / "exact_gemm"))
         self.assertEqual(sorted(os.listdir(work)), [])
 
     def test_refuses_a_library_older_than_a_source(self):

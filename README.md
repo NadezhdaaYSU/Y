@@ -2123,6 +2123,12 @@ a code path the test could not fail on. None of them moved a number. All of them
 changed what the numbers are worth, which is the reason they are written down at
 the same length as the results.
 
+**From Python:** `from y_lang.exact import load, generate`
+([`python/README.md`](python/README.md)). The prototype's modules live in
+`python/y_lang/exact/`, so an installed y-lang carries them; `tools/` keeps
+their old names (`exact_model`, `exact_kv`, `w8a8_gemv`,
+`batch_invariance_demo`, `exact_large_model`) for the harnesses.
+
 Full write-ups: [bit-identical decode](docs/bit_identical_decode.md) (findings,
 controls, and the bugs found by turning this process on the tooling itself)
 and [deterministic inference](docs/deterministic_inference.md) (the design).
