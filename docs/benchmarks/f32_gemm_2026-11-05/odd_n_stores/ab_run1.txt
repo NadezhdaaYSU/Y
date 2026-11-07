@@ -1,0 +1,13 @@
+1024x50257x768: old==new bits True | old 0.846x  new 0.964x  (new/old time 0.877)
+4096x50257x768: old==new bits True | old 0.893x  new 0.962x  (new/old time 0.928)
+1024x50259x768: old==new bits True | old 0.865x  new 0.930x  (new/old time 0.930)
+4116x50257x768: old==new bits True | old 0.960x  new 1.006x  (new/old time 0.954)
+1024x32001x4096: old==new bits True | old 0.960x  new 0.976x  (new/old time 0.983)
+4095x4097x512: old==new bits True | old 0.769x  new 0.919x  (new/old time 0.837)
+4096x4097x4096: old==new bits True | old 0.985x  new 1.021x  (new/old time 0.965)
+2047x2049x2051: old==new bits True | old 0.893x  new 0.893x  (new/old time 1.000)
+1023x1025x1027: old==new bits True | old 0.862x  new 0.862x  (new/old time 1.000)
+1x50257x768: old==new bits True | old 0.979x  new 0.980x  (new/old time 1.000)
+1024x30522x768: old==new bits True | old 0.960x  new 0.962x  (new/old time 0.998)
+4096x4096x4096: old==new bits True | old 1.029x  new 1.028x  (new/old time 1.001)
+# 2190 MHz, 277.69 W, 74, 100 %

@@ -1,0 +1,355 @@
+==PROF== Connected to process 193532 (/usr/bin/python3.14)
+==PROF== Profiling "y_1024_50257_768": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_50257_768": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_50257_768": 0%....50%....100% - 5 passes
+1024x50257x768 exact
+==PROF== Profiling "y_1024_50176_768": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_50176_768": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_50176_768": 0%....50%....100% - 5 passes
+1024x50176x768 exact
+==PROF== Profiling "y_1024_32001_4096": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_32001_4096": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_32001_4096": 0%....50%....100% - 5 passes
+1024x32001x4096 exact
+==PROF== Profiling "y_1024_32000_4096": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_32000_4096": 0%....50%....100% - 5 passes
+==PROF== Profiling "y_1024_32000_4096": 0%....50%....100% - 5 passes
+1024x32000x4096 exact
+==PROF== Disconnected from process 193532
+[193532] python3.14@127.0.0.1
+  y_1024_50257_768 (1584, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        157,62
+    dram__bytes_write.sum                                                             Mbyte        186,23
+    gpu__time_duration.sum                                                               ms          2,85
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               905.856
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector    18.115.584
+    lts__t_sectors_op_write.sum                                                      sector    17.995.494
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,65
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,07
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,23
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,23
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,03
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,84
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,18
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,05
+    smsp__inst_executed.sum                                                            inst 1.372.566.272
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         73,49
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_50257_768 (1584, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        157,67
+    dram__bytes_write.sum                                                             Mbyte        186,19
+    gpu__time_duration.sum                                                               ms          2,86
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               905.856
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector    18.115.584
+    lts__t_sectors_op_write.sum                                                      sector    17.995.940
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,65
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,07
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,23
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,23
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,03
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,84
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,18
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,05
+    smsp__inst_executed.sum                                                            inst 1.372.566.272
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         73,63
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_50257_768 (1584, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        191,09
+    dram__bytes_write.sum                                                             Mbyte        186,23
+    gpu__time_duration.sum                                                               ms          2,86
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               905.856
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector    18.115.584
+    lts__t_sectors_op_write.sum                                                      sector    18.001.304
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,65
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,07
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,23
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,23
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,03
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,84
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,18
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,05
+    smsp__inst_executed.sum                                                            inst 1.372.566.272
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         73,58
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_50176_768 (1568, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        157,42
+    dram__bytes_write.sum                                                             Mbyte        185,51
+    gpu__time_duration.sum                                                               ms          2,56
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               401.408
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector     6.422.528
+    lts__t_sectors_op_write.sum                                                      sector     6.425.314
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,66
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,05
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,22
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,04
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,02
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,87
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,15
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,04
+    smsp__inst_executed.sum                                                            inst 1.355.153.408
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         81,26
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_50176_768 (1568, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        157,33
+    dram__bytes_write.sum                                                             Mbyte        185,48
+    gpu__time_duration.sum                                                               ms          2,56
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               401.408
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector     6.422.528
+    lts__t_sectors_op_write.sum                                                      sector     6.424.481
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,66
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,04
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,22
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,04
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,02
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,87
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,15
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,04
+    smsp__inst_executed.sum                                                            inst 1.355.153.408
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         81,24
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_50176_768 (1568, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        157,34
+    dram__bytes_write.sum                                                             Mbyte        185,48
+    gpu__time_duration.sum                                                               ms          2,56
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               401.408
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector     6.422.528
+    lts__t_sectors_op_write.sum                                                      sector     6.424.517
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,66
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,05
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,22
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,04
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,01
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,87
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,15
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,04
+    smsp__inst_executed.sum                                                            inst 1.355.153.408
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         81,24
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_32001_4096 (1008, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        793,36
+    dram__bytes_write.sum                                                             Mbyte        123,54
+    gpu__time_duration.sum                                                               ms          9,23
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               576.128
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector    11.521.024
+    lts__t_sectors_op_write.sum                                                      sector    11.454.865
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,66
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,06
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,23
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,04
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,03
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,84
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,18
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,05
+    smsp__inst_executed.sum                                                            inst 4.652.482.112
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         79,49
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_32001_4096 (1008, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        795,90
+    dram__bytes_write.sum                                                             Mbyte        123,53
+    gpu__time_duration.sum                                                               ms          9,24
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               576.128
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector    11.521.024
+    lts__t_sectors_op_write.sum                                                      sector    11.453.926
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,66
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,06
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,23
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,04
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,03
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,84
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,18
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,05
+    smsp__inst_executed.sum                                                            inst 4.652.482.112
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         79,83
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_32001_4096 (1008, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        796,81
+    dram__bytes_write.sum                                                             Mbyte        123,73
+    gpu__time_duration.sum                                                               ms          9,26
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               576.128
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector    11.521.024
+    lts__t_sectors_op_write.sum                                                      sector    11.467.461
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,66
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,06
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,23
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,04
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,03
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,84
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,18
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,05
+    smsp__inst_executed.sum                                                            inst 4.652.482.112
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         79,82
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_32000_4096 (1000, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        762,17
+    dram__bytes_write.sum                                                             Mbyte        142,02
+    gpu__time_duration.sum                                                               ms          8,79
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               256.000
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector     4.096.000
+    lts__t_sectors_op_write.sum                                                      sector     4.100.077
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,67
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,04
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,22
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,01
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,01
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,87
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,15
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,03
+    smsp__inst_executed.sum                                                            inst 4.599.936.000
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         83,01
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_32000_4096 (1000, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        797,30
+    dram__bytes_write.sum                                                             Mbyte        123,31
+    gpu__time_duration.sum                                                               ms          8,80
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               256.000
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector     4.096.000
+    lts__t_sectors_op_write.sum                                                      sector     4.116.203
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,67
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,04
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,22
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,01
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,01
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,87
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,15
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,03
+    smsp__inst_executed.sum                                                            inst 4.599.936.000
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         83,01
+    --------------------------------------------------------------------------- ----------- -------------
+
+  y_1024_32000_4096 (1000, 1, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.9
+    Section: Command line profiler metrics
+    --------------------------------------------------------------------------- ----------- -------------
+    Metric Name                                                                 Metric Unit  Metric Value
+    --------------------------------------------------------------------------- ----------- -------------
+    dram__bytes_read.sum                                                              Mbyte        763,39
+    dram__bytes_write.sum                                                             Mbyte        123,23
+    gpu__time_duration.sum                                                               ms          8,79
+    l1tex__t_requests_pipe_lsu_mem_global_op_ldgsts.sum                                           (!) n/a
+    l1tex__t_requests_pipe_lsu_mem_global_op_st.sum                                               256.000
+    l1tex__t_sectors_pipe_lsu_mem_global_op_ldgsts.sum                                            (!) n/a
+    l1tex__t_sectors_pipe_lsu_mem_global_op_st.sum                                   sector     4.096.000
+    lts__t_sectors_op_write.sum                                                      sector     4.118.360
+    sm__warps_active.avg.pct_of_peak_sustained_active                                     %         16,67
+    smsp__average_warps_issue_stalled_barrier_per_issue_active.ratio                   inst          0,04
+    smsp__average_warps_issue_stalled_dispatch_stall_per_issue_active.ratio            inst          0,22
+    smsp__average_warps_issue_stalled_drain_per_issue_active.ratio                     inst          0,00
+    smsp__average_warps_issue_stalled_lg_throttle_per_issue_active.ratio               inst          0,01
+    smsp__average_warps_issue_stalled_long_scoreboard_per_issue_active.ratio           inst          0,01
+    smsp__average_warps_issue_stalled_math_pipe_throttle_per_issue_active.ratio        inst          0,02
+    smsp__average_warps_issue_stalled_mio_throttle_per_issue_active.ratio              inst          0,06
+    smsp__average_warps_issue_stalled_not_selected_per_issue_active.ratio              inst          0,87
+    smsp__average_warps_issue_stalled_short_scoreboard_per_issue_active.ratio          inst          0,15
+    smsp__average_warps_issue_stalled_wait_per_issue_active.ratio                      inst          0,03
+    smsp__inst_executed.sum                                                            inst 4.599.936.000
+    smsp__issue_active.avg.pct_of_peak_sustained_active                                   %         83,01
+    --------------------------------------------------------------------------- ----------- -------------
+

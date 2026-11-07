@@ -114,7 +114,9 @@ Since the same day the kernel takes any M, N and K below 2^22.
 - **K tail.** The last, partial K tile runs only its valid steps, so a
   ragged K keeps the in-order chain, -0.0 included.
 - **N % 4 != 0.** A B row is not 16-byte aligned, so B is copied and C
-  stored 4 bytes at a time.
+  stored 4 bytes at a time. (Both later moved to wider pieces: B by row
+  width below, and C, at N odd on the 256-column tiles, since 2026-11-07,
+  `odd_n_stores/`.)
 - **Aligned shapes are unchanged.** They emit SASS identical to before
   (checked at five shapes).
 

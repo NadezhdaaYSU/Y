@@ -192,6 +192,34 @@ fn the_tile_follows_the_shape_and_each_kernel_assembles_without_spills() {
 }
 
 #[test]
+fn odd_n_stores_c_in_aligned_pieces_on_the_256_column_tiles() {
+    let dir = pinned::pinned_scratch("f32_gemm_odd_stores", pinned::SM_PINNED);
+    // A thread's float4 of C sits at place (row * N + e) mod 4 of a 16-byte
+    // line, and its four rows are 0..3 mod 4: with N odd the places are 0, 1,
+    // 2 and 3 (in either order), stored as v4, f32 + v2 + f32, v2 + v2 and
+    // f32 + v2 + f32. The large tile has 2 x 4 such (row group, column
+    // group) pairs: 8 v4, 32 v2 and 32 f32. The 81 or 83 columns past its
+    // whole tiles are a ragged `rem128x64` set, still 4 bytes at a time
+    // (32 f32).
+    for (m, n, k) in [(1024u32, 50257u32, 768u32), (1024, 50259, 768)] {
+        let ptx = compile(&dir, &format!("odd_{n}"), m, n, k, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
+        assert_eq!(header(&ptx).tile, "large", "N = {n}");
+        let count = |s: &str| ptx.matches(s).count();
+        assert_eq!(
+            (count("st.global.v4.f32 ["), count("st.global.v2.f32 ["), count("st.global.f32 [")),
+            (8, 32, 64),
+            "N = {n}: not the stores this test expects"
+        );
+    }
+    // The 128-column mid tile keeps 4-byte stores: there the pieces ran
+    // 1.02-1.09x the time at 1023 x 1025 x 1027.
+    let ptx = compile(&dir, "odd_mid", 1023, 1025, 1027, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
+    assert_eq!(header(&ptx).tile, "mid");
+    assert_eq!(ptx.matches("st.global.v2.f32").count() + ptx.matches("st.global.v4.f32").count(), 0, "a wide C store on the mid tile");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn what_cannot_be_addressed_is_refused_and_so_is_the_host_backend() {
     let dir = pinned::pinned_scratch("f32_gemm_refused", pinned::SM_PINNED);
     // One tile's rows are addressed with 32-bit offsets.
@@ -259,7 +287,7 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
     // Each tile; K = 16 is one K tile (fewer than the pipeline's stages),
     // K = 32 two (the prologue loads them all), the others run the loop past
     // its last load.
-    let shapes: [((u32, u32, u32), &str); 31] = [
+    let shapes: [((u32, u32, u32), &str); 33] = [
         ((64, 64, 16), "small"),
         ((192, 320, 112), "small"),
         ((128, 4096, 80), "mid"),
@@ -305,6 +333,12 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
         ((256, 12802, 83), "mid"),
         ((2048, 12803, 67), "large"),
         ((2048, 4226, 32), "large"),
+        // C stored in each float's widest aligned pieces (v4, v2 + v2, or
+        // f32 + v2 + f32 by its place in a 16-byte line) on the 256-column
+        // tiles with N odd: 12803 and 4099 above are 3 mod 4, these 1 mod 4,
+        // the second with a 12-row `rows32x256` strip.
+        ((2048, 4097, 40), "large"),
+        ((2060, 4097, 24), "large"),
     ];
     for (si, ((m, n, k), tile)) in shapes.iter().enumerate() {
         let (m, n, k) = (*m as usize, *n as usize, *k as usize);
@@ -431,6 +465,9 @@ fn child_sanitized_runs() {
         (256, 12802, 80),
         (2048, 12803, 64),
         (256, 12802, 83),
+        // C's v2 and v4 stores at N odd, both residues, a row strip.
+        (2048, 4097, 40),
+        (2060, 4097, 24),
     ];
     for (si, &(m, n, k)) in shapes.iter().enumerate() {
         let name = format!("san{si}");
@@ -478,7 +515,7 @@ fn compute_sanitizer_finds_no_invalid_access_and_no_race() {
     // racecheck: no shared-memory hazard, including a stage reused by the
     // next tile or the next stream-K segment.
     for (check, summary) in [("memcheck", "ERROR SUMMARY: 0 errors"), ("racecheck", "RACECHECK SUMMARY: 0 hazards displayed")] {
-        for (child, mark, runs) in [("child_sanitized_runs", "SANITIZED_RUN", 17), ("child_sanitized_streamk_runs", "SANITIZED_SK_RUN", STREAMK_SANITIZED.len())] {
+        for (child, mark, runs) in [("child_sanitized_runs", "SANITIZED_RUN", 19), ("child_sanitized_streamk_runs", "SANITIZED_SK_RUN", STREAMK_SANITIZED.len())] {
             let out = Command::new(tool)
                 .args(["--tool", check, "--print-limit", "0"])
                 .arg(std::env::current_exe().unwrap())

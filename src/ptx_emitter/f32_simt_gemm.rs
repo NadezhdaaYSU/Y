@@ -920,7 +920,9 @@ impl PtxEmitter {
         // - N: the B columns a thread copies are clamped to the last valid
         //   ones once per tile (they feed only C columns past N, which are not
         //   stored); with N % 4 != 0 a B row is not 16-byte aligned, so B is
-        //   copied and C stored 4 bytes at a time;
+        //   copied at each row's width and C stored in pieces of 8 bytes (N
+        //   even) or, at N odd, 4-16 bytes on the 256-column tiles and 4
+        //   bytes on the others (the epilogue below);
         // - K: the copies of k >= K copy nothing, and the last K tile runs
         //   only its K % BK valid steps, so every element is still the
         //   in-order chain over k < K (zero products would turn a -0.0 sum
@@ -1431,6 +1433,13 @@ impl PtxEmitter {
         }
 
         // ---- Epilogue: this thread's TM x TN outputs, float4 where N allows.
+        // The odd-N stores below read each float's place in its 16-byte line
+        // off `rw` and `e` alone, which needs every row and column origin a
+        // multiple of 4.
+        assert!(
+            [row_origin, col_origin, t.bm, t.wm, t.bn, t.wn].iter().all(|v| v % 4 == 0),
+            "F32 GEMM epilogue: an origin or tile edge is not a multiple of 4 ({row_origin}, {col_origin}, {t:?})"
+        );
         let gcb = self.alloc_reg64();
         let (row0, col0) = (r(self), r(self));
         let (p_row, p_col) = (self.alloc_pred(), self.alloc_pred());
@@ -1499,6 +1508,40 @@ impl PtxEmitter {
                                 "{}st.global.v2.f32 [{}+{}], {{{}, {}}};",
                                 guard, gcb, off + e as u64 * 4, acc[i][j + e as usize], acc[i][j + e as usize + 1]
                             ));
+                        }
+                    } else if !rag_n && t.bn == 256 {
+                        // N odd, every column inside N, on a 256-column tile
+                        // (on the 128-column mid tile 1023 x 1025 x 1027 ran
+                        // 1.02-1.09x the scalar stores' time in 9 runs, where
+                        // the same shape's unchanged kernel varied 1.00x;
+                        // without a ragged M, 0.97-1.01x). Element e of this
+                        // float4 is float `row * N + col0 + dcol + e` of C,
+                        // where row = row0 + drow with row0 = 0 and drow = rw
+                        // (mod 4), and col0 + dcol = 0 (mod 4): so its place
+                        // in a 16-byte line, (rw * N + e) mod 4, is known
+                        // here. Each group goes out in its widest aligned
+                        // pieces: v4 at place 0, v2 + v2 at place 2, and
+                        // f32 + v2 + f32 at places 1 and 3 - 2.25 stores a
+                        // group instead of 4. Four scalar stores a group
+                        // made C 5x its sectors in L2 writes at
+                        // 1024 x 50257 x 768 (ncu: 32.3M against 7.0M at
+                        // N = 50176), most of that shape's loss
+                        // (docs/benchmarks/f32_gemm_2026-11-05/odd_n_stores/).
+                        let place = ((rw as u64 * n as u64) % 4) as u32;
+                        let pieces: &[(u32, u32)] = match place {
+                            0 => &[(0, 4)],
+                            2 => &[(0, 2), (2, 2)],
+                            _ => &[(0, 1), (1, 2), (3, 1)],
+                        };
+                        let guard = if rag_m { format!("@{} ", p_row) } else { String::new() };
+                        for &(e, len) in pieces {
+                            let at = off + e as u64 * 4;
+                            let v = |x: u32| acc[i][j + (e + x) as usize].clone();
+                            match len {
+                                4 => w(self, format!("{}st.global.v4.f32 [{}+{}], {{{}, {}, {}, {}}};", guard, gcb, at, v(0), v(1), v(2), v(3))),
+                                2 => w(self, format!("{}st.global.v2.f32 [{}+{}], {{{}, {}}};", guard, gcb, at, v(0), v(1))),
+                                _ => w(self, format!("{}st.global.f32 [{}+{}], {};", guard, gcb, at, v(0))),
+                            }
                         }
                     } else {
                         for e in 0..4u32 {

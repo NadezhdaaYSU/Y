@@ -1572,7 +1572,12 @@ Any M, N and K, still bit-exact:
   width:
   - N = 2 mod 4: 0.79-1.02x. BERT's vocabulary projection,
     1024 x 30522 x 768, runs at 1.00x.
-  - N odd: 0.77-0.98x. GPT-2's, 1024 x 50257 x 768, runs at 0.85x.
+  - N odd: 0.80-1.02x. GPT-2's, 1024 x 50257 x 768, runs at 0.96-0.99x
+    since C is stored in each float4's widest aligned pieces (it was
+    0.85x: four 4-byte stores a float4 wrote C's sectors 5 times over in
+    L2, `docs/benchmarks/f32_gemm_2026-11-05/odd_n_stores/`). On the
+    128-column tile, where the pieces measured slower, 1023 x 1025 x 1027
+    is still 0.80-0.86x.
 
 ### BN254 field kernels, NTT and MSM
 
@@ -1620,7 +1625,7 @@ different baseline.
 | RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
 | FP32 GEMM, K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.94–0.98x |
 | FP32 GEMM where the tiles overshoot a whole number of waves (768³, 2048 × 768 × 3072), without the workspace `W` | cuBLAS, TF32 off | 0.72–0.87x (with `W`: 0.97–1.25x) |
-| FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time) | cuBLAS, TF32 off | 0.77–0.98x (GPT-2's 1024 × 50257 × 768: 0.85x) |
+| FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time; on 128-column tiles C stored 4 bytes at a time too) | cuBLAS, TF32 off | 0.80–0.98x on mid-size shapes (1023³-class: 0.80–0.86x); 0.92–0.99x on the large tile (GPT-2's 1024 × 50257 × 768: 0.96–0.99x) |
 | int8 GEMM, 128 × 4096 × 11008 and × 14336 (Llama's MLP), 512 × 11008 × 4096, 512 × 1024 × 4096 with B from DRAM | cuBLASLt (`torch._int_mm`) | 0.91–0.98x (at 128 rows the 64×64 tile gives 0.99x from DRAM but 0.77–0.83x from L2) |
 | int8 GEMM, K % 64 == 32 (4000³, 4096 × 4096 × 4000) | cuBLASLt | 0.93–0.95x |
 | int8 GEMM, 8192³ | cuBLASLt | 0.97–1.00x |
