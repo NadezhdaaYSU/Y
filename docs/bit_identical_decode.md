@@ -745,10 +745,15 @@ Y's kernel with a float64 product over the whole int8 range and with the
 `_int_mm` path in 12 layer calls, eager and compiled, with a changed weight
 as the control. The records are in `docs/benchmarks/exact_y_gemm_2026-11-07/`.
 
-Compiled, at batch 32, the 0.5B model decodes at 192-195 tokens/s a sequence
-on Y's kernel. That is against 215-222 on the Triton kernel and 184-186 on
-cuBLASLt, in ABCCBA order on an idle GPU. Running the proved kernel costs about
-10% there, about 3.6 us of 168 GEMM calls a step.
+Compiled, at batch 32, the 0.5B model first decoded at 192-195 tokens/s a
+sequence on Y's kernel, against 215-222 on the Triton kernel and 184-186 on
+cuBLASLt (ABCCBA order, idle GPU): about 3.6 us a GEMM call slower, over 168
+calls a step. That was the op's registration, not the kernel. Through
+`torch.library.custom_op` a call cost 34.7 us of host time inside a compiled
+graph, 28.3 us through the low-level `torch.library.Library`, against 32.4 us
+for a Triton launch. Registered the second way, the pipeline on Y's kernel
+decodes at 225-227 tokens/s a sequence against Triton's 217-223 (ABBA, idle
+GPU), 1.01-1.04x. Running the proved kernel now costs nothing there.
 
 In Y mode the int32 product of every linear layer is computed by a kernel
 with a machine-checked proof. The rest is tested, not proved:

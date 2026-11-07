@@ -103,8 +103,8 @@ Where the output tiles fill at most half the SMs, K is split over
 least `ceil(tiles * z / SMs) * ceil(k_tiles / z)`, with at least 8 K tiles a
 split. On this card that is 4 for the 0.5B down projection at decode (14
 tiles) and 7 for the 7B key and value projections (8 tiles). Under
-`torch.compile` the op is `torch.ops.y_lang.int8_mm`, a custom op, so dynamo
-keeps it in the graph.
+`torch.compile` the op is `torch.ops.y_lang.int8_mm`, so dynamo keeps it in
+the graph. It was a `torch.library.custom_op` until later the same day (below).
 
 Host CPU time of one call at 32 x 896 x 896 (the minimum of 5 batches of 300
 calls, measured with the card in use, which host time barely depends on):
@@ -115,3 +115,58 @@ calls, measured with the card in use, which host time barely depends on):
 | `torch._int_mm` | 3.2 us |
 | Triton `w8a8_matmul` | 9.9 us |
 | `int8_mm` through the custom-op dispatcher | 9.4 us |
+
+## Later the same day: a plain `torch.library` op, and Y ahead of Triton
+
+`torch.library.custom_op` wraps each call in Python-side dispatch. The op is
+now registered through the low-level `torch.library.Library` instead: a
+schema, the same Python body for CUDA tensors (and for CPU ones, which it
+refuses with its own message), and a fake for `torch.compile`
+(`python/y_lang/int8_gemm.py`). The kernel, its launch and the epilogue are
+unchanged.
+
+**Host time per call** (`dispatch/dispatch_cost.py`, 64 x 896 x 896, the
+two-digit decode shape, minimum of 7 batches of 300 calls with no
+synchronisation inside a batch; `dispatch/dispatch_cost.log`):
+
+| path | host time per call |
+|---|---:|
+| `int8_mm`'s Python body, called directly | 4.8 us |
+| the body through `torch.library.custom_op` (the registration before) | 9.1 us |
+| the body through `torch.library.Library` | 5.8 us |
+| `torch.ops.y_lang.int8_mm` as registered now | 5.8 us |
+| `torch._int_mm` (cuBLASLt) | 3.9 us |
+| Triton `w8a8_matmul`, eager | 9.9 us |
+| compiled, op + one pointwise: `custom_op` | 34.7 us |
+| compiled, op + one pointwise: `Library` | 28.0 us |
+| compiled, op + one pointwise: the repo's op | 28.3 us |
+| compiled, Triton `w8a8_matmul` + one pointwise | 32.4 us |
+| compiled, `torch._int_mm` + one pointwise | 22.5 us |
+
+Inside a compiled graph the registration costs about 6 us a call; over 168
+GEMM calls a decode step that is about 1 ms, more than the 0.6 ms Y trailed
+by. (A first run of the same measurement, before the log was kept, gave
+9.1, 5.8, 33.9, 28.3 and 30.2 us.)
+
+**Decode throughput, compiled** (`e2e_0p5b_library_op/`: the same
+`exact_throughput.py` arguments as `e2e.sh`, Triton and Y only, in ABBA
+order, idle GPU, 2026-11-07 16:36-17:00):
+
+| GEMM under the exact arm | tok/s per sequence |
+|---|---|
+| Triton (`w8a8_gemv`, the default) | 223.3, 216.8 |
+| Y's kernel | 227.0, 225.3 |
+
+Y's kernel now runs the pipeline at 1.01-1.04x its Triton speed (it was
+0.87-0.91x, 192-195 tok/s), and won both pairs. Run 3's spread over its 5
+repetitions was 3.6%, the others' 0.1-1.5%.
+
+**Correctness, unchanged.**
+- `selftest_y_library_op.log`: `tools/exact_selftest.py` passes in Y mode,
+  with Y's kernel checked against float64 and against the `_int_mm` path,
+  eager and compiled.
+- `gpu_sm89_y_compiled_library_op.json` (log beside it): compiled, Y mode,
+  recorded after the change. Against the CPU record
+  (`compare_cpu_vs_y_compiled_library_op.txt`), exact changed 0/5 cases with
+  the same token digest `30eec169d2f38da4`, and stock 5/5 (the control
+  fired).

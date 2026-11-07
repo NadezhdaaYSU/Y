@@ -2812,8 +2812,8 @@ Record, raw logs and scripts: `docs/benchmarks/int8_gemm_2026-11-06/`.
 **The exact-inference pipeline now runs it (2026-11-07).** Until then the
 pipeline's linear layers ran on a Triton kernel or on cuBLASLt, so the proofs
 covered a kernel the pipeline did not use. `y_lang.int8_gemm.int8_mm` calls
-this kernel from PyTorch. It is a custom op under `torch.compile`, pads M to
-a row bucket, and splits K over `gridDim.z` when the output tiles leave half
+this kernel from PyTorch. It is an op registered through `torch.library` (so
+`torch.compile` keeps it in the graph), pads M to a row bucket, and splits K over `gridDim.z` when the output tiles leave half
 the card idle. `Y_EXACT_GEMM=y` puts every `ExactLinear` product on it. On
 Qwen2.5-0.5B, 5 cases x 160 tokens, the GPU in that mode decodes to the CPU's
 exact token digest, eager and compiled: 0 of 5 cases changed, against 5 of 5
@@ -2822,8 +2822,12 @@ for stock bf16 (`docs/bit_identical_decode.md`,
 Triton kernel: faster on most prefill shapes (1.25-1.76x) and on the decode
 layers with few output tiles. It is 0.90x on 7B's large decode layers, where
 its epilogue takes four unfused torch passes. Compiled, at Qwen2.5-0.5B decode
-(batch 32), the pipeline on Y's kernel runs at 0.87-0.91x its Triton speed,
-and 1.03-1.06x the cuBLASLt path.
+(batch 32), the pipeline on Y's kernel runs at 1.01-1.04x its Triton speed
+(225-227 against 217-223 tokens/s a sequence) and above the cuBLASLt path
+(184-186). It ran at 0.87-0.91x until the op stopped being a
+`torch.library.custom_op`, whose Python-side dispatch cost about 6 us a call
+inside a compiled graph, 168 calls a step
+(`docs/benchmarks/exact_y_gemm_2026-11-07/`).
 
 ### BF16 matches cuBLAS (2026-11-07)
 
