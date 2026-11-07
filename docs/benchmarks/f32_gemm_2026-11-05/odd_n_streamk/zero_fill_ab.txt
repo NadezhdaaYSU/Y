@@ -1,0 +1,25 @@
+# sweep.py, 2026-11-07, idle GPU, two runs: 83da64d's build (old), past-N B copies redirected to column col - N (spread, what was kept) and zero-filled with a source size of 0 (zfill, tried and not kept). Three-parameter kernels.
+all 30 kernels equal the in-order oracle bit for bit
+1024x1025x1024   cuBLAS    106.6 us  old    140.3 us 0.760x  spread    124.1 us 0.860x  zfill    124.1 us 0.859x
+1023x1025x1027   cuBLAS    118.3 us  old    146.6 us 0.807x  spread    131.2 us 0.902x  zfill    131.8 us 0.898x
+1025x1025x1025   cuBLAS    118.4 us  old    172.7 us 0.685x  spread    160.4 us 0.738x  zfill    159.1 us 0.744x
+1024x1021x1024   cuBLAS     98.8 us  old    103.0 us 0.959x  spread    100.2 us 0.986x  zfill    101.9 us 0.970x
+1024x1028x1024   cuBLAS    105.9 us  old    113.0 us 0.938x  spread    112.1 us 0.944x  zfill    114.0 us 0.929x
+1024x897x1024   cuBLAS     97.4 us  old     94.6 us 1.029x  spread     96.1 us 1.014x  zfill     96.9 us 1.006x
+1000x1001x1000   cuBLAS     98.2 us  old    108.3 us 0.907x  spread    104.8 us 0.937x  zfill    105.7 us 0.929x
+2048x2049x1024   cuBLAS    380.5 us  old    393.9 us 0.966x  spread    359.9 us 1.057x  zfill    361.1 us 1.054x
+2047x2049x2051   cuBLAS    746.4 us  old    809.1 us 0.923x  spread    745.8 us 1.001x  zfill    750.6 us 0.994x
+1024x1024x1024   cuBLAS     98.4 us  old     79.3 us 1.241x  spread     78.9 us 1.247x  zfill     79.4 us 1.239x
+# 2520 MHz, 265.68 W, 69, 100 %
+all 30 kernels equal the in-order oracle bit for bit
+1024x1025x1024   cuBLAS    106.9 us  old    140.5 us 0.761x  spread    122.8 us 0.871x  zfill    127.1 us 0.842x
+1023x1025x1027   cuBLAS    118.3 us  old    149.9 us 0.789x  spread    131.0 us 0.903x  zfill    132.3 us 0.894x
+1025x1025x1025   cuBLAS    118.7 us  old    170.9 us 0.695x  spread    162.8 us 0.729x  zfill    161.7 us 0.734x
+1024x1021x1024   cuBLAS     99.0 us  old    103.2 us 0.960x  spread    102.3 us 0.968x  zfill    101.8 us 0.973x
+1024x1028x1024   cuBLAS    106.5 us  old    114.9 us 0.927x  spread    112.9 us 0.943x  zfill    114.5 us 0.930x
+1024x897x1024   cuBLAS     98.3 us  old     95.4 us 1.030x  spread     96.9 us 1.014x  zfill     97.3 us 1.010x
+1000x1001x1000   cuBLAS     99.1 us  old    108.2 us 0.916x  spread    105.7 us 0.938x  zfill    106.6 us 0.930x
+2048x2049x1024   cuBLAS    386.6 us  old    398.7 us 0.970x  spread    363.0 us 1.065x  zfill    365.4 us 1.058x
+2047x2049x2051   cuBLAS    736.9 us  old    810.3 us 0.910x  spread    758.7 us 0.971x  zfill    751.1 us 0.981x
+1024x1024x1024   cuBLAS     99.2 us  old     79.6 us 1.246x  spread     79.9 us 1.241x  zfill     79.8 us 1.242x
+# 2520 MHz, 265.66 W, 67, 100 %

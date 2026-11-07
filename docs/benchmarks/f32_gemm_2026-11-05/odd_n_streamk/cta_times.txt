@@ -1,0 +1,20 @@
+[first stream-K build, B past N clamped to the last chunk]
+1024x1025x1024 grid 132: kernel span 197.6 us; start spread 0.0 us
+latest-ending CTAs (cta: start..end us, sm): 125: 0..198 sm53, 129: 0..198 sm61, 131: 0..198 sm65, 127: 0..197 sm57, 130: 0..197 sm63, 128: 0..197 sm59, 126: 0..195 sm55, 64: 0..174 sm63, 61: 0..173 sm57, 59: 0..173 sm53, 65: 0..173 sm65, 63: 0..172 sm61
+duration percentiles us: min 101 p50 114 p90 166 max 198
+end time by CTA index (every 8th): 101 109 104 109 102 108 109 108 174 117 120 116 114 116 120 120 197
+[first stream-K build, B past N clamped to the last chunk]
+1024x1028x1024 grid 132: kernel span 101.4 us; start spread 0.0 us
+latest-ending CTAs (cta: start..end us, sm): 111: 0..101 sm25, 124: 0..100 sm51, 101: 0..100 sm5, 102: 0..100 sm7, 116: 0..100 sm35, 119: 0..100 sm41, 113: 0..100 sm29, 122: 0..100 sm47, 91: 0..100 sm50, 80: 0..100 sm28, 90: 0..100 sm48, 89: 0..100 sm46
+duration percentiles us: min 93 p50 97 p90 100 max 101
+end time by CTA index (every 8th): 94 95 97 97 97 96 96 98 96 99 100 97 99 98 100 98 97
+[final build]
+1024x1025x1024 grid 132: kernel span 216.1 us; start spread 1.0 us
+latest-ending CTAs (cta: start..end us, sm): 72: 1..216 sm12, 78: 1..216 sm24, 111: 1..215 sm25, 84: 1..215 sm36, 117: 1..215 sm37, 105: 1..215 sm13, 80: 1..214 sm28, 90: 1..214 sm48, 87: 1..214 sm42, 122: 1..214 sm47, 102: 1..213 sm7, 120: 1..213 sm43
+duration percentiles us: min 164 p50 191 p90 211 max 215
+end time by CTA index (every 8th): 184 191 185 193 184 189 188 194 170 216 214 202 203 207 211 213 183
+[final build]
+1024x1028x1024 grid 132: kernel span 124.9 us; start spread 0.0 us
+latest-ending CTAs (cta: start..end us, sm): 102: 0..125 sm7, 101: 0..125 sm5, 108: 0..125 sm19, 106: 0..125 sm15, 122: 0..125 sm47, 119: 0..125 sm41, 116: 0..125 sm35, 113: 0..125 sm29, 69: 0..125 sm6, 67: 0..125 sm2, 80: 0..124 sm28, 83: 0..124 sm34
+duration percentiles us: min 117 p50 122 p90 124 max 125
+end time by CTA index (every 8th): 117 119 117 119 119 121 122 122 118 123 124 122 123 123 124 123 120
