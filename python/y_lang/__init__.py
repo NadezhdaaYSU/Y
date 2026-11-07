@@ -8,7 +8,6 @@ from .compiler import (
 )
 from .torch_interop import TorchKernel
 from .autotune_decorator import autotune, AutotuneConfig, Config, heuristics
-from .interpreter import CPUInterpreter, debug_interpret
 from .cpu_jit import CPUJit, CPUJitError
 
 
@@ -19,6 +18,14 @@ def __getattr__(name):
         from .inductor import y_inductor
         globals()[name] = y_inductor
         return y_inductor
+    # The PTX interpreter needs numpy; `import y_lang` did not, until this
+    # module imported the interpreter eagerly (found installing the wheel on a
+    # clean glibc 2.28 system: tools/wheel_glibc228/check.py).
+    if name in ("CPUInterpreter", "debug_interpret"):
+        from . import interpreter
+        value = getattr(interpreter, name)
+        globals()[name] = value
+        return value
     if name == "ops":
         import importlib
         ops = importlib.import_module(".ops", __name__)
