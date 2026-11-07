@@ -1919,10 +1919,19 @@ fast. Integer accumulation needs no pinning, so the compiler stays free.
 
 **This is unfinished work, and it is here because the finished parts are
 measured.** What exists is a PyTorch + Triton **prototype** carrying the whole
-pipeline, plus one kernel the compiler itself emits (exact attention) and its
-integer `exp2`. The determinism and accuracy numbers below are the prototype's.
-Replacing the rest of the prototype with compiler output is the remaining work,
-not a detail.
+pipeline. Two of its products can now run on kernels the compiler emits, with
+the same tokens:
+- every linear layer's int8 product, on Y's int8 GEMM, whose schedule and
+  value have a machine-checked proof (`Y_EXACT_GEMM=y`; compiled, 0.5B, batch
+  32: 1.01-1.04x the Triton kernel's decode speed, 2026-11-07);
+- with the int8 V cache, attention's `p·V` product, on `tests/exact_pv.ysu`
+  (`Y_EXACT_V_INT8=1`; 1.00-1.03x the digit split it replaces).
+
+The attention scores and softmax, the quantisers and the norms are still
+torch and Triton; the compiler's exact attention kernel and its integer `exp2`
+are checked against them bit for bit, but not wired in. The determinism and
+accuracy numbers below are the prototype's. Replacing the rest of it with
+compiler output is the remaining work, not a detail.
 
 **`0/16` is also what a broken arm scores**, and that is not hypothetical: the
 fixed-order control's first version returned its tensor in the wrong layout, did
@@ -1943,6 +1952,31 @@ Model: Qwen2.5-0.5B-Instruct · RTX 4070 Ti SUPER · measured 2026-08-18.
 | **Task accuracy** | statistical null | net +40 of 3,000 items |
 | **Decode speed** | 1.09x slower wall clock | **0.97x device time** — the gap is launch overhead |
 
+**The same tokens on a CPU and a GPU** (2026-11-01 to 11-07,
+[Finding 12](docs/bit_identical_decode.md)). The same 5 prompts x 160 tokens
+were decoded on the host CPU (Zen 5) and on the GPU, and
+`tools/exact_cross_device.py --compare` checked the pair:
+
+| model | exact changed | stock bf16 changed |
+|---|---|---|
+| Qwen2.5-0.5B, GPU eager and compiled, Triton path and Y's GEMM | **0 / 5** | 5 / 5 |
+| Qwen2.5-7B, exact compiled on the GPU | **0 / 5** | 5 / 5 |
+
+It failed first. Six float operations gave different bits on the two devices
+with the same inputs: a divide by a Python float, which CUDA turns into a
+multiply by the reciprocal; float32 sin/cos and sigmoid, which libm and CUDA
+round differently; and three ways `torch.compile` rounds unlike eager PyTorch.
+Each was replaced. `exact_selftest.py` compares the quantisers, the norm and
+SiLU bit for bit on both devices, eager and compiled, with controls that must
+still differ.
+
+**Speed since the table** (compiled, batch 32, idle GPU): at 0.5B, with the
+CPU==GPU fixes, exact decodes 1.11x slower than stock bf16. At
+7B it decodes **1.50x faster** (47.4 against 31.5 tok/s/seq, 2026-11-04). That
+is int8 weights being half the bytes of bf16, not exactness: a
+non-deterministic int8 engine on the same card has not been measured, and
+neither has int8's accuracy cost at 7B.
+
 **The control had to be earned.** At 24 generated tokens the stock arm was
 invariant *too*, because a bf16 reduction-order delta needs room to flip a greedy
 argmax. The test runs 160 tokens on prompts chosen for a small top-2 margin. A
@@ -1958,9 +1992,10 @@ scales would have — they recombine partial sums with *float* weights, which is
 the exact thing being prevented.
 
 **You can check most of this without a GPU.** `python3 tools/exact_selftest.py`
-runs 9 of its 13 checks on CPU — including batch invariance itself — and names
-the four it skips (three launch Triton, one asserts a CUDA-specific `_int_mm`
-refusal). It used to print `SKIP: no CUDA` and exit 0 having checked nothing.
+runs 11 of its 19 checks on CPU — including batch invariance itself — and says
+how many it skipped. The other eight launch Triton or Y's kernels, assert a
+CUDA-only `_int_mm` refusal, or compare the GPU against the CPU. It used to
+print `SKIP: no CUDA` and exit 0 having checked nothing.
 `python3 tools/exact_bounds_check.py` needs only z3 and runs all 22 of its
 checks on CPU.
 
@@ -1996,9 +2031,9 @@ invariance is a different claim and is not made.
 
 ### What this does not yet claim
 
-- **One model, one GPU, one stack — but the exp is now measured across two
-  architectures.** Cross-hardware bit-identity is the strongest thing exactness
-  buys. For the integer `exp2` it is no longer an argument:
+- **One model family, one GPU.** Qwen2.5 at 0.5B and 7B, on one RTX 4070 Ti
+  SUPER and its host CPU. Cross-hardware bit-identity is the strongest thing
+  exactness buys. For the integer `exp2` it is no longer an argument:
 
       device == host on all 1,966,085 arguments, bit for bit
       846,328 distinct results, so the agreement is not over a constant
@@ -2017,9 +2052,11 @@ invariance is a different claim and is not made.
   by the ISA — while the `ex2.approx.f32` probe beside it compiles to a `MUFU`,
   which the ISA specifies by tolerance rather than by value.
 
-  **This covers one kernel, not the pipeline.** The end-to-end claim — the whole
-  decode path producing identical tokens on different hardware — still needs a
-  second card, and remains the headline with no measurement behind it.
+  The whole decode path is now measured too, CPU against GPU (the table above:
+  0/5 at 0.5B and 7B). **Two different NVIDIA cards have not been compared.**
+  The CPU-GPU pair is the wider gap in instruction sets, but a second card
+  also brings its own kernel choices and autotuning, and none of that has run.
+  Accuracy is measured at 0.5B only.
 - **CUDA graphs are worth up to 1.47x and are blocked.** The prerequisites are
   cheap — a static cache costs 5–8% and improves the exact/stock ratio to 1.01x
   — and the property survives them. Capture then segfaults on *both* arms, from
@@ -2032,11 +2069,13 @@ invariance is a different claim and is not made.
 Ranked, and the first item is the one that could invalidate the framing rather
 than extend it:
 
-1. **Run a second GPU.** Cross-hardware bit-identity is the strongest thing
-   exactness buys and the only headline claim with no evidence behind it.
-3. **Move the pipeline off the prototype** onto compiler-emitted kernels, and
-   into a serving integration — which is also where CUDA graphs stop being
-   blocked.
+1. **Run a second GPU.** CPU against GPU is measured; two different NVIDIA
+   cards are not. `tools/exact_cross_device.py --record` on the other card and
+   `--compare` anywhere, with no GPU, is the whole procedure.
+2. **Move the rest of the pipeline off the prototype.** The linear layers and
+   `p·V` run on compiler-emitted kernels; the attention scores, softmax,
+   quantisers and norms do not. Then into a serving integration, which is also
+   where CUDA graphs stop being blocked.
 
 Findings 05–08 in the write-up are the result of turning this same process on
 the tooling: four rounds that found the emitted kernel enforced none of its own
@@ -2045,7 +2084,7 @@ checked against themselves, and a checker asserting a copy of the rule it was
 checking. None of those changed a number above; all four changed what the
 numbers are worth.
 
-**A note on how the caveats above were found.** Five of the nine findings in the
+**A note on how the caveats above were found.** Many of the findings in the
 write-up are not about the kernels at all — they are about the tooling that
 measures them: a differential whose two arms shared a wrong constant and so
 agreed perfectly on a uniform softmax; two implementations checked against
