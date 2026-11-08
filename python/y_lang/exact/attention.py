@@ -552,6 +552,38 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
     ki, sk, vi, sv, k_lv, v_lv = quantize_kv(module, k, v, Q_LEVELS)
     tk = ki.shape[-2]
 
+    return exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
+                                table, query.dtype), None
+
+
+# A factual prompt with a one-word answer no broken arm reaches by accident.
+# Deliberately NOT one of the measured prompts: the point is to ask whether the
+# arm computes the model's function at all, which a prompt chosen for a narrow
+# top-2 margin is the worst possible way to ask.
+CANARY = "The capital of France is"
+CANARY_MUST_CONTAIN = "Paris"
+CANARY_TOKENS = 10
+# 160 greedy tokens from this model run 60-110 distinct. A collapsed arm runs
+# 1-4. The threshold is nowhere near either, because a false failure here stops
+# a 20-minute run.
+MIN_DISTINCT = 8
+
+
+def exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
+                         table, out_dtype):
+    """`exact_attention` from its quantised operands on.
+
+    qi [b, nh, q, d] (integer-valued float32) and sq [b, nh, q, 1] (float64)
+    are the query and its scales; ki, sk, vi, sv the per-token K/V operands
+    `quantize_kv` returns, with their widths k_lv, v_lv. Returns the output
+    [b, q, nh, d] in `out_dtype`. Split out so tests can drive the arithmetic
+    with chosen operands, which the float inputs of `exact_attention` cannot
+    reach (tests/test_exact_decode_attention.py).
+    """
+    b, nh, q_len, d = qi.shape
+    nkv, tk = ki.shape[1], ki.shape[-2]
+    rep = nh // nkv
+    dev = qi.device
     # Exact integer scores, in fp32 rather than fp64. A dot product of two int8
     # vectors of length d is bounded by d*127^2 = 1.03e6 here, and so is every
     # partial sum of it, so fp32's 24-bit mantissa holds the whole computation
@@ -574,8 +606,7 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
             out = _ATTN_OP(*args)
         else:
             out = _y_exact_decode_attention(*args)
-        out = out.reshape(b, nh, 1, d).to(query.dtype).transpose(1, 2).contiguous()
-        return out, None
+        return out.reshape(b, nh, 1, d).to(out_dtype).transpose(1, 2).contiguous()
     # ... and the query group is folded into the row dimension instead of K
     # being broadcast into it, so this is one matmul over `nkv` heads.
     qg = qi.reshape(b, nkv, rep * q_len, d).contiguous()
@@ -594,7 +625,7 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
                        float(d) * Q_LEVELS * k_lv)
 
     if attention_mask is not None:
-        mask = attention_mask[:, :, :, : k.shape[-2]]
+        mask = attention_mask[:, :, :, :tk]
         blocked = mask < -1.0
     else:
         blocked = torch.zeros_like(s_int, dtype=torch.bool)
@@ -626,21 +657,7 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
                        float(tk) * (1 << P_BITS) * v_lv)
 
     out = (acc * wscale) / l.to(torch.float64).clamp(min=1.0)
-    out = out.to(query.dtype).transpose(1, 2).contiguous()
-    return out, None
-
-
-# A factual prompt with a one-word answer no broken arm reaches by accident.
-# Deliberately NOT one of the measured prompts: the point is to ask whether the
-# arm computes the model's function at all, which a prompt chosen for a narrow
-# top-2 margin is the worst possible way to ask.
-CANARY = "The capital of France is"
-CANARY_MUST_CONTAIN = "Paris"
-CANARY_TOKENS = 10
-# 160 greedy tokens from this model run 60-110 distinct. A collapsed arm runs
-# 1-4. The threshold is nowhere near either, because a false failure here stops
-# a 20-minute run.
-MIN_DISTINCT = 8
+    return out.to(out_dtype).transpose(1, 2).contiguous()
 
 
 def sanity_verdict(canary, ref_tokens):
