@@ -395,6 +395,16 @@ pub enum Expr {
     },
     /// Zero-initialization: `{}`
     ZeroInit(Span),
+    /// A numeric conversion, `expr as F64`. Integer to float rounds to
+    /// nearest, ties to even; float to integer truncates toward zero,
+    /// saturates at the target's range and takes NaN to 0; F64 to F32 rounds
+    /// to nearest even; integer to integer truncates or extends as a typed
+    /// `let` does. Other operand or target types are refused.
+    Cast {
+        expr: Box<Expr>,
+        ty: Type,
+        span: Span,
+    },
 }
 
 impl Expr {
@@ -417,6 +427,7 @@ impl Expr {
             Expr::UnaryOp { span, .. } => span.clone(),
             Expr::BlockExpr(_, s) => s.clone(),
             Expr::StructLit { span, .. } => span.clone(),
+            Expr::Cast { span, .. } => span.clone(),
         }
     }
 }
@@ -761,6 +772,7 @@ fn walk_expr(expr: &Expr, f: &mut dyn FnMut(&Stmt)) {
             walk_expr(right, f);
         }
         Expr::UnaryOp { operand, .. } => walk_expr(operand, f),
+        Expr::Cast { expr, .. } => walk_expr(expr, f),
         Expr::BlockExpr(block, _) => walk_block(block, f),
         Expr::StructLit { fields, .. } => {
             for (_, e) in fields {

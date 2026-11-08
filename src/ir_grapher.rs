@@ -603,6 +603,9 @@ impl DependencyGrapher {
             Expr::UnaryOp { operand, .. } => {
                 self.wire_expr_dependencies(consumer, operand);
             }
+            Expr::Cast { expr, .. } => {
+                self.wire_expr_dependencies(consumer, expr);
+            }
             // The four sub-expression carriers this walk used to drop. Each one
             // can hold an `Ident` naming a produced variable, and a dropped
             // Ident is a dependency edge that never gets built -- the consumer

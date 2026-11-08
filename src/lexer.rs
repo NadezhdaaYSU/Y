@@ -52,6 +52,8 @@ pub enum TokenKind {
     SelfKw,
     Break,
     Module,
+    /// `as`: a numeric conversion, `x as F64`.
+    As,
 
     // ── Memory space types ───────────────────────────────────
     GlobalMemory,
@@ -445,6 +447,7 @@ impl Lexer {
             "impl" => TokenKind::Impl,
             "self" => TokenKind::SelfKw,
             "module" => TokenKind::Module,
+            "as" => TokenKind::As,
 
             // Memory space types
             "GlobalMemory" => TokenKind::GlobalMemory,

@@ -33,7 +33,8 @@
     "impl",
     "self",
     "break",
-    "func"
+    "func",
+    "as"
   ],
   "memory_space_types": [
     "GlobalMemory",

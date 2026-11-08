@@ -281,6 +281,10 @@ impl Renamer {
                 self.expr(right);
             }
             Expr::UnaryOp { op: _, operand, span: _ } => self.expr(operand),
+            Expr::Cast { expr, ty, span: _ } => {
+                self.expr(expr);
+                self.ty(ty);
+            }
             Expr::BlockExpr(b, _) => self.block(b),
             Expr::StructLit { name: _, fields, span: _ } => {
                 for (_, v) in fields {

@@ -1319,6 +1319,9 @@ fn expr_references_var(expr: &Expr, name: &str) -> bool {
         Expr::Call { args, .. } => {
             args.iter().any(|arg| expr_references_var(arg, name))
         }
+        // Not lowered by this backend (`emit_expr` refuses it), but a read
+        // inside it is still a read.
+        Expr::Cast { expr, .. } => expr_references_var(expr, name),
         _ => false,
     }
 }

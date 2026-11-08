@@ -264,3 +264,69 @@ fn every_type_shuffles_and_reduces_exactly_on_the_gpu() {
         }
     }
 }
+
+/// `shfl_sync_idx(v, lane)`: every lane reads lane `lane`'s value, in the
+/// value's own type, with a source lane that differs per lane and one that is
+/// the same for all. Two warps, so a lane index that ignored the warp would
+/// read the wrong warp's values.
+#[test]
+fn shfl_sync_idx_reads_the_named_lane_in_every_type_on_the_gpu() {
+    use y::cuda_runtime::CudaContext;
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - shfl_sync_idx was not run.");
+        return;
+    };
+    for (ty, _, wide) in TYPES {
+        let src = format!(
+            "kernel idx(In: GlobalMemory<{ty}>, A: GlobalMemory<{ty}>, B: GlobalMemory<{ty}>) {{\n    \
+             let t: I32 = global_thread_id();\n    let lane: I32 = thread_idx_x() & 31;\n    \
+             let x: {ty} = In[t];\n    let from: I32 = (lane * 7 + 3) & 31;\n    \
+             A[t] = shfl_sync_idx(x, from);\n    let nine: I32 = 9;\n    B[t] = shfl_sync_idx(x, nine);\n}}\n\nfn main() {{\n}}\n");
+        let (ok, out, ptx) = compile(&src, &format!("idx_gpu_{}", ty.to_lowercase()));
+        assert!(ok, "{ty}: {out}");
+        let ptx = ptx.unwrap();
+        assert!(ptx.contains("shfl.sync.idx.b32"), "{ty}: no shfl.sync.idx in\n{ptx}");
+        let module = ctx.load_ptx(&ptx, "idx").unwrap_or_else(|e| panic!("{ty}: {e}"));
+        let w = if wide { 8 } else { 4 };
+        let v = lanes(ty);
+        let bytes: Vec<u8> = v.iter().flat_map(|x| x.to_le_bytes()[..w].to_vec()).collect();
+        let d_in = ctx.alloc(bytes.len()).unwrap();
+        ctx.memcpy_htod_at(&d_in, 0, &bytes).unwrap();
+        let outs: Vec<_> = (0..2).map(|_| ctx.alloc(bytes.len()).unwrap()).collect();
+        for o in &outs {
+            ctx.memset_u8(o, 0xA5).unwrap();
+        }
+        ctx.launch(&module, (2, 1, 1), (32, 1, 1), 0,
+                   &[d_in.device_ptr(), outs[0].device_ptr(), outs[1].device_ptr()]).expect("launch");
+        ctx.synchronize().expect("kernel did not complete");
+        let read = |o: &y::cuda_runtime::DeviceBuffer| -> Vec<u64> {
+            let mut raw = vec![0u8; bytes.len()];
+            ctx.memcpy_dtoh_at(&mut raw, o, 0).unwrap();
+            raw.chunks(w).map(|c| { let mut b = [0u8; 8]; b[..w].copy_from_slice(c); u64::from_le_bytes(b) }).collect()
+        };
+        let want_a: Vec<u64> = (0..64).map(|t| v[(t & !31) + ((t % 32) * 7 + 3) % 32]).collect();
+        let want_b: Vec<u64> = (0..64).map(|t| v[(t & !31) + 9]).collect();
+        assert_eq!(read(&outs[0]), want_a, "{ty}: per-lane source");
+        assert_eq!(read(&outs[1]), want_b, "{ty}: one source for all");
+    }
+}
+
+#[test]
+fn shfl_sync_idx_is_refused_where_lanes_can_diverge_and_takes_no_float_lane() {
+    let (ok, out, _) = compile(
+        "kernel d(In: GlobalMemory<I32>, Out: GlobalMemory<I32>) {\n    let t: I32 = global_thread_id();\n    \
+         let x: I32 = In[t];\n    if t < 20 {\n        Out[t] = shfl_sync_idx(x, 0);\n    }\n}\n\nfn main() {\n}\n",
+        "idx_divergent");
+    assert!(!ok && out.contains("shfl.sync.idx"), "{out}");
+    let (ok, out, _) = compile(
+        "kernel f(In: GlobalMemory<I32>, Out: GlobalMemory<I32>) {\n    let t: I32 = global_thread_id();\n    \
+         let x: I32 = In[t];\n    let l: F32 = 1.0;\n    Out[t] = shfl_sync_idx(x, l);\n}\n\nfn main() {\n}\n",
+        "idx_float_lane");
+    assert!(!ok && out.contains("lane index"), "{out}");
+    // Control: the same kernel with the shuffle outside the branch compiles.
+    let (ok, out, _) = compile(
+        "kernel c(In: GlobalMemory<I32>, Out: GlobalMemory<I32>) {\n    let t: I32 = global_thread_id();\n    \
+         let x: I32 = In[t];\n    let z: I32 = 0;\n    let y: I32 = shfl_sync_idx(x, z);\n    if t < 20 {\n        Out[t] = y;\n    }\n}\n\nfn main() {\n}\n",
+        "idx_control");
+    assert!(ok, "{out}");
+}

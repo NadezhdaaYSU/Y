@@ -4074,30 +4074,55 @@ Before 2026-10-10 this backend computed a Q value as a plain `i32`: `let x: Q16.
 
 ### 20.4 Type Casting
 
-**There is no cast syntax.** `as` is not a keyword, and the parser stops at it
-(checked 2026-09-28):
+`expr as T` converts a number between the integer types and F32 / F64
+(since 2026-11-08). It means what Rust's `as` means, on every backend:
+
+| From | To | Result |
+| :--- | :--- | :--- |
+| integer | F32, F64 | nearest float, ties to even (`16777217 as F32` is 16777216.0) |
+| F32, F64 | integer | truncated toward zero; clamped to the target's range; NaN gives 0 |
+| F64 | F32 | nearest float, ties to even; out of range gives an infinity |
+| F32 | F64 | exact |
+| integer | integer | truncated, or extended by the SOURCE's signedness (`-1 as U64` is all ones) |
 
 ```ysu
-let x: I32 = 42;
-let y: F32 = x as F32;    // Expected ';' at end of let statement but found Ident("as")
+let n: I32 = -7;
+let x: F64 = n as F64;          // -7.0
+let k: I64 = x as F32 as I64;   // casts chain left to right
+let m: U32 = 4294967295;
+let w: I64 = m as I64;          // 4294967295, zero-extended
 ```
 
-What a typed `let` converts, measured with `--emit-llvm` and run:
+`as` binds tighter than `*` and looser than unary operators, as in Rust:
+`-x as F32` is `(-x) as F32`, and `a * b as F32` is `a * (b as F32)`.
 
-- **between integer widths**: `let z: I16 = x;` truncates (`x = 70000` keeps
-  only its low 16 bits), and `let back: I32 = z;` sign-extends a signed value;
-- **not between integers and floats**: `let y: F32 = x;` is
-  `Type mismatch in let assignment`, and so is the reverse. No built-in
-  converts between them either.
+What is refused, by name:
 
-Mixing types inside an expression is refused (`binary operands mismatch:
-expected I32, got F32`, §6.1). In a **PTX kernel** an `F16` value is refused
-(§20.5): declare it `F32` and store it into a `GlobalMemory<F16>`, which rounds
-it to nearest-even.
+- **Casting a literal** (`0.1 as F64`, `(1 + 2) as F64`). A bare literal has
+  no type of its own for `as` to convert from - the checker defaults a float
+  literal to F32 where the LLVM backend makes it a double - so write the
+  literal at the type you want (`let x: F64 = 0.1;`).
+- **Targets narrower than 32 bits** (`I8`, `U8`, `I16`, `U16`): in a PTX kernel
+  these are memory formats whose values are promoted to 32 bits (§20.5), so
+  `(x as U8) + 1` would wrap on one backend and not another. Store into a
+  `GlobalMemory<U8>` to narrow. 8- and 16-bit SOURCES are fine.
+- **F16, BF16, Q formats, `bool`, references and structs**, as source or target.
+- **A cast inside `@invariant` / `@bounds` proofs**: the verifier does not
+  model it and says so.
+- The PTX backend refuses to convert an integer whose type it did not record
+  (it would read a `U32` above 2^31 as negative); bind the operand to a typed
+  `let` first. The ZK and `--emit-native` backends refuse casts.
 
-This section used to document `x as F32`, `x as I16` and `y as F16`, and an
-error message recommending an explicit `as` cast. None of those casts parses,
-and Y prints no such message.
+`tests/numeric_casts.rs` checks all 36 conversions between I32, I64, U32,
+U64, F32 and F64 on ~20 edge inputs each (ties, 2^24 + 1, 2^53 + 1, each
+type's limits and the values just past them, NaN, infinities, signed zeros,
+subnormals) through `--emit-llvm` at -O0 and -O2, `--emit-cpu`'s Rust, and
+PTX on a GPU, bit for bit against Rust's own `as`. A NaN produced by a float
+to float conversion is compared as a NaN: its payload is the hardware's.
+
+A typed `let` still converts between integer widths without `as`
+(`let z: I16 = x;` truncates) and still refuses integer to float or back
+(`Type mismatch in let assignment`); `as` is how that is spelled.
 
 ### 20.5 GPU Type Usage Rules
 

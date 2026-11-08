@@ -10,6 +10,11 @@
 use crate::ast::*;
 use crate::lexer::{Token, TokenKind};
 
+/// Binding power of `as` (see `parse_expr_bp`): above `* / %`, below unary.
+const AS_BP: u8 = 19;
+/// Binding power a unary operator parses its operand at: above `as`.
+const UNARY_BP: u8 = 21;
+
 pub struct Parser {
     tokens: Vec<Token>,
     pos: usize,
@@ -1771,7 +1776,11 @@ impl Parser {
     ///   << >>       : 13, 14
     ///   + -         : 15, 16
     ///   * / %       : 17, 18
+    ///   as          : 19 (left-associative; its right side is a type)
+    ///   unary - ! * & operands: 21
     /// ```
+    /// As in Rust, `-x as F32` is `(-x) as F32` and `a * b as F32` is
+    /// `a * (b as F32)`.
     fn parse_expr_bp(&mut self, min_bp: u8) -> Result<Expr, String> {
         // Parse prefix (unary operators) or primary
         let mut lhs = self.parse_unary_or_primary()?;
@@ -1780,6 +1789,21 @@ impl Parser {
             // Try postfix operations (highest precedence: call, index, member access)
             let had_postfix = self.try_parse_postfix(&mut lhs)?;
             if had_postfix {
+                continue;
+            }
+
+            if self.check(TokenKind::As) {
+                if AS_BP < min_bp {
+                    break;
+                }
+                self.advance(); // consume `as`
+                let span = lhs.span();
+                let ty = self.parse_type()?;
+                lhs = Expr::Cast {
+                    expr: Box::new(lhs),
+                    ty,
+                    span,
+                };
                 continue;
             }
 
@@ -1989,7 +2013,7 @@ impl Parser {
                 self.advance();
                 return Ok(Expr::IntLit(i64::MIN, span));
             }
-            let operand = self.parse_expr_bp(19)?; // higher than any binary op
+            let operand = self.parse_expr_bp(UNARY_BP)?; // above every binary op and `as`
             return Ok(Expr::UnaryOp {
                 op: UnaryOp::Neg,
                 operand: Box::new(operand),
@@ -1999,7 +2023,7 @@ impl Parser {
 
         // Unary not: !expr
         if self.match_token(TokenKind::Bang) {
-            let operand = self.parse_expr_bp(19)?;
+            let operand = self.parse_expr_bp(UNARY_BP)?;
             return Ok(Expr::UnaryOp {
                 op: UnaryOp::Not,
                 operand: Box::new(operand),
@@ -2012,7 +2036,7 @@ impl Parser {
 
         // Dereference: *expr
         if self.match_token(TokenKind::Star) {
-            let operand = self.parse_expr_bp(19)?;
+            let operand = self.parse_expr_bp(UNARY_BP)?;
             return Ok(Expr::UnaryOp {
                 op: UnaryOp::Deref,
                 operand: Box::new(operand),
@@ -2023,7 +2047,7 @@ impl Parser {
         // Address-of: &expr or &mut expr
         if self.match_token(TokenKind::Ampersand) {
             let mutable = self.match_token(TokenKind::Mut);
-            let operand = self.parse_expr_bp(19)?;
+            let operand = self.parse_expr_bp(UNARY_BP)?;
             return Ok(Expr::UnaryOp {
                 op: UnaryOp::Ref { mutable },
                 operand: Box::new(operand),

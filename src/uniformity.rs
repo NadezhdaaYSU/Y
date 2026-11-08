@@ -133,6 +133,8 @@ impl Uniformity {
             }
             Expr::BinaryOp { left, right, .. } => worst(self.leaf(left), self.leaf(right)),
             Expr::UnaryOp { operand, .. } => self.leaf(operand),
+            // A conversion of a value is as uniform as the value.
+            Expr::Cast { expr, .. } => self.leaf(expr),
             // A lane of a v4 value: as uniform as the value.
             Expr::MemberAccess { base, .. } => self.leaf(base),
             Expr::Index { .. } => (Uniform::Thread, "a value loaded from memory".to_string(), None),

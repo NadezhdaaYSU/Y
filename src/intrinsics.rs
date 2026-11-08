@@ -50,6 +50,7 @@ pub fn is_known_function(name: &str) -> bool {
                 // scalar interpretation, including for the `_b32` spelling.
                 | "shfl_sync_bfly"
                 | "shfl_sync_bfly_b32"
+                | "shfl_sync_idx"
                 // Exact names with coprocessor mappings in IrGrapher. These
                 // mappings stage structured results in shared memory, so this
                 // scalar-only table cannot supply their result types.
