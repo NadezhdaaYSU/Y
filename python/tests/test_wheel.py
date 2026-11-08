@@ -177,10 +177,12 @@ class TestWheel(unittest.TestCase):
             names = z.namelist()
             self.assertIn("y_lang/liby.so", names, "the library must sit in the package, not under .data/")
             self.assertIn("y_lang/PROFILE_IN_USER_CACHE", names)
-            for module in ("__init__", "model", "kv", "attention", "w8a8_gemv", "large_model"):
+            for module in ("__init__", "model", "kv", "attention", "w8a8_gemv", "large_model",
+                           "greedy", "norm_kernel"):
                 self.assertIn(f"y_lang/exact/{module}.py", names)
-            # The link's target, not the link: the wheel must carry the source.
-            self.assertEqual(z.read("y_lang/exact/exact_pv.ysu"), (ROOT / "tests" / "exact_pv.ysu").read_bytes())
+            # The links' targets, not the links: the wheel must carry the sources.
+            for src in ("exact_pv.ysu", "exact_decode_attention.ysu"):
+                self.assertEqual(z.read(f"y_lang/exact/{src}"), (ROOT / "tests" / src).read_bytes(), src)
             self.assertEqual(z.read("y_lang/liby.so"), LIB.read_bytes())
             self.assertEqual(z.read("y_lang/ysu_gpu_probe"), FAKE_PROBE.encode())
             self.assertTrue((z.getinfo("y_lang/ysu_gpu_probe").external_attr >> 16) & 0o100,

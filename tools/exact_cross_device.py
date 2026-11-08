@@ -369,13 +369,21 @@ def check_gate_logic():
 def _weight_fingerprint(model):
     """Deterministic, device-independent digest of an arm's parameters.
 
-    Everything is pulled to the CPU and widened to f64 first, so this is a
-    property of the weights and not of where they were sitting. Catches a
-    different checkpoint revision between the two recordings -- and, for the
-    `exact` arm whose scales are computed on-device, a genuine cross-device
-    difference in the quantisation itself.
+    Each PARAMETER's name, shape and first 8 values (pulled to the CPU and
+    widened to f64, so this is a property of the weights and not of where they
+    were sitting), and each BUFFER's name and shape only. That catches a
+    different checkpoint revision between two recordings (the embedding is a
+    parameter in both arms). It does NOT see the exact arm's quantised weights
+    and scales, which are buffers (`ExactLinear.w8t`, `sw`): a cross-device
+    difference in the quantisation shows in the tokens, not here. Hashing
+    their values would change every recorded fingerprint, so it has not been
+    done.
+
+    Buffers are listed as the unmerged model's (`unmerged_buffer_shapes`), so
+    a model with q/k/v merged matches records made before merging existed.
     """
     import torch
+    from y_lang.exact.model import unmerged_buffer_shapes
     h = hashlib.sha256()
     for name, p in sorted(model.named_parameters(), key=lambda kv: kv[0]):
         h.update(name.encode())
@@ -383,9 +391,9 @@ def _weight_fingerprint(model):
         flat = p.detach().flatten()
         take = flat[:8].to("cpu", dtype=torch.float64)
         h.update(take.numpy().tobytes())
-    for name, b in sorted(model.named_buffers(), key=lambda kv: kv[0]):
+    for name, shape in sorted(unmerged_buffer_shapes(model), key=lambda kv: kv[0]):
         h.update(name.encode())
-        h.update(str(tuple(b.shape)).encode())
+        h.update(str(shape).encode())
     return h.hexdigest()[:16]
 
 

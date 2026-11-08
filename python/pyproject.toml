@@ -40,5 +40,6 @@ version = {attr = "y_lang.__version__"}
 [tool.setuptools.package-data]
 # Compiled on first use by torch_interop's native launch path.
 y_lang = ["_launch.c"]
-# The exact_pv kernel's Y source; in the repository a link to tests/exact_pv.ysu.
-"y_lang.exact" = ["exact_pv.ysu"]
+# The Y sources of the exact_pv and exact_decode_attention kernels; in the
+# repository, links to tests/.
+"y_lang.exact" = ["exact_pv.ysu", "exact_decode_attention.ysu"]

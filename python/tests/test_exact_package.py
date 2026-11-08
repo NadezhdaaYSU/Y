@@ -78,10 +78,11 @@ class TestOldNames(unittest.TestCase):
             # In a checkout the tile choices stay where they were before the move.
             self.assertEqual(out["exact_gemm_profile"], str(ROOT / ".ysu_exact_gemm"))
 
-    def test_the_exact_pv_source_is_the_tests_one(self):
+    def test_the_kernel_sources_are_the_tests_ones(self):
         from y_lang.exact import attention
-        self.assertEqual(Path(attention.__file__).with_name("exact_pv.ysu").read_bytes(),
-                         (ROOT / "tests" / "exact_pv.ysu").read_bytes())
+        for name in ("exact_pv.ysu", "exact_decode_attention.ysu"):
+            self.assertEqual(Path(attention.__file__).with_name(name).read_bytes(),
+                             (ROOT / "tests" / name).read_bytes(), name)
 
 
 def _have(module):
@@ -156,6 +157,12 @@ class TestLoad(unittest.TestCase):
         em.convert(all_merged, merge=True)
         self.assertEqual(sum(isinstance(m, em.ExactLinear) for m in all_merged.modules()), 2 * 4 + 1)
         self.assertEqual(all_merged.model.layers[0].mlp.gate_up_sizes, (128, 128))
+        # Buffer names and shapes as the unmerged model has them, whatever
+        # was merged (exact_cross_device's weight fingerprint is keyed on them).
+        want = sorted((n, tuple(b.shape)) for n, b in unmerged.named_buffers())
+        for m in (model, all_merged, unmerged):
+            self.assertEqual(sorted(em.unmerged_buffer_shapes(m)), want)
+        self.assertNotEqual(sorted((n, tuple(b.shape)) for n, b in model.named_buffers()), want)
 
         # Not a degenerate model: the exact logits follow the float model's.
         ids = tok("The capital of France is", return_tensors="pt").input_ids
