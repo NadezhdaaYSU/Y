@@ -2001,9 +2001,14 @@ still differ.
 **Speed since the table** (compiled, batch 32, idle GPU): at 0.5B, with the
 CPU==GPU fixes, exact decodes 1.11x slower than stock bf16. At
 7B it decodes **1.50x faster** (47.4 against 31.5 tok/s/seq, 2026-11-04). That
-is int8 weights being half the bytes of bf16, not exactness: a
-non-deterministic int8 engine on the same card has not been measured, and
-neither has int8's accuracy cost at 7B.
+is int8 weights being half the bytes of bf16, not exactness. Against an
+8-bit engine without exactness (vLLM 0.21, FP8 weights, CUDA graphs, same card,
+2026-11-08), Y's exact path on its own int8 kernels decodes at **0.89x**
+(52.0 against 58.3 tok/s/seq), and vLLM changes the target's tokens in 2-3 of 4
+batch compositions where Y changes none. vLLM's batch-invariant mode changes
+none too, at 16.5 tok/s/seq: **Y is 3.15x faster** than it
+([record](docs/benchmarks/vllm_fp8_7b_2026-11-08/)). Int8's accuracy cost at
+7B is still unmeasured.
 
 **The control had to be earned.** At 24 generated tokens the stock arm was
 invariant *too*, because a bf16 reduction-order delta needs room to flip a greedy

@@ -1,0 +1,8 @@
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 37075.15it/s]
+alone 160
++2 after 160
++7 after 160
++31 after 160
+middle of 11 160
+alone again 160
+RESULT {"compositions_changed": 0, "alone_reproduces": true, "first_differing_token_vs_alone": {"+2 after": null, "+7 after": null, "+31 after": null, "middle of 11": null, "alone again": null}}

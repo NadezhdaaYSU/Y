@@ -1128,10 +1128,12 @@ stock where exact is 1.03x. Two gaps remain:
 - **That arm is the naive construction.** It pins the order with chunked
   loops in Python. A hand-written fixed-order CUDA kernel would be far faster,
   and none has been measured.
-- **No int8 engine without exactness has been measured.** At 7B, exact is
-  1.50x faster than stock bf16 because its weights are int8 (Finding 12, At
-  7B). What prices determinism there is a non-deterministic int8 engine on the
-  same card.
+- **The 8-bit engine without exactness is now measured, at FP8 (2026-11-08).**
+  At 7B, vLLM 0.21 with FP8 weights and CUDA graphs decodes 58.3 tok/s/seq
+  and changes the target's tokens in 2-3 of 4 batch compositions; Y's exact
+  path decodes 52.0 (0.89x) and changes none. vLLM's own batch-invariant mode
+  changes none at 16.5 (Y 3.15x faster). FP8 is not Y's int8, so accuracy is
+  not compared (`docs/benchmarks/vllm_fp8_7b_2026-11-08/`).
 
 ### One model family, one GPU — narrow evidence
 

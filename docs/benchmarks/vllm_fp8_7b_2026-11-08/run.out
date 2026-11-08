@@ -1,0 +1,21 @@
+== vllm fp8_graphs 143006  util 0%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.0955317919999743, "tok_s_per_seq": 58.41911706018432, "compositions_changed": 3, "alone_reproduces": true}
+== y_vint8 143141  util 1%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.230        52.0       1664.6     0.1%
+== y_vint8 143740  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.231        52.0       1664.2     0.1%
+== vllm fp8_graphs 144336  util 21%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.099697956, "tok_s_per_seq": 58.19779845075933, "compositions_changed": 2, "alone_reproduces": true}
+== vllm fp8_eager 144415  util 0%  others: 
+exit 0
+RESULT {"mode": "eager", "batch_invariant_env": "", "best_s": 1.1298766659999728, "tok_s_per_seq": 56.643350487602284, "compositions_changed": 2, "alone_reproduces": true}
+== vllm fp8_graphs_bi 144450  util 0%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "1", "best_s": 3.885782226000174, "tok_s_per_seq": 16.470300258148622, "compositions_changed": 0, "alone_reproduces": true}
+== done 14:46:43

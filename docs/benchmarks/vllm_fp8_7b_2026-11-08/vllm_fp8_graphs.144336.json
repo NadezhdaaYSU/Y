@@ -1,0 +1,28 @@
+{
+ "mode": "graphs",
+ "batch_invariant_env": "",
+ "model": "Qwen/Qwen2.5-7B-Instruct",
+ "quantization": "fp8",
+ "batch": 32,
+ "tokens": 64,
+ "times_s": [
+  1.1006831619999957,
+  1.10052867100012,
+  1.1011743060000754,
+  1.099697956,
+  1.1065978119997908
+ ],
+ "best_s": 1.099697956,
+ "tok_s_per_seq": 58.19779845075933,
+ "tok_s_total": 1862.3295504242985,
+ "first_differing_token_vs_alone": {
+  "+2 after": null,
+  "+7 after": null,
+  "+31 after": 3,
+  "middle of 11": 3,
+  "alone again": null
+ },
+ "compositions_changed": 2,
+ "alone_reproduces": true,
+ "alone_text_start": "1. **Supporting Structure**: The suspension bridge consists of a series of cables, towers, and anchorages. The cables are the primary load-bearing elements of the bridge.\n\n2. **Load Distribution"
+}
