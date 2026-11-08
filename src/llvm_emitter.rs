@@ -6275,6 +6275,35 @@ representation, and whether that is lossless depends on the expression.",
     /// promotions require; I32, I64, F64 and pointers pass as they are. A
     /// format that is not a literal is refused: a Y `String` value is a
     /// handle, not C text.
+    /// `f64_to_bits(x)` and friends: an LLVM `bitcast`, which copies the bits
+    /// (NaN payloads and signalling NaNs included; a `fptoui`/`uitofp` would
+    /// convert the value). The operand must lower to exactly the argument's
+    /// LLVM type.
+    fn emit_bit_reinterpretation(&mut self, name: &str, from: &str, to: &str, args: &[Expr]) -> String {
+        let (Some((fk, fb)), Some((tk, tb))) = (cast_kind(from), cast_kind(to)) else {
+            self.emit_errors.push(format!("[LLVM host backend] `{}` has no lowering", name));
+            return "0".into();
+        };
+        let fty = cast_llvm_type(fk, fb);
+        let tty = cast_llvm_type(tk, tb);
+        if args.len() != 1 {
+            self.emit_errors.push(format!(
+                "[LLVM host backend] `{}` takes one {} argument, got {}", name, from, args.len()));
+            return if tk == 'f' { "0.0".into() } else { "0".into() };
+        }
+        let lowered = self.infer_type(&args[0]);
+        if lowered != fty {
+            self.emit_errors.push(format!(
+                "[LLVM host backend] the operand of `{}` lowers to `{}`, not `{}` ({}); bind it \
+                 to a typed `let` first", name, lowered, fty, from));
+            return if tk == 'f' { "0.0".into() } else { "0".into() };
+        }
+        let v = self.emit_expr(&args[0], None, Some(fty.to_string()));
+        let tmp = self.fresh_tmp();
+        writeln!(&mut self.output, "  {} = bitcast {} {} to {}", tmp, fty, v, tty).unwrap();
+        tmp
+    }
+
     fn emit_printf(&mut self, args: &[Expr]) -> String {
         let mut parts = Vec::new();
         for (i, arg) in args.iter().enumerate() {
@@ -6505,6 +6534,11 @@ representation, and whether that is lossless depends on the expression.",
                 // C's printf, unless the program defines its own.
                 if func_name == "printf" && !self.fn_llvm_params.contains_key("printf") {
                     return self.emit_printf(args);
+                }
+                if let Some((from, to)) = crate::intrinsics::bit_reinterpretation(&func_name) {
+                    if !self.fn_llvm_params.contains_key(&func_name) {
+                        return self.emit_bit_reinterpretation(&func_name, from, to, args);
+                    }
                 }
 
                 if let Some(value) = self.try_emit_runtime_query(&func_name, args) {
@@ -7613,6 +7647,13 @@ representation, and whether that is lossless depends on the expression.",
                 if let Some(layout) = self.enum_variant_layouts.get(&func_name) {
                     return layout.enum_name.clone();
                 }
+                // The Y type, so `f64_to_bits(x) >> 63` is a logical shift
+                // and a compare of two of them unsigned.
+                if let Some((_, to)) = crate::intrinsics::bit_reinterpretation(&func_name) {
+                    if !self.fn_llvm_params.contains_key(&func_name) {
+                        return to.into();
+                    }
+                }
                 if let Some(ret_ast_ty) = self.fn_ast_returns.get(&func_name) {
                     ret_ast_ty.clone()
                 } else if let Some((_, ret_ast_ty)) = self.functions.get(&func_name) {
@@ -7716,6 +7757,11 @@ representation, and whether that is lossless depends on the expression.",
                 }
                 if let Some(layout) = self.enum_variant_layouts.get(&func_name) {
                     return self.enum_value_type(layout);
+                }
+                if let Some((_, to)) = crate::intrinsics::bit_reinterpretation(&func_name) {
+                    if let (false, Some((k, b))) = (self.fn_llvm_params.contains_key(&func_name), cast_kind(to)) {
+                        return cast_llvm_type(k, b).to_string();
+                    }
                 }
                 // A block-pointer load yields the buffer's element type. Falling
                 // through to the `i32` default here is what put a `sitofp` on
@@ -8071,6 +8117,11 @@ representation, and whether that is lossless depends on the expression.",
                 // Enum constructor calls return the enum struct type
                 if let Some(layout) = self.enum_variant_layouts.get(&func_name) {
                     return self.enum_value_type(layout);
+                }
+                if let Some((_, to)) = crate::intrinsics::bit_reinterpretation(&func_name) {
+                    if let (false, Some((k, b))) = (self.fn_llvm_params.contains_key(&func_name), cast_kind(to)) {
+                        return cast_llvm_type(k, b).to_string();
+                    }
                 }
                 self.functions
                     .get(&func_name)

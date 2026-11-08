@@ -2507,6 +2507,7 @@ impl PtxEmitter {
         "thread_id", "global_thread_id", "thread_idx", "thread_idx_x", "thread_idx_y", "thread_idx_z",
         "block_idx_x", "block_idx_y", "block_idx_z", "block_dim_x", "block_dim_y", "block_dim_z",
         "grid_dim_x", "grid_dim_y", "grid_dim_z", "mul_wide_u32", "mul_wide_s32", "u64_lo32", "u64_hi32",
+        "f64_to_bits", "f64_from_bits", "f32_to_bits", "f32_from_bits",
     ];
 
     /// Loads, arithmetic and `DRIFT_THREAD_LOCAL_CALLS`; anything else may
@@ -5120,7 +5121,8 @@ impl PtxEmitter {
             | "grid_dim_x" | "grid_dim_y" | "grid_dim_z" | "barrier_sync" | "membar"
             | "block_arange" => Arity::Exactly(0),
             "ld_global_v4_f32" | "load_v4" | "warp_reduce_sum" | "warp_reduce_max"
-            | "u64_lo32" | "u64_hi32" | "shared_alloc_u32" => Arity::Exactly(1),
+            | "u64_lo32" | "u64_hi32" | "shared_alloc_u32" | "f64_to_bits" | "f64_from_bits"
+            | "f32_to_bits" | "f32_from_bits" => Arity::Exactly(1),
             "store" | "mul_wide_u32" | "mul_wide_s32" | "shared_load_v4" | "drift_close" => Arity::Exactly(2),
             "atomic_add" | "atomic_max" | "drift_add_to" | "drift_add_at" | "drift_finish" | "drift_convert"
             | "swiglu_v4" | "swiglu_fast" | "vec_add_unrolled4" => {
@@ -8878,6 +8880,10 @@ declare it as a Q format.\n{}",
                             let dst = self.alloc_ty(ScalarTy::I64);
                             writeln!(&mut self.ptx_buffer, "    mul.wide.s32 {}, {}, {};", dst, a32, b32).unwrap();
                             dst
+                        } else if let (Some((from, to)), 1) =
+                            (crate::intrinsics::bit_reinterpretation(fname), args.len())
+                        {
+                            self.emit_bit_reinterpretation(fname, from, to, &args[0], cache_policy, hw_profile)
                         } else if fname == "u64_lo32" && args.len() == 1 {
                             // Truncation, i.e. `cvt.u32.u64` - spelled out
                             // rather than left to an implicit narrowing so the
@@ -9795,6 +9801,44 @@ declare it as a Q format.\n{}",
             (false, false) => format!("cvt.u32.u64 {}, {};", out, v),
         };
         writeln!(&mut self.ptx_buffer, "    {}", line).unwrap();
+        out
+    }
+
+    /// `f64_to_bits(x)` and friends: one `mov.b64` / `mov.b32` between the
+    /// float and integer register files, which copies the bits (no `cvt`, so
+    /// no rounding and no NaN canonicalisation). The operand must already be
+    /// in a register of exactly the argument's class and width: a literal is
+    /// refused by the checker, and an integer whose type this backend did
+    /// not record could be a narrower value it would read as the wrong width.
+    fn emit_bit_reinterpretation(&mut self, fname: &str, from: &str, to: &str, arg: &Expr,
+                                 cache_policy: Option<&CachePolicyAttr>,
+                                 hw_profile: &HardwareProfile) -> String {
+        let span = arg.span();
+        let (Some(from_ty), Some(to_ty)) = (ScalarTy::from_name(from), ScalarTy::from_name(to)) else {
+            self.unsupported_expr(&format!("`{}`", fname), &span);
+            return "".into();
+        };
+        let v = self.emit_expr(arg, cache_policy, hw_profile);
+        if v.is_empty() {
+            return "".into();
+        }
+        let have = if v.starts_with('%') && (v.starts_with("%f") || self.reg_ty.contains_key(&v)) {
+            Some(self.ty_of(&v).promoted())
+        } else {
+            None
+        };
+        // Signedness is the one difference allowed: I64 and U64 hold the same
+        // 64 bits (the checker has already asked for the unsigned spelling).
+        let fits = have.is_some_and(|h| h.is_float() == from_ty.is_float() && h.is_64() == from_ty.is_64());
+        if !fits {
+            self.unsupported_expr(&format!(
+                "`{}` of an operand this backend holds as {} (it takes a {}); bind it to a \
+                 typed `let` first", fname,
+                have.map_or("an untyped value".to_string(), |h| format!("{:?}", h)), from), &span);
+            return "".into();
+        }
+        let out = self.alloc_ty(to_ty);
+        writeln!(&mut self.ptx_buffer, "    mov.b{} {}, {};", if to_ty.is_64() { 64 } else { 32 }, out, v).unwrap();
         out
     }
 

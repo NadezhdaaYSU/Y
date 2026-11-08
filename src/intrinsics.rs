@@ -75,9 +75,28 @@ pub fn is_known_function(name: &str) -> bool {
         )
 }
 
+/// The bit reinterpretations, Rust's `f64::to_bits` and friends, as
+/// `(argument type, result type)`. The bits are unchanged, NaN payloads and
+/// signalling NaNs included: no backend may lower these through a numeric
+/// conversion. The argument must have exactly the named type (the checker
+/// refuses a literal, which has no type of its own until context gives it
+/// one, as for `as`).
+pub fn bit_reinterpretation(name: &str) -> Option<(&'static str, &'static str)> {
+    Some(match name {
+        "f64_to_bits" => ("F64", "U64"),
+        "f64_from_bits" => ("U64", "F64"),
+        "f32_to_bits" => ("F32", "U32"),
+        "f32_from_bits" => ("U32", "F32"),
+        _ => return None,
+    })
+}
+
 /// A result fixed by the builtin's contract, independent of arguments/shapes.
 /// `None` means this table cannot supply a scalar type; it does not mean void.
 pub fn scalar_return_type(name: &str) -> Option<&'static str> {
+    if let Some((_, to)) = bit_reinterpretation(name) {
+        return Some(to);
+    }
     Some(match name {
         "thread_id" | "global_thread_id" | "thread_idx" | "thread_idx_x" | "thread_idx_y"
         | "thread_idx_z" | "block_idx_x" | "block_idx_y" | "block_idx_z" | "block_dim_x"
