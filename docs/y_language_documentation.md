@@ -4117,7 +4117,10 @@ What is refused, by name:
 U64, F32 and F64 on ~20 edge inputs each (ties, 2^24 + 1, 2^53 + 1, each
 type's limits and the values just past them, NaN, infinities, signed zeros,
 subnormals) through `--emit-llvm` at -O0 and -O2, `--emit-cpu`'s Rust, and
-PTX on a GPU, bit for bit against Rust's own `as`. A NaN produced by a float
+PTX on a GPU, bit for bit against Rust's own `as`. The GPU run is what found
+that PTX's `cvt.rzi` alone does not take NaN to 0 from F64 or to a 64-bit
+integer (the CPU PTX interpreter, §34.4, models the same), so the PTX lowering
+selects 0 for a NaN itself. A NaN produced by a float
 to float conversion is compared as a NaN: its payload is the hardware's.
 
 A typed `let` still converts between integer widths without `as`
@@ -4151,6 +4154,23 @@ which `ptxas` contracted with the following `add.f32` into one `FFMA`: the GPU
 rounded once where the PTX and the host backends round twice, and a product
 with two uses could be fused at one use and not the other.
 `tests/ptx_let_bound_rounding.rs` checks the PTX, the SASS and the device.
+
+**Where one Y source rounds differently on a CPU and a GPU.** Two float
+operations are lowered to different instructions by the PTX backend and the
+host backends (LLVM, the CPU JIT, `--emit-cpu`'s Rust):
+
+| Source | PTX | LLVM, JIT, Rust |
+| :--- | :--- | :--- |
+| F32 `a / b` | `div.approx.f32`: within 2 ulp, and 0 for a divisor above 2^126 | IEEE division, correctly rounded |
+| `a * b + c` in one expression (F32, F64) | one `fma.rn`: rounded once | multiply, then add: rounded twice |
+
+Everything else in F32/F64 arithmetic - `+`, `-`, `*`, F64 `/` (`div.rn.f64`
+on PTX), comparisons and `as` (§20.4) - is the same IEEE operation on every
+backend. Code that must give the same bits on a CPU and a GPU binds every
+product with `let` before adding it, and divides in F64 (a correctly rounded
+F64 quotient of two F32 values, rounded back to F32 with `as`, is the
+correctly rounded F32 quotient: 53 >= 2 x 24 + 2). `tests/exact_decode_attention.ysu`
+is written that way and matches PyTorch's CPU arithmetic bit for bit.
 
 **`F16` is a buffer element type only**, like `I8`/`U16`: a load widens it to
 `F32` exactly (`cvt.f32.f16`) and a store rounds any value to nearest-even
