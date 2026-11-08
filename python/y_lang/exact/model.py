@@ -691,10 +691,15 @@ def _merged_attention_forward(self, hidden_states, position_embeddings, attentio
     value_states = v.view(hidden_shape).transpose(1, 2)
     cos, sin = position_embeddings
     query_states, key_states = qwen2.apply_rotary_pos_emb(query_states, key_states, cos, sin)
-    if past_key_values is not None:
-        key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx)
     attention_interface = qwen2.ALL_ATTENTION_FUNCTIONS.get_interface(
         self.config._attn_implementation, qwen2.eager_attention_forward)
+    if past_key_values is not None:
+        if _kv.PACK and getattr(attention_interface, "takes_packed_kv", False):
+            # The cache keeps rows quantised and packed (kv.PACK): only the
+            # new rows are quantised, once, instead of the whole cache every
+            # step, and the cache copies 3 bytes a value instead of 8.
+            key_states, value_states = _kv.quantize_and_pack(key_states, value_states)
+        key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx)
     attn_output, attn_weights = attention_interface(
         self, query_states, key_states, value_states, attention_mask,
         dropout=0.0 if not self.training else self.attention_dropout,
@@ -841,3 +846,8 @@ def convert(model, linears=True, norms=True, floats=None, merge=None):
         from . import w8a8_gemv
         w8a8_gemv.prime(shapes, dev)
     return n_lin, n_norm
+
+
+# Last, because kv imports `divisor` from here: either module can be imported
+# first, and `_merged_attention_forward` reads `_kv` only when called.
+from . import kv as _kv  # noqa: E402

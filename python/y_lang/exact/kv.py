@@ -342,6 +342,101 @@ def quantize_kv(module, k, v, q_levels=127):
     return ki, sk, vi, sv, k_lv, V_LEVELS
 
 
+# Keep the decode cache quantised: `Y_EXACT_KV_PACK=1`.
+#
+# Without it, transformers' DynamicCache holds float32 K and V, appends with
+# `torch.cat` (a copy of the whole cache every step) and `exact_attention`
+# quantises all of it again every step - per-token scales make each row's
+# integers depend on that row alone, so all but the newest row come out as
+# they did the step before. At 7B that copy-and-requantise was about 30 us a
+# layer a step (docs/benchmarks/exact_greedy_loop_7b_2026-11-08), against
+# vLLM writing one new row.
+#
+# With it, the attention forward quantises only the new rows and hands the
+# cache packed rows: K as int16 values (|k| <= K_LEVELS fits) followed by its
+# float32 scale's four bytes and padding, D + 8 int16s; V as int8 values, the
+# scale's four bytes and padding, D + 16 bytes. Rows stay 16-byte aligned and
+# the scale's bytes are in memory order, so a kernel reads it as a float32.
+# Both are handed over as int8 tensors (K's int16 rows viewed as their 2(D + 8)
+# bytes): transformers' DynamicLayer creates its empty V with K's dtype, and
+# `cat` would then promote int8 V rows to int16.
+# The integers and scales are the ones the unpacked path computes, bit for bit
+# (`check_pack_round_trip`, python/tests/test_exact_package.py). The cache
+# still grows by `cat`, now over 2 + 1 bytes a value instead of 4 + 4.
+PACK = os.environ.get("Y_EXACT_KV_PACK", "0") != "0"
+K_PAD, V_PAD = 8, 16
+
+
+def _bytes_of(scale, n_parts, part_bits):
+    """float32 `scale` [..., 1] as `n_parts` signed pieces of `part_bits`
+    bits, least significant first: the float's bytes in little-endian memory
+    order, as int16 or int8 values."""
+    bits = scale.contiguous().view(torch.int32)
+    lim, mask = 1 << (part_bits - 1), (1 << part_bits) - 1
+    parts = []
+    for i in range(n_parts):
+        if i == n_parts - 1:
+            p = bits >> (part_bits * i)                    # arithmetic: signed top piece
+        else:
+            p = (bits >> (part_bits * i)) & mask
+            p = torch.where(p >= lim, p - (1 << part_bits), p)
+        parts.append(p)
+    return parts
+
+
+def _scale_from(pieces, part_bits):
+    """Inverse of `_bytes_of`: int pieces [..., n] -> float32 [..., 1]."""
+    x = pieces.to(torch.int32)
+    n = x.shape[-1]
+    mask = (1 << part_bits) - 1
+    bits = x[..., n - 1:n] * (1 << (part_bits * (n - 1)))    # signed top piece
+    for i in range(n - 1):
+        bits = bits + (x[..., i:i + 1] & mask) * (1 << (part_bits * i))
+    return bits.view(torch.float32)
+
+
+def pack_k(ki, sk):
+    """Integer-valued float32 K [..., T, D] and its scales [..., T, 1] as one
+    row of D + 8 int16s, returned as its bytes: int8 [..., T, 2 * (D + 8)]
+    (see `PACK`)."""
+    if K_LEVELS > 32767:
+        raise ValueError(f"K_LEVELS={K_LEVELS} does not fit int16")
+    pad = torch.zeros((*ki.shape[:-1], K_PAD - 2), dtype=torch.int16, device=ki.device)
+    lo, hi = _bytes_of(sk, 2, 16)
+    rows = torch.cat([ki.to(torch.int16), lo.to(torch.int16), hi.to(torch.int16), pad], dim=-1)
+    return rows.view(torch.int8)
+
+
+def pack_v(vi, sv):
+    """Integer-valued V [..., T, D] (float32 or int8) and its scales [..., T, 1]
+    as one int8 tensor [..., T, D + 16] (see `PACK`)."""
+    if V_LEVELS > 127:
+        raise ValueError(f"V_LEVELS={V_LEVELS} does not fit int8")
+    pad = torch.zeros((*vi.shape[:-1], V_PAD - 4), dtype=torch.int8, device=vi.device)
+    parts = [p.to(torch.int8) for p in _bytes_of(sv, 4, 8)]
+    return torch.cat([vi.to(torch.int8), *parts, pad], dim=-1)
+
+
+def unpack_k(kp, d):
+    """`pack_k`'s inverse: (ki float32 [..., T, d], sk float32 [..., T, 1])."""
+    rows = kp.view(torch.int16)
+    return rows[..., :d].to(torch.float32), _scale_from(rows[..., d:d + 2], 16)
+
+
+def unpack_v(vp, d):
+    """`pack_v`'s inverse: (vi int8 [..., T, d], sv float32 [..., T, 1])."""
+    return vp[..., :d], _scale_from(vp[..., d:d + 4], 8)
+
+
+def quantize_and_pack(k, v, q_levels=127):
+    """New K/V rows (float32 [..., t, D]) quantised as `quantize_kv` quantises
+    them, packed for the cache."""
+    k_lv = k_levels_for(k.shape[-1], q_levels)
+    ki, sk = quantize_rows(k, k_lv)
+    vi, sv = quantize_rows(v, V_LEVELS)
+    return pack_k(ki, sk), pack_v(vi, sv)
+
+
 def fold_scale_into_weights(p, sv_t, p_bits=28):
     """`W = round(p * sv * 2^p_bits / max(p*sv))`, plus the common scale.
 

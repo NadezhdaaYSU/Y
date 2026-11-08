@@ -224,6 +224,89 @@ class TestLoad(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "at least 1"):
             greedy(model, batch.input_ids, batch.attention_mask, 0)
 
+        # kv.PACK: the cache keeps each row quantised once and packed. The
+        # logits at every step and greedy's tokens are the float cache's, and
+        # the cache really holds packed int8 rows (so the comparison is not
+        # between two unpacked runs).
+        from transformers import DynamicCache
+        from y_lang.exact import kv
+
+        def decode_logits(n):
+            cache = DynamicCache(config=model.config)
+            att = batch.attention_mask
+            pos = (att.long().cumsum(-1) - 1).masked_fill(att == 0, 0)
+            logits = []
+            with torch.no_grad():
+                out = model(input_ids=batch.input_ids, attention_mask=att, position_ids=pos,
+                            past_key_values=cache, use_cache=True)
+                logits.append(out.logits[:, -1])
+                for _ in range(n):
+                    nxt = out.logits[:, -1].argmax(-1, keepdim=True)
+                    att = torch.cat([att, att.new_ones((att.shape[0], 1))], dim=-1)
+                    pos = pos[:, -1:] + 1
+                    out = model(input_ids=nxt, attention_mask=att, position_ids=pos,
+                                past_key_values=cache, use_cache=True)
+                    logits.append(out.logits[:, -1])
+            return torch.stack(logits), cache
+
+        saved = kv.PACK
+        try:
+            kv.PACK = False
+            want_logits, float_cache = decode_logits(6)
+            kv.PACK = True
+            got_logits, packed_cache = decode_logits(6)
+            packed_tokens = greedy(model, batch.input_ids, batch.attention_mask, 10)
+        finally:
+            kv.PACK = saved
+        self.assertEqual(float_cache.layers[0].keys.dtype, torch.float32)
+        self.assertEqual(packed_cache.layers[0].keys.dtype, torch.int8)
+        self.assertEqual(packed_cache.layers[0].keys.shape[-1], 2 * (16 + kv.K_PAD))
+        self.assertEqual(packed_cache.layers[0].values.dtype, torch.int8)
+        self.assertTrue(torch.equal(got_logits, want_logits), "packing the cache changed logits")
+        self.assertEqual(packed_tokens.tolist(), got.tolist())
+
+    def test_packed_rows_round_trip_bit_for_bit(self):
+        import torch
+        from y_lang.exact import kv
+        devices = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
+        for dev in devices:
+            g = torch.Generator(device=dev).manual_seed(0)
+            k = torch.randn(3, 2, 9, 32, device=dev, generator=g)
+            v = torch.randn(3, 2, 9, 32, device=dev, generator=g)
+            k = k * torch.exp(torch.randn(3, 2, 9, 1, device=dev, generator=g) * 4)
+            v = v * torch.exp(torch.randn(3, 2, 9, 1, device=dev, generator=g) * 4)
+            k[0, 0, 0] = 0.0                       # a zero row: scale 1
+            k_lv = kv.k_levels_for(32, 127)
+            ki, sk = kv.quantize_rows(k, k_lv)
+            vi, sv = kv.quantize_rows(v, kv.V_LEVELS)
+            self.assertEqual(float(ki.abs().max()), k_lv)       # the extremes are in
+            kp, vp = kv.quantize_and_pack(k, v)
+            self.assertEqual((kp.dtype, kp.shape[-1]), (torch.int8, 2 * (32 + kv.K_PAD)))
+            self.assertEqual((vp.dtype, vp.shape[-1]), (torch.int8, 32 + kv.V_PAD))
+            ki2, sk2 = kv.unpack_k(kp, 32)
+            vi2, sv2 = kv.unpack_v(vp, 32)
+            self.assertTrue(torch.equal(ki2, ki), dev)
+            self.assertTrue(torch.equal(vi2.to(torch.float32), vi), dev)
+            for a, b in ((sk2, sk), (sv2, sv)):
+                self.assertTrue(torch.equal(a.view(torch.int32), b.view(torch.int32)), dev)
+            # Every scale bit pattern survives, sign and NaN patterns included.
+            bits = torch.randint(-2 ** 31, 2 ** 31, (4096, 1), generator=torch.Generator().manual_seed(1),
+                                 dtype=torch.int64).to(torch.int32).to(dev)
+            bits[:4, 0] = torch.tensor([0, -1, -2 ** 31, 2 ** 31 - 1], dtype=torch.int32)
+            s = bits.view(torch.float32)
+            z = torch.zeros((4096, 32), device=dev)
+            self.assertTrue(torch.equal(kv.unpack_k(kv.pack_k(z, s), 32)[1].view(torch.int32), bits))
+            self.assertTrue(torch.equal(kv.unpack_v(kv.pack_v(z, s), 32)[1].view(torch.int32), bits))
+            if dev == "cuda":
+                # The model runs these compiled: Inductor's lowering of the
+                # shifts and bitcasts must give the same rows.
+                packed = torch.compile(kv.quantize_and_pack, dynamic=False)(k, v)
+                self.assertTrue(torch.equal(packed[0], kp) and torch.equal(packed[1], vp))
+                un = torch.compile(lambda a, b: (*kv.unpack_k(a, 32), *kv.unpack_v(b, 32)),
+                                   dynamic=False)(kp, vp)
+                self.assertTrue(torch.equal(un[1].view(torch.int32), sk.view(torch.int32)))
+                self.assertTrue(torch.equal(un[3].view(torch.int32), sv.view(torch.int32)))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -154,6 +154,32 @@ class TestExactDecodeAttention(unittest.TestCase):
         self.assertNotEqual(p[0].item(), p[1].item())
         self.assertTrue(torch.equal(got.view(torch.int32), want.view(torch.int32)), (got, want))
 
+    def test_packed_cache_rows_give_the_same_bits(self):
+        # `kv.PACK`: the cache holds rows quantised once and packed; given
+        # those, exact_attention must return what it returns given the float
+        # K/V it quantises itself - on Y's kernel, on the torch ops with an
+        # int8 V and with a float V, decoding and in a prefill.
+        A, kv = self.attention, self.kv
+        cases = [(3, 14, 2, 37, 64, 2.0, 0, "pad"), (2, 28, 4, 300, 128, 6.0, 13, None),
+                 (3, 14, 2, 64, 64, 6.0, 7, "all")]
+        try:
+            for c in cases:
+                for q_len in (1, 3):
+                    q, k, v, am, sc = _case(*c)
+                    if q_len > 1:
+                        q = torch.randn(c[0], c[1], q_len, c[4], device="cuda")
+                        am = None
+                    kp, vp = kv.quantize_and_pack(k, v)
+                    for mode, v_int8 in (("y", True), ("torch", True), ("torch", False)):
+                        A.ATTN, kv.V_INT8 = mode, v_int8
+                        with torch.no_grad():
+                            want = A.exact_attention(None, q, k, v, am, scaling=sc)[0]
+                            got = A.exact_attention(None, q, kp, vp, am, scaling=sc)[0]
+                        self.assertTrue(torch.equal(got.view(torch.int32), want.view(torch.int32)),
+                                        (c, q_len, mode, v_int8))
+        finally:
+            kv.V_INT8 = True
+
     def test_prefill_stays_on_the_torch_ops(self):
         q, k, v, am, sc = _case(2, 14, 2, 9, 64, 1.0, 10, None)
         q = torch.randn(2, 14, 3, 64, device="cuda")        # three query positions
