@@ -68,7 +68,8 @@ const WARP_REDUCTIONS: &[&str] = &["warp_reduce_sum", "warp_reduce_max"];
 /// instruction last set it.
 const PURE_BUILTINS: &[&str] = &[
     "block_cdiv", "mul_wide_u32", "mul_wide_s32", "u64_lo32", "u64_hi32", "add_cc_u32",
-    "sub_cc_u32", "mad_lo_cc_u32", "mad_hi_cc_u32",
+    "sub_cc_u32", "mad_lo_cc_u32", "mad_hi_cc_u32", "f64_to_bits", "f64_from_bits", "f32_to_bits",
+    "f32_from_bits",
 ];
 
 /// How far each variable of one kernel body is the same across threads.

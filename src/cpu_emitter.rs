@@ -926,6 +926,9 @@ impl CpuEmitter {
             Expr::UnaryOp { op: UnaryOp::Neg | UnaryOp::Not, operand, .. } => self.rust_type_of(operand),
             Expr::Cast { ty: Type::Primitive(n, _) | Type::Ident(n, _), .. } => rust_scalar(n),
             Expr::Call { func, .. } => match &**func {
+                Expr::Ident(name, _) if !self.fn_sigs.contains_key(name) => {
+                    crate::intrinsics::bit_reinterpretation(name).and_then(|(_, to)| rust_scalar(to))
+                }
                 Expr::Ident(name, _) => self.fn_sigs.get(name).and_then(|(_, ret)| *ret),
                 _ => None,
             },
@@ -978,6 +981,19 @@ impl CpuEmitter {
         if matches!(fname.as_str(), "cp_async" | "ldmatrix" | "mma_sync" | "store") {
             let span = func.span();
             return self.unsupported_gpu_intrinsic(&fname, &span);
+        }
+
+        // `f64_to_bits(x)` is Rust's `f64::to_bits(x)`, and so on: the same
+        // operation, and rustc refuses an operand of any other type.
+        if let (Some(_), false, [arg]) = (crate::intrinsics::bit_reinterpretation(&fname),
+                                                  self.known_fns.contains(&fname), arg_strs.as_slice()) {
+            let (float, dir) = match fname.as_str() {
+                "f64_to_bits" => ("f64", "to_bits"),
+                "f64_from_bits" => ("f64", "from_bits"),
+                "f32_to_bits" => ("f32", "to_bits"),
+                _ => ("f32", "from_bits"),
+            };
+            return format!("{}::{}({})", float, dir, arg);
         }
 
         // A plain identifier this blob does not define is a GPU intrinsic or a

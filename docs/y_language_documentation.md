@@ -4127,6 +4127,50 @@ A typed `let` still converts between integer widths without `as`
 (`let z: I16 = x;` truncates) and still refuses integer to float or back
 (`Type mismatch in let assignment`); `as` is how that is spelled.
 
+#### Bit reinterpretation
+
+`as` converts a value. To reuse a float's bits as an integer, or the other
+way round, there are Rust's four functions (since 2026-11-09):
+
+| Call | Argument | Result |
+| :--- | :--- | :--- |
+| `f64_to_bits(x)` | F64 | U64 |
+| `f64_from_bits(u)` | U64 | F64 |
+| `f32_to_bits(x)` | F32 | U32 |
+| `f32_from_bits(u)` | U32 | F32 |
+
+The bits are copied unchanged on every backend (an LLVM `bitcast`, a PTX
+`mov.b64` / `mov.b32`, Rust's own functions): NaN payloads, signalling NaNs,
+`-0.0` and subnormals included. The results are unsigned, so
+`f64_to_bits(x) >> 63` is the sign bit and comparing two results is an
+unsigned compare.
+
+```ysu
+let x: F64 = 1.5;
+let u: U64 = f64_to_bits(x);           // 0x3FF8000000000000
+let back: F64 = f64_from_bits(u);      // 1.5
+let neg: U64 = f64_to_bits(x) >> 63;   // 0
+```
+
+What it is for: a GeForce GPU runs float64 at 1/64 of its float32 rate,
+compares included, and integer operations at full rate. Two non-negative
+floats order as their bit patterns, so `x < 2^30` can be
+`f64_to_bits(x) < f64_to_bits(2^30)`; any two floats order as the signed
+integers `b ^ ((b >> 63) & 0x7FFFFFFFFFFFFFFF)` (with `b = f64_to_bits(x) as
+I64`, and `-0.0` below `+0.0`). For `0 <= x < 2^52`,
+`f64_to_bits(x + 2^52) - f64_to_bits(2^52)` is `x` rounded half to even, as
+an integer, with one float64 add instead of two and a conversion. The exact
+decode attention kernel (`tests/exact_decode_attention.ysu`) uses all three.
+
+The argument must have exactly the named type: `f64_from_bits` of an `I64` or
+a `U32` is refused, though a typed `let` would widen or re-sign either (write
+`v as U64`). A literal argument is refused as for `as`. The ZK backend
+(undefined function) and `--emit-native` (unresolved call) refuse these calls.
+`tests/bit_reinterpretation.rs` checks all four, the sign shift and an
+unsigned compare on NaNs with payloads, a signalling NaN, signed zeros,
+subnormals and infinities, through `--emit-llvm` at -O0 and -O2, `--emit-cpu`'s
+Rust and PTX on a GPU, against Rust.
+
 ### 20.5 GPU Type Usage Rules
 
 | Context | Allowed Types |
