@@ -2003,12 +2003,19 @@ CPU==GPU fixes, exact decodes 1.11x slower than stock bf16. At
 7B it decodes **1.50x faster** (47.4 against 31.5 tok/s/seq, 2026-11-04). That
 is int8 weights being half the bytes of bf16, not exactness. Against an
 8-bit engine without exactness (vLLM 0.21, FP8 weights, CUDA graphs, same card,
-2026-11-08), Y's exact path on its own int8 kernels decodes at **0.89x**
-(52.0 against 58.3 tok/s/seq), and vLLM changes the target's tokens in 2-3 of 4
-batch compositions where Y changes none. vLLM's batch-invariant mode changes
-none too, at 16.5 tok/s/seq: **Y is 3.15x faster** than it
-([record](docs/benchmarks/vllm_fp8_7b_2026-11-08/)). Int8's accuracy cost at
-7B is still unmeasured.
+2026-11-08), Y's exact path on its own int8 kernels first decoded at 0.89x
+(52.0 against 58.3 tok/s/seq). With q/k/v merged into one GEMM and a decode
+loop that does not wait for the host every token (`y_lang.exact.greedy`), it
+decodes at **0.93x** (54.4-54.5 against vLLM's 58.2-59.2 the same evening), with
+the CPU's tokens. vLLM changes the target's tokens in 2-3 of 4 batch
+compositions where Y changes none. vLLM's batch-invariant mode changes none
+too, at 16.5 tok/s/seq: **Y is 3.3x faster** than it
+([vLLM record](docs/benchmarks/vllm_fp8_7b_2026-11-08/),
+[merging](docs/benchmarks/exact_merged_7b_2026-11-08/),
+[the loop](docs/benchmarks/exact_greedy_loop_7b_2026-11-08/)). Y's GEMMs are
+already faster than vLLM's (12.6 against 13.7 ms a step); the rest of the gap
+is its other kernels ([profile](docs/benchmarks/exact_7b_profile_2026-11-08/)).
+Int8's accuracy cost at 7B is still unmeasured.
 
 **The control had to be earned.** At 24 generated tokens the stock arm was
 invariant *too*, because a bf16 reduction-order delta needs room to flip a greedy

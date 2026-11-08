@@ -1,0 +1,25 @@
+== record merged 15:28:52  util 56%  others: Discord chromium 
+exit 1
+== vllm_fp8_graphs 153906  util 59%  others: Discord chromium 
+exit 1
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+== merged 153912  util 18%  others: Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.308        48.9       1565.9     0.1%
+== unmerged 154505  util 65%  others: Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.286        49.8       1592.2     0.5%
+== unmerged 155141  util 37%  others: Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.269        50.4       1614.1     1.7%
+== merged 155813  util 0%  others: Discord chromium 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.234        51.9       1659.3     0.1%
+== vllm_fp8_graphs 160350  util 0%  others: Discord chromium 
+exit 1
+RuntimeError: Engine core initialization failed. See root cause above. Failed core proc(s): {}
+== done 16:03:56

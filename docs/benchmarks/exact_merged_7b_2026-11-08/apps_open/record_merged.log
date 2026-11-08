@@ -1,0 +1,79 @@
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Recording on NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0)
+  5 cases x 160 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- exact ---
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 34507.20it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1108 15:29:59.703000 50666 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+[W1108 15:38:58.322379988 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 912261120 bytes (free: 316014592, total: 16769744896).
+[W1108 15:38:58.330135653 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 912261120 bytes (free: 597032960, total: 16769744896).
+  gate: ok -- canary ok, 94 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+Traceback (most recent call last):
+  File "/tmp/y_exact_nospace/tools/exact_cross_device.py", line 653, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/tmp/y_exact_nospace/tools/exact_cross_device.py", line 647, in main
+    return record(a)
+  File "/tmp/y_exact_nospace/tools/exact_cross_device.py", line 518, in record
+    got = R.decode_target(model, tok, others, pos, args.tokens,
+                          args.device)
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/exact_ragged_batch.py", line 177, in decode_target
+    out = model.generate(
+        input_ids=enc.input_ids, attention_mask=enc.attention_mask,
+        max_new_tokens=n_new, do_sample=False, num_beams=1, use_cache=True,
+        pad_token_id=tok.eos_token_id,
+    )
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/transformers/generation/utils.py", line 2668, in generate
+    result = decoding_method(
+        self,
+    ...<5 lines>...
+        **model_kwargs,
+    )
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/transformers/generation/utils.py", line 2868, in _sample
+    outputs = self._prefill(
+        input_ids,
+    ...<2 lines>...
+        is_first_iteration=not generation_config.is_assistant,
+    )
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/transformers/generation/utils.py", line 3948, in _prefill
+    return self(**model_inputs, return_dict=True)
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_dynamo/eval_frame.py", line 1166, in compile_wrapper
+    result = fn(*args, **kwargs)
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/transformers/utils/generic.py", line 933, in wrapper
+    @wraps(func)
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_dynamo/eval_frame.py", line 1446, in _fn
+    return fn(*args, **kwargs)
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_functorch/aot_autograd.py", line 1277, in forward
+    return compiled_fn(full_args)
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 1141, in runtime_wrapper
+    result = _codegen_runtime_wrapper(
+        _inner_compiled_fn,
+    ...<2 lines>...
+        args,
+    )
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_functorch/_aot_autograd/subclass_codegen.py:codegen(runtime_wrapper_orchestration)", line 8, in _runtime_wrapper
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/output_code.py", line 763, in __call__
+    return self.current_callable(inputs)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/torchinductor_yumin/m7/cm7k2dso4l57qdj27bmoycawdjwp5gcszpfl24xzxciafb2bzqqy.py", line 2807, in call
+    buf42 = torch.ops.y_lang.int8_mm.default(buf41, reinterpret_tensor(arg28_1, (37888, 3584), (3584, 1), 0))
+  File "/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_ops.py", line 875, in __call__
+    return self._op(*args, **kwargs)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/python/y_lang/int8_gemm.py", line 199, in _int8_mm
+    c = torch.empty((mb, n), dtype=torch.int32, device=dev)
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 870.00 MiB. GPU 0 has a total capacity of 15.62 GiB of which 569.38 MiB is free. Process 2089 has 21.82 MiB memory in use. Including non-PyTorch memory, this process has 13.26 GiB memory in use. Of the allocated memory 9.54 GiB is allocated by PyTorch, and 3.47 GiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)

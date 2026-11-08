@@ -1,0 +1,29 @@
+== record (persistent rows 4096) 19:14:31  util 6%  others: 
+exit 0
+== vllm_fp8_graphs 192425  util 0%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.099799323001207, "tok_s_per_seq": 58.192434439177916, "compositions_changed": 2, "alone_reproduces": true}
+== y_rows_0 192504  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+exact  int8, order-independent           1.176        54.4       1741.5     0.0%
+== y_rows_4096 193031  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+exact  int8, order-independent           1.203        53.2       1702.9     0.0%
+== y_rows_4096 193600  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+exact  int8, order-independent           1.201        53.3       1704.8     0.1%
+== y_rows_0 194129  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+exact  int8, order-independent           1.176        54.4       1741.5     0.1%
+== vllm_fp8_graphs 194657  util 0%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.0816337010001007, "tok_s_per_seq": 59.16975399418887, "compositions_changed": 2, "alone_reproduces": true}
+== done 19:47:36
