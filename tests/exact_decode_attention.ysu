@@ -3,12 +3,17 @@
 //
 // The Python path runs this as about fifteen kernels a layer (an fp32 matmul
 // for the integer scores, the logit, the max, the integer exp2, the sums, the
-// V-scale fold, `exact_pv`, the final divide). Here it is one launch: a warp
-// per (sequence, query head), its lanes taking key positions 32 at a time.
+// V-scale fold, `exact_pv`, the final divide). Here it is one launch: a block
+// per (sequence, KV head), one warp per query head of the group, the lanes
+// taking key positions 32 at a time. Each chunk of 32 keys is staged in
+// shared memory once and read by every query head of the group: K as
+// integers in padded rows, V as packed bytes transposed so a lane's four
+// dimensions of four keys are one 16-byte read.
 //
 // Every value is the Python path's, by construction:
-//   * scores are integer dot products (|q| <= 127, |k| <= 1023, d <= 128:
-//     below 2^24, so the Python fp32 matmul is exact and so is this I32 sum);
+//   * scores are integer dot products: |q| <= 127, |k| <= 1023, D <= 128, so
+//     every partial sum is an integer below 2^24 - the Python fp32 matmul is
+//     exact for that reason, and this I32 sum is exact for any reason;
 //   * the logit, the exp argument and the folded weight are float64, one
 //     operation per `let`: Y fuses `a * b + c` written in one expression into
 //     an FMA, which rounds once where PyTorch rounds twice;
@@ -20,28 +25,27 @@
 //     divide, since scaling by a power of two commutes with rounding;
 //   * the max, the integer sums and `max` of the folded weights do not depend
 //     on order, so the warp reductions give the Python values;
-//   * the score is summed in float32 four values at a time: every partial
-//     sum is an integer below 2^24 (see the loop), so this is exact too.
+//   * the output is `float32((acc * wscale) / max(l, 1))` in float64.
 //
 // Random operands almost never land where an operation's ORDER or a tie's
 // rounding shows (one in ~10^7 values), so the Python tests add two searched
 // cases: one where (s * a) * sk and (s * sk) * a give different exp
 // arguments, one where m - logit is exactly k + 0.5 with k even
 // (python/y_lang/tests/test_exact_decode_attention.py).
-//   * the output is `float32((acc * wscale) / max(l, 1))` in float64.
 //
 // Layout (all contiguous): QI [B][NH][D] (integer-valued float32), A [B][NH]
 // (`sq * scaling * log2(e) * 65536`, float64, computed by the caller exactly
 // as the Python path does), KI [B][NKV][T][D] (integer-valued float32), SK and
-// SV [B][NKV][T], VI [B][NKV][T][D] (int8), BLOCKED [B][T] (1 = masked),
-// TABLE [64] (the exp2 table), OUT [B][NH][D]. Launch: grid (NH, B), 32
-// threads. D must be a multiple of 32 and at most 128.
+// SV [B][NKV][T], VW [B][NKV][T][D/4] (the int8 V, four bytes to a word),
+// BLOCKED [B][T] (1 = masked), TABLE [64] (the exp2 table), OUT [B][NH][D].
+// Launch: grid (NKV, B), REP warps (REP = NH / NKV <= 8). D is a multiple of
+// 16 and at most 128.
 kernel exact_decode_attention(
     QI: GlobalMemory<F32>,
     A: GlobalMemory<F64>,
     KI: GlobalMemory<F32>,
     SK: GlobalMemory<F32>,
-    VI: GlobalMemory<I8>,
+    VW: GlobalMemory<U32>,
     SV: GlobalMemory<F32>,
     BLOCKED: GlobalMemory<I32>,
     TABLE: GlobalMemory<I64>,
@@ -52,12 +56,43 @@ kernel exact_decode_attention(
     REP: I32,
     D: I32
 ) {
-    let h: I32 = block_idx_x();
+    let g: I32 = block_idx_x();
     let b: I32 = block_idx_y();
-    let lane: I32 = thread_idx_x();
-    let g: I32 = h / REP;
-    let qrow: I32 = (b * NH + h) * D;
+    let tid: I32 = thread_idx_x();
+    let lane: I32 = tid & 31;
+    let w: I32 = tid >> 5;
+    // Bounded so the strided loops below provably cannot wrap; outside
+    // these a launch traps (D <= 128, at most 8 query heads per KV head).
+    @bounds(min=1, max=8) let rep: I32 = REP;
+    @bounds(min=4, max=32) let dq: I32 = D / 4;
+    let h: I32 = g * rep + w;
+    let kstride: I32 = dq + 1;
     let krow0: I32 = (b * NKV + g) * T;
+    let qrow: I32 = (b * NH + h) * D;
+    // Q as integers, one row per head: 8 x 32 units of 16 bytes. K, 32 keys
+    // a chunk, as integers in rows of D/4 + 1 sixteen-byte units (the extra
+    // unit staggers the rows across the banks). V transposed: unit
+    // lane * 9 + j holds the four V words of keys 4j..4j+3 for dimensions
+    // 4 * lane .. 4 * lane + 3.
+    let sq_s: U64 = shared_alloc_u32(1024);
+    let sk_s: U64 = shared_alloc_u32(4224);
+    let sv_s: U64 = shared_alloc_u32(1152);
+
+    @invariant(c4 >= 0)
+    for c4 in lane..dq step 32 {
+        let qend: I32 = qrow + D;
+        let q4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + c4 * 4, 0, 1, qend);
+        let q0f: F32 = q4.x;
+        let q1f: F32 = q4.y;
+        let q2f: F32 = q4.z;
+        let q3f: F32 = q4.w;
+        let q0: I32 = q0f as I32;
+        let q1: I32 = q1f as I32;
+        let q2: I32 = q2f as I32;
+        let q3: I32 = q3f as I32;
+        shared_store_v4(sq_s, w * 32 + c4, q0 as U32, q1 as U32, q2 as U32, q3 as U32);
+    }
+
     let a: F64 = A[b * NH + h];
     let one: F64 = 1.0;
     let zero: F64 = 0.0;
@@ -71,7 +106,8 @@ kernel exact_decode_attention(
     let two28: F64 = 268435456.0;
     let inv28: F64 = 0.0000000037252902984619140625;
     let chunks: I32 = (T + 31) / 32;
-    let quads: I32 = D / 4;
+    let kend: I32 = (krow0 + T) * D;
+    let vend: I32 = (krow0 + T) * dq;
 
     let m_lane: F64 = neg;
     let m: F64 = neg;
@@ -84,6 +120,22 @@ kernel exact_decode_attention(
     let acc1: I64 = 0;
     let acc2: I64 = 0;
     let acc3: I64 = 0;
+    // Up to 256 keys, a lane keeps its eight scores (key c * 32 + lane for
+    // chunk c) in registers from phase 0, and phases 1 and 2 neither stage K
+    // nor recompute a dot product. Past 256 they recompute, with the same
+    // result: the score is an exact integer either way.
+    let cached: I32 = 0;
+    if T <= 256 {
+        cached = 1;
+    }
+    let s0: I32 = 0;
+    let s1: I32 = 0;
+    let s2: I32 = 0;
+    let s3: I32 = 0;
+    let s4: I32 = 0;
+    let s5: I32 = 0;
+    let s6: I32 = 0;
+    let s7: I32 = 0;
 
     @invariant(phase >= 0)
     for phase in 0..3 {
@@ -103,37 +155,126 @@ kernel exact_decode_attention(
         }
         @invariant(c >= 0)
         for c in 0..chunks {
+            // Every warp is done with the previous chunk before it is replaced.
+            barrier_sync();
+            let fresh: I32 = 0;
+            if phase == 0 {
+                fresh = 1;
+            }
+            if cached == 0 {
+                fresh = 1;
+            }
+            if fresh == 1 {
+                @invariant(r >= 0)
+                for r in w..32 step rep {
+                    let krow: I32 = (krow0 + c * 32 + r) * D;
+                    @invariant(k4 >= 0)
+                    for k4 in lane..dq step 32 {
+                        let k4v: F32x4 = block_ptr2d_load_v4(KI, 0, krow + k4 * 4, 0, 1, kend);
+                        let k0f: F32 = k4v.x;
+                        let k1f: F32 = k4v.y;
+                        let k2f: F32 = k4v.z;
+                        let k3f: F32 = k4v.w;
+                        let k0: I32 = k0f as I32;
+                        let k1: I32 = k1f as I32;
+                        let k2: I32 = k2f as I32;
+                        let k3: I32 = k3f as I32;
+                        shared_store_v4(sk_s, r * kstride + k4, k0 as U32, k1 as U32, k2 as U32, k3 as U32);
+                    }
+                }
+            }
+            if phase == 2 {
+                @invariant(j4 >= 0)
+                for j4 in w..8 step rep {
+                    let vrow: I32 = (krow0 + c * 32 + j4 * 4) * dq;
+                    @invariant(wd >= 0)
+                    for wd in lane..dq step 32 {
+                        let v0: U32 = block_ptr2d_load(VW, 0, vrow + wd, 0, 1, vend);
+                        let v1: U32 = block_ptr2d_load(VW, 0, vrow + dq + wd, 0, 1, vend);
+                        let v2: U32 = block_ptr2d_load(VW, 0, vrow + 2 * dq + wd, 0, 1, vend);
+                        let v3: U32 = block_ptr2d_load(VW, 0, vrow + 3 * dq + wd, 0, 1, vend);
+                        shared_store_v4(sv_s, wd * 9 + j4, v0, v1, v2, v3);
+                    }
+                }
+            }
+            barrier_sync();
+
             let t: I32 = c * 32 + lane;
-            let wt: I64 = 0;
+            let wt: I32 = 0;
             if t < T {
                 if BLOCKED[b * T + t] == 0 {
-                    // The integer score, summed in float32: every product
-                    // and partial sum is an integer below 2^24 (|q| <= 127,
-                    // |k| <= 1023, D <= 128; `assert_score_budget` checks it
-                    // before launch), which float32 holds exactly, so the sum
-                    // is exact in any order and with or without the FMA Y
-                    // makes of `s + q * k` - the argument that makes the
-                    // Python path's float32 matmul exact. Four values a load.
-                    let s: F32 = 0.0;
-                    let krow: I32 = (krow0 + t) * D;
-                    let qend: I32 = qrow + D;
-                    let kend: I32 = krow + D;
-                    @invariant(d4 >= 0)
-                    for d4 in 0..quads {
-                        let q4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + d4 * 4, 0, 1, qend);
-                        let k4: F32x4 = block_ptr2d_load_v4(KI, 0, krow + d4 * 4, 0, 1, kend);
-                        let qx: F32 = q4.x;
-                        let qy: F32 = q4.y;
-                        let qz: F32 = q4.z;
-                        let qw: F32 = q4.w;
-                        let kx: F32 = k4.x;
-                        let ky: F32 = k4.y;
-                        let kz: F32 = k4.z;
-                        let kw: F32 = k4.w;
-                        s = s + qx * kx;
-                        s = s + qy * ky;
-                        s = s + qz * kz;
-                        s = s + qw * kw;
+                    let s: I32 = 0;
+                    if fresh == 1 {
+                        @invariant(d4 >= 0)
+                        for d4 in 0..dq {
+                            let qv: U32x4 = shared_load_v4(sq_s, w * 32 + d4);
+                            let kv: U32x4 = shared_load_v4(sk_s, lane * kstride + d4);
+                            let qa: U32 = qv.x;
+                            let qb: U32 = qv.y;
+                            let qc: U32 = qv.z;
+                            let qd: U32 = qv.w;
+                            let ka: U32 = kv.x;
+                            let kb: U32 = kv.y;
+                            let kc: U32 = kv.z;
+                            let kd: U32 = kv.w;
+                            let pa: I32 = (qa as I32) * (ka as I32);
+                            let pb: I32 = (qb as I32) * (kb as I32);
+                            let pc: I32 = (qc as I32) * (kc as I32);
+                            let pd: I32 = (qd as I32) * (kd as I32);
+                            s = s + pa;
+                            s = s + pb;
+                            s = s + pc;
+                            s = s + pd;
+                        }
+                        if cached == 1 {
+                            if c == 0 {
+                                s0 = s;
+                            }
+                            if c == 1 {
+                                s1 = s;
+                            }
+                            if c == 2 {
+                                s2 = s;
+                            }
+                            if c == 3 {
+                                s3 = s;
+                            }
+                            if c == 4 {
+                                s4 = s;
+                            }
+                            if c == 5 {
+                                s5 = s;
+                            }
+                            if c == 6 {
+                                s6 = s;
+                            }
+                            if c == 7 {
+                                s7 = s;
+                            }
+                        }
+                    } else {
+                        s = s0;
+                        if c == 1 {
+                            s = s1;
+                        }
+                        if c == 2 {
+                            s = s2;
+                        }
+                        if c == 3 {
+                            s = s3;
+                        }
+                        if c == 4 {
+                            s = s4;
+                        }
+                        if c == 5 {
+                            s = s5;
+                        }
+                        if c == 6 {
+                            s = s6;
+                        }
+                        if c == 7 {
+                            s = s7;
+                        }
                     }
                     let skf: F32 = SK[krow0 + t];
                     let sk: F64 = skf as F64;
@@ -188,90 +329,106 @@ kernel exact_decode_attention(
                         let svf: F32 = SV[krow0 + t];
                         let sv: F64 = svf as F64;
                         let pf: F64 = p as F64;
-                        let w: F64 = pf * sv;
+                        let wv: F64 = pf * sv;
                         if phase == 1 {
                             l_lane = l_lane + p;
-                            if w > w_lane {
-                                w_lane = w;
+                            if wv > w_lane {
+                                w_lane = wv;
                             }
                         } else {
                             // W = clamp(round(w * factor), 0, 2^28).
-                            let wf: F64 = w * factor;
+                            let wf: F64 = wv * factor;
                             let wr: F64 = two28;
                             if wf < two28 {
                                 let up2: F64 = wf + two52;
                                 wr = up2 - two52;
                             }
-                            wt = wr as I64;
+                            wt = wr as I32;
                         }
                     }
                 }
             }
             if phase == 2 {
-                // Every lane adds every key's weighted V row, its own D/32
-                // columns (lane, lane + 32, ...): the weight comes from the
-                // lane that computed it.
-                @invariant(k >= 0)
-                for k in 0..32 {
-                    let wk: I64 = shfl_sync_idx(wt, k);
-                    let tk: I32 = c * 32 + k;
-                    if tk < T {
-                        let vrow: I32 = (krow0 + tk) * D;
-                        let v0: I32 = VI[vrow + lane];
-                        let v0w: I64 = v0 as I64;
-                        let a0: I64 = wk * v0w;
-                        acc0 = acc0 + a0;
-                        if D > 32 {
-                            let v1: I32 = VI[vrow + lane + 32];
-                            let v1w: I64 = v1 as I64;
-                            let a1: I64 = wk * v1w;
-                            acc1 = acc1 + a1;
-                        }
-                        if D > 64 {
-                            let v2: I32 = VI[vrow + lane + 64];
-                            let v2w: I64 = v2 as I64;
-                            let a2: I64 = wk * v2w;
-                            acc2 = acc2 + a2;
-                        }
-                        if D > 96 {
-                            let v3: I32 = VI[vrow + lane + 96];
-                            let v3w: I64 = v3 as I64;
-                            let a3: I64 = wk * v3w;
-                            acc3 = acc3 + a3;
-                        }
-                    }
+                // Every lane adds every key's weighted V row to its own four
+                // dimensions, 4 * lane .. 4 * lane + 3; the weight (at most
+                // 2^28, an I32) comes from the lane that computed it, and
+                // each product is one 32 x 32 -> 64-bit multiply.
+                @invariant(j4 >= 0)
+                for j4 in 0..8 {
+                    let vw: U32x4 = shared_load_v4(sv_s, lane * 9 + j4);
+                    let key0: I32 = j4 * 4;
+                    let wk0: I32 = shfl_sync_idx(wt, key0);
+                    let wk1: I32 = shfl_sync_idx(wt, key0 + 1);
+                    let wk2: I32 = shfl_sync_idx(wt, key0 + 2);
+                    let wk3: I32 = shfl_sync_idx(wt, key0 + 3);
+                    // A key past T has weight 0 (its lane computed none), so
+                    // it adds nothing and needs no test.
+                    let wx: U32 = vw.x;
+                    let wy: U32 = vw.y;
+                    let wz: U32 = vw.z;
+                    let ww: U32 = vw.w;
+                    let xi: I32 = wx as I32;
+                    let yi: I32 = wy as I32;
+                    let zi: I32 = wz as I32;
+                    let wi: I32 = ww as I32;
+                    let x0s: I32 = xi << 24;
+                    let x1s: I32 = xi << 16;
+                    let x2s: I32 = xi << 8;
+                    let y0s: I32 = yi << 24;
+                    let y1s: I32 = yi << 16;
+                    let y2s: I32 = yi << 8;
+                    let z0s: I32 = zi << 24;
+                    let z1s: I32 = zi << 16;
+                    let z2s: I32 = zi << 8;
+                    let w0s: I32 = wi << 24;
+                    let w1s: I32 = wi << 16;
+                    let w2s: I32 = wi << 8;
+                    acc0 = acc0 + mul_wide_s32(wk0, x0s >> 24);
+                    acc1 = acc1 + mul_wide_s32(wk0, x1s >> 24);
+                    acc2 = acc2 + mul_wide_s32(wk0, x2s >> 24);
+                    acc3 = acc3 + mul_wide_s32(wk0, xi >> 24);
+                    acc0 = acc0 + mul_wide_s32(wk1, y0s >> 24);
+                    acc1 = acc1 + mul_wide_s32(wk1, y1s >> 24);
+                    acc2 = acc2 + mul_wide_s32(wk1, y2s >> 24);
+                    acc3 = acc3 + mul_wide_s32(wk1, yi >> 24);
+                    acc0 = acc0 + mul_wide_s32(wk2, z0s >> 24);
+                    acc1 = acc1 + mul_wide_s32(wk2, z1s >> 24);
+                    acc2 = acc2 + mul_wide_s32(wk2, z2s >> 24);
+                    acc3 = acc3 + mul_wide_s32(wk2, zi >> 24);
+                    acc0 = acc0 + mul_wide_s32(wk3, w0s >> 24);
+                    acc1 = acc1 + mul_wide_s32(wk3, w1s >> 24);
+                    acc2 = acc2 + mul_wide_s32(wk3, w2s >> 24);
+                    acc3 = acc3 + mul_wide_s32(wk3, wi >> 24);
                 }
             }
         }
     }
 
-    // out = float32((acc * wscale) / max(l, 1)), each in float64.
-    let lf: F64 = l as F64;
-    let den: F64 = lf;
-    if lf < one {
-        den = one;
-    }
-    let o0a: F64 = acc0 as F64;
-    let o0b: F64 = o0a * wscale;
-    let o0c: F64 = o0b / den;
-    OUT[qrow + lane] = o0c as F32;
-    if D > 32 {
+    // out = float32((acc * wscale) / max(l, 1)), each in float64; lane
+    // holds dimensions 4 * lane .. 4 * lane + 3.
+    if lane < dq {
+        let lf: F64 = l as F64;
+        let den: F64 = lf;
+        if lf < one {
+            den = one;
+        }
+        let o0a: F64 = acc0 as F64;
+        let o0b: F64 = o0a * wscale;
+        let o0c: F64 = o0b / den;
         let o1a: F64 = acc1 as F64;
         let o1b: F64 = o1a * wscale;
         let o1c: F64 = o1b / den;
-        OUT[qrow + lane + 32] = o1c as F32;
-    }
-    if D > 64 {
         let o2a: F64 = acc2 as F64;
         let o2b: F64 = o2a * wscale;
         let o2c: F64 = o2b / den;
-        OUT[qrow + lane + 64] = o2c as F32;
-    }
-    if D > 96 {
         let o3a: F64 = acc3 as F64;
         let o3b: F64 = o3a * wscale;
         let o3c: F64 = o3b / den;
-        OUT[qrow + lane + 96] = o3c as F32;
+        let ob: I32 = qrow + lane * 4;
+        OUT[ob] = o0c as F32;
+        OUT[ob + 1] = o1c as F32;
+        OUT[ob + 2] = o2c as F32;
+        OUT[ob + 3] = o3c as F32;
     }
 }
 

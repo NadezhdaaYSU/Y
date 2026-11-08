@@ -394,9 +394,9 @@ def _y_exact_decode_attention(qi, a, ki, sk, vi, sv, blocked, table, rep):
     B, NH, D = qi.shape
     NKV, T = ki.shape[1], ki.shape[2]
     dev = qi.device
-    if D % 32 or D > 128 or NH != NKV * rep:
-        raise ValueError(f"exact_decode_attention: head_dim {D} (a multiple of 32, at "
-                         f"most 128) and {NH} heads = {NKV} x {rep}")
+    if D % 16 or D > 128 or NH != NKV * rep or not 1 <= rep <= 8:
+        raise ValueError(f"exact_decode_attention: head_dim {D} (a multiple of 16, at "
+                         f"most 128) and {NH} heads = {NKV} x {rep} (at most 8)")
     if B * NKV * T * D >= 1 << 31 or B * NH * D >= 1 << 31:
         raise ValueError("exact_decode_attention forms 32-bit offsets; this cache is "
                          "too large for it")
@@ -405,14 +405,17 @@ def _y_exact_decode_attention(qi, a, ki, sk, vi, sv, blocked, table, rep):
                          f"2^53, where its conversion to float64 would round")
     index, kern = _attn_kernel(dev)
     out = torch.empty((B, NH, D), dtype=torch.float32, device=dev)
+    # V's int8 rows as 32-bit words, four bytes each: a reinterpretation, no copy.
+    vw = vi.contiguous().view(torch.int32)
     args = [qi.contiguous(), a.contiguous(), ki.contiguous(), sk.contiguous(),
-            vi.contiguous(), sv.contiguous(), blocked.contiguous(), table, out,
+            vw, sv.contiguous(), blocked.contiguous(), table, out,
             T, NH, NKV, rep, D]
+    grid, block = (NKV, B, 1), (32 * rep, 1, 1)
     if index == torch.cuda.current_device():
-        kern.launch((NH, B, 1), (32, 1, 1), args)
+        kern.launch(grid, block, args)
     else:
         with torch.cuda.device(index):
-            kern.launch((NH, B, 1), (32, 1, 1), args)
+            kern.launch(grid, block, args)
     return out
 
 
@@ -591,7 +594,7 @@ def exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
     # is the same argument the int64 kernel uses one level down.
     assert_score_budget(d, Q_LEVELS, k_lv)
     if (ATTN == "y" and q_len == 1 and vi.dtype == torch.int8 and dev.type == "cuda"
-            and d % 32 == 0 and d <= 128):
+            and d % 16 == 0 and d <= 128 and rep <= 8):
         # One decode step on Y's kernel: the values below, computed in one
         # launch (tests/exact_decode_attention.ysu). `a` is the logit's
         # per-query factor, formed exactly as the line further down forms it.
