@@ -1,0 +1,331 @@
+{
+ "config": {
+  "Y_EXACT_GEMM": "y",
+  "Y_EXACT_V_INT8": "1",
+  "Y_EXACT_MERGE": ""
+ },
+ "new_tokens": 16,
+ "wall_ms": 331.64494700031355,
+ "gpu_busy_ms": 322.0781729999985,
+ "decode_step_issue_ms": [
+  4.186625001239008,
+  4.106373999093194,
+  4.092274000868201,
+  4.083894000359578,
+  4.112044000066817,
+  4.097533999811276,
+  4.063583999595721,
+  4.067914000188466,
+  4.069144000823144,
+  4.051934000017354
+ ],
+ "decode_step_latency_ms": [
+  17.039134001606726,
+  17.01255400075752,
+  17.08483500078728,
+  17.085125000448897,
+  17.112954999902286,
+  17.031383998983074,
+  17.022754000208806,
+  17.034194001098513,
+  17.069985000489396,
+  17.11547600098129
+ ],
+ "kernels": [
+  {
+   "name": "y_int8_mm",
+   "ms": 231.794,
+   "calls": 2256
+  },
+  {
+   "name": "triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_int8_mm_le_mul_nan_to_num_ones_like_round_t_unsqueeze_view_where_zeros_like_14",
+   "ms": 9.859,
+   "calls": 28
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_add_amax_clamp_div_eq_int8_mm_mul_ones_like_pow_round_sqrt_sum_t_unsqueeze_view_where_23",
+   "ms": 7.428,
+   "calls": 405
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_add_amax_clamp_div_eq_int8_mm_mul_ones_like_pow_round_sqrt_sum_t_unsqueeze_view_where_24",
+   "ms": 7.208,
+   "calls": 405
+  },
+  {
+   "name": "exact_pv",
+   "ms": 7.005,
+   "calls": 448
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_add_amax_clamp_div_eq_int8_mm_mul_ones_like_pow_round_sqrt_sum_t_unsqueeze_view_where_15",
+   "ms": 4.526,
+   "calls": 27
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_add_amax_clamp_div_eq_int8_mm_mul_ones_like_pow_round_sqrt_sum_t_unsqueeze_view_where_16",
+   "ms": 4.409,
+   "calls": 27
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_clone_div_eq_gt_int8_mm_mul_ones_like_round_t_transpose_view_where_12",
+   "ms": 4.208,
+   "calls": 28
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_10",
+   "ms": 3.571,
+   "calls": 28
+  },
+  {
+   "name": "triton_poi_fused___rshift____to_copy_add_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_num_ones_like_round_unsqueeze_view_where_zeros_like_19",
+   "ms": 3.192,
+   "calls": 420
+  },
+  {
+   "name": "triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_rsub_scalar_tensor_sub_sum_transpose_unsqueeze_view_where_zeros_like_8",
+   "ms": 2.994,
+   "calls": 27
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_div_eq_gt_int8_mm_mul_ones_like_round_t_transpose_view_where_17",
+   "ms": 2.976,
+   "calls": 420
+  },
+  {
+   "name": "triton_per_fused_abs_amax_4",
+   "ms": 2.813,
+   "calls": 840
+  },
+  {
+   "name": "void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float> >(cublasGemmSmallNParams<cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float>, float>)",
+   "ms": 2.47,
+   "calls": 420
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_div_gt_mul_ones_like_transpose_view_where_15",
+   "ms": 2.385,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_unsqueeze_view_where_3",
+   "ms": 2.185,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_cat_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_10",
+   "ms": 2.166,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_clone_div_eq_exact_pv_expand_gt_mul_ones_like_reciprocal_round_transpose_unsqueeze_view_where_13",
+   "ms": 1.58,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_div_eq_exact_pv_gt_mul_ones_like_reciprocal_round_view_where_9",
+   "ms": 1.45,
+   "calls": 28
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_1",
+   "ms": 1.357,
+   "calls": 448
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_amax_div_eq_mul_ones_like_unsqueeze_view_where_20",
+   "ms": 1.331,
+   "calls": 420
+  },
+  {
+   "name": "triton_red_fused__to_copy_amax_clone_div_eq_expand_mul_ones_like_sum_transpose_unsqueeze_view_where_12",
+   "ms": 1.281,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused_clamp_div_eq_ones_like_round_where_5",
+   "ms": 1.279,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_div_eq_int8_mm_mul_ones_like_round_t_unsqueeze_view_where_22",
+   "ms": 1.199,
+   "calls": 420
+  },
+  {
+   "name": "ampere_sgemm_128x128_nn",
+   "ms": 1.195,
+   "calls": 28
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_clone_div_eq_exact_pv_expand_gt_mul_ones_like_reciprocal_round_transpose_unsqueeze_view_where_14",
+   "ms": 1.166,
+   "calls": 420
+  },
+  {
+   "name": "triton_red_fused__to_copy_add_amax_arange_bitwise_and_expand_full_like_index_le_lift_fresh_lt_new_ones_scalar_tensor_unsqueeze_where_8",
+   "ms": 1.057,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clone_div_eq_expand_mul_ones_like_transpose_unsqueeze_view_where_7",
+   "ms": 0.894,
+   "calls": 420
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_with_sizes_transpose_unsqueeze_view_where_2",
+   "ms": 0.866,
+   "calls": 420
+  },
+  {
+   "name": "triton_poi_fused___lshift_____rshift____to_copy_add_arange_bitwise_and_clamp_expand_full_like_ge_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_rsub_scalar_tensor_sub_unsqueeze_where_zeros_like_9",
+   "ms": 0.856,
+   "calls": 420
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_cat_clamp_clone_div_eq_index_mul_neg_ones_like_round_slice_split_with_sizes_transpose_unsqueeze_view_where_2",
+   "ms": 0.683,
+   "calls": 28
+  },
+  {
+   "name": "triton_poi_fused__unsafe_view_bmm_clamp_clone_div_eq_expand_ones_like_round_transpose_view_where_4",
+   "ms": 0.66,
+   "calls": 28
+  },
+  {
+   "name": "triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_26",
+   "ms": 0.5,
+   "calls": 15
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_div_gt_mul_ones_like_transpose_view_where_16",
+   "ms": 0.465,
+   "calls": 420
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_amax_clamp_div_embedding_eq_int8_mm_mul_ones_like_pow_round_sqrt_sum_t_view_where_0",
+   "ms": 0.441,
+   "calls": 16
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_cat_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_11",
+   "ms": 0.395,
+   "calls": 420
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_div_eq_mul_ones_like_unsqueeze_view_where_21",
+   "ms": 0.386,
+   "calls": 420
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_add_amax_clamp_div_eq_int8_mm_mul_ones_like_pow_round_slice_sqrt_sum_t_unsqueeze_view_where_25",
+   "ms": 0.277,
+   "calls": 15
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_add_amax_clamp_div_embedding_eq_int8_mm_mul_ones_like_pow_round_sqrt_sum_t_unsqueeze_view_where_18",
+   "ms": 0.274,
+   "calls": 15
+  },
+  {
+   "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4> >(at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4>)",
+   "ms": 0.238,
+   "calls": 16
+  },
+  {
+   "name": "triton_poi_fused_clamp_clone_div_eq_expand_ones_like_round_transpose_where_5",
+   "ms": 0.167,
+   "calls": 28
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_add_amax_clamp_div_embedding_eq_int8_mm_mul_ones_like_pow_round_sqrt_sum_t_unsqueeze_view_where_13",
+   "ms": 0.16,
+   "calls": 1
+  },
+  {
+   "name": "triton_red_fused__to_copy_add_div_eq_mul_ones_like_pow_sqrt_sum_unsqueeze_view_where_18",
+   "ms": 0.153,
+   "calls": 1
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_exact_pv_gt_mul_ones_like_reciprocal_round_split_with_sizes_transpose_unsqueeze_view_where_7",
+   "ms": 0.129,
+   "calls": 28
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_unsqueeze_view_where_3",
+   "ms": 0.116,
+   "calls": 28
+  },
+  {
+   "name": "triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_rsub_scalar_tensor_sub_sum_transpose_unsqueeze_view_where_zeros_like_17",
+   "ms": 0.11,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1} const&)::{lambda(int)#1})",
+   "ms": 0.089,
+   "calls": 28
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_11",
+   "ms": 0.035,
+   "calls": 28
+  },
+  {
+   "name": "triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_20",
+   "ms": 0.035,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::native::(anonymous namespace)::OpaqueType<8u>, unsigned int, 2, 128, 1, 16>(at::native::(anonymous namespace)::OpaqueType<8u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<8u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int)",
+   "ms": 0.027,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul>)",
+   "ms": 0.016,
+   "calls": 15
+  },
+  {
+   "name": "Memset (Device)",
+   "ms": 0.01,
+   "calls": 16
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_amax_clamp_div_eq_int8_mm_mul_ones_like_round_slice_sqrt_t_view_where_19",
+   "ms": 0.003,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::tensor_kernel_scan_innermost_dim<long, std::plus<long> >(long*, long const*, unsigned int, unsigned int, unsigned int, long, std::plus<long>)",
+   "ms": 0.002,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctorOnSelf_add<long> >(at::TensorIteratorBase&, at::native::CUDAFunctorOnSelf_add<long> const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctorOnSelf_add<long> >(at::TensorIteratorBase&, at::native::CUDAFunctorOnSelf_add<long> const&)::{lambda(int)#1})",
+   "ms": 0.001,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, bool)#1}, std::array<char*, 3ul> >(int, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, bool)#1}, std::array<char*, 3ul>)",
+   "ms": 0.001,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> >, std::array<char*, 2ul>)",
+   "ms": 0.001,
+   "calls": 1
+  },
+  {
+   "name": "Memcpy DtoD (Device -> Device)",
+   "ms": 0.001,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>, std::array<char*, 1ul> >(int, at::native::FillFunctor<long>, std::array<char*, 1ul>)",
+   "ms": 0.001,
+   "calls": 1
+  }
+ ]
+}

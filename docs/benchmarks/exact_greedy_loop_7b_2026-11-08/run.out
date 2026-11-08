@@ -1,0 +1,27 @@
+== record (merge default = qkv) 18:16:28  util 0%  others: 
+exit 0
+== vllm_fp8_graphs 182205  util 12%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.0828649080012838, "tok_s_per_seq": 59.10247855212991, "compositions_changed": 2, "alone_reproduces": true}
+== y_generate 182244  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.209        52.9       1694.1     0.1%
+== y_greedy 183634  util 61%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+exact  int8, order-independent           1.174        54.5       1744.1     0.1%
+== y_greedy 184201  util 12%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+exact  int8, order-independent           1.175        54.5       1743.0     0.1%
+== y_generate 184728  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.204        53.1       1700.7     0.0%
+== vllm_fp8_graphs 185255  util 25%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.0950747150000097, "tok_s_per_seq": 58.443500816288534, "compositions_changed": 3, "alone_reproduces": true}
+== done 18:53:35

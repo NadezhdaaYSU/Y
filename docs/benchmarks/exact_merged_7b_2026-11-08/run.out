@@ -1,0 +1,47 @@
+== record merged=all 17:29:27  util 8%  others: 
+exit 0
+-- compare with cpu_zen5_eager.json
+              attributable to the device. For 'exact' this can be a real finding: the
+              quantisation scales are computed on-device.
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+-- compare with gpu_sm89_y_compiled.json
+Cross-device bit-identity
+  /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/docs/benchmarks/exact_merged_7b_2026-11-08/../exact_y_gemm_7b_2026-11-08/gpu_sm89_y_compiled.json  vs  /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/docs/benchmarks/exact_merged_7b_2026-11-08/gpu_sm89_y_vint8_merged_compiled.json
+  *** both artifacts came from NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0). ***
+      That measures RE-RUN determinism on one card, not cross-hardware bit-identity,
+      and a single card is deterministic for a fixed batch even in bf16. Pass
+      --allow-same-device only if you know that is what you want.
+== vllm_fp8_graphs 173458  util 0%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.083473482000045, "tok_s_per_seq": 59.0692814021242, "compositions_changed": 2, "alone_reproduces": true}
+== y_merge_0 173538  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.229        52.1       1666.9     0.1%
+== y_merge_qkv 174135  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.209        52.9       1693.5     0.1%
+== y_merge_all 175122  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.230        52.1       1665.7     0.1%
+== y_merge_all 175639  util 0%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.230        52.0       1665.4     0.1%
+== y_merge_qkv 180155  util 20%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.204        53.1       1700.3     0.1%
+== y_merge_0 180722  util 1%  others: 
+exit 0
+  sanity exact        canary ok, 49 distinct tokens in reference
+exact  int8, order-independent           1.225        52.3       1672.3     0.1%
+== vllm_fp8_graphs 181316  util 0%  others: 
+exit 0
+RESULT {"mode": "graphs", "batch_invariant_env": "", "best_s": 1.0819461259998207, "tok_s_per_seq": 59.15266801372198, "compositions_changed": 2, "alone_reproduces": true}
+== done 18:13:55

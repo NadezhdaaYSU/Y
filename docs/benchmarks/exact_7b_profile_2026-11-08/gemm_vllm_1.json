@@ -1,0 +1,101 @@
+{
+ "M": 32,
+ "L2_bytes": 50331648,
+ "shapes": {
+  "q_proj / o_proj": {
+   "N": 3584,
+   "K": 3584,
+   "calls_per_step": 56,
+   "us": {
+    "CUTLASS int8 (vLLM)": 27.51,
+    "CUTLASS FP8 (vLLM)": 27.78
+   },
+   "GB_per_s": {
+    "CUTLASS int8 (vLLM)": 466.8,
+    "CUTLASS FP8 (vLLM)": 462.5
+   }
+  },
+  "k_proj / v_proj": {
+   "N": 512,
+   "K": 3584,
+   "calls_per_step": 56,
+   "us": {
+    "CUTLASS int8 (vLLM)": 9.49,
+    "CUTLASS FP8 (vLLM)": 10.82
+   },
+   "GB_per_s": {
+    "CUTLASS int8 (vLLM)": 193.3,
+    "CUTLASS FP8 (vLLM)": 169.5
+   }
+  },
+  "gate / up": {
+   "N": 18944,
+   "K": 3584,
+   "calls_per_step": 56,
+   "us": {
+    "CUTLASS int8 (vLLM)": 124.01,
+    "CUTLASS FP8 (vLLM)": 131.12
+   },
+   "GB_per_s": {
+    "CUTLASS int8 (vLLM)": 547.5,
+    "CUTLASS FP8 (vLLM)": 517.8
+   }
+  },
+  "down": {
+   "N": 3584,
+   "K": 18944,
+   "calls_per_step": 28,
+   "us": {
+    "CUTLASS int8 (vLLM)": 137.26,
+    "CUTLASS FP8 (vLLM)": 136.57
+   },
+   "GB_per_s": {
+    "CUTLASS int8 (vLLM)": 494.7,
+    "CUTLASS FP8 (vLLM)": 497.2
+   }
+  },
+  "lm_head": {
+   "N": 152064,
+   "K": 3584,
+   "calls_per_step": 1,
+   "us": {
+    "CUTLASS int8 (vLLM)": 952.46,
+    "CUTLASS FP8 (vLLM)": 951.5
+   },
+   "GB_per_s": {
+    "CUTLASS int8 (vLLM)": 572.2,
+    "CUTLASS FP8 (vLLM)": 572.8
+   }
+  },
+  "qkv merged": {
+   "N": 4608,
+   "K": 3584,
+   "calls_per_step": 0,
+   "us": {
+    "CUTLASS int8 (vLLM)": 39.14,
+    "CUTLASS FP8 (vLLM)": 40.2
+   },
+   "GB_per_s": {
+    "CUTLASS int8 (vLLM)": 421.9,
+    "CUTLASS FP8 (vLLM)": 410.9
+   }
+  },
+  "gate+up merged": {
+   "N": 37888,
+   "K": 3584,
+   "calls_per_step": 0,
+   "us": {
+    "CUTLASS int8 (vLLM)": 242.34,
+    "CUTLASS FP8 (vLLM)": 248.79
+   },
+   "GB_per_s": {
+    "CUTLASS int8 (vLLM)": 560.3,
+    "CUTLASS FP8 (vLLM)": 545.8
+   }
+  }
+ },
+ "per_step_ms": {
+  "CUTLASS int8 (vLLM)": 13.8123,
+  "CUTLASS FP8 (vLLM)": 14.27978
+ }
+}

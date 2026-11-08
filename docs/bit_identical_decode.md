@@ -778,7 +778,10 @@ changed). Decoding at batch 32, Y's GEMM ran 1.03-1.08x the Triton kernel's
 tokens/s, and Y's GEMM with the int8 V cache on `exact_pv` 1.09-1.18x
 (ABCCBA, one arm per process, desktop applications open; the same
 configuration moved up to 6% between processes). Records:
-`docs/benchmarks/exact_y_gemm_7b_2026-11-08/`.
+`docs/benchmarks/exact_y_gemm_7b_2026-11-08/`. Merging q/k/v (the default
+since) and q/k/v plus gate/up each kept the CPU's tokens too
+(`docs/benchmarks/exact_merged_7b_2026-11-08/`,
+`docs/benchmarks/exact_greedy_loop_7b_2026-11-08/`).
 
 ## Finding 13 — `0/16` is also what a broken arm scores
 
@@ -1131,9 +1134,19 @@ stock where exact is 1.03x. Two gaps remain:
 - **The 8-bit engine without exactness is now measured, at FP8 (2026-11-08).**
   At 7B, vLLM 0.21 with FP8 weights and CUDA graphs decodes 58.3 tok/s/seq
   and changes the target's tokens in 2-3 of 4 batch compositions; Y's exact
-  path decodes 52.0 (0.89x) and changes none. vLLM's own batch-invariant mode
-  changes none at 16.5 (Y 3.15x faster). FP8 is not Y's int8, so accuracy is
-  not compared (`docs/benchmarks/vllm_fp8_7b_2026-11-08/`).
+  path decoded 52.0 (0.89x) and changes none. vLLM's own batch-invariant mode
+  changes none at 16.5. FP8 is not Y's int8, so accuracy is not compared
+  (`docs/benchmarks/vllm_fp8_7b_2026-11-08/`). Later that day, with q/k/v
+  merged and `y_lang.exact.greedy` in place of `generate`, Y decodes 54.4-54.5
+  against vLLM's 58.2-59.2 in the same runs (0.93x; 3.3x vLLM's
+  batch-invariant mode), with the CPU's tokens
+  (`docs/benchmarks/exact_merged_7b_2026-11-08/`,
+  `docs/benchmarks/exact_greedy_loop_7b_2026-11-08/`). Y's GEMMs take 12.6 ms
+  a step against vLLM's 13.7; the gap is the other kernels, 3.7 ms a step,
+  led by the norm's float64 sum and divide
+  (`docs/benchmarks/exact_7b_profile_2026-11-08/`). Making those reductions
+  persistent sped the norm alone by a third and the model down by 2.2%
+  (`docs/benchmarks/exact_persistent_7b_2026-11-08/`).
 
 ### One model family, one GPU — narrow evidence
 

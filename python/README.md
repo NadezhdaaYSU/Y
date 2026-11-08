@@ -62,7 +62,14 @@ results and their limits are in the repository's
 - On a GPU, `Y_EXACT_GEMM=y` runs the linear layers on Y's proved int8 kernel
   (default: Triton) and `Y_EXACT_V_INT8=1` runs attention's p.V on Y's
   `exact_pv` kernel; every choice gives the same bits. Set them before
-  importing `y_lang.exact.model`.
+  importing `y_lang.exact.model`. q, k and v run as one GEMM
+  (`Y_EXACT_MERGE`: `qkv`, the default; `all` also merges gate and up; `0`
+  none), with the same bits.
+- For a batch decoded to a fixed length, `y_lang.exact.greedy.greedy(model,
+  input_ids, attention_mask, n)` takes the argmax on the device and does not
+  wait for the GPU until the end (3% faster than `generate` at 7B, batch 32).
+  It applies no logits processor, so it matches `generate(...,
+  repetition_penalty=1.0)`, and end-of-sequence tokens do not stop it.
 - Loading replaces `transformers`' Qwen2 eager attention for the whole
   process, and importing the model module sets two `torch.compile` rounding
   flags process-wide; see `y_lang.exact`'s docstring.
