@@ -7,8 +7,9 @@ must return identical tensors: same shapes, same bits.
 
 GPU only. The cases cover both Qwen2.5 head sizes (64, 128), key counts below,
 at and past multiples of 32 and a single key, left-padding masks, a row with
-every key masked, no mask at all, and value ranges wide enough that many keys
-get a zero weight and the exp argument reaches its clamp.
+every key masked, no mask at all, key counts either side of 256 (where the
+kernel stops keeping scores in registers), and value ranges wide enough that
+many keys get a zero weight and the exp argument reaches its clamp.
 """
 
 import math
@@ -75,6 +76,11 @@ class TestExactDecodeAttention(unittest.TestCase):
             (3, 28, 4, 129, 128, 6.0, 6, "pad"),    # wide ranges: zero weights, clamps
             (3, 14, 2, 64, 64, 6.0, 7, "all"),
             (1, 7, 1, 200, 128, 3.0, 8, None),
+            # The kernel keeps scores in registers up to 256 keys and
+            # recomputes them past that: both sides of the line.
+            (2, 28, 4, 256, 128, 2.0, 11, "pad"),
+            (2, 14, 2, 257, 64, 2.0, 12, "pad"),
+            (1, 28, 4, 300, 128, 6.0, 13, None),
         ]
         for c in cases:
             q, k, v, am, sc = _case(*c)
