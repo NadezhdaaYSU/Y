@@ -16570,10 +16570,15 @@ declare it as a Q format.\n{}",
     ) -> u32 {
         const WARP: u32 = 32;
         const VEC: u32 = 8; // f16 elements per 128-bit vectorized group
-        debug_assert_eq!(
-            hidden_dim % (WARP * VEC),
-            0,
-            "hidden_dim must be a multiple of 256 (32 lanes x 8-wide vectorized f16 groups)"
+        // A whole number of 8-wide groups; the last group of a row is
+        // predicated (below), so the width need not fill whole warps. This
+        // asserted a multiple of 256 until 2026-11-08, from before that
+        // predication: release builds, which skip it, ran hidden 128 exactly
+        // (`python/y_lang/tests/test_rmsnorm_residual.py`), and a debug
+        // `liby.so` aborted the Python process on the same call.
+        debug_assert!(
+            hidden_dim > 0 && hidden_dim % VEC == 0,
+            "hidden_dim must be a positive multiple of 8 (8-wide vectorized f16 groups)"
         );
         let vec_groups = hidden_dim / VEC;
         // One group a thread on up to 16 warps; past that, up to two a thread
