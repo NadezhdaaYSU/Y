@@ -1,0 +1,251 @@
+// Exact decode attention: `y_lang.exact.attention.exact_attention` for one
+// query position per sequence, from its quantised operands on, bit for bit.
+//
+// The Python path runs this as about fifteen kernels a layer (an fp32 matmul
+// for the integer scores, the logit, the max, the integer exp2, the sums, the
+// V-scale fold, `exact_pv`, the final divide). Here it is one launch: a warp
+// per (sequence, query head), its lanes taking key positions 32 at a time.
+//
+// Every value is the Python path's, by construction:
+//   * scores are integer dot products (|q| <= 127, |k| <= 1023, d <= 128:
+//     below 2^24, so the Python fp32 matmul is exact and so is this I32 sum);
+//   * the logit, the exp argument and the folded weight are float64, one
+//     operation per `let`: Y fuses `a * b + c` written in one expression into
+//     an FMA, which rounds once where PyTorch rounds twice;
+//   * `torch.round` is round-half-to-even, computed as (x + 2^52) - 2^52 for
+//     0 <= x < 2^30, each operand clamped to [0, 2^30] (the exp argument) or
+//     [0, 2^28] (the weight) as the Python code clamps them;
+//   * `2^28 / safe` is `reciprocal(safe) * 2^28`, because that is what
+//     PyTorch's `float / tensor` computes (`Tensor.__rdiv__`);
+//   * the max, the integer sums and `max` of the folded weights do not depend
+//     on order, so the warp reductions give the Python values;
+//   * the output is `float32((acc * wscale) / max(l, 1))` in float64.
+//
+// Layout (all contiguous): QI [B][NH][D] (integer-valued float32), A [B][NH]
+// (`sq * scaling * log2(e) * 65536`, float64, computed by the caller exactly
+// as the Python path does), KI [B][NKV][T][D] (integer-valued float32), SK and
+// SV [B][NKV][T], VI [B][NKV][T][D] (int8), BLOCKED [B][T] (1 = masked),
+// TABLE [64] (the exp2 table), OUT [B][NH][D]. Launch: grid (NH, B), 32
+// threads. D must be a multiple of 32 and at most 128.
+kernel exact_decode_attention(
+    QI: GlobalMemory<F32>,
+    A: GlobalMemory<F64>,
+    KI: GlobalMemory<F32>,
+    SK: GlobalMemory<F32>,
+    VI: GlobalMemory<I8>,
+    SV: GlobalMemory<F32>,
+    BLOCKED: GlobalMemory<I32>,
+    TABLE: GlobalMemory<I64>,
+    OUT: GlobalMemory<F32>,
+    T: I32,
+    NH: I32,
+    NKV: I32,
+    REP: I32,
+    D: I32
+) {
+    let h: I32 = block_idx_x();
+    let b: I32 = block_idx_y();
+    let lane: I32 = thread_idx_x();
+    let g: I32 = h / REP;
+    let qrow: I32 = (b * NH + h) * D;
+    let krow0: I32 = (b * NKV + g) * T;
+    let a: F64 = A[b * NH + h];
+    let one: F64 = 1.0;
+    let zero: F64 = 0.0;
+    // Below every logit. Python starts its max at the most negative double;
+    // the two differ only when every key is masked, and then every weight is
+    // forced to 0 whatever the max is.
+    let inf: F64 = one / zero;
+    let neg: F64 = zero - inf;
+    let two52: F64 = 4503599627370496.0;
+    let cap30: F64 = 1073741824.0;
+    let two28: F64 = 268435456.0;
+    let inv28: F64 = 0.0000000037252902984619140625;
+    let chunks: I32 = (T + 31) / 32;
+
+    let m_lane: F64 = neg;
+    let m: F64 = neg;
+    let l_lane: I64 = 0;
+    let l: I64 = 0;
+    let w_lane: F64 = zero;
+    let factor: F64 = zero;
+    let wscale: F64 = zero;
+    let acc0: I64 = 0;
+    let acc1: I64 = 0;
+    let acc2: I64 = 0;
+    let acc3: I64 = 0;
+
+    @invariant(phase >= 0)
+    for phase in 0..3 {
+        if phase == 1 {
+            m = warp_reduce_max(m_lane);
+        }
+        if phase == 2 {
+            l = warp_reduce_sum(l_lane);
+            let wmax: F64 = warp_reduce_max(w_lane);
+            let safe_w: F64 = one;
+            if wmax > zero {
+                safe_w = wmax;
+            }
+            let recip: F64 = one / safe_w;
+            factor = recip * two28;
+            wscale = safe_w * inv28;
+        }
+        @invariant(c >= 0)
+        for c in 0..chunks {
+            let t: I32 = c * 32 + lane;
+            let wt: I64 = 0;
+            if t < T {
+                if BLOCKED[b * T + t] == 0 {
+                    let s: I32 = 0;
+                    let krow: I32 = (krow0 + t) * D;
+                    @invariant(d >= 0)
+                    for d in 0..D {
+                        let qf: F32 = QI[qrow + d];
+                        let kf: F32 = KI[krow + d];
+                        let qv: I32 = qf as I32;
+                        let kv: I32 = kf as I32;
+                        let prod: I32 = qv * kv;
+                        s = s + prod;
+                    }
+                    let skf: F32 = SK[krow0 + t];
+                    let sk: F64 = skf as F64;
+                    let sd: F64 = s as F64;
+                    let la: F64 = sd * a;
+                    let logit: F64 = la * sk;
+                    if phase == 0 {
+                        if logit > m_lane {
+                            m_lane = logit;
+                        }
+                    } else {
+                        // tq = clamp(round(m - logit), 0, 2^30); m >= logit.
+                        let x: F64 = m - logit;
+                        let tqf: F64 = cap30;
+                        if x < cap30 {
+                            let up: F64 = x + two52;
+                            tqf = up - two52;
+                        }
+                        let tq: I64 = tqf as I64;
+                        // p = exp2_neg_q16_16(tq), in int64 (Q0.28).
+                        let n: I64 = tq >> 16;
+                        let f: I64 = tq & 65535;
+                        let idx: I64 = f >> 10;
+                        let base: I64 = TABLE[idx as I32];
+                        let dd: I64 = f & 1023;
+                        let ya: I64 = dd * 744261118;
+                        let y: I64 = ya >> 16;
+                        let y2a: I64 = y * y;
+                        let y2: I64 = y2a >> 30;
+                        let y3a: I64 = y2 * y;
+                        let y3: I64 = y3a >> 30;
+                        let y3b: I64 = y3 * 715827883;
+                        let y3o6: I64 = y3b >> 32;
+                        let half2: I64 = y2 >> 1;
+                        let c1: I64 = 1073741824 - y;
+                        let c2: I64 = c1 + half2;
+                        let corr: I64 = c2 - y3o6;
+                        let gp: I64 = base * corr;
+                        let gg: I64 = gp >> 30;
+                        let sh: I64 = 2 + n;
+                        if sh > 62 {
+                            sh = 62;
+                        }
+                        let shm: I64 = sh - 1;
+                        let one64: I64 = 1;
+                        let rnd: I64 = one64 << shm;
+                        let gr: I64 = gg + rnd;
+                        let p: I64 = gr >> sh;
+                        if n >= 30 {
+                            p = 0;
+                        }
+                        let svf: F32 = SV[krow0 + t];
+                        let sv: F64 = svf as F64;
+                        let pf: F64 = p as F64;
+                        let w: F64 = pf * sv;
+                        if phase == 1 {
+                            l_lane = l_lane + p;
+                            if w > w_lane {
+                                w_lane = w;
+                            }
+                        } else {
+                            // W = clamp(round(w * factor), 0, 2^28).
+                            let wf: F64 = w * factor;
+                            let wr: F64 = two28;
+                            if wf < two28 {
+                                let up2: F64 = wf + two52;
+                                wr = up2 - two52;
+                            }
+                            wt = wr as I64;
+                        }
+                    }
+                }
+            }
+            if phase == 2 {
+                // Every lane adds every key's weighted V row, its own D/32
+                // columns (lane, lane + 32, ...): the weight comes from the
+                // lane that computed it.
+                @invariant(k >= 0)
+                for k in 0..32 {
+                    let wk: I64 = shfl_sync_idx(wt, k);
+                    let tk: I32 = c * 32 + k;
+                    if tk < T {
+                        let vrow: I32 = (krow0 + tk) * D;
+                        let v0: I32 = VI[vrow + lane];
+                        let v0w: I64 = v0 as I64;
+                        let a0: I64 = wk * v0w;
+                        acc0 = acc0 + a0;
+                        if D > 32 {
+                            let v1: I32 = VI[vrow + lane + 32];
+                            let v1w: I64 = v1 as I64;
+                            let a1: I64 = wk * v1w;
+                            acc1 = acc1 + a1;
+                        }
+                        if D > 64 {
+                            let v2: I32 = VI[vrow + lane + 64];
+                            let v2w: I64 = v2 as I64;
+                            let a2: I64 = wk * v2w;
+                            acc2 = acc2 + a2;
+                        }
+                        if D > 96 {
+                            let v3: I32 = VI[vrow + lane + 96];
+                            let v3w: I64 = v3 as I64;
+                            let a3: I64 = wk * v3w;
+                            acc3 = acc3 + a3;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // out = float32((acc * wscale) / max(l, 1)), each in float64.
+    let lf: F64 = l as F64;
+    let den: F64 = lf;
+    if lf < one {
+        den = one;
+    }
+    let o0a: F64 = acc0 as F64;
+    let o0b: F64 = o0a * wscale;
+    let o0c: F64 = o0b / den;
+    OUT[qrow + lane] = o0c as F32;
+    if D > 32 {
+        let o1a: F64 = acc1 as F64;
+        let o1b: F64 = o1a * wscale;
+        let o1c: F64 = o1b / den;
+        OUT[qrow + lane + 32] = o1c as F32;
+    }
+    if D > 64 {
+        let o2a: F64 = acc2 as F64;
+        let o2b: F64 = o2a * wscale;
+        let o2c: F64 = o2b / den;
+        OUT[qrow + lane + 64] = o2c as F32;
+    }
+    if D > 96 {
+        let o3a: F64 = acc3 as F64;
+        let o3b: F64 = o3a * wscale;
+        let o3c: F64 = o3b / den;
+        OUT[qrow + lane + 96] = o3c as F32;
+    }
+}
+
+fn main() {}

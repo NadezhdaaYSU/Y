@@ -350,6 +350,90 @@ def exact_pv(p, v):
     return acc
 
 
+# `Y_EXACT_ATTN`: "torch" (the default) computes exact attention as the torch
+# ops below; "y" runs each decode step (one query position, int8 V) through
+# Y's `exact_decode_attention` kernel (tests/exact_decode_attention.ysu), one
+# launch where the ops below are about fifteen kernels. The same bits either
+# way; prefill stays on the torch ops.
+ATTN = os.environ.get("Y_EXACT_ATTN", "torch")
+if ATTN not in ("torch", "y"):
+    raise ValueError(f"Y_EXACT_ATTN={ATTN!r}: expected 'torch' or 'y'")
+_Y_ATTN = {}
+_ATTN_LIB = globals().get("_ATTN_LIB")
+
+
+def _attn_kernel(dev):
+    """The compiled `exact_decode_attention` for `dev`; raises if it cannot be
+    built (see `_pv_kernel` for why there is no silent fallback)."""
+    index = dev.index if dev.index is not None else torch.cuda.current_device()
+    kern = _Y_ATTN.get(index)
+    if kern is None:
+        from pathlib import Path
+        source = Path(__file__).with_name("exact_decode_attention.ysu")
+        try:
+            from ..torch_interop import TorchKernel
+            major, minor = torch.cuda.get_device_capability(index)
+            kern = TorchKernel(source.read_text(), kernel_name="exact_decode_attention",
+                               target_sm=f"sm_{major}{minor}")
+        except Exception as e:
+            raise RuntimeError(
+                f"Y_EXACT_ATTN=y needs Y's compiler library (liby.so; in a checkout, "
+                f"`cargo build --release`) and {source}, and it failed: {e}") from e
+        _Y_ATTN[index] = kern
+    return index, kern
+
+
+def _y_exact_decode_attention(qi, a, ki, sk, vi, sv, blocked, table, rep):
+    """One decode step of `exact_attention` on Y's kernel.
+
+    qi f32 [B, NH, D] (integer-valued), a f64 [B, NH], ki f32 [B, NKV, T, D],
+    sk / sv f32 [B, NKV, T], vi int8 [B, NKV, T, D], blocked int32 [B, T],
+    table int64 [64]. Returns f32 [B, NH, D]. Launched on torch's current
+    stream, without a synchronisation.
+    """
+    B, NH, D = qi.shape
+    NKV, T = ki.shape[1], ki.shape[2]
+    dev = qi.device
+    if D % 32 or D > 128 or NH != NKV * rep:
+        raise ValueError(f"exact_decode_attention: head_dim {D} (a multiple of 32, at "
+                         f"most 128) and {NH} heads = {NKV} x {rep}")
+    if B * NKV * T * D >= 1 << 31 or B * NH * D >= 1 << 31:
+        raise ValueError("exact_decode_attention forms 32-bit offsets; this cache is "
+                         "too large for it")
+    if T * (1 << P_BITS) * 127 >= 1 << 53:
+        raise ValueError(f"exact_decode_attention: {T} keys would take the W*V sum past "
+                         f"2^53, where its conversion to float64 would round")
+    index, kern = _attn_kernel(dev)
+    out = torch.empty((B, NH, D), dtype=torch.float32, device=dev)
+    args = [qi.contiguous(), a.contiguous(), ki.contiguous(), sk.contiguous(),
+            vi.contiguous(), sv.contiguous(), blocked.contiguous(), table, out,
+            T, NH, NKV, rep, D]
+    if index == torch.cuda.current_device():
+        kern.launch((NH, B, 1), (32, 1, 1), args)
+    else:
+        with torch.cuda.device(index):
+            kern.launch((NH, B, 1), (32, 1, 1), args)
+    return out
+
+
+def _register_attn_op():
+    global _ATTN_LIB
+    if not hasattr(torch.ops.y, "exact_decode_attention"):
+        lib = torch.library.Library("y", "FRAGMENT")
+        lib.define("exact_decode_attention(Tensor qi, Tensor a, Tensor ki, Tensor sk, "
+                   "Tensor vi, Tensor sv, Tensor blocked, Tensor table, int rep) -> Tensor")
+        lib.impl("exact_decode_attention", _y_exact_decode_attention, "CUDA")
+        torch.library.register_fake(
+            "y::exact_decode_attention",
+            lambda qi, a, ki, sk, vi, sv, blocked, table, rep: torch.empty_like(qi),
+            lib=lib)
+        _ATTN_LIB = lib
+    return torch.ops.y.exact_decode_attention
+
+
+_ATTN_OP = _register_attn_op()
+
+
 EXACT_CHECK = os.environ.get("Y_EXACT_CHECK") == "1"
 
 
@@ -474,6 +558,24 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
     # without a single rounding - which is what makes it order-independent, and
     # is the same argument the int64 kernel uses one level down.
     assert_score_budget(d, Q_LEVELS, k_lv)
+    if (ATTN == "y" and q_len == 1 and vi.dtype == torch.int8 and dev.type == "cuda"
+            and d % 32 == 0 and d <= 128):
+        # One decode step on Y's kernel: the values below, computed in one
+        # launch (tests/exact_decode_attention.ysu). `a` is the logit's
+        # per-query factor, formed exactly as the line further down forms it.
+        a = (sq * sc * math.log2(math.e) * 65536.0).reshape(b, nh)
+        if attention_mask is not None:
+            blocked1 = (attention_mask[:, :, :, :tk] < -1.0).reshape(b, tk)
+        else:
+            blocked1 = torch.zeros((b, tk), dtype=torch.bool, device=dev)
+        args = (qi.reshape(b, nh, d), a, ki, sk.reshape(b, nkv, tk), vi,
+                sv.reshape(b, nkv, tk), blocked1.to(torch.int32), table, rep)
+        if torch.compiler.is_compiling():
+            out = _ATTN_OP(*args)
+        else:
+            out = _y_exact_decode_attention(*args)
+        out = out.reshape(b, nh, 1, d).to(query.dtype).transpose(1, 2).contiguous()
+        return out, None
     # ... and the query group is folded into the row dimension instead of K
     # being broadcast into it, so this is one matmul over `nkv` heads.
     qg = qi.reshape(b, nkv, rep * q_len, d).contiguous()

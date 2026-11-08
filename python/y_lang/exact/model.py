@@ -518,6 +518,11 @@ class ExactRMSNorm(nn.Module):
         divisor(norm.weight.numel(), self.weight.to(torch.float64))
 
     def forward(self, x):
+        if (_NORM_OP is not None and x.is_cuda and x.dtype == torch.float32
+                and self.weight.dtype == torch.float32):
+            # The same value without a float64 divide per element
+            # (`norm_kernel`); one graph node under torch.compile.
+            return _NORM_OP(x, self.weight, self.eps)
         xd = x.to(torch.float64)
         var = xd.pow(2).sum(dim=-1, keepdim=True) / divisor(xd.shape[-1], xd)
         # sqrt and a tensor/tensor divide are correctly rounded on every IEEE
@@ -525,6 +530,43 @@ class ExactRMSNorm(nn.Module):
         # gives the same float64 on a CPU and a GPU where x * rsqrt(v) may not.
         y = xd / torch.sqrt(var + self.eps)
         return (y.to(torch.float32) * self.weight).to(x.dtype)
+
+
+# `Y_EXACT_NORM`: "torch" (the default) runs ExactRMSNorm through the formula
+# above, "triton" runs it on CUDA through `norm_kernel`. Same bits either way.
+# Opt-in until a 7B decode shows it faster in the model: the kernel cannot
+# fuse with its neighbours, so the 0.5B forward launches 895 kernels where it
+# launched 797 (and persistent reductions were faster alone and 2.2% slower
+# in the model, docs/benchmarks/exact_persistent_7b_2026-11-08).
+NORM = os.environ.get("Y_EXACT_NORM", "torch")
+if NORM not in ("triton", "torch"):
+    raise ValueError(f"Y_EXACT_NORM={NORM!r}: expected 'triton' or 'torch'")
+# The registration lasts as long as the `Library` object (see attention.py).
+_NORM_LIB = globals().get("_NORM_LIB")
+
+
+def _register_norm_op():
+    """`torch.ops.y.exact_rms_norm`, or None where Triton or CUDA is missing
+    (then the formula runs, with the same bits)."""
+    global _NORM_LIB
+    if NORM != "triton" or not torch.cuda.is_available():
+        return None
+    try:
+        from . import norm_kernel
+    except ImportError:
+        return None
+    if not hasattr(torch.ops.y, "exact_rms_norm"):
+        lib = torch.library.Library("y", "FRAGMENT")
+        lib.define("exact_rms_norm(Tensor x, Tensor weight, float eps) -> Tensor")
+        lib.impl("exact_rms_norm", norm_kernel.rms_norm, "CUDA")
+        torch.library.register_fake(
+            "y::exact_rms_norm",
+            lambda x, weight, eps: torch.empty_like(x, dtype=torch.float32), lib=lib)
+        _NORM_LIB = lib
+    return torch.ops.y.exact_rms_norm
+
+
+_NORM_OP = _register_norm_op()
 
 
 SILU_LIM = 16          # sigmoid is 0 / 1 past +-16, to within 2^-24 of the table
@@ -666,6 +708,38 @@ def _merged_mlp_forward(self, x):
     """transformers' Qwen2MLP.forward, with gate and up from one projection."""
     gate, up = self.gate_up_proj(x).split(self.gate_up_sizes, dim=-1)
     return self.down_proj(self.act_fn(gate) * up)
+
+
+_MERGED = (("qkv_proj", "qkv_sizes", ("q_proj", "k_proj", "v_proj")),
+           ("gate_up_proj", "gate_up_sizes", ("gate_proj", "up_proj")))
+
+
+def unmerged_buffer_shapes(model):
+    """`(name, shape)` of every buffer as the model would have it unmerged.
+
+    A merged ExactLinear's `w8t` ([K][sum N]), `sw` and `bias` ([sum N]) are
+    listed as its parts' (`q_proj.w8t` [K][N_q], ...), so anything keyed on
+    buffer names and shapes (exact_cross_device's weight fingerprint) is the
+    same for a model however it was merged.
+    """
+    merged = {}
+    for path, mod in model.named_modules():
+        for fused, sizes, names in _MERGED:
+            if isinstance(getattr(mod, fused, None), ExactLinear) and hasattr(mod, sizes):
+                key = f"{path}.{fused}" if path else fused
+                merged[key] = (path, names, getattr(mod, sizes))
+    out = []
+    for name, b in model.named_buffers():
+        mod_path, _, leaf = name.rpartition(".")
+        if mod_path in merged:
+            parent, names, sizes = merged[mod_path]
+            for part, n in zip(names, sizes):
+                shape = (b.shape[0], n) if leaf == "w8t" else (n,)
+                out.append((f"{parent}.{part}.{leaf}" if parent else f"{part}.{leaf}",
+                            tuple(shape)))
+        else:
+            out.append((name, tuple(b.shape)))
+    return out
 
 
 def merge_projections(model, groups=("qkv", "gate_up")):
