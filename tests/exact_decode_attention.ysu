@@ -41,18 +41,21 @@
 //
 // Layout (all contiguous): QI [B][NH][D] (integer-valued float32), A [B][NH]
 // (`sq * scaling * log2(e) * 65536`, float64, computed by the caller exactly
-// as the Python path does), KI [B][NKV][T][D] (integer-valued float32), SK and
-// SV [B][NKV][T], VW [B][NKV][T][D/4] (the int8 V, four bytes to a word),
-// BLOCKED [B][T] (1 = masked), TABLE [64] (the exp2 table), OUT [B][NH][D].
+// as the Python path does), KP and VP the packed cache rows of
+// `y_lang.exact.kv.pack_k` / `pack_v`: KP [B][NKV][T][D + 8] int16, the D
+// integers of a K row then its float32 scale's four bytes and padding, read
+// here as float32 words (two int16s each, the scale one word); VP
+// [B][NKV][T][D + 16] int8, the D integers of a V row then its scale's four
+// bytes and padding, read as 32-bit words. BLOCKED [B][T] (1 = masked; not
+// read when HAS_MASK is 0, for a batch with no mask at all),
+// TABLE [64] (the exp2 table), OUT [B][NH][D].
 // Launch: grid (NKV, B), REP warps (REP = NH / NKV <= 8). D is a multiple of
 // 16 and at most 128.
 kernel exact_decode_attention(
     QI: GlobalMemory<F32>,
     A: GlobalMemory<F64>,
-    KI: GlobalMemory<F32>,
-    SK: GlobalMemory<F32>,
-    VW: GlobalMemory<U32>,
-    SV: GlobalMemory<F32>,
+    KP: GlobalMemory<F32>,
+    VP: GlobalMemory<U32>,
     BLOCKED: GlobalMemory<I32>,
     TABLE: GlobalMemory<I64>,
     OUT: GlobalMemory<F32>,
@@ -60,7 +63,8 @@ kernel exact_decode_attention(
     NH: I32,
     NKV: I32,
     REP: I32,
-    D: I32
+    D: I32,
+    HAS_MASK: I32
 ) {
     let g: I32 = block_idx_x();
     let b: I32 = block_idx_y();
@@ -71,6 +75,10 @@ kernel exact_decode_attention(
     // these a launch traps (D <= 128, at most 8 query heads per KV head).
     @bounds(min=1, max=8) let rep: I32 = REP;
     @bounds(min=4, max=32) let dq: I32 = D / 4;
+    @bounds(min=2, max=16) let dq8: I32 = D / 8;
+    // Words in a packed row: K (D + 8) int16s, V D + 16 bytes.
+    let kwords: I32 = dq * 2 + 4;
+    let vwords: I32 = dq + 4;
     let h: I32 = g * rep + w;
     let kstride: I32 = dq + 1;
     let krow0: I32 = (b * NKV + g) * T;
@@ -122,8 +130,8 @@ kernel exact_decode_attention(
     let cap28b: U64 = 4733283208366391296;
     let two52b: U64 = 4841369599423283200;
     let chunks: I32 = (T + 31) / 32;
-    let kend: I32 = (krow0 + T) * D;
-    let vend: I32 = (krow0 + T) * dq;
+    let kend: I32 = (krow0 + T) * kwords;
+    let vend: I32 = (krow0 + T) * vwords;
 
     let negb: I64 = f64_to_bits(neg) as I64;
     let negs: I64 = negb >> 63;
@@ -203,32 +211,49 @@ kernel exact_decode_attention(
             if fresh == 1 {
                 @invariant(r >= 0)
                 for r in w..32 step rep {
-                    let krow: I32 = (krow0 + c * 32 + r) * D;
-                    @invariant(k4 >= 0)
-                    for k4 in lane..dq step 32 {
-                        let k4v: F32x4 = block_ptr2d_load_v4(KI, 0, krow + k4 * 4, 0, 1, kend);
-                        let k0f: F32 = k4v.x;
-                        let k1f: F32 = k4v.y;
-                        let k2f: F32 = k4v.z;
-                        let k3f: F32 = k4v.w;
-                        let k0: I32 = k0f as I32;
-                        let k1: I32 = k1f as I32;
-                        let k2: I32 = k2f as I32;
-                        let k3: I32 = k3f as I32;
-                        shared_store_v4(sk_s, r * kstride + k4, k0 as U32, k1 as U32, k2 as U32, k3 as U32);
+                    let krow: I32 = (krow0 + c * 32 + r) * kwords;
+                    // Sixteen bytes are eight int16s, two to a word, the
+                    // lower-addressed one in the low half; each is
+                    // sign-extended into an I32 for the dot product.
+                    @invariant(k8 >= 0)
+                    for k8 in lane..dq8 step 32 {
+                        let k8v: F32x4 = block_ptr2d_load_v4(KP, 0, krow + k8 * 4, 0, 1, kend);
+                        let fa: F32 = k8v.x;
+                        let fb: F32 = k8v.y;
+                        let fc: F32 = k8v.z;
+                        let fd: F32 = k8v.w;
+                        let ba: I32 = f32_to_bits(fa) as I32;
+                        let bb: I32 = f32_to_bits(fb) as I32;
+                        let bc: I32 = f32_to_bits(fc) as I32;
+                        let bd: I32 = f32_to_bits(fd) as I32;
+                        let ta: I32 = ba << 16;
+                        let tb: I32 = bb << 16;
+                        let tc: I32 = bc << 16;
+                        let td: I32 = bd << 16;
+                        let k0: I32 = ta >> 16;
+                        let k1: I32 = ba >> 16;
+                        let k2: I32 = tb >> 16;
+                        let k3: I32 = bb >> 16;
+                        let k4: I32 = tc >> 16;
+                        let k5: I32 = bc >> 16;
+                        let k6: I32 = td >> 16;
+                        let k7: I32 = bd >> 16;
+                        let unit: I32 = r * kstride + k8 * 2;
+                        shared_store_v4(sk_s, unit, k0 as U32, k1 as U32, k2 as U32, k3 as U32);
+                        shared_store_v4(sk_s, unit + 1, k4 as U32, k5 as U32, k6 as U32, k7 as U32);
                     }
                 }
             }
             if phase == 2 {
                 @invariant(j4 >= 0)
                 for j4 in w..8 step rep {
-                    let vrow: I32 = (krow0 + c * 32 + j4 * 4) * dq;
+                    let vrow: I32 = (krow0 + c * 32 + j4 * 4) * vwords;
                     @invariant(wd >= 0)
                     for wd in lane..dq step 32 {
-                        let v0: U32 = block_ptr2d_load(VW, 0, vrow + wd, 0, 1, vend);
-                        let v1: U32 = block_ptr2d_load(VW, 0, vrow + dq + wd, 0, 1, vend);
-                        let v2: U32 = block_ptr2d_load(VW, 0, vrow + 2 * dq + wd, 0, 1, vend);
-                        let v3: U32 = block_ptr2d_load(VW, 0, vrow + 3 * dq + wd, 0, 1, vend);
+                        let v0: U32 = block_ptr2d_load(VP, 0, vrow + wd, 0, 1, vend);
+                        let v1: U32 = block_ptr2d_load(VP, 0, vrow + vwords + wd, 0, 1, vend);
+                        let v2: U32 = block_ptr2d_load(VP, 0, vrow + 2 * vwords + wd, 0, 1, vend);
+                        let v3: U32 = block_ptr2d_load(VP, 0, vrow + 3 * vwords + wd, 0, 1, vend);
                         shared_store_v4(sv_s, wd * 9 + j4, v0, v1, v2, v3);
                     }
                 }
@@ -271,7 +296,11 @@ kernel exact_decode_attention(
                     p = pc as I64;
                     live = 1;
                 } else {
-                    if BLOCKED[b * T + t] == 0 {
+                    let blocked: I32 = 0;
+                    if HAS_MASK != 0 {
+                        blocked = BLOCKED[b * T + t];
+                    }
+                    if blocked == 0 {
                         let s: I32 = 0;
                         if fresh == 1 {
                             @invariant(d4 >= 0)
@@ -345,7 +374,7 @@ kernel exact_decode_attention(
                                 s = s7;
                             }
                         }
-                        let skf: F32 = SK[krow0 + t];
+                        let skf: F32 = KP[(krow0 + t) * kwords + dq * 2];
                         let sk: F64 = skf as F64;
                         let sd: F64 = s as F64;
                         let la: F64 = sd * a;
@@ -434,7 +463,8 @@ kernel exact_decode_attention(
                     }
                 }
                 if live == 1 {
-                    let svf: F32 = SV[krow0 + t];
+                    let svb: U32 = VP[(krow0 + t) * vwords + dq];
+                    let svf: F32 = f32_from_bits(svb);
                     let sv: F64 = svf as F64;
                     let pf: F64 = p as F64;
                     let wv: F64 = pf * sv;

@@ -54,7 +54,9 @@ import transformers.models.qwen2.modeling_qwen2 as qwen2
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from . import model as exact_model
-from .kv import V_LEVELS, fold_scale_into_weights, quantize_kv
+from . import kv as _kv
+from .kv import (K_PAD, V_LEVELS, V_PAD, fold_scale_into_weights, k_levels_for, pack_k,
+                 pack_v, quantize_kv, unpack_k, unpack_v)
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 P_BITS = 28  # Q0.28 softmax weights, derived in tests/attention_quantization_error.rs
@@ -383,21 +385,28 @@ def _attn_kernel(dev):
     return index, kern
 
 
-def _y_exact_decode_attention(qi, a, ki, sk, vi, sv, blocked, table, rep):
+def _y_exact_decode_attention(qi, a, kp, vp, blocked, table, rep):
     """One decode step of `exact_attention` on Y's kernel.
 
-    qi f32 [B, NH, D] (integer-valued), a f64 [B, NH], ki f32 [B, NKV, T, D],
-    sk / sv f32 [B, NKV, T], vi int8 [B, NKV, T, D], blocked int32 [B, T],
-    table int64 [64]. Returns f32 [B, NH, D]. Launched on torch's current
-    stream, without a synchronisation.
+    qi f32 [B, NH, D] (integer-valued), a f64 [B, NH], kp int8
+    [B, NKV, T, 2 * (D + 8)] (D + 8 int16s a row) and vp int8
+    [B, NKV, T, D + 16] (the packed rows of `kv.pack_k` / `kv.pack_v`),
+    blocked int32 [B, T] (or None: no key is masked), table int64 [64].
+    Returns f32 [B, NH, D]. Launched on torch's current stream, without a
+    synchronisation.
     """
     B, NH, D = qi.shape
-    NKV, T = ki.shape[1], ki.shape[2]
+    NKV, T = kp.shape[1], kp.shape[2]
     dev = qi.device
     if D % 16 or D > 128 or NH != NKV * rep or not 1 <= rep <= 8:
         raise ValueError(f"exact_decode_attention: head_dim {D} (a multiple of 16, at "
                          f"most 128) and {NH} heads = {NKV} x {rep} (at most 8)")
-    if B * NKV * T * D >= 1 << 31 or B * NH * D >= 1 << 31:
+    if (kp.dtype != torch.int8 or vp.dtype != torch.int8
+            or kp.shape != (B, NKV, T, 2 * (D + K_PAD)) or vp.shape != (B, NKV, T, D + V_PAD)):
+        raise ValueError(f"exact_decode_attention: K {tuple(kp.shape)} {kp.dtype} and V "
+                         f"{tuple(vp.shape)} {vp.dtype} are not the packed rows of a "
+                         f"[{B}, {NKV}, {T}, {D}] cache")
+    if B * NKV * T * (D + V_PAD) >= 1 << 31 or B * NH * D >= 1 << 31:
         raise ValueError("exact_decode_attention forms 32-bit offsets; this cache is "
                          "too large for it")
     if T * (1 << P_BITS) * 127 >= 1 << 53:
@@ -405,11 +414,14 @@ def _y_exact_decode_attention(qi, a, ki, sk, vi, sv, blocked, table, rep):
                          f"2^53, where its conversion to float64 would round")
     index, kern = _attn_kernel(dev)
     out = torch.empty((B, NH, D), dtype=torch.float32, device=dev)
-    # V's int8 rows as 32-bit words, four bytes each: a reinterpretation, no copy.
-    vw = vi.contiguous().view(torch.int32)
-    args = [qi.contiguous(), a.contiguous(), ki.contiguous(), sk.contiguous(),
-            vw, sv.contiguous(), blocked.contiguous(), table, out,
-            T, NH, NKV, rep, D]
+    # Reinterpretations, no copies: K's int16 pairs as float32 words (the
+    # kernel takes their bits), V's bytes as 32-bit words.
+    has_mask = blocked is not None
+    if not has_mask:
+        blocked = table.view(torch.int32)      # any int32 buffer: not read
+    args = [qi.contiguous(), a.contiguous(), kp.contiguous().view(torch.float32),
+            vp.contiguous().view(torch.int32), blocked.contiguous(), table, out,
+            T, NH, NKV, rep, D, int(has_mask)]
     grid, block = (NKV, B, 1), (32 * rep, 1, 1)
     if index == torch.cuda.current_device():
         kern.launch(grid, block, args)
@@ -419,16 +431,41 @@ def _y_exact_decode_attention(qi, a, ki, sk, vi, sv, blocked, table, rep):
     return out
 
 
+def _y_decode_eligible(q_len, dev, d, rep):
+    """Whether a step can run on Y's kernel (decode, CUDA, its shape limits)."""
+    return (ATTN == "y" and q_len == 1 and dev.type == "cuda" and d % 16 == 0
+            and d <= 128 and rep <= 8)
+
+
+def _y_decode(qi, sq, sc, kp, vp, attention_mask, table, out_dtype):
+    """`exact_attention_core`'s result for one decode step, on Y's kernel, from
+    packed K/V rows."""
+    b, nh, _, d = qi.shape
+    nkv, tk = kp.shape[1], kp.shape[2]
+    # `a` is the logit's per-query factor, formed exactly as the torch path
+    # forms it (exact_attention_core).
+    a = (sq * sc * math.log2(math.e) * 65536.0).reshape(b, nh)
+    blocked1 = None
+    if attention_mask is not None:
+        blocked1 = (attention_mask[:, :, :, :tk] < -1.0).reshape(b, tk).to(torch.int32)
+    args = (qi.reshape(b, nh, d), a, kp, vp, blocked1, table, nh // nkv)
+    if torch.compiler.is_compiling():
+        out = _ATTN_OP(*args)
+    else:
+        out = _y_exact_decode_attention(*args)
+    return out.reshape(b, nh, 1, d).to(out_dtype).transpose(1, 2).contiguous()
+
+
 def _register_attn_op():
     global _ATTN_LIB
     if not hasattr(torch.ops.y, "exact_decode_attention"):
         lib = torch.library.Library("y", "FRAGMENT")
-        lib.define("exact_decode_attention(Tensor qi, Tensor a, Tensor ki, Tensor sk, "
-                   "Tensor vi, Tensor sv, Tensor blocked, Tensor table, int rep) -> Tensor")
+        lib.define("exact_decode_attention(Tensor qi, Tensor a, Tensor kp, Tensor vp, "
+                   "Tensor? blocked, Tensor table, int rep) -> Tensor")
         lib.impl("exact_decode_attention", _y_exact_decode_attention, "CUDA")
         torch.library.register_fake(
             "y::exact_decode_attention",
-            lambda qi, a, ki, sk, vi, sv, blocked, table, rep: torch.empty_like(qi),
+            lambda qi, a, kp, vp, blocked, table, rep: torch.empty_like(qi),
             lib=lib)
         _ATTN_LIB = lib
     return torch.ops.y.exact_decode_attention
@@ -544,6 +581,18 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
 
     qi, sq = q8_per_tensor(q, (-1,))          # per query vector (float32)
     sq = sq.to(torch.float64)
+    if k.dtype == torch.int8:
+        # The cache's packed rows (kv.PACK: the attention forward quantised
+        # each row once, as it arrived). Y's kernel reads them as they are;
+        # the torch path unpacks them into the operands quantize_kv returns.
+        if _y_decode_eligible(q_len, query.device, d, rep):
+            return _y_decode(qi, sq, sc, k, v, attention_mask, table, query.dtype), None
+        ki, sk = unpack_k(k, d)
+        vi, sv = unpack_v(v, d)
+        if not _kv.V_INT8:                    # the int8 consumer is exact_pv
+            vi = vi.to(torch.float32)
+        return exact_attention_core(qi, sq, ki, sk, vi, sv, k_levels_for(d, Q_LEVELS),
+                                    V_LEVELS, attention_mask, sc, table, query.dtype), None
     # K and V use PER-TOKEN scales, so a row's quantisation depends on that row
     # alone and the cache can be appended to instead of rebuilt. Under the old
     # per-head / per-channel scales every scale could move when a token arrived,
@@ -557,6 +606,11 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
 
     return exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
                                 table, query.dtype), None
+
+
+# The attention forward hands this function the cache's packed rows when
+# kv.PACK is set (model._merged_attention_forward), and no other function.
+exact_attention.takes_packed_kv = True
 
 
 # A factual prompt with a one-word answer no broken arm reaches by accident.
@@ -593,23 +647,12 @@ def exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
     # without a single rounding - which is what makes it order-independent, and
     # is the same argument the int64 kernel uses one level down.
     assert_score_budget(d, Q_LEVELS, k_lv)
-    if (ATTN == "y" and q_len == 1 and vi.dtype == torch.int8 and dev.type == "cuda"
-            and d % 16 == 0 and d <= 128 and rep <= 8):
+    if _y_decode_eligible(q_len, dev, d, rep) and k_lv <= 32767 and v_lv <= 127:
         # One decode step on Y's kernel: the values below, computed in one
-        # launch (tests/exact_decode_attention.ysu). `a` is the logit's
-        # per-query factor, formed exactly as the line further down forms it.
-        a = (sq * sc * math.log2(math.e) * 65536.0).reshape(b, nh)
-        if attention_mask is not None:
-            blocked1 = (attention_mask[:, :, :, :tk] < -1.0).reshape(b, tk)
-        else:
-            blocked1 = torch.zeros((b, tk), dtype=torch.bool, device=dev)
-        args = (qi.reshape(b, nh, d), a, ki, sk.reshape(b, nkv, tk), vi,
-                sv.reshape(b, nkv, tk), blocked1.to(torch.int32), table, rep)
-        if torch.compiler.is_compiling():
-            out = _ATTN_OP(*args)
-        else:
-            out = _y_exact_decode_attention(*args)
-        return out.reshape(b, nh, 1, d).to(out_dtype).transpose(1, 2).contiguous()
+        # launch (tests/exact_decode_attention.ysu), which reads the cache's
+        # packed rows; operands that arrive unpacked are packed here.
+        return _y_decode(qi, sq, sc, pack_k(ki, sk), pack_v(vi, sv), attention_mask,
+                         table, out_dtype)
     # ... and the query group is folded into the row dimension instead of K
     # being broadcast into it, so this is one matmul over `nkv` heads.
     qg = qi.reshape(b, nkv, rep * q_len, d).contiguous()
