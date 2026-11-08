@@ -6262,6 +6262,64 @@ representation, and whether that is lossless depends on the expression.",
         Ok(tmp)
     }
 
+    /// A call to C's `printf`: its arguments under C's variadic rules, not a
+    /// Y signature's.
+    ///
+    /// It went through the generic call path, which gave every argument past
+    /// the format the default parameter type `i32` - an F64 reached printf
+    /// as `fptosi` of itself, so `printf("%f", 0.5)` printed from an integer
+    /// 0 - and turned each string literal into a `ystr_new` handle, so the
+    /// FORMAT itself was a pointer to the runtime's string object, not to
+    /// text. Now a string literal is its C string, an F32 is promoted to
+    /// double, a narrower integer or a bool to int, as C's default argument
+    /// promotions require; I32, I64, F64 and pointers pass as they are. A
+    /// format that is not a literal is refused: a Y `String` value is a
+    /// handle, not C text.
+    fn emit_printf(&mut self, args: &[Expr]) -> String {
+        let mut parts = Vec::new();
+        for (i, arg) in args.iter().enumerate() {
+            if let Expr::StringLit(text, _) = arg {
+                let g = self.register_string(text);
+                parts.push(format!("ptr {}", g));
+                continue;
+            }
+            if i == 0 {
+                self.emit_errors.push(format!(
+                    "[LLVM host backend] line {}: `printf`'s format must be a string literal; \
+                     a Y String value is a runtime handle, not C text",
+                    arg.span().line));
+                return "0".into();
+            }
+            let v = self.emit_expr(arg, None, None);
+            let ty = self.infer_type(arg);
+            let part = match ty.as_str() {
+                "float" => {
+                    let t = self.fresh_tmp();
+                    writeln!(&mut self.output, "  {} = fpext float {} to double", t, v).unwrap();
+                    format!("double {}", t)
+                }
+                "i1" | "i8" | "i16" => {
+                    let t = self.fresh_tmp();
+                    let ext = if ty == "i1" || self.expr_is_unsigned(arg) { "zext" } else { "sext" };
+                    writeln!(&mut self.output, "  {} = {} {} {} to i32", t, ext, ty, v).unwrap();
+                    format!("i32 {}", t)
+                }
+                "i32" | "i64" | "double" | "ptr" => format!("{} {}", ty, v),
+                other => {
+                    self.emit_errors.push(format!(
+                        "[LLVM host backend] line {}: `printf` argument {} lowers to `{}`, which \
+                         C's variadic call cannot take",
+                        arg.span().line, i, other));
+                    return "0".into();
+                }
+            };
+            parts.push(part);
+        }
+        let tmp = self.fresh_tmp();
+        writeln!(&mut self.output, "  {} = call i32 (ptr, ...) @printf({})", tmp, parts.join(", ")).unwrap();
+        tmp
+    }
+
     fn emit_expr(
         &mut self,
         expr: &Expr,
@@ -6443,6 +6501,11 @@ representation, and whether that is lossless depends on the expression.",
             }
             Expr::Call { func, args, .. } => {
                 let func_name = self.emit_call_target(func);
+
+                // C's printf, unless the program defines its own.
+                if func_name == "printf" && !self.fn_llvm_params.contains_key("printf") {
+                    return self.emit_printf(args);
+                }
 
                 if let Some(value) = self.try_emit_runtime_query(&func_name, args) {
                     return value;
