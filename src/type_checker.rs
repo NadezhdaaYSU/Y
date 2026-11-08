@@ -633,6 +633,9 @@ not know its length",
             Expr::UnaryOp { operand, .. } => {
                 self.eval_expr_constraint_state(operand)
             }
+            // A conversion does not constrain anything: whatever its operand
+            // is, so is it (the catch-all below says Constrained).
+            Expr::Cast { expr: operand, .. } => self.eval_expr_constraint_state(operand),
             Expr::Call { args, .. } => {
                 for arg in args {
                     let st = self.eval_expr_constraint_state(arg);
@@ -1228,7 +1231,7 @@ not know its length",
             Expr::MemberAccess { base, .. } => {
                 self.collect_assigned_vars_in_expr(base, vars);
             }
-            Expr::UnaryOp { operand, .. } => {
+            Expr::UnaryOp { operand, .. } | Expr::Cast { expr: operand, .. } => {
                 self.collect_assigned_vars_in_expr(operand, vars);
             }
             Expr::StructLit { fields, .. } => {
@@ -1325,6 +1328,91 @@ not know its length",
             SemanticType::Pipeline => "Pipeline".into(),
             SemanticType::TransferObligation => "TransferObligation".into(),
             other => format!("{:?}", other),
+        }
+    }
+
+    /// The types `as` converts between: the integers and F32 / F64.
+    ///
+    /// F16 and BF16 are left out (a PTX kernel refuses an F16 value, §20.5),
+    /// and so are Q formats, whose stored integer is not their value, and
+    /// `bool`. Each would need its own rule; none has a user yet.
+    fn is_cast_primitive(name: &str) -> bool {
+        matches!(
+            name,
+            "I8" | "I16" | "I32" | "I64" | "U8" | "U16" | "U32" | "U64" | "F32" | "F64"
+                | "i8" | "i16" | "i32" | "i64" | "u8" | "u16" | "u32" | "u64" | "f32" | "f64"
+        )
+    }
+
+    /// Only literals and operators on them: no value with a declared type.
+    fn is_literal_only(expr: &Expr) -> bool {
+        match expr {
+            Expr::IntLit(..) | Expr::FloatLit(..) | Expr::BoolLit(..) | Expr::CharLit(..) => true,
+            Expr::UnaryOp { operand, .. } => Self::is_literal_only(operand),
+            Expr::BinaryOp { left, right, .. } => {
+                Self::is_literal_only(left) && Self::is_literal_only(right)
+            }
+            _ => false,
+        }
+    }
+
+    /// The type of `operand as to`, or `Unknown` with an error.
+    ///
+    /// A literal operand is refused: a bare literal has no type of its own -
+    /// this checker defaults a float literal to F32 where the LLVM backend
+    /// makes it a double - so `0.1 as F64` would convert a different value on
+    /// different backends. Writing the literal at the type wanted
+    /// (`let x: F64 = 0.1;`) says the same thing without the ambiguity.
+    fn check_cast(&mut self, from: &SemanticType, to: &SemanticType, operand: &Expr,
+                  span: &Span) -> SemanticType {
+        // Targets stop at 32 and 64 bits. In a PTX kernel an 8- or 16-bit type
+        // is a memory format only - a value is promoted to 32 bits in a
+        // register and `U8 + U8` does not wrap at 255 (ptx_emitter
+        // `ScalarTy::promoted`) - while the LLVM backend has real i8 values,
+        // so `(x as U8) + 1` would wrap on one backend and not the other.
+        let to_name = match to {
+            SemanticType::Primitive(n)
+                if Self::is_cast_primitive(n)
+                    && !matches!(n.as_str(), "I8" | "I16" | "U8" | "U16" | "i8" | "i16" | "u8" | "u16") =>
+            {
+                n.clone()
+            }
+            other => {
+                self.errors.push(format!(
+                    "Line {}: Cannot cast to `{}`: `as` converts to I32, I64, U32, U64, \
+                     F32 or F64.",
+                    span.line,
+                    Self::semantic_type_name(other)
+                ));
+                return SemanticType::Unknown;
+            }
+        };
+        if Self::is_literal_only(operand) {
+            self.errors.push(format!(
+                "Line {}: Cast of a literal: write the literal at the type you want \
+                 (`let x: {} = ...;`) instead of `... as {}`. A bare literal has no \
+                 type of its own for `as` to convert from.",
+                span.line, to_name, to_name
+            ));
+            return SemanticType::Unknown;
+        }
+        match from {
+            SemanticType::Primitive(n) if Self::is_cast_primitive(n) => {
+                SemanticType::Primitive(to_name)
+            }
+            // No information about the operand: the backend that lowers the
+            // cast must name its type or refuse; it never guesses one.
+            SemanticType::Unknown => SemanticType::Primitive(to_name),
+            other => {
+                self.errors.push(format!(
+                    "Line {}: Cannot cast a `{}` to `{}`: `as` converts between the \
+                     integer types, F32 and F64.",
+                    span.line,
+                    Self::semantic_type_name(other),
+                    to_name
+                ));
+                SemanticType::Unknown
+            }
         }
     }
 
@@ -2680,6 +2768,9 @@ so the stored value is tested and a value outside the range stops the program"
         match expr {
             Expr::Ident(name, _) => self.lookup_var(name).cloned(),
             Expr::UnaryOp { op: UnaryOp::Neg, operand, .. } => self.known_expr_type(operand),
+            Expr::Cast { ty: Type::Primitive(n, _) | Type::Ident(n, _), .. } => {
+                Some(SemanticType::Primitive(n.clone()))
+            }
             Expr::Call { func, .. } => {
                 let name = match &**func {
                     Expr::Ident(name, _) => name.clone(),
@@ -2753,6 +2844,17 @@ so the stored value is tested and a value outside the range stops the program"
         }
         if let Some(sig) = signature { return sig.result; }
         if let Some(t) = typed_vec_get { return SemanticType::Primitive(t.to_string()); }
+        // A warp collective's result has its argument's type: the PTX backend
+        // reduces and shuffles in the value's own type (`emit_warp_reduce`,
+        // `emit_shfl_typed`). The table below says F32 for the reductions,
+        // which made `let m: F64 = warp_reduce_max(x)` a type error for an
+        // F64 `x` that the backend reduces correctly.
+        if matches!(name, "warp_reduce_sum" | "warp_reduce_max" | "shfl_sync_bfly"
+                          | "shfl_sync_bfly_b32" | "shfl_sync_idx") {
+            if let Some(SemanticType::Primitive(t)) = arg_types.first() {
+                return SemanticType::Primitive(t.clone());
+            }
+        }
         if let Some(t) = crate::intrinsics::scalar_return_type(name) {
             return if t == "void" { SemanticType::Void } else { SemanticType::Primitive(t.to_string()) };
         }
@@ -3192,6 +3294,12 @@ so the stored value is tested and a value outside the range stops the program"
                     },
                 }
             }
+            Expr::Cast { expr: operand, ty, span } => {
+                let from = self.check_expr_with_expected(operand, None);
+                self.reject_transfer_escape(&from, &operand.span(), "in a cast");
+                let to = self.resolve_type(ty);
+                self.check_cast(&from, &to, operand, span)
+            }
             Expr::BlockExpr(block, _) => {
                 self.check_block(block);
                 SemanticType::Unknown
@@ -3530,7 +3638,9 @@ so the stored value is tested and a value outside the range stops the program"
     fn contains_unsigned_literal(expr: &Expr) -> bool {
         match expr {
             Expr::IntLit(n, _) => *n > i32::MAX as i64 && *n <= u32::MAX as i64,
-            Expr::UnaryOp { operand, .. } => Self::contains_unsigned_literal(operand),
+            Expr::UnaryOp { operand, .. } | Expr::Cast { expr: operand, .. } => {
+                Self::contains_unsigned_literal(operand)
+            }
             Expr::BinaryOp { left, right, .. } =>
                 Self::contains_unsigned_literal(left) || Self::contains_unsigned_literal(right),
             _ => false,
@@ -3942,7 +4052,9 @@ own operand, so `*p` was proven as `p`)",
             Expr::BinaryOp { left, right, .. } => {
                 Self::collect_reads(left, out) && Self::collect_reads(right, out)
             }
-            Expr::UnaryOp { operand, .. } => Self::collect_reads(operand, out),
+            Expr::UnaryOp { operand, .. } | Expr::Cast { expr: operand, .. } => {
+                Self::collect_reads(operand, out)
+            }
             Expr::Index { base, index, .. } => {
                 Self::collect_reads(base, out) && Self::collect_reads(index, out)
             }
@@ -4300,6 +4412,9 @@ model",
         match expr {
             Expr::UnaryOp { op: UnaryOp::Ref { .. }, .. } => true,
             Expr::UnaryOp { operand, .. } => self.takes_reference(operand),
+            // A cast's value is a number, never a reference, but evaluating
+            // it evaluates the operand.
+            Expr::Cast { expr: operand, .. } => self.takes_reference(operand),
             Expr::BinaryOp { left, right, .. } => {
                 self.takes_reference(left) || self.takes_reference(right)
             }
@@ -5254,6 +5369,13 @@ fn expr_to_string(expr: &Expr) -> String {
             };
             format!("{}{}", op_str, expr_to_string(operand))
         }
+        Expr::Cast { expr, ty, .. } => {
+            let t = match ty {
+                Type::Primitive(n, _) | Type::Ident(n, _) => n.clone(),
+                other => format!("{:?}", other),
+            };
+            format!("({} as {})", expr_to_string(expr), t)
+        }
         _ => format!("{:?}", expr),
     }
 }
@@ -5319,6 +5441,9 @@ impl<'a> CoherenceAnalyzer<'a> {
             Expr::UnaryOp { operand, .. } => {
                 self.collect_expr_accesses(operand, is_write);
             }
+            // A conversion reads its operand (the catch-all below would drop
+            // the read, and with it any race on it).
+            Expr::Cast { expr: operand, .. } => self.collect_expr_accesses(operand, false),
             Expr::Call { func, args, .. } => {
                 if let Expr::Ident(fname, _) = &**func {
                     if fname == "cp_async" && args.len() >= 2 {

@@ -12,7 +12,7 @@
 //! extension the program carries), and as a file (`--emit-guarantees`) for a
 //! program that has no host binary to carry them.
 
-use crate::ast::{BinaryOp, Expr, UnaryOp};
+use crate::ast::{BinaryOp, Expr, Type, UnaryOp};
 
 /// How a fact is established, strongest first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -214,6 +214,9 @@ pub fn render(expr: &Expr) -> String {
         }
         Expr::BinaryOp { left, op, right, .. } => {
             format!("{} {} {}", render_operand(left), binary_op(op), render_operand(right))
+        }
+        Expr::Cast { expr, ty: Type::Primitive(t, _) | Type::Ident(t, _), .. } => {
+            format!("{} as {}", render_operand(expr), t)
         }
         _ => "...".to_string(),
     }

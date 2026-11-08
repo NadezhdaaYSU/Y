@@ -924,6 +924,7 @@ impl CpuEmitter {
                 },
             },
             Expr::UnaryOp { op: UnaryOp::Neg | UnaryOp::Not, operand, .. } => self.rust_type_of(operand),
+            Expr::Cast { ty: Type::Primitive(n, _) | Type::Ident(n, _), .. } => rust_scalar(n),
             Expr::Call { func, .. } => match &**func {
                 Expr::Ident(name, _) => self.fn_sigs.get(name).and_then(|(_, ret)| *ret),
                 _ => None,
@@ -1151,6 +1152,23 @@ impl CpuEmitter {
             // substitution in the repo on two counts: `a + b` became the
             // CONSTANT 0, and the trailing `//` commented out the rest of the
             // emitted line - including the statement's own terminator.
+            // Rust's `as` is Y's (see `Expr::Cast`): ties-to-even to a float,
+            // saturating truncation with NaN to 0 to an integer.
+            Expr::Cast { expr: operand, ty, span } => {
+                let to = match ty {
+                    Type::Primitive(n, _) | Type::Ident(n, _) => rust_scalar(n),
+                    _ => None,
+                };
+                match to {
+                    Some(t @ ("i32" | "i64" | "u32" | "u64" | "f32" | "f64")) => {
+                        format!("(({}) as {})", self.emit_expr(operand), t)
+                    }
+                    _ => {
+                        let span = span.clone();
+                        self.unsupported_expr("`as` to a type other than I32, I64, U32, U64, F32, F64", &span)
+                    }
+                }
+            }
             Expr::BlockExpr(_, span) => {
                 let span = span.clone();
                 self.unsupported_expr("a block expression", &span)

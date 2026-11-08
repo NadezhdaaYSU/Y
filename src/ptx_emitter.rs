@@ -5141,7 +5141,7 @@ impl PtxEmitter {
             "st_global_v4_f32" | "store_v4" => Arity::OneOf(&[2, 5]),
             "block_ptr3d_store_v4" => Arity::OneOf(&[10, 13]),
             "cp_async" => Arity::Range(2, 3),
-            "shfl_sync_bfly" | "shfl_sync_bfly_b32" | "block_ptr2d_advance"
+            "shfl_sync_bfly" | "shfl_sync_bfly_b32" | "shfl_sync_idx" | "block_ptr2d_advance"
             | "block_ptr3d_advance" | "block_cdiv" => Arity::Range(1, 2),
             "block_tile_load" | "tile_load" => Arity::Range(2, 3),
             "block_tile_store" | "tile_store" => Arity::Range(3, 4),
@@ -6245,6 +6245,7 @@ or `shared_alloc_u32` for a shared-memory array.",
                 Self::collect_idents(right, out);
             }
             Expr::UnaryOp { operand, .. } => Self::collect_idents(operand, out),
+            Expr::Cast { expr, .. } => Self::collect_idents(expr, out),
             Expr::Call { func, args, .. } => {
                 Self::collect_idents(func, out);
                 for a in args {
@@ -6567,6 +6568,7 @@ or `shared_alloc_u32` for a shared-memory array.",
                 Self::cache_policy_loads(right, honoured, dropped);
             }
             Expr::UnaryOp { operand, .. } => Self::cache_policy_loads(operand, honoured, dropped),
+            Expr::Cast { expr, .. } => Self::cache_policy_loads(expr, honoured, dropped),
             Expr::MemberAccess { base, .. } => Self::cache_policy_loads(base, honoured, dropped),
             Expr::StructLit { fields, .. } => {
                 for (_, v) in fields {
@@ -6661,6 +6663,8 @@ or `shared_alloc_u32` for a shared-memory array.",
                 Self::reads_only_registers(left) && Self::reads_only_registers(right)
             }
             Expr::UnaryOp { operand, .. } => Self::reads_only_registers(operand),
+            // A conversion is one `cvt` on registers.
+            Expr::Cast { expr, .. } => Self::reads_only_registers(expr),
             // A lane of a 4-wide vector is one of its four registers.
             Expr::MemberAccess { base, member, .. } => {
                 matches!(member.as_str(), "x" | "y" | "z" | "w") && Self::reads_only_registers(base)
@@ -8024,6 +8028,7 @@ declare it as a Q format.\n{}",
                     }
                 }
             }
+            Expr::Cast { expr: operand, ty, span } => self.emit_cast(operand, ty, span, cache_policy, hw_profile),
             // READING `A[i]` LOADS THE ELEMENT. It used to evaluate to the
             // element's ADDRESS, in every position: `let v: F32 = A[1];`
             // emitted `cvt.rn.f32.u64 %f0, %rd4` - the address of `A[1]`,
@@ -8459,6 +8464,26 @@ declare it as a Q format.\n{}",
                                 return src_val;
                             }
                             self.emit_bfly_typed(&src_val, &offset_val)
+                        } else if fname == "shfl_sync_idx" {
+                            // `shfl_sync_idx(v, lane)`: every lane gets lane
+                            // `lane`'s `v` (`shfl.sync.idx`), a 64-bit value as
+                            // its two halves. Like every shuffle it must run on
+                            // all 32 lanes (`refuse_divergent_collectives`).
+                            let src_val = self.emit_expr(&args[0], cache_policy, hw_profile);
+                            let lane = self.emit_expr(&args[1], cache_policy, hw_profile);
+                            if src_val.is_empty() || lane.is_empty() {
+                                return "".into();
+                            }
+                            let lty = self.ty_of(&lane);
+                            if lty.is_float() {
+                                self.unsupported_intrinsic(
+                                    fname,
+                                    &format!("its source lane is a lane index and this one is {}; give an integer", lty.name()),
+                                );
+                                return src_val;
+                            }
+                            let lane = self.emit_convert(&lane, ScalarTy::U32);
+                            self.emit_shfl_typed("idx", &src_val, &lane)
                         } else if fname == "warp_reduce_sum" {
                             let src_val = if !args.is_empty() { self.emit_expr(&args[0], cache_policy, hw_profile) } else { "%f0".to_string() };
                             self.emit_warp_reduce_sum(&src_val)
@@ -9699,6 +9724,80 @@ declare it as a Q format.\n{}",
     /// have. Both push to `emit_errors`, which `main` turns into a failed
     /// build - the point being that the refusal is fail-closed, where an empty
     /// return value is spliced into an instruction and is not.
+    /// `operand as ty` (see `Expr::Cast`): one `cvt`, or a `mov` where only
+    /// signedness changes.
+    ///
+    /// Float to integer is `cvt.rzi`, which truncates and clamps to the
+    /// target's range, then a `selp` that takes NaN to 0: `cvt.rzi` alone
+    /// gives NaN the "integer indefinite" pattern (0x80000000, 0x8000...0) for
+    /// an F64 source or a 64-bit target - measured on sm_89 by
+    /// `tests/numeric_casts.rs`, which an F32-to-32-bit test alone would not
+    /// have shown, since that one form does give 0. Together they are the
+    /// LLVM backend's `select` chain and Rust's `as`. Integer widening extends by the SOURCE's signedness, written with
+    /// the source's signedness on both sides (`cvt.s64.s32`, `cvt.u64.u32`).
+    ///
+    /// An integer operand must be in a register whose type was recorded:
+    /// `ty_of` reads an unrecorded `%r` as `I32`, which would convert a `U32`
+    /// above 2^31 as negative. A float register's class names its type.
+    fn emit_cast(&mut self, operand: &Expr, ty: &Type, span: &Span,
+                 cache_policy: Option<&CachePolicyAttr>, hw_profile: &HardwareProfile) -> String {
+        let to_name = match ty {
+            Type::Primitive(n, _) | Type::Ident(n, _) => n.to_ascii_uppercase(),
+            _ => String::new(),
+        };
+        let to = match ScalarTy::from_name(&to_name) {
+            Some(t @ (ScalarTy::I32 | ScalarTy::I64 | ScalarTy::U32 | ScalarTy::U64
+                      | ScalarTy::F32 | ScalarTy::F64)) => t,
+            _ => {
+                self.unsupported_expr(&format!("`as {}`: `as` converts to I32, I64, U32, U64, \
+                                                F32 or F64", to_name), span);
+                return "".into();
+            }
+        };
+        let v = self.emit_expr(operand, cache_policy, hw_profile);
+        if v.is_empty() {
+            return "".into();
+        }
+        if !v.starts_with("%f") && !self.reg_ty.contains_key(&v) {
+            self.unsupported_expr(&format!(
+                "`as {}` of an integer whose type this backend did not record (it would read \
+                 it as I32, and a U32 above 2^31 as negative); bind the operand to a typed \
+                 `let` first", to_name), span);
+            return "".into();
+        }
+        let from = self.ty_of(&v).promoted();
+        if !matches!(from, ScalarTy::I32 | ScalarTy::I64 | ScalarTy::U32 | ScalarTy::U64
+                           | ScalarTy::F32 | ScalarTy::F64) {
+            self.unsupported_expr(&format!("`as {}` of a `{:?}`", to_name, from), span);
+            return "".into();
+        }
+        let out = self.alloc_ty(to);
+        let line = match (from.is_float(), to.is_float()) {
+            (true, true) if from == to => format!("mov.{} {}, {};", to.arith(), out, v),
+            (true, true) if to == ScalarTy::F64 => format!("cvt.f64.f32 {}, {};", out, v),
+            (true, true) => format!("cvt.rn.f32.f64 {}, {};", out, v),
+            (false, true) => format!("cvt.rn.{}.{} {}, {};", to.arith(), from.arith(), out, v),
+            (true, false) => {
+                let raw = self.alloc_ty(to);
+                let nan = self.alloc_pred();
+                let bits = if to.is_64() { 64 } else { 32 };
+                writeln!(&mut self.ptx_buffer, "    cvt.rzi.{}.{} {}, {};", to.arith(), from.arith(), raw, v).unwrap();
+                writeln!(&mut self.ptx_buffer, "    setp.nan.{} {}, {}, {};", from.arith(), nan, v, v).unwrap();
+                format!("selp.b{} {}, 0, {}, {};", bits, out, raw, nan)
+            }
+            (false, false) if from.is_64() == to.is_64() => {
+                format!("mov.b{} {}, {};", if to.is_64() { 64 } else { 32 }, out, v)
+            }
+            (false, false) if to.is_64() => {
+                let s = if from.is_signed() { "s" } else { "u" };
+                format!("cvt.{s}64.{s}32 {}, {};", out, v)
+            }
+            (false, false) => format!("cvt.u32.u64 {}, {};", out, v),
+        };
+        writeln!(&mut self.ptx_buffer, "    {}", line).unwrap();
+        out
+    }
+
     fn unsupported_expr(&mut self, what: &str, span: &Span) {
         self.emit_errors.push(format!(
             "[PTX] {} (line {}, col {}) cannot be lowered by this backend.",
@@ -18820,17 +18919,23 @@ declare it as a Q format.\n{}",
     /// an integer (`shfl_sync_bfly(t + 1000, 1)` was 0 on every lane), and a
     /// 64-bit value reached a `.b32` shuffle that ptxas rejects.
     fn emit_bfly_typed(&mut self, src_reg: &str, offset: &str) -> String {
+        self.emit_shfl_typed("bfly", src_reg, offset)
+    }
+
+    /// `shfl.sync.<mode>` over the whole warp, in the value's own type; a
+    /// 64-bit value moves as its two 32-bit halves.
+    fn emit_shfl_typed(&mut self, mode: &str, src_reg: &str, operand: &str) -> String {
         let ty = self.ty_of(src_reg);
         let dst = self.alloc_ty(ty);
         if ty.is_64() {
             let (lo, hi) = (self.alloc_reg32(), self.alloc_reg32());
             let (lo2, hi2) = (self.alloc_reg32(), self.alloc_reg32());
             writeln!(&mut self.ptx_buffer, "    mov.b64 {{{}, {}}}, {};", lo, hi, src_reg).unwrap();
-            writeln!(&mut self.ptx_buffer, "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;", lo2, lo, offset).unwrap();
-            writeln!(&mut self.ptx_buffer, "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;", hi2, hi, offset).unwrap();
+            writeln!(&mut self.ptx_buffer, "    shfl.sync.{mode}.b32 {}, {}, {}, 0x1f, 0xffffffff;", lo2, lo, operand).unwrap();
+            writeln!(&mut self.ptx_buffer, "    shfl.sync.{mode}.b32 {}, {}, {}, 0x1f, 0xffffffff;", hi2, hi, operand).unwrap();
             writeln!(&mut self.ptx_buffer, "    mov.b64 {}, {{{}, {}}};", dst, lo2, hi2).unwrap();
         } else {
-            writeln!(&mut self.ptx_buffer, "    shfl.sync.bfly.b32 {}, {}, {}, 0x1f, 0xffffffff;", dst, src_reg, offset).unwrap();
+            writeln!(&mut self.ptx_buffer, "    shfl.sync.{mode}.b32 {}, {}, {}, 0x1f, 0xffffffff;", dst, src_reg, operand).unwrap();
         }
         dst
     }

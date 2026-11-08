@@ -412,6 +412,34 @@ fn primitive_llvm_type(name: &str) -> Option<&'static str> {
     })
 }
 
+/// `('i' | 'u' | 'f', bits)` for a type `as` converts between, else None.
+fn cast_kind(name: &str) -> Option<(char, u32)> {
+    Some(match name {
+        "I8" | "i8" => ('i', 8),
+        "I16" | "i16" => ('i', 16),
+        "I32" | "i32" => ('i', 32),
+        "I64" | "i64" => ('i', 64),
+        "U8" | "u8" => ('u', 8),
+        "U16" | "u16" => ('u', 16),
+        "U32" | "u32" => ('u', 32),
+        "U64" | "u64" => ('u', 64),
+        "F32" | "f32" => ('f', 32),
+        "F64" | "f64" => ('f', 64),
+        _ => return None,
+    })
+}
+
+fn cast_llvm_type(kind: char, bits: u32) -> &'static str {
+    match (kind, bits) {
+        ('f', 32) => "float",
+        ('f', _) => "double",
+        (_, 8) => "i8",
+        (_, 16) => "i16",
+        (_, 32) => "i32",
+        _ => "i64",
+    }
+}
+
 fn ast_type_to_string(ty: &Type) -> String {
     match ty {
         Type::Primitive(name, _) => name.clone(),
@@ -2573,6 +2601,10 @@ impl LlvmEmitter {
                 operand,
                 ..
             } => Self::scalar_helper_expr(operand, locals, proved, arities),
+            // A numeric conversion is arithmetic on its operand.
+            Expr::Cast { expr: operand, .. } => {
+                Self::scalar_helper_expr(operand, locals, proved, arities)
+            }
             Expr::Call { func, args, .. } => {
                 let Expr::Ident(name, _) = &**func else {
                     return false;
@@ -2938,7 +2970,9 @@ impl LlvmEmitter {
                 self.inspect_runtime_expr(base, candidates, rejected, opaque);
                 self.inspect_runtime_expr(index, candidates, rejected, opaque);
             }
-            Expr::MemberAccess { base, .. } | Expr::UnaryOp { operand: base, .. } => {
+            Expr::MemberAccess { base, .. }
+            | Expr::UnaryOp { operand: base, .. }
+            | Expr::Cast { expr: base, .. } => {
                 self.inspect_runtime_expr(base, candidates, rejected, opaque);
             }
             Expr::StructLit { fields, .. } => {
@@ -6163,6 +6197,71 @@ representation, and whether that is lossless depends on the expression.",
         result
     }
 
+    /// `operand as to`, with `operand` of Y type `from` (see `Expr::Cast`).
+    ///
+    /// Float to integer is written out rather than called as
+    /// `llvm.fpto[su]i.sat`, which would need a declaration in the prelude:
+    /// `fpto[su]i` itself is poison outside the target's range, so the result
+    /// is chosen with `select`, which does not propagate poison from the arm
+    /// it does not choose. NaN gives 0, at or above 2^(bits-1) (2^bits
+    /// unsigned) the maximum, below -2^(bits-1) (0 unsigned) the minimum:
+    /// Rust's `as`, and PTX's `cvt.rzi`.
+    fn emit_cast(&mut self, operand: &Expr, from: &str, to: &str) -> Result<String, String> {
+        let (fk, fb) = cast_kind(from).ok_or_else(|| format!(
+            "cannot name the type of the operand of `as {}` (it types as `{}`); \
+             bind it to a typed `let` first", to, from))?;
+        let (tk, tb) = cast_kind(to).ok_or_else(|| format!(
+            "`as {}`: `as` converts to an integer type, F32 or F64", to))?;
+        let fty = cast_llvm_type(fk, fb);
+        let tty = cast_llvm_type(tk, tb);
+        let lowered = self.infer_type(operand);
+        if lowered != fty {
+            return Err(format!(
+                "the operand of `as {}` is a `{}` but lowers to `{}`, not `{}`",
+                to, from, lowered, fty));
+        }
+        let v = self.emit_expr(operand, None, Some(fty.to_string()));
+        let tmp = self.fresh_tmp();
+        let line = match (fk, tk) {
+            ('f', 'f') if fb == tb => return Ok(v),
+            ('f', 'f') if fb < tb => format!("{} = fpext {} {} to {}", tmp, fty, v, tty),
+            ('f', 'f') => format!("{} = fptrunc {} {} to {}", tmp, fty, v, tty),
+            ('f', _) => {
+                let raw = self.fresh_tmp();
+                let conv = if tk == 'i' { "fptosi" } else { "fptoui" };
+                writeln!(&mut self.output, "  {} = {} {} {} to {}", raw, conv, fty, v, tty).unwrap();
+                // Both bounds are powers of two, exact in either float type.
+                let (lo, hi) = if tk == 'i' {
+                    (-(2f64.powi(tb as i32 - 1)), 2f64.powi(tb as i32 - 1))
+                } else {
+                    (0.0, 2f64.powi(tb as i32))
+                };
+                let (min, max) = if tk == 'i' {
+                    (format!("{}", i128::MIN >> (128 - tb)), format!("{}", i128::MAX >> (128 - tb)))
+                } else {
+                    ("0".to_string(), "-1".to_string()) // all ones
+                };
+                let (nan, big, small, r1, r2) = (self.fresh_tmp(), self.fresh_tmp(),
+                    self.fresh_tmp(), self.fresh_tmp(), self.fresh_tmp());
+                let o = &mut self.output;
+                writeln!(o, "  {} = fcmp uno {} {}, {}", nan, fty, v, v).unwrap();
+                writeln!(o, "  {} = fcmp oge {} {}, 0x{:016X}", big, fty, v, hi.to_bits()).unwrap();
+                writeln!(o, "  {} = fcmp olt {} {}, 0x{:016X}", small, fty, v, lo.to_bits()).unwrap();
+                writeln!(o, "  {} = select i1 {}, {} {}, {} {}", r1, big, tty, max, tty, raw).unwrap();
+                writeln!(o, "  {} = select i1 {}, {} {}, {} {}", r2, small, tty, min, tty, r1).unwrap();
+                format!("{} = select i1 {}, {} 0, {} {}", tmp, nan, tty, tty, r2)
+            }
+            (_, 'f') => format!("{} = {} {} {} to {}", tmp,
+                                if fk == 'i' { "sitofp" } else { "uitofp" }, fty, v, tty),
+            _ if fb == tb => return Ok(v),
+            _ if fb > tb => format!("{} = trunc {} {} to {}", tmp, fty, v, tty),
+            _ => format!("{} = {} {} {} to {}", tmp,
+                         if fk == 'i' { "sext" } else { "zext" }, fty, v, tty),
+        };
+        writeln!(&mut self.output, "  {}", line).unwrap();
+        Ok(tmp)
+    }
+
     fn emit_expr(
         &mut self,
         expr: &Expr,
@@ -6291,6 +6390,18 @@ representation, and whether that is lossless depends on the expression.",
                 )
                 .unwrap();
                 tmp
+            }
+            Expr::Cast { expr: operand, ty, span } => {
+                let to = ast_type_to_string(ty);
+                let from = self.infer_ast_type(operand);
+                match self.emit_cast(operand, &from, &to) {
+                    Ok(value) => value,
+                    Err(msg) => {
+                        self.emit_errors.push(format!(
+                            "[LLVM host backend] line {}: {}", span.line, msg));
+                        "0".into()
+                    }
+                }
             }
             Expr::UnaryOp { op, operand, .. } => {
                 if let UnaryOp::Ref { .. } = op {
@@ -7370,6 +7481,7 @@ representation, and whether that is lossless depends on the expression.",
                 operand,
                 ..
             } => self.infer_ast_type(operand),
+            Expr::Cast { ty, .. } => ast_type_to_string(ty),
             Expr::BinaryOp {
                 left, op, right, ..
             } => {
@@ -7669,6 +7781,13 @@ representation, and whether that is lossless depends on the expression.",
                     }
                 } else {
                     "i32".into()
+                }
+            }
+            Expr::Cast { ty, .. } => {
+                let to = ast_type_to_string(ty);
+                match cast_kind(&to) {
+                    Some((k, b)) => cast_llvm_type(k, b).into(),
+                    None => "Unknown".into(),
                 }
             }
             Expr::UnaryOp { op, operand, .. } => match op {
