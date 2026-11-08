@@ -363,7 +363,13 @@ def quantize_kv(module, k, v, q_levels=127):
 # The integers and scales are the ones the unpacked path computes, bit for bit
 # (`check_pack_round_trip`, python/tests/test_exact_package.py). The cache
 # still grows by `cat`, now over 2 + 1 bytes a value instead of 4 + 4.
-PACK = os.environ.get("Y_EXACT_KV_PACK", "0") != "0"
+#
+# It pays with Y's attention kernel (`Y_EXACT_ATTN=y`), which reads the packed
+# rows as they are. The torch path unpacks the whole cache every step, which
+# costs about what it saves: one compiled 0.5B decode step, batch 32, rough
+# (desktop on the GPU), same tokens in all four: Y kernel 2485 -> 2301 us GPU
+# (497 -> 473 kernels) packed; torch path 2709 -> 2738 us (677 -> 725).
+PACK =os.environ.get("Y_EXACT_KV_PACK", "0") != "0"
 K_PAD, V_PAD = 8, 16
 
 
