@@ -25,10 +25,17 @@ def _bits_differ(a, b):
 
 def _pairs(kind, n, rng):
     """float32 x and float64 r; "midpoint" pairs put x / r within about a
-    float64 ulp of a float32 rounding midpoint."""
+    float64 ulp of a float32 rounding midpoint, "subnormal" pairs within about
+    a float64 ulp of one below 2^-126, where float32's spacing is 2^-149 and
+    the midpoints, (2k + 1) * 2^-150, do not have the bit pattern the kernel's
+    normal-range test looks for: only its |q| < 2^-126 test catches them."""
     if kind == "random":
         x = (rng.standard_normal(n) * np.exp(rng.uniform(-8, 8, n))).astype(np.float32)
         r = np.sqrt(np.exp(rng.uniform(-14, 14, n)) + 1e-6)
+    elif kind == "subnormal":
+        x = (rng.uniform(0.5, 60, n) * np.sign(rng.standard_normal(n))).astype(np.float32)
+        m = np.ldexp((2 * rng.integers(0, 1 << 23, n) + 1).astype(np.float64), -150)
+        r = np.abs(x.astype(np.float64) / m)
     else:
         x = (rng.uniform(0.5, 60, n) * np.sign(rng.standard_normal(n))).astype(np.float32)
         c = rng.uniform(1, 2, n).astype(np.float32).astype(np.float64)
@@ -42,11 +49,11 @@ class TestNormKernel(unittest.TestCase):
     def test_quotient_equals_the_divide(self):
         from y_lang.exact import norm_kernel as nk
         rng = np.random.default_rng(0)
-        for kind in ("random", "midpoint"):
+        for kind in ("random", "midpoint", "subnormal"):
             x, r = _pairs(kind, 2_000_000, rng)
             want = (x.double() / r).float()
             self.assertEqual(_bits_differ(nk.quotient_to_f32(x, r), want), 0, kind)
-            if kind == "midpoint":
+            if kind != "random":
                 # Control: the multiply alone is wrong here, so the guard is
                 # what makes the result right.
                 cheap = (x.double() * (1.0 / r)).float()
@@ -100,6 +107,10 @@ class TestNormKernel(unittest.TestCase):
         self.assertRegex(ptx, r"\bdiv\.rn\.f64")
         self.assertRegex(ptx, r"\bsqrt\.rn\.f64")
         self.assertTrue(re.search(r"\bmul\.rn\.f64", ptx))
+        # Speed, not bits: the guard tests q's bits as integers, because a
+        # float64 compare runs at 1/64 rate on a GeForce part (four per
+        # element made the kernel 11.4 us at the 7B shape, none 8.1 us).
+        self.assertNotRegex(ptx, r"\bsetp\.\w+\.f64")
 
 
 if __name__ == "__main__":
