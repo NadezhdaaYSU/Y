@@ -85,7 +85,6 @@ def build_exact(model_id, device):
             f"builder quantises. Use the harness without --low-memory.")
     rot = m.model.rotary_emb
     assert rot.inv_freq.dtype == torch.float32, rot.inv_freq.dtype
-    shapes = []
     # Hold PARENTS only: a list of every module would keep each original Linear
     # alive after its float32 copy moved to the device (measured: 13.3 GiB, OOM).
     parents = [mod for mod in m.modules()
@@ -95,16 +94,13 @@ def build_exact(model_id, device):
             lin = getattr(mod, cn).to(device=device, dtype=torch.float32)
             new = exact_model.ExactLinear(lin)
             setattr(mod, cn, new)
-            shapes.append((new.out_features, new.in_features))
             del lin
     del parents
     m.to(device=device, dtype=torch.float32)
     n_lin, n_norm = exact_model.convert(m)
     assert n_lin == 0, "every Linear should already be ExactLinear"
-    if (device != "cpu" and exact_model.GEMM == "triton"
-            and exact_model.w8a8_matmul is not None):
-        from . import w8a8_gemv
-        w8a8_gemv.prime(sorted(set(shapes)), torch.device(device))
+    # `convert` primes the Triton tiles, for the shapes left after it merges
+    # q/k/v and gate/up.
     return m
 
 

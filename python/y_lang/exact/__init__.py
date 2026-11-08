@@ -24,6 +24,7 @@ names:
 - `kv`: the K/V quantisers and cache.
 - `attention`: exact attention for Qwen2 (integer scores, the integer `exp2`,
   an exact p.V), and the demo's `build`, `decode` and sanity gate.
+- `greedy`: fixed-length greedy decoding without a host sync per token.
 - `w8a8_gemv`: the Triton int8 kernels (GPU only).
 - `large_model`: a builder that never holds a float32 copy of a bf16
   checkpoint, for models too large for that.

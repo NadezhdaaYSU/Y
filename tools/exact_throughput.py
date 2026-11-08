@@ -45,6 +45,7 @@ import torch._inductor.config as _inductor_config  # noqa: E402
 
 import batch_invariance_demo as D  # noqa: E402
 import exact_model  # noqa: E402
+from y_lang.exact.greedy import greedy  # noqa: E402
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 PROMPT = ("Explain, step by step and in detail, how a suspension bridge carries "
@@ -119,7 +120,7 @@ def build(arm, device, compile_it, graphs=False, low_memory=False):
     return m
 
 
-def gate(models, tok, device):
+def gate(models, tok, device, static_cache=False):
     """Refuse to time an arm that is not computing the model's function.
 
     This tool never decodes a token - it calls `generate` for the clock and
@@ -130,8 +131,8 @@ def gate(models, tok, device):
     thing is not a cost.
     """
     for name, m in models.items():
-        canary = D.canary_text(m, tok, device)
-        ref = D.sanity_reference(m, tok, argparse.Namespace(device=device, tokens=64))
+        canary = D.canary_text(m, tok, device, static_cache)
+        ref = D.sanity_reference(m, tok, argparse.Namespace(device=device, tokens=64), static_cache)
         ok, reason = D.sanity_verdict(canary, ref)
         print(f"  sanity {name:<12} {reason}")
         if not ok:
@@ -142,17 +143,20 @@ def gate(models, tok, device):
     return True
 
 
-def one_run(model, inp, att, kw):
+def one_run(model, inp, att, kw, loop="generate"):
     torch.cuda.synchronize()
     t = time.perf_counter()
     with torch.no_grad():
-        out = model.generate(input_ids=inp, attention_mask=att, **kw)
+        if loop == "greedy":
+            out = greedy(model, inp, att, kw["max_new_tokens"])
+        else:
+            out = model.generate(input_ids=inp, attention_mask=att, **kw)
     torch.cuda.synchronize()
     dt = time.perf_counter() - t
     # tok/s divides by max_new_tokens, so an arm that hit EOS early would be
     # credited with work it did not do. Rows that finish early are still
     # computed (padded) until every row has, so the shape is the work done.
-    new = out.shape[1] - inp.shape[1]
+    new = out.shape[1] - (0 if loop == "greedy" else inp.shape[1])
     if new != kw["max_new_tokens"]:
         raise RuntimeError(
             f"generate stopped after {new} of {kw['max_new_tokens']} tokens; "
@@ -160,8 +164,26 @@ def one_run(model, inp, att, kw):
     return dt
 
 
+def greedy_matches_generate(model, inp, att, kw):
+    """Does `greedy` pick `generate`'s tokens on the timed batch?
+
+    `greedy` applies no logits processor, so the comparison turns off the one
+    the checkpoint's generation config adds (Qwen2.5-Instruct: a 1.05
+    repetition penalty). A loop that decoded something else would be timed
+    doing different work, so a mismatch refuses the run.
+    """
+    with torch.no_grad():
+        want = model.generate(input_ids=inp, attention_mask=att,
+                              **dict(kw, repetition_penalty=1.0))[:, inp.shape[1]:]
+        got = greedy(model, inp, att, kw["max_new_tokens"])
+    if want.shape != got.shape:
+        return f"generate made {tuple(want.shape)} tokens, greedy {tuple(got.shape)}"
+    rows = (want != got).any(dim=1).nonzero().flatten().tolist()
+    return f"rows {rows} differ" if rows else None
+
+
 def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
-                    static_cache=False):
+                    static_cache=False, loop="generate"):
     """Time the arms round-robin, not one after the other.
 
     The first version of this ran stock to completion and then exact, and a
@@ -185,15 +207,25 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
         # to beat that extra work - which is the cost this experiment measures
         # rather than assumes.
         kw["cache_implementation"] = "static"
-    for m in models.values():                   # warm up + let inductor compile
+    for name, m in models.items():              # warm up + let inductor compile
         with torch.no_grad():
             m.generate(input_ids=inp, attention_mask=att,
                        **dict(kw, max_new_tokens=min(8, tokens)))
-        one_run(m, inp, att, kw)
+        if loop == "greedy":
+            if graphs or static_cache:
+                raise SystemExit("--loop greedy drives a dynamic cache; it does not "
+                                 "combine with --graphs or --static-cache")
+            differs = greedy_matches_generate(m, inp, att, kw)
+            if differs:
+                raise SystemExit(f"*** arm {name!r}: greedy's tokens are not "
+                                 f"generate's ({differs}); refusing to time it")
+            print(f"  loop {name:<13} greedy == generate(repetition_penalty=1.0) "
+                  f"on all {batch} rows")
+        one_run(m, inp, att, kw, loop)
     times = {k: [] for k in models}
     for _ in range(reps):
         for name, m in models.items():
-            times[name].append(one_run(m, inp, att, kw))
+            times[name].append(one_run(m, inp, att, kw, loop))
     return {k: (min(v), statistics.median(v)) for k, v in times.items()}
 
 
@@ -208,6 +240,10 @@ def main():
                     help="CUDA graphs via static cache + reduce-overhead, BOTH arms")
     ap.add_argument("--static-cache", action="store_true",
                     help="static cache WITHOUT graphs: prices the padding alone")
+    ap.add_argument("--loop", choices=("generate", "greedy"), default="generate",
+                    help="time Hugging Face's generate (the default), or "
+                         "y_lang.exact.greedy, which has no per-step host sync "
+                         "and no logits processors; BOTH arms")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--low-memory", action="store_true",
@@ -222,7 +258,8 @@ def main():
     print(f"\n{MODEL.split('/')[-1]}  batch {a.batch}  {a.tokens} new tokens  "
           f"compile={'on (BOTH arms)' if a.compile else 'off'}"
           f"{'  cuda-graphs=on (BOTH arms)' if a.graphs else ''}"
-          f"{'  static-cache=on (BOTH arms)' if a.static_cache else ''}  "
+          f"{'  static-cache=on (BOTH arms)' if a.static_cache else ''}"
+          f"{'  loop=greedy (BOTH arms)' if a.loop == 'greedy' else ''}  "
           f"best of {a.reps}")
     print(f"{'arm':<38}{'s':>8}{'tok/s/seq':>12}{'tok/s total':>13}{'spread':>9}")
     # Both models are built BEFORE anything is timed, so the arms can be
@@ -238,11 +275,11 @@ def main():
     models = {}
     for name in arms:
         models[name] = build(name, a.device, a.compile, a.graphs, a.low_memory)
-    if not gate(models, tok, a.device):
+    if not gate(models, tok, a.device, static_cache=a.graphs or a.static_cache):
         qwen2.eager_attention_forward = D._orig
         return 1
-    res = run_interleaved(models, tok, a.batch,
-                          a.tokens, a.device, a.reps, a.graphs, a.static_cache)
+    res = run_interleaved(models, tok, a.batch, a.tokens, a.device, a.reps,
+                          a.graphs, a.static_cache, a.loop)
     LABELS = {"stock": "stock  bf16 + SDPA (what ships)",
               "exact": "exact  int8, order-independent",
               "fixedfloat": "fixedfloat  fp32, reduction order pinned"}
