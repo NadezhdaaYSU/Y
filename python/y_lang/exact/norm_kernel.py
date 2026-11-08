@@ -47,9 +47,17 @@ def _quotient_to_f32(xd, r, rinv):
     q = xd * rinv
     bits = q.to(tl.int64, bitcast=True)
     dist = tl.abs((bits & 536870911) - 268435456)          # 2^29 - 1, 2^28
-    aq = tl.abs(q)
-    unsafe = (q != 0.0) & ((aq < 1.1754943508222875e-38)   # 2^-126
-                           | (dist <= 3) | (aq > 1.7976931348623157e308) | (q != q))
+    # The other tests on |q|'s bits, as integers: a GeForce part compares
+    # float64s at 1/64 rate, and four float64 compares per element cost more
+    # than the norm's own float64 arithmetic. Non-negative float64s order as
+    # their bit patterns, so 0 < abits < bits(2^-126) is 0 < |q| < 2^-126 and
+    # abits >= bits(inf) is infinite or NaN. The first is one unsigned
+    # compare, abits - 1 wrapping to 2^64 - 1 at q == 0 (written as
+    # `abits != 0 & ...`, LLVM turns the zero test back into a float64
+    # compare). q == 0 is never unsafe: its dist is 2^28.
+    abits = bits & 0x7FFFFFFFFFFFFFFF
+    tiny = (abits - 1).to(tl.uint64, bitcast=True) < 0x380FFFFFFFFFFFFF  # bits(2^-126) - 1
+    unsafe = tiny | (dist <= 3) | (abits >= 0x7FF0000000000000)
     if tl.max(unsafe.to(tl.int32), axis=0) > 0:
         q = tl.where(unsafe, xd / r, q)   # float64 `/` is div.rn.f64
     return q.to(tl.float32)
