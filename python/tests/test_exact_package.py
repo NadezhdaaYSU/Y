@@ -140,7 +140,22 @@ class TestLoad(unittest.TestCase):
         linears = [m for m in model.modules() if isinstance(m, torch.nn.Linear)]
         exact = [m for m in model.modules() if isinstance(m, em.ExactLinear)]
         self.assertEqual(linears, [], "every Linear must be converted")
-        self.assertEqual(len(exact), 2 * 7 + 1)     # q, k, v, o, gate, up, down per layer, and lm_head
+        # q/k/v merged by default: qkv, o, gate, up, down per layer, and lm_head.
+        self.assertEqual(len(exact), 2 * 5 + 1)
+        self.assertEqual(model.model.layers[0].self_attn.qkv_sizes, (64, 32, 32))
+
+        # Merging changes no bits: the same model converted without it, and
+        # with gate/up merged too.
+        from transformers import AutoModelForCausalLM
+        unmerged = AutoModelForCausalLM.from_pretrained(str(d), dtype=torch.float32,
+                                                        attn_implementation="eager").eval()
+        em.convert(unmerged, merge=False)
+        self.assertEqual(sum(isinstance(m, em.ExactLinear) for m in unmerged.modules()), 2 * 7 + 1)
+        all_merged = AutoModelForCausalLM.from_pretrained(str(d), dtype=torch.float32,
+                                                          attn_implementation="eager").eval()
+        em.convert(all_merged, merge=True)
+        self.assertEqual(sum(isinstance(m, em.ExactLinear) for m in all_merged.modules()), 2 * 4 + 1)
+        self.assertEqual(all_merged.model.layers[0].mlp.gate_up_sizes, (128, 128))
 
         # Not a degenerate model: the exact logits follow the float model's.
         ids = tok("The capital of France is", return_tensors="pt").input_ids
@@ -149,12 +164,58 @@ class TestLoad(unittest.TestCase):
             got = model(ids).logits.float()
         rel = ((got - want).norm() / want.norm()).item()
         self.assertLess(rel, 0.05, f"exact logits are {rel:.3f} away from the float model's")
+        with torch.no_grad():
+            got_unmerged = unmerged(ids).logits.float()
+        self.assertTrue(torch.equal(got, got_unmerged), "merging q/k/v changed the logits")
+        with torch.no_grad():
+            self.assertTrue(torch.equal(all_merged(ids).logits.float(), got_unmerged),
+                            "merging q/k/v and gate/up changed the logits")
 
         prompt = "A suspension bridge carries the weight of the deck"
         alone = generate(model, tok2, prompt, max_new_tokens=12)
         in_batch = attention.decode(model, tok2, prompt, 5, 12, torch.device("cpu"))
         self.assertEqual(len(alone), 12)
         self.assertEqual(alone, in_batch)
+        self.assertEqual(alone, generate(unmerged, tok2, prompt, max_new_tokens=12))
+
+        # `greedy` picks generate's tokens, on a left-padded ragged batch too.
+        from y_lang.exact.greedy import greedy
+        tok2.padding_side = "left"
+        batch = tok2([prompt, "Hi", "The capital of France is"], return_tensors="pt",
+                     padding=True)
+        self.assertEqual(int((batch.attention_mask == 0).sum()) > 0, True, "not ragged")
+        # A tiny random model's argmax hardly depends on positions, so the
+        # tokens alone let wrong position ids through (two mutants did): every
+        # forward must also get generate's inputs.
+        calls = {"generate": [], "greedy": []}
+
+        def recorder(key):
+            def hook(module, args, kwargs):
+                calls[key].append({k: kwargs.get(k) for k in
+                                   ("input_ids", "position_ids", "attention_mask", "logits_to_keep")})
+            return hook
+
+        handle = model.register_forward_pre_hook(recorder("generate"), with_kwargs=True)
+        with torch.no_grad():
+            want = model.generate(input_ids=batch.input_ids, attention_mask=batch.attention_mask,
+                                  max_new_tokens=10, do_sample=False, num_beams=1,
+                                  repetition_penalty=1.0, pad_token_id=tok2.eos_token_id)
+        handle.remove()
+        handle = model.register_forward_pre_hook(recorder("greedy"), with_kwargs=True)
+        got = greedy(model, batch.input_ids, batch.attention_mask, 10)
+        handle.remove()
+        self.assertEqual(got.tolist(), want[:, batch.input_ids.shape[1]:].tolist())
+        self.assertEqual(len(calls["greedy"]), 10)
+        self.assertEqual(len(calls["generate"]), len(calls["greedy"]))
+        for step, (g, y) in enumerate(zip(calls["generate"], calls["greedy"])):
+            for k in g:
+                if torch.is_tensor(g[k]):
+                    self.assertTrue(torch.is_tensor(y[k]) and torch.equal(g[k], y[k]),
+                                    f"forward {step}: {k} is {y[k]}, generate's is {g[k]}")
+                else:
+                    self.assertEqual(g[k], y[k], f"forward {step}: {k}")
+        with self.assertRaisesRegex(ValueError, "at least 1"):
+            greedy(model, batch.input_ids, batch.attention_mask, 0)
 
 
 if __name__ == "__main__":

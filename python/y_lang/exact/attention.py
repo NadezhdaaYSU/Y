@@ -571,7 +571,7 @@ def sanity_verdict(canary, ref_tokens):
     return True, f"canary ok, {n} distinct tokens in reference"
 
 
-def canary_text(model, tok, device):
+def canary_text(model, tok, device, static_cache=False):
     # No `padding=True`: one sequence needs none, and asking for it makes
     # this fail on a tokenizer with no `pad_token` set - which the
     # throughput tool's is, since it never batches ragged input.
@@ -581,6 +581,7 @@ def canary_text(model, tok, device):
             input_ids=enc.input_ids, attention_mask=enc.attention_mask,
             max_new_tokens=CANARY_TOKENS, do_sample=False, num_beams=1,
             use_cache=True, pad_token_id=tok.eos_token_id,
+            **({"cache_implementation": "static"} if static_cache else {}),
         )
     return tok.decode(out[0, enc.input_ids.shape[1]:])
 
@@ -615,11 +616,16 @@ def check_gate_logic():
     return 0
 
 
-def sanity_reference(model, tok, args):
+def sanity_reference(model, tok, args, static_cache=False):
     """The arm's own batch-1 generation of PROMPTS[0], for the degeneracy half.
 
     Reuses the run's own token budget so the check reads the same length of
     output the verdict is drawn from, rather than a shorter proxy.
+
+    `static_cache` (and the same in `canary_text`): a forward captured as CUDA
+    graphs can only be driven with HF's static cache, whose buffers it updates
+    in place; the default dynamic cache keeps the previous step's graph
+    outputs, which the next replay overwrites.
     """
     ids = tok(PROMPTS[0], return_tensors="pt").to(args.device)
     with torch.no_grad():
@@ -627,6 +633,7 @@ def sanity_reference(model, tok, args):
             input_ids=ids.input_ids, attention_mask=ids.attention_mask,
             max_new_tokens=args.tokens, do_sample=False, num_beams=1,
             use_cache=True, pad_token_id=tok.eos_token_id,
+            **({"cache_implementation": "static"} if static_cache else {}),
         )
     return g[0, ids.input_ids.shape[1]:].tolist()
 

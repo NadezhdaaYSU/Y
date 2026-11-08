@@ -361,6 +361,44 @@ class ExactLinear(nn.Module):
             f"K for this width is {ACC_BUDGET // ((self.a_levels + 128) * 127)}."
         )
 
+    @classmethod
+    def merge(cls, parts):
+        """One ExactLinear computing `parts` side by side: output columns in
+        order, `cat([p(x) for p in parts], -1)`, bit for bit.
+
+        Nothing is quantised again. A part's weights, scales and bias are the
+        rows of the merged ones, the input is quantised per row from `x` alone
+        (`_q_per_row`), and each output column is its own integer dot product
+        times its own scales. So merging changes how many GEMMs run, never a
+        value. Parts that read different widths, or some with a bias and some
+        without (a zero bias would turn a -0.0 into +0.0), are refused.
+        """
+        first = parts[0]
+        same = ("in_features", "a_levels", "split_act", "fp32_exact")
+        for p in parts[1:]:
+            for f in same:
+                if getattr(p, f) != getattr(first, f):
+                    raise ValueError(f"cannot merge ExactLinears whose {f} differ")
+        biases = [p.bias for p in parts]
+        if any(b is None for b in biases) and not all(b is None for b in biases):
+            raise ValueError("cannot merge ExactLinears with and without a bias")
+        rows = torch.cat([p.w8t.t() for p in parts], dim=0)       # [sum N][K]
+        m = cls.__new__(cls)
+        nn.Module.__init__(m)
+        # The layout the parts were built with (`__init__`): Y's GEMM wants
+        # the [N][K] matrix contiguous, the others its transpose.
+        if first.w8t.t().is_contiguous():
+            m.register_buffer("w8t", rows.contiguous().t())
+        else:
+            m.register_buffer("w8t", rows.t().contiguous())
+        m.register_buffer("sw", torch.cat([p.sw for p in parts]))
+        m.register_buffer("bias", None if biases[0] is None else torch.cat(biases))
+        m.in_features = first.in_features
+        m.out_features = sum(p.out_features for p in parts)
+        for f in ("fp32_exact", "a_levels", "split_act"):
+            setattr(m, f, getattr(first, f))
+        return m
+
     def forward(self, x):
         shape = x.shape
         xf = x.reshape(-1, shape[-1])
@@ -570,12 +608,116 @@ class ExactRotary(nn.Module):
         return self.cos[position_ids].to(x.dtype), self.sin[position_ids].to(x.dtype)
 
 
-def convert(model, linears=True, norms=True, floats=None):
+# Merging q/k/v and gate/up replaces Qwen2Attention.forward and Qwen2MLP.forward
+# per instance with copies that call one projection where these call several.
+# The copies are only valid for the code they were copied from, so these lines
+# must be in transformers' forwards; if one is not, nothing is merged.
+_ATTENTION_LINES = (
+    "query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1, 2)",
+    "key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1, 2)",
+    "value_states = self.v_proj(hidden_states).view(hidden_shape).transpose(1, 2)",
+    "query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)",
+    "key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx)",
+    "attn_output = attn_output.reshape(*input_shape, -1).contiguous()",
+    "attn_output = self.o_proj(attn_output)",
+)
+_MLP_LINES = ("down_proj = self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))",)
+# `Y_EXACT_MERGE`: "qkv" (the default) merges q/k/v, "all" q/k/v and gate/up,
+# "0" nothing; any other value is refused. Measured at 7B, batch 32, on Y's
+# GEMM with the int8 V cache (docs/benchmarks/exact_merged_7b_2026-11-08):
+# q/k/v 52.9/53.1 tok/s/seq, nothing 52.1/52.3, both 52.1/52.0. Merging
+# gate/up gains nothing there and raises the peak memory of a long prefill:
+# one [rows][2 x intermediate] int32 output where there were two halves
+# (an 870 MiB allocation in the 7B record's longest prefill, which ran a 16 GB
+# card out of memory with a desktop open).
+_MERGE_CHOICES = {"0": (), "qkv": ("qkv",), "all": ("qkv", "gate_up")}
+if os.environ.get("Y_EXACT_MERGE", "qkv") not in _MERGE_CHOICES:
+    raise ValueError(f"Y_EXACT_MERGE={os.environ['Y_EXACT_MERGE']!r}: expected one of "
+                     f"{', '.join(_MERGE_CHOICES)}")
+MERGE = _MERGE_CHOICES[os.environ.get("Y_EXACT_MERGE", "qkv")]
+
+
+def _merged_attention_forward(self, hidden_states, position_embeddings, attention_mask,
+                              past_key_values=None, **kwargs):
+    """transformers' Qwen2Attention.forward, with q/k/v from one projection."""
+    import transformers.models.qwen2.modeling_qwen2 as qwen2
+    input_shape = hidden_states.shape[:-1]
+    hidden_shape = (*input_shape, -1, self.head_dim)
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+    query_states = q.view(hidden_shape).transpose(1, 2)
+    key_states = k.view(hidden_shape).transpose(1, 2)
+    value_states = v.view(hidden_shape).transpose(1, 2)
+    cos, sin = position_embeddings
+    query_states, key_states = qwen2.apply_rotary_pos_emb(query_states, key_states, cos, sin)
+    if past_key_values is not None:
+        key_states, value_states = past_key_values.update(key_states, value_states, self.layer_idx)
+    attention_interface = qwen2.ALL_ATTENTION_FUNCTIONS.get_interface(
+        self.config._attn_implementation, qwen2.eager_attention_forward)
+    attn_output, attn_weights = attention_interface(
+        self, query_states, key_states, value_states, attention_mask,
+        dropout=0.0 if not self.training else self.attention_dropout,
+        scaling=self.scaling, sliding_window=self.sliding_window, **kwargs)
+    attn_output = attn_output.reshape(*input_shape, -1).contiguous()
+    attn_output = self.o_proj(attn_output)
+    return attn_output, attn_weights
+
+
+def _merged_mlp_forward(self, x):
+    """transformers' Qwen2MLP.forward, with gate and up from one projection."""
+    gate, up = self.gate_up_proj(x).split(self.gate_up_sizes, dim=-1)
+    return self.down_proj(self.act_fn(gate) * up)
+
+
+def merge_projections(model, groups=("qkv", "gate_up")):
+    """Merge each Qwen2 layer's q/k/v and gate/up ExactLinears
+    (`ExactLinear.merge`): 4 GEMMs a layer where there were 7, and as many
+    fewer activation quantisations and epilogues, with the same bits.
+    Returns the number of modules merged; 0, with a message on stderr, if
+    transformers' forwards are not the ones the replacements were copied
+    from."""
+    import inspect
+    import sys
+    import types
+    import transformers.models.qwen2.modeling_qwen2 as qwen2
+    attention_src = inspect.getsource(qwen2.Qwen2Attention.forward)
+    mlp_src = inspect.getsource(qwen2.Qwen2MLP.forward)
+    missing = [line for line in _ATTENTION_LINES if line not in attention_src]
+    missing += [line for line in _MLP_LINES if line not in mlp_src]
+    if missing:
+        sys.stderr.write(
+            "y_lang.exact: transformers' Qwen2 forwards are not the ones the merged "
+            f"projections were written against ({missing[0]!r} is missing), so q/k/v "
+            "and gate/up are left as separate GEMMs (same bits, slower).\n")
+        return 0
+    merged = 0
+    for mod in list(model.modules()):
+        names = None
+        if isinstance(mod, qwen2.Qwen2Attention) and "qkv" in groups:
+            names, fused, sizes, fwd = ("q_proj", "k_proj", "v_proj"), "qkv_proj", "qkv_sizes", _merged_attention_forward
+        elif isinstance(mod, qwen2.Qwen2MLP) and "gate_up" in groups:
+            names, fused, sizes, fwd = ("gate_proj", "up_proj"), "gate_up_proj", "gate_up_sizes", _merged_mlp_forward
+        if names is None or not all(isinstance(getattr(mod, n, None), ExactLinear) for n in names):
+            continue
+        parts = [getattr(mod, n) for n in names]
+        setattr(mod, fused, ExactLinear.merge(parts))
+        setattr(mod, sizes, tuple(p.out_features for p in parts))
+        for n in names:
+            delattr(mod, n)
+        mod.forward = types.MethodType(fwd, mod)
+        merged += 1
+    return merged
+
+
+def convert(model, linears=True, norms=True, floats=None, merge=None):
     """Replace every Linear / RMSNorm in place. Returns counts.
 
     `floats` (default: follow `norms`) also swaps the SiLU activations and the
     rotary embedding for `ExactSiLU` / `ExactRotary`, the two remaining float
     ops that made a CPU decode differ from a GPU one.
+
+    `merge` (default: `Y_EXACT_MERGE`, which defaults to q/k/v only) then
+    merges projections (`merge_projections`), which changes no bits: True
+    (q/k/v and gate/up), False (none), or the groups to merge.
     """
     floats = norms if floats is None else floats
     n_lin = n_norm = 0
@@ -598,6 +740,13 @@ def convert(model, linears=True, norms=True, floats=None):
             elif floats and child.__class__.__name__.endswith("RotaryEmbedding"):
                 setattr(mod, child_name,
                         ExactRotary(child, max_pos).to(child.inv_freq.device))
+    groups = MERGE if merge is None else (("qkv", "gate_up") if merge is True else (merge or ()))
+    if groups:
+        merge_projections(model, groups)
+    exact = [m for m in model.modules() if isinstance(m, ExactLinear)]
+    shapes = sorted({(m.out_features, m.in_features) for m in exact})
+    if exact:
+        dev = exact[0].sw.device
     # The attention's quantiser widths, created now so a compiled forward finds
     # them as graph inputs (see `divisor`; a miss would cost a fallback to eager,
     # not bits). Imported here: exact_kv imports `divisor` from this module.
@@ -613,7 +762,7 @@ def convert(model, linears=True, norms=True, floats=None):
     # nothing is being traced. Doing it lazily on first call put the benchmark
     # inside `torch.compile`, where N and K are SymInts and the kernel cannot
     # even be launched. Five distinct shapes here, a few hundred ms total.
-    if (linears and shapes and dev is not None and dev.type == "cuda"
+    if (shapes and dev is not None and dev.type == "cuda"
             and GEMM == "triton" and w8a8_matmul is not None):
         from . import w8a8_gemv
         w8a8_gemv.prime(shapes, dev)
