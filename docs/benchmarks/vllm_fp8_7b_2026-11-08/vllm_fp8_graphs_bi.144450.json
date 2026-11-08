@@ -1,0 +1,28 @@
+{
+ "mode": "graphs",
+ "batch_invariant_env": "1",
+ "model": "Qwen/Qwen2.5-7B-Instruct",
+ "quantization": "fp8",
+ "batch": 32,
+ "tokens": 64,
+ "times_s": [
+  3.9506809539998358,
+  3.88589974599995,
+  3.8925310600000103,
+  3.885782226000174,
+  3.9632810380001047
+ ],
+ "best_s": 3.885782226000174,
+ "tok_s_per_seq": 16.470300258148622,
+ "tok_s_total": 527.0496082607559,
+ "first_differing_token_vs_alone": {
+  "+2 after": null,
+  "+7 after": null,
+  "+31 after": null,
+  "middle of 11": null,
+  "alone again": null
+ },
+ "compositions_changed": 0,
+ "alone_reproduces": true,
+ "alone_text_start": "1. **Anchorage Connection**: The suspension bridge starts with two massive concrete or masonry structures called anchorages. These anchorages are built into the ground and are designed to withstand the enormous forces"
+}
