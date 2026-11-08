@@ -15,10 +15,19 @@
 //   * `torch.round` is round-half-to-even, computed as (x + 2^52) - 2^52 for
 //     0 <= x < 2^30, each operand clamped to [0, 2^30] (the exp argument) or
 //     [0, 2^28] (the weight) as the Python code clamps them;
-//   * `2^28 / safe` is `reciprocal(safe) * 2^28`, because that is what
-//     PyTorch's `float / tensor` computes (`Tensor.__rdiv__`);
+//   * `2^28 / safe` is `reciprocal(safe) * 2^28`, which is what PyTorch's
+//     `float / tensor` computes (`Tensor.__rdiv__`) - and also equal to the
+//     divide, since scaling by a power of two commutes with rounding;
 //   * the max, the integer sums and `max` of the folded weights do not depend
 //     on order, so the warp reductions give the Python values;
+//   * the score is summed in float32 four values at a time: every partial
+//     sum is an integer below 2^24 (see the loop), so this is exact too.
+//
+// Random operands almost never land where an operation's ORDER or a tie's
+// rounding shows (one in ~10^7 values), so the Python tests add two searched
+// cases: one where (s * a) * sk and (s * sk) * a give different exp
+// arguments, one where m - logit is exactly k + 0.5 with k even
+// (python/y_lang/tests/test_exact_decode_attention.py).
 //   * the output is `float32((acc * wscale) / max(l, 1))` in float64.
 //
 // Layout (all contiguous): QI [B][NH][D] (integer-valued float32), A [B][NH]
@@ -62,6 +71,7 @@ kernel exact_decode_attention(
     let two28: F64 = 268435456.0;
     let inv28: F64 = 0.0000000037252902984619140625;
     let chunks: I32 = (T + 31) / 32;
+    let quads: I32 = D / 4;
 
     let m_lane: F64 = neg;
     let m: F64 = neg;
@@ -97,16 +107,33 @@ kernel exact_decode_attention(
             let wt: I64 = 0;
             if t < T {
                 if BLOCKED[b * T + t] == 0 {
-                    let s: I32 = 0;
+                    // The integer score, summed in float32: every product
+                    // and partial sum is an integer below 2^24 (|q| <= 127,
+                    // |k| <= 1023, D <= 128; `assert_score_budget` checks it
+                    // before launch), which float32 holds exactly, so the sum
+                    // is exact in any order and with or without the FMA Y
+                    // makes of `s + q * k` - the argument that makes the
+                    // Python path's float32 matmul exact. Four values a load.
+                    let s: F32 = 0.0;
                     let krow: I32 = (krow0 + t) * D;
-                    @invariant(d >= 0)
-                    for d in 0..D {
-                        let qf: F32 = QI[qrow + d];
-                        let kf: F32 = KI[krow + d];
-                        let qv: I32 = qf as I32;
-                        let kv: I32 = kf as I32;
-                        let prod: I32 = qv * kv;
-                        s = s + prod;
+                    let qend: I32 = qrow + D;
+                    let kend: I32 = krow + D;
+                    @invariant(d4 >= 0)
+                    for d4 in 0..quads {
+                        let q4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + d4 * 4, 0, 1, qend);
+                        let k4: F32x4 = block_ptr2d_load_v4(KI, 0, krow + d4 * 4, 0, 1, kend);
+                        let qx: F32 = q4.x;
+                        let qy: F32 = q4.y;
+                        let qz: F32 = q4.z;
+                        let qw: F32 = q4.w;
+                        let kx: F32 = k4.x;
+                        let ky: F32 = k4.y;
+                        let kz: F32 = k4.z;
+                        let kw: F32 = k4.w;
+                        s = s + qx * kx;
+                        s = s + qy * ky;
+                        s = s + qz * kz;
+                        s = s + qw * kw;
                     }
                     let skf: F32 = SK[krow0 + t];
                     let sk: F64 = skf as F64;

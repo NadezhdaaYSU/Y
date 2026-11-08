@@ -92,6 +92,62 @@ class TestExactDecodeAttention(unittest.TestCase):
         _, other = self.run_both(q, k, v, am, sc * 1.0001)
         self.assertGreater((other.view(torch.int32) != want.view(torch.int32)).sum().item(), 0)
 
+    def core_both(self, s0, s1, sq_bits, sk_bits):
+        """`exact_attention_core` on one query and two keys with scores s0 > s1
+        (q = (127, 1, 0, ...), so a key (x, y, 0, ...) scores 127x + y), the
+        query scale `sq_bits` and both keys' scale `sk_bits` (float32 bits)."""
+        import struct
+        A = self.attention
+        f32 = lambda bits: struct.unpack("<f", struct.pack("<I", bits))[0]
+        d = 32
+        qi = torch.zeros(1, 1, 1, d, device="cuda")
+        qi[..., 0], qi[..., 1] = 127.0, 1.0
+        ki = torch.zeros(1, 1, 2, d, device="cuda")
+        for t, s in enumerate((s0, s1)):
+            ki[0, 0, t, 0], ki[0, 0, t, 1] = float(s // 127), float(s - 127 * (s // 127))
+        sq = torch.full((1, 1, 1, 1), f32(sq_bits), dtype=torch.float32, device="cuda").double()
+        sk = torch.full((1, 1, 2, 1), f32(sk_bits), dtype=torch.float32, device="cuda")
+        g = torch.Generator(device="cuda").manual_seed(0)
+        vi = torch.randint(-127, 128, (1, 1, 2, d), generator=g, device="cuda").to(torch.int8)
+        sv = torch.full((1, 1, 2, 1), 0.01, device="cuda")
+        table = A._table(torch.device("cuda"))
+        out = {}
+        for mode in ("torch", "y"):
+            A.ATTN = mode
+            with torch.no_grad():
+                out[mode] = A.exact_attention_core(qi, sq, ki, sk, vi, sv, 1023, 127, None,
+                                                   1.0 / math.sqrt(d), table, torch.float32)
+        a = ((sq.cpu() * (1.0 / math.sqrt(d))) * math.log2(math.e)) * 65536.0
+        skd = sk[0, 0, 0, 0].double().cpu()
+        return out["torch"], out["y"], a.reshape(()), skd
+
+    def test_the_logit_is_formed_in_pythons_order(self):
+        # (s * a) * sk, not (s * sk) * a: found by search, these operands give
+        # exp arguments one apart under the two orders, and different weights.
+        s0, s1 = 126359, 126357
+        want, got, a, sk = self.core_both(s0, s1, 0x3FC23156, 0x3EADEC92)
+        x = ((s0 * a) * sk) - ((s1 * a) * sk)
+        x_other = ((s0 * sk) * a) - ((s1 * sk) * a)
+        tq, tq_other = torch.round(x), torch.round(x_other)
+        self.assertNotEqual(tq.item(), tq_other.item(), "the case no longer discriminates")
+        p = self.attention.exp2_neg_q16_16(torch.stack([tq, tq_other]), self.attention._table("cpu"))
+        self.assertNotEqual(p[0].item(), p[1].item())
+        self.assertTrue(torch.equal(got.view(torch.int32), want.view(torch.int32)), (got, want))
+
+    def test_the_exp_argument_rounds_half_to_even(self):
+        # m - logit is exactly k + 0.5 with k even: half-to-even and half-up
+        # give different exp arguments and different weights.
+        s0, s1 = 128484, 128482
+        want, got, a, sk = self.core_both(s0, s1, 0x3FFA0E4D, 0x3E193D2A)
+        x = ((s0 * a) * sk) - ((s1 * a) * sk)
+        self.assertEqual(x.item() - math.floor(x.item()), 0.5, "the case is no longer a tie")
+        self.assertEqual(math.floor(x.item()) % 2, 0)
+        p = self.attention.exp2_neg_q16_16(
+            torch.tensor([math.floor(x.item()), math.floor(x.item()) + 1.0], dtype=torch.float64),
+            self.attention._table("cpu"))
+        self.assertNotEqual(p[0].item(), p[1].item())
+        self.assertTrue(torch.equal(got.view(torch.int32), want.view(torch.int32)), (got, want))
+
     def test_prefill_stays_on_the_torch_ops(self):
         q, k, v, am, sc = _case(2, 14, 2, 9, 64, 1.0, 10, None)
         q = torch.randn(2, 14, 3, 64, device="cuda")        # three query positions
