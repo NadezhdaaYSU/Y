@@ -17,9 +17,15 @@
 //   * the logit, the exp argument and the folded weight are float64, one
 //     operation per `let`: Y fuses `a * b + c` written in one expression into
 //     an FMA, which rounds once where PyTorch rounds twice;
-//   * `torch.round` is round-half-to-even, computed as (x + 2^52) - 2^52 for
-//     0 <= x < 2^30, each operand clamped to [0, 2^30] (the exp argument) or
-//     [0, 2^28] (the weight) as the Python code clamps them;
+//   * `torch.round` is round-half-to-even, computed as
+//     bits(x + 2^52) - bits(2^52) for 0 <= x < 2^30, each operand clamped to
+//     [0, 2^30] (the exp argument) or [0, 2^28] (the weight) as the Python code
+//     clamps them;
+//   * the max of the logits is the max of their order keys (bits with the
+//     magnitude flipped for negatives), the same float64 up to the sign of a
+//     zero, which only ever makes m - logit +0 where Python's could be -0, and
+//     both round to 0;
+//   * up to 256 keys, phase 2 reuses phase 1's integer weights p.
 //   * `2^28 / safe` is `reciprocal(safe) * 2^28`, which is what PyTorch's
 //     `float / tensor` computes (`Tensor.__rdiv__`) - and also equal to the
 //     divide, since scaling by a power of two commutes with rounding;
@@ -102,18 +108,31 @@ kernel exact_decode_attention(
     let inf: F64 = one / zero;
     let neg: F64 = zero - inf;
     let two52: F64 = 4503599627370496.0;
-    let cap30: F64 = 1073741824.0;
     let two28: F64 = 268435456.0;
     let inv28: F64 = 0.0000000037252902984619140625;
+    // Float64 compares run at 1/64 rate on a GeForce part, so every compare
+    // per key is on bits. Non-negative float64s order as their bit patterns
+    // (the exp argument m - logit and the weights are >= +0), and for any
+    // float64 the key bits ^ ((bits >> 63) & (2^63 - 1)) orders as an I64
+    // does (-0 below +0, which keeps m - logit from ever being -0). Bits of
+    // 2^30, 2^28 and 2^52; for 0 <= x < 2^52, bits(x + 2^52) - bits(2^52) is
+    // x + 2^52 - 2^52, the integer that round-half-even gives.
+    let maxpos: I64 = 9223372036854775807;
+    let cap30b: U64 = 4742290407621132288;
+    let cap28b: U64 = 4733283208366391296;
+    let two52b: U64 = 4841369599423283200;
     let chunks: I32 = (T + 31) / 32;
     let kend: I32 = (krow0 + T) * D;
     let vend: I32 = (krow0 + T) * dq;
 
-    let m_lane: F64 = neg;
+    let negb: I64 = f64_to_bits(neg) as I64;
+    let negs: I64 = negb >> 63;
+    let negm: I64 = negs & maxpos;
+    let m_key: I64 = negb ^ negm;
     let m: F64 = neg;
     let l_lane: I64 = 0;
     let l: I64 = 0;
-    let w_lane: F64 = zero;
+    let wmax_b: U64 = 0;
     let factor: F64 = zero;
     let wscale: F64 = zero;
     let acc0: I64 = 0;
@@ -136,15 +155,32 @@ kernel exact_decode_attention(
     let s5: I32 = 0;
     let s6: I32 = 0;
     let s7: I32 = 0;
+    // And phase 1's integer weights p (Q0.28, at most 2^28), so that phase 2
+    // reads them back instead of recomputing the logit and the exp. A masked
+    // key keeps p = 0, which gives it weight 0 as the mask does.
+    let p0: I32 = 0;
+    let p1: I32 = 0;
+    let p2: I32 = 0;
+    let p3: I32 = 0;
+    let p4: I32 = 0;
+    let p5: I32 = 0;
+    let p6: I32 = 0;
+    let p7: I32 = 0;
 
     @invariant(phase >= 0)
     for phase in 0..3 {
         if phase == 1 {
-            m = warp_reduce_max(m_lane);
+            let mk: I64 = warp_reduce_max(m_key);
+            let mks: I64 = mk >> 63;
+            let mkm: I64 = mks & maxpos;
+            let mb: I64 = mk ^ mkm;
+            let mbu: U64 = mb as U64;
+            m = f64_from_bits(mbu);
         }
         if phase == 2 {
             l = warp_reduce_sum(l_lane);
-            let wmax: F64 = warp_reduce_max(w_lane);
+            let wmb: U64 = warp_reduce_max(wmax_b);
+            let wmax: F64 = f64_from_bits(wmb);
             let safe_w: F64 = one;
             if wmax > zero {
                 safe_w = wmax;
@@ -202,148 +238,223 @@ kernel exact_decode_attention(
             let t: I32 = c * 32 + lane;
             let wt: I32 = 0;
             if t < T {
-                if BLOCKED[b * T + t] == 0 {
-                    let s: I32 = 0;
-                    if fresh == 1 {
-                        @invariant(d4 >= 0)
-                        for d4 in 0..dq {
-                            let qv: U32x4 = shared_load_v4(sq_s, w * 32 + d4);
-                            let kv: U32x4 = shared_load_v4(sk_s, lane * kstride + d4);
-                            let qa: U32 = qv.x;
-                            let qb: U32 = qv.y;
-                            let qc: U32 = qv.z;
-                            let qd: U32 = qv.w;
-                            let ka: U32 = kv.x;
-                            let kb: U32 = kv.y;
-                            let kc: U32 = kv.z;
-                            let kd: U32 = kv.w;
-                            let pa: I32 = (qa as I32) * (ka as I32);
-                            let pb: I32 = (qb as I32) * (kb as I32);
-                            let pc: I32 = (qc as I32) * (kc as I32);
-                            let pd: I32 = (qd as I32) * (kd as I32);
-                            s = s + pa;
-                            s = s + pb;
-                            s = s + pc;
-                            s = s + pd;
-                        }
-                        if cached == 1 {
-                            if c == 0 {
-                                s0 = s;
-                            }
-                            if c == 1 {
-                                s1 = s;
-                            }
-                            if c == 2 {
-                                s2 = s;
-                            }
-                            if c == 3 {
-                                s3 = s;
-                            }
-                            if c == 4 {
-                                s4 = s;
-                            }
-                            if c == 5 {
-                                s5 = s;
-                            }
-                            if c == 6 {
-                                s6 = s;
-                            }
-                            if c == 7 {
-                                s7 = s;
-                            }
-                        }
-                    } else {
-                        s = s0;
-                        if c == 1 {
-                            s = s1;
-                        }
-                        if c == 2 {
-                            s = s2;
-                        }
-                        if c == 3 {
-                            s = s3;
-                        }
-                        if c == 4 {
-                            s = s4;
-                        }
-                        if c == 5 {
-                            s = s5;
-                        }
-                        if c == 6 {
-                            s = s6;
-                        }
-                        if c == 7 {
-                            s = s7;
-                        }
+                // live: this key's p is known and its weight is wanted.
+                let live: I32 = 0;
+                let p: I64 = 0;
+                let reuse: I32 = 0;
+                if phase == 2 {
+                    reuse = cached;
+                }
+                if reuse == 1 {
+                    let pc: I32 = p0;
+                    if c == 1 {
+                        pc = p1;
                     }
-                    let skf: F32 = SK[krow0 + t];
-                    let sk: F64 = skf as F64;
-                    let sd: F64 = s as F64;
-                    let la: F64 = sd * a;
-                    let logit: F64 = la * sk;
-                    if phase == 0 {
-                        if logit > m_lane {
-                            m_lane = logit;
-                        }
-                    } else {
-                        // tq = clamp(round(m - logit), 0, 2^30); m >= logit.
-                        let x: F64 = m - logit;
-                        let tqf: F64 = cap30;
-                        if x < cap30 {
-                            let up: F64 = x + two52;
-                            tqf = up - two52;
-                        }
-                        let tq: I64 = tqf as I64;
-                        // p = exp2_neg_q16_16(tq), in int64 (Q0.28).
-                        let n: I64 = tq >> 16;
-                        let f: I64 = tq & 65535;
-                        let idx: I64 = f >> 10;
-                        let base: I64 = TABLE[idx as I32];
-                        let dd: I64 = f & 1023;
-                        let ya: I64 = dd * 744261118;
-                        let y: I64 = ya >> 16;
-                        let y2a: I64 = y * y;
-                        let y2: I64 = y2a >> 30;
-                        let y3a: I64 = y2 * y;
-                        let y3: I64 = y3a >> 30;
-                        let y3b: I64 = y3 * 715827883;
-                        let y3o6: I64 = y3b >> 32;
-                        let half2: I64 = y2 >> 1;
-                        let c1: I64 = 1073741824 - y;
-                        let c2: I64 = c1 + half2;
-                        let corr: I64 = c2 - y3o6;
-                        let gp: I64 = base * corr;
-                        let gg: I64 = gp >> 30;
-                        let sh: I64 = 2 + n;
-                        if sh > 62 {
-                            sh = 62;
-                        }
-                        let shm: I64 = sh - 1;
-                        let one64: I64 = 1;
-                        let rnd: I64 = one64 << shm;
-                        let gr: I64 = gg + rnd;
-                        let p: I64 = gr >> sh;
-                        if n >= 30 {
-                            p = 0;
-                        }
-                        let svf: F32 = SV[krow0 + t];
-                        let sv: F64 = svf as F64;
-                        let pf: F64 = p as F64;
-                        let wv: F64 = pf * sv;
-                        if phase == 1 {
-                            l_lane = l_lane + p;
-                            if wv > w_lane {
-                                w_lane = wv;
+                    if c == 2 {
+                        pc = p2;
+                    }
+                    if c == 3 {
+                        pc = p3;
+                    }
+                    if c == 4 {
+                        pc = p4;
+                    }
+                    if c == 5 {
+                        pc = p5;
+                    }
+                    if c == 6 {
+                        pc = p6;
+                    }
+                    if c == 7 {
+                        pc = p7;
+                    }
+                    p = pc as I64;
+                    live = 1;
+                } else {
+                    if BLOCKED[b * T + t] == 0 {
+                        let s: I32 = 0;
+                        if fresh == 1 {
+                            @invariant(d4 >= 0)
+                            for d4 in 0..dq {
+                                let qv: U32x4 = shared_load_v4(sq_s, w * 32 + d4);
+                                let kv: U32x4 = shared_load_v4(sk_s, lane * kstride + d4);
+                                let qa: U32 = qv.x;
+                                let qb: U32 = qv.y;
+                                let qc: U32 = qv.z;
+                                let qd: U32 = qv.w;
+                                let ka: U32 = kv.x;
+                                let kb: U32 = kv.y;
+                                let kc: U32 = kv.z;
+                                let kd: U32 = kv.w;
+                                let pa: I32 = (qa as I32) * (ka as I32);
+                                let pb: I32 = (qb as I32) * (kb as I32);
+                                let pc: I32 = (qc as I32) * (kc as I32);
+                                let pd: I32 = (qd as I32) * (kd as I32);
+                                s = s + pa;
+                                s = s + pb;
+                                s = s + pc;
+                                s = s + pd;
+                            }
+                            if cached == 1 {
+                                if c == 0 {
+                                    s0 = s;
+                                }
+                                if c == 1 {
+                                    s1 = s;
+                                }
+                                if c == 2 {
+                                    s2 = s;
+                                }
+                                if c == 3 {
+                                    s3 = s;
+                                }
+                                if c == 4 {
+                                    s4 = s;
+                                }
+                                if c == 5 {
+                                    s5 = s;
+                                }
+                                if c == 6 {
+                                    s6 = s;
+                                }
+                                if c == 7 {
+                                    s7 = s;
+                                }
                             }
                         } else {
-                            // W = clamp(round(w * factor), 0, 2^28).
-                            let wf: F64 = wv * factor;
-                            let wr: F64 = two28;
-                            if wf < two28 {
-                                let up2: F64 = wf + two52;
-                                wr = up2 - two52;
+                            s = s0;
+                            if c == 1 {
+                                s = s1;
                             }
-                            wt = wr as I32;
+                            if c == 2 {
+                                s = s2;
+                            }
+                            if c == 3 {
+                                s = s3;
+                            }
+                            if c == 4 {
+                                s = s4;
+                            }
+                            if c == 5 {
+                                s = s5;
+                            }
+                            if c == 6 {
+                                s = s6;
+                            }
+                            if c == 7 {
+                                s = s7;
+                            }
+                        }
+                        let skf: F32 = SK[krow0 + t];
+                        let sk: F64 = skf as F64;
+                        let sd: F64 = s as F64;
+                        let la: F64 = sd * a;
+                        let logit: F64 = la * sk;
+                        if phase == 0 {
+                            let lb: I64 = f64_to_bits(logit) as I64;
+                            let ls: I64 = lb >> 63;
+                            let lm: I64 = ls & maxpos;
+                            let key: I64 = lb ^ lm;
+                            if key > m_key {
+                                m_key = key;
+                            }
+                        } else {
+                            // tq = clamp(round(m - logit), 0, 2^30); m >= logit,
+                            // so x >= +0.
+                            let x: F64 = m - logit;
+                            let xb: U64 = f64_to_bits(x);
+                            let tq: I64 = 1073741824;
+                            if xb < cap30b {
+                                let up: F64 = x + two52;
+                                let ub: U64 = f64_to_bits(up);
+                                let tqu: U64 = ub - two52b;
+                                tq = tqu as I64;
+                            }
+                            // p = exp2_neg_q16_16(tq), in int64 (Q0.28).
+                            let n: I64 = tq >> 16;
+                            let f: I64 = tq & 65535;
+                            let idx: I64 = f >> 10;
+                            let base: I64 = TABLE[idx as I32];
+                            let dd: I64 = f & 1023;
+                            let ya: I64 = dd * 744261118;
+                            let y: I64 = ya >> 16;
+                            let y2a: I64 = y * y;
+                            let y2: I64 = y2a >> 30;
+                            let y3a: I64 = y2 * y;
+                            let y3: I64 = y3a >> 30;
+                            let y3b: I64 = y3 * 715827883;
+                            let y3o6: I64 = y3b >> 32;
+                            let half2: I64 = y2 >> 1;
+                            let c1: I64 = 1073741824 - y;
+                            let c2: I64 = c1 + half2;
+                            let corr: I64 = c2 - y3o6;
+                            let gp: I64 = base * corr;
+                            let gg: I64 = gp >> 30;
+                            let sh: I64 = 2 + n;
+                            if sh > 62 {
+                                sh = 62;
+                            }
+                            let shm: I64 = sh - 1;
+                            let one64: I64 = 1;
+                            let rnd: I64 = one64 << shm;
+                            let gr: I64 = gg + rnd;
+                            p = gr >> sh;
+                            if n >= 30 {
+                                p = 0;
+                            }
+                            live = 1;
+                            if cached == 1 {
+                                let pi: I32 = p as I32;
+                                if c == 0 {
+                                    p0 = pi;
+                                }
+                                if c == 1 {
+                                    p1 = pi;
+                                }
+                                if c == 2 {
+                                    p2 = pi;
+                                }
+                                if c == 3 {
+                                    p3 = pi;
+                                }
+                                if c == 4 {
+                                    p4 = pi;
+                                }
+                                if c == 5 {
+                                    p5 = pi;
+                                }
+                                if c == 6 {
+                                    p6 = pi;
+                                }
+                                if c == 7 {
+                                    p7 = pi;
+                                }
+                            }
+                        }
+                    }
+                }
+                if live == 1 {
+                    let svf: F32 = SV[krow0 + t];
+                    let sv: F64 = svf as F64;
+                    let pf: F64 = p as F64;
+                    let wv: F64 = pf * sv;
+                    // wv >= +0: p >= 0 and the V scale is positive.
+                    let wvb: U64 = f64_to_bits(wv);
+                    if phase == 1 {
+                        l_lane = l_lane + p;
+                        if wvb > wmax_b {
+                            wmax_b = wvb;
+                        }
+                    } else {
+                        // W = clamp(round(w * factor), 0, 2^28).
+                        let wf: F64 = wv * factor;
+                        let wfb: U64 = f64_to_bits(wf);
+                        wt = 268435456;
+                        if wfb < cap28b {
+                            let up2: F64 = wf + two52;
+                            let u2: U64 = f64_to_bits(up2);
+                            let wtu: U64 = u2 - two52b;
+                            wt = wtu as I32;
                         }
                     }
                 }
