@@ -544,25 +544,115 @@ kernel exact_decode_attention(
     }
 
     // out = float32((acc * wscale) / max(l, 1)), each in float64; lane
-    // holds dimensions 4 * lane .. 4 * lane + 3.
+    // holds dimensions 4 * lane .. 4 * lane + 3. One divide, for 1 / den,
+    // instead of four: q = (acc * wscale) * (1 / den) gives the divide's
+    // float32 unless q is within 3 float64 ulps of a float32 rounding
+    // midpoint (its low 29 fraction bits within 3 of 2^28), in float32's
+    // subnormal range (0 < |q| < 2^-126) or not finite; those divide. The
+    // argument is y_lang/exact/norm_kernel.py's: |q - RN64(x / den)| < 3.0001
+    // float64 ulps. A searched case where the bare multiply rounds
+    // differently is in python/y_lang/tests/test_exact_decode_attention.py;
+    // the subnormal and non-finite branches rest on the argument alone (a
+    // subnormal case where it matters is too rare to search for).
     if lane < dq {
-        let lf: F64 = l as F64;
-        let den: F64 = lf;
-        if lf < one {
-            den = one;
+        let lc: I64 = l;
+        if lc < 1 {
+            lc = 1;
         }
+        let den: F64 = lc as F64;
+        let rinv: F64 = one / den;
         let o0a: F64 = acc0 as F64;
         let o0b: F64 = o0a * wscale;
-        let o0c: F64 = o0b / den;
+        let o0c: F64 = o0b * rinv;
+        let q0b: U64 = f64_to_bits(o0c);
+        let q0l: U64 = q0b & 536870911;
+        let q0m: U64 = q0b & 9223372036854775807;
+        let u0: I32 = 0;
+        if q0l >= 268435453 {
+            if q0l <= 268435459 {
+                u0 = 1;
+            }
+        }
+        if q0m != 0 {
+            if q0m < 4039728865751334912 {
+                u0 = 1;
+            }
+        }
+        if q0m >= 9218868437227405312 {
+            u0 = 1;
+        }
+        if u0 == 1 {
+            o0c = o0b / den;
+        }
         let o1a: F64 = acc1 as F64;
         let o1b: F64 = o1a * wscale;
-        let o1c: F64 = o1b / den;
+        let o1c: F64 = o1b * rinv;
+        let q1b: U64 = f64_to_bits(o1c);
+        let q1l: U64 = q1b & 536870911;
+        let q1m: U64 = q1b & 9223372036854775807;
+        let u1: I32 = 0;
+        if q1l >= 268435453 {
+            if q1l <= 268435459 {
+                u1 = 1;
+            }
+        }
+        if q1m != 0 {
+            if q1m < 4039728865751334912 {
+                u1 = 1;
+            }
+        }
+        if q1m >= 9218868437227405312 {
+            u1 = 1;
+        }
+        if u1 == 1 {
+            o1c = o1b / den;
+        }
         let o2a: F64 = acc2 as F64;
         let o2b: F64 = o2a * wscale;
-        let o2c: F64 = o2b / den;
+        let o2c: F64 = o2b * rinv;
+        let q2b: U64 = f64_to_bits(o2c);
+        let q2l: U64 = q2b & 536870911;
+        let q2m: U64 = q2b & 9223372036854775807;
+        let u2: I32 = 0;
+        if q2l >= 268435453 {
+            if q2l <= 268435459 {
+                u2 = 1;
+            }
+        }
+        if q2m != 0 {
+            if q2m < 4039728865751334912 {
+                u2 = 1;
+            }
+        }
+        if q2m >= 9218868437227405312 {
+            u2 = 1;
+        }
+        if u2 == 1 {
+            o2c = o2b / den;
+        }
         let o3a: F64 = acc3 as F64;
         let o3b: F64 = o3a * wscale;
-        let o3c: F64 = o3b / den;
+        let o3c: F64 = o3b * rinv;
+        let q3b: U64 = f64_to_bits(o3c);
+        let q3l: U64 = q3b & 536870911;
+        let q3m: U64 = q3b & 9223372036854775807;
+        let u3: I32 = 0;
+        if q3l >= 268435453 {
+            if q3l <= 268435459 {
+                u3 = 1;
+            }
+        }
+        if q3m != 0 {
+            if q3m < 4039728865751334912 {
+                u3 = 1;
+            }
+        }
+        if q3m >= 9218868437227405312 {
+            u3 = 1;
+        }
+        if u3 == 1 {
+            o3c = o3b / den;
+        }
         let ob: I32 = qrow + lane * 4;
         OUT[ob] = o0c as F32;
         OUT[ob + 1] = o1c as F32;
