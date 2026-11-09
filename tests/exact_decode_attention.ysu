@@ -6,9 +6,11 @@
 // V-scale fold, `exact_pv`, the final divide). Here it is one launch: a block
 // per (sequence, KV head), one warp per query head of the group, the lanes
 // taking key positions 32 at a time. Each chunk of 32 keys is staged in
-// shared memory once and read by every query head of the group: K as
-// integers in padded rows, V as packed bytes transposed so a lane's four
-// dimensions of four keys are one 16-byte read.
+// shared memory once and read by every query head of the group: K as the
+// cache's int16 pairs in padded rows, V as packed bytes transposed so a lane's
+// four dimensions of four keys are one 16-byte read. The query is staged as
+// packed int8 words, and a score is `dp2a` over the pairs: two int16 x int8
+// products and an add per instruction.
 //
 // Every value is the Python path's, by construction:
 //   * scores are integer dot products: |q| <= 127, |k| <= 1023, D <= 128, so
@@ -76,35 +78,52 @@ kernel exact_decode_attention(
     @bounds(min=1, max=8) let rep: I32 = REP;
     @bounds(min=4, max=32) let dq: I32 = D / 4;
     @bounds(min=2, max=16) let dq8: I32 = D / 8;
+    @bounds(min=1, max=8) let dq16: I32 = D / 16;
     // Words in a packed row: K (D + 8) int16s, V D + 16 bytes.
     let kwords: I32 = dq * 2 + 4;
     let vwords: I32 = dq + 4;
     let h: I32 = g * rep + w;
-    let kstride: I32 = dq + 1;
+    let kstride: I32 = dq8 + 1;
     let krow0: I32 = (b * NKV + g) * T;
     let qrow: I32 = (b * NH + h) * D;
-    // Q as integers, one row per head: 8 x 32 units of 16 bytes. K, 32 keys
-    // a chunk, as integers in rows of D/4 + 1 sixteen-byte units (the extra
-    // unit staggers the rows across the banks). V transposed: unit
+    // Q as int8 bytes, one row per head: 8 x 8 units of 16 bytes. K, 32 keys
+    // a chunk, as int16 pairs in rows of D/8 + 1 sixteen-byte units (the
+    // extra unit staggers the rows across the banks). V transposed: unit
     // lane * 9 + j holds the four V words of keys 4j..4j+3 for dimensions
     // 4 * lane .. 4 * lane + 3.
-    let sq_s: U64 = shared_alloc_u32(1024);
-    let sk_s: U64 = shared_alloc_u32(4224);
+    let sq_s: U64 = shared_alloc_u32(256);
+    let sk_s: U64 = shared_alloc_u32(2176);
     let sv_s: U64 = shared_alloc_u32(1152);
 
-    @invariant(c4 >= 0)
-    for c4 in lane..dq step 32 {
+    // Q as packed int8 words, one row of D/16 sixteen-byte units per head.
+    @invariant(c16 >= 0)
+    for c16 in lane..dq16 step 32 {
         let qend: I32 = qrow + D;
-        let q4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + c4 * 4, 0, 1, qend);
-        let q0f: F32 = q4.x;
-        let q1f: F32 = q4.y;
-        let q2f: F32 = q4.z;
-        let q3f: F32 = q4.w;
-        let q0: I32 = q0f as I32;
-        let q1: I32 = q1f as I32;
-        let q2: I32 = q2f as I32;
-        let q3: I32 = q3f as I32;
-        shared_store_v4(sq_s, w * 32 + c4, q0 as U32, q1 as U32, q2 as U32, q3 as U32);
+        let qa4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + c16 * 16, 0, 1, qend);
+        let qb4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + c16 * 16 + 4, 0, 1, qend);
+        let qc4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + c16 * 16 + 8, 0, 1, qend);
+        let qd4: F32x4 = block_ptr2d_load_v4(QI, 0, qrow + c16 * 16 + 12, 0, 1, qend);
+        let wq0: U32 = qa4.x as I32 as U32 & 255;
+        let wq1: U32 = qa4.y as I32 as U32 & 255;
+        let wq2: U32 = qa4.z as I32 as U32 & 255;
+        let wq3: U32 = qa4.w as I32 as U32;
+        let wq4: U32 = qb4.x as I32 as U32 & 255;
+        let wq5: U32 = qb4.y as I32 as U32 & 255;
+        let wq6: U32 = qb4.z as I32 as U32 & 255;
+        let wq7: U32 = qb4.w as I32 as U32;
+        let wq8: U32 = qc4.x as I32 as U32 & 255;
+        let wq9: U32 = qc4.y as I32 as U32 & 255;
+        let wqa: U32 = qc4.z as I32 as U32 & 255;
+        let wqb: U32 = qc4.w as I32 as U32;
+        let wqc: U32 = qd4.x as I32 as U32 & 255;
+        let wqd: U32 = qd4.y as I32 as U32 & 255;
+        let wqe: U32 = qd4.z as I32 as U32 & 255;
+        let wqf: U32 = qd4.w as I32 as U32;
+        let pq0: U32 = wq0 | (wq1 << 8) | (wq2 << 16) | (wq3 << 24);
+        let pq1: U32 = wq4 | (wq5 << 8) | (wq6 << 16) | (wq7 << 24);
+        let pq2: U32 = wq8 | (wq9 << 8) | (wqa << 16) | (wqb << 24);
+        let pq3: U32 = wqc | (wqd << 8) | (wqe << 16) | (wqf << 24);
+        shared_store_v4(sq_s, w * 8 + c16, pq0, pq1, pq2, pq3);
     }
 
     let a: F64 = A[b * NH + h];
@@ -212,9 +231,7 @@ kernel exact_decode_attention(
                 @invariant(r >= 0)
                 for r in w..32 step rep {
                     let krow: I32 = (krow0 + c * 32 + r) * kwords;
-                    // Sixteen bytes are eight int16s, two to a word, the
-                    // lower-addressed one in the low half; each is
-                    // sign-extended into an I32 for the dot product.
+                    // Sixteen bytes, eight int16s, copied as they are.
                     @invariant(k8 >= 0)
                     for k8 in lane..dq8 step 32 {
                         let k8v: F32x4 = block_ptr2d_load_v4(KP, 0, krow + k8 * 4, 0, 1, kend);
@@ -222,25 +239,8 @@ kernel exact_decode_attention(
                         let fb: F32 = k8v.y;
                         let fc: F32 = k8v.z;
                         let fd: F32 = k8v.w;
-                        let ba: I32 = f32_to_bits(fa) as I32;
-                        let bb: I32 = f32_to_bits(fb) as I32;
-                        let bc: I32 = f32_to_bits(fc) as I32;
-                        let bd: I32 = f32_to_bits(fd) as I32;
-                        let ta: I32 = ba << 16;
-                        let tb: I32 = bb << 16;
-                        let tc: I32 = bc << 16;
-                        let td: I32 = bd << 16;
-                        let k0: I32 = ta >> 16;
-                        let k1: I32 = ba >> 16;
-                        let k2: I32 = tb >> 16;
-                        let k3: I32 = bb >> 16;
-                        let k4: I32 = tc >> 16;
-                        let k5: I32 = bc >> 16;
-                        let k6: I32 = td >> 16;
-                        let k7: I32 = bd >> 16;
-                        let unit: I32 = r * kstride + k8 * 2;
-                        shared_store_v4(sk_s, unit, k0 as U32, k1 as U32, k2 as U32, k3 as U32);
-                        shared_store_v4(sk_s, unit + 1, k4 as U32, k5 as U32, k6 as U32, k7 as U32);
+                        shared_store_v4(sk_s, r * kstride + k8, f32_to_bits(fa), f32_to_bits(fb),
+                                        f32_to_bits(fc), f32_to_bits(fd));
                     }
                 }
             }
@@ -303,26 +303,25 @@ kernel exact_decode_attention(
                     if blocked == 0 {
                         let s: I32 = 0;
                         if fresh == 1 {
-                            @invariant(d4 >= 0)
-                            for d4 in 0..dq {
-                                let qv: U32x4 = shared_load_v4(sq_s, w * 32 + d4);
-                                let kv: U32x4 = shared_load_v4(sk_s, lane * kstride + d4);
-                                let qa: U32 = qv.x;
-                                let qb: U32 = qv.y;
-                                let qc: U32 = qv.z;
-                                let qd: U32 = qv.w;
-                                let ka: U32 = kv.x;
-                                let kb: U32 = kv.y;
-                                let kc: U32 = kv.z;
-                                let kd: U32 = kv.w;
-                                let pa: I32 = (qa as I32) * (ka as I32);
-                                let pb: I32 = (qb as I32) * (kb as I32);
-                                let pc: I32 = (qc as I32) * (kc as I32);
-                                let pd: I32 = (qd as I32) * (kd as I32);
-                                s = s + pa;
-                                s = s + pb;
-                                s = s + pc;
-                                s = s + pd;
+                            // Per 16 dimensions: one unit of Q's bytes, two of
+                            // K's int16 pairs; dp2a_lo takes bytes 0-1, _hi 2-3.
+                            @invariant(u >= 0)
+                            for u in 0..dq16 {
+                                let qv: U32x4 = shared_load_v4(sq_s, w * 8 + u);
+                                let k0: U32x4 = shared_load_v4(sk_s, lane * kstride + u * 2);
+                                let k1: U32x4 = shared_load_v4(sk_s, lane * kstride + u * 2 + 1);
+                                let qx: I32 = qv.x as I32;
+                                let qy: I32 = qv.y as I32;
+                                let qz: I32 = qv.z as I32;
+                                let qw: I32 = qv.w as I32;
+                                s = dp2a_lo(k0.x as I32, qx, s);
+                                s = dp2a_hi(k0.y as I32, qx, s);
+                                s = dp2a_lo(k0.z as I32, qy, s);
+                                s = dp2a_hi(k0.w as I32, qy, s);
+                                s = dp2a_lo(k1.x as I32, qz, s);
+                                s = dp2a_hi(k1.y as I32, qz, s);
+                                s = dp2a_lo(k1.z as I32, qw, s);
+                                s = dp2a_hi(k1.w as I32, qw, s);
                             }
                             if cached == 1 {
                                 if c == 0 {
