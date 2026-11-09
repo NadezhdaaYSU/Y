@@ -91,10 +91,35 @@ pub fn bit_reinterpretation(name: &str) -> Option<(&'static str, &'static str)> 
     })
 }
 
+/// The packed integer dot products, PTX's `dp4a.s32.s32` and
+/// `dp2a.{lo,hi}.s32.s32`, on 32-bit words: `dp4a(a, b, c)` is `c` plus the
+/// four products of `a`'s and `b`'s signed bytes, byte i with byte i;
+/// `dp2a_lo(a, b, c)` is `c` plus `a`'s two signed 16-bit halves times `b`'s
+/// signed bytes 0 and 1, `dp2a_hi` the same with bytes 2 and 3. Sums wrap at 32
+/// bits, as the instructions' do.
+pub fn integer_dot(name: &str) -> bool {
+    matches!(name, "dp4a" | "dp2a_lo" | "dp2a_hi")
+}
+
+/// Builtins whose arguments must have exactly these types (the checker's
+/// general rule lets any integer stand for any other), and their result.
+pub fn exact_signature(name: &str) -> Option<(&'static [&'static str], &'static str)> {
+    if integer_dot(name) {
+        return Some((&["I32", "I32", "I32"], "I32"));
+    }
+    Some(match name {
+        "f64_to_bits" => (&["F64"], "U64"),
+        "f64_from_bits" => (&["U64"], "F64"),
+        "f32_to_bits" => (&["F32"], "U32"),
+        "f32_from_bits" => (&["U32"], "F32"),
+        _ => return None,
+    })
+}
+
 /// A result fixed by the builtin's contract, independent of arguments/shapes.
 /// `None` means this table cannot supply a scalar type; it does not mean void.
 pub fn scalar_return_type(name: &str) -> Option<&'static str> {
-    if let Some((_, to)) = bit_reinterpretation(name) {
+    if let Some((_, to)) = exact_signature(name) {
         return Some(to);
     }
     Some(match name {

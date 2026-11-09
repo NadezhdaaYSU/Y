@@ -4171,6 +4171,37 @@ unsigned compare on NaNs with payloads, a signalling NaN, signed zeros,
 subnormals and infinities, through `--emit-llvm` at -O0 and -O2, `--emit-cpu`'s
 Rust and PTX on a GPU, against Rust.
 
+#### Packed integer dot products
+
+PTX's `dp4a.s32.s32` and `dp2a.{lo,hi}.s32.s32` (since 2026-11-09), on 32-bit
+words, all three arguments and the result `I32`:
+
+| Call | Result |
+| :--- | :--- |
+| `dp4a(a, b, c)` | `c` + the four products of `a`'s and `b`'s signed bytes, byte i with byte i |
+| `dp2a_lo(a, b, c)` | `c` + `a`'s two signed 16-bit halves times `b`'s signed bytes 0 and 1 |
+| `dp2a_hi(a, b, c)` | the same with `b`'s bytes 2 and 3 |
+
+The sum wraps at 32 bits, as the instructions' does. On PTX each is one
+instruction and needs sm_61 or later (the PTX target-feature check refuses
+an older target); the LLVM backend and `--emit-cpu` compute the same value with
+shifts, multiplies and wrapping adds, so a kernel can be checked on a CPU.
+`dp2a` is what an int16 x int8 dot product wants: an int16 vector in pairs
+against an int8 vector in words, two products and an add per instruction
+(the exact attention kernel's scores, `tests/exact_decode_attention.ysu`).
+
+```ysu
+let k: I32 = 196611;              // halves 3 and 3
+let q: I32 = 513;                 // bytes 1, 2, 0, 0
+let s: I32 = dp2a_lo(k, q, 0);    // 3 * 1 + 3 * 2 = 9
+```
+
+The arguments must be exactly `I32` (a `U32` or `I64` is refused by name).
+`tests/integer_dot.rs` checks all three on 720 operand triples (bytes and
+halves at their limits, mixed signs, accumulators that make the sum wrap)
+through PTX on a GPU, `--emit-llvm` at -O0 and -O2 and `--emit-cpu`'s Rust,
+against a model of the PTX ISA's definition.
+
 ### 20.5 GPU Type Usage Rules
 
 | Context | Allowed Types |

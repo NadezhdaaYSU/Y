@@ -51,6 +51,7 @@ const PROBES: &[(&str, &str, bool)] = &[
     ("a scoped memory-model access (.acquire/.release/.acq_rel)", "ld.acquire.gpu.global.u32 %r1, [%rd1];", true),
     ("`shfl.sync`", "shfl.sync.bfly.b32 %r1, %r2, 1, 31, 0xffffffff;", true),
     ("`vote.sync`", "setp.ne.u32 %p1, %r2, 0;\n vote.sync.ballot.b32 %r1, %p1, 0xffffffff;", true),
+    ("`dp4a` / `dp2a`", "dp4a.s32.s32 %r1, %r2, %r3, %r4;\n dp2a.lo.s32.s32 %r1, %r2, %r3, %r1;", true),
 ];
 
 /// Architectures CUDA 12's `ptxas` targets, and the first PTX ISA for each.

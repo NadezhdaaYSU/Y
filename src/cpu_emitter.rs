@@ -927,7 +927,7 @@ impl CpuEmitter {
             Expr::Cast { ty: Type::Primitive(n, _) | Type::Ident(n, _), .. } => rust_scalar(n),
             Expr::Call { func, .. } => match &**func {
                 Expr::Ident(name, _) if !self.fn_sigs.contains_key(name) => {
-                    crate::intrinsics::bit_reinterpretation(name).and_then(|(_, to)| rust_scalar(to))
+                    crate::intrinsics::exact_signature(name).and_then(|(_, to)| rust_scalar(to))
                 }
                 Expr::Ident(name, _) => self.fn_sigs.get(name).and_then(|(_, ret)| *ret),
                 _ => None,
@@ -994,6 +994,23 @@ impl CpuEmitter {
                 _ => ("f32", "from_bits"),
             };
             return format!("{}::{}({})", float, dir, arg);
+        }
+        // The packed dot products, spelled out with wrapping arithmetic (what
+        // PTX's dp4a / dp2a compute).
+        if let (true, false, [a, b, c]) = (crate::intrinsics::integer_dot(&fname),
+                                           self.known_fns.contains(&fname), arg_strs.as_slice()) {
+            let terms = match fname.as_str() {
+                "dp4a" => "((a << 24) >> 24).wrapping_mul((b << 24) >> 24)\
+                           .wrapping_add(((a << 16) >> 24).wrapping_mul((b << 16) >> 24))\
+                           .wrapping_add(((a << 8) >> 24).wrapping_mul((b << 8) >> 24))\
+                           .wrapping_add((a >> 24).wrapping_mul(b >> 24))",
+                "dp2a_lo" => "((a << 16) >> 16).wrapping_mul((b << 24) >> 24)\
+                              .wrapping_add((a >> 16).wrapping_mul((b << 16) >> 24))",
+                _ => "((a << 16) >> 16).wrapping_mul((b << 8) >> 24)\
+                      .wrapping_add((a >> 16).wrapping_mul(b >> 24))",
+            };
+            return format!("{{ let (a, b, c): (i32, i32, i32) = ({}, {}, {}); c.wrapping_add({}) }}",
+                           a, b, c, terms);
         }
 
         // A plain identifier this blob does not define is a GPU intrinsic or a
