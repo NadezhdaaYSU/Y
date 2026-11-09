@@ -98,10 +98,12 @@ class TestExactDecodeAttention(unittest.TestCase):
         _, other = self.run_both(q, k, v, am, sc * 1.0001)
         self.assertGreater((other.view(torch.int32) != want.view(torch.int32)).sum().item(), 0)
 
-    def core_both(self, s0, s1, sq_bits, sk_bits):
+    def core_both(self, s0, s1, sq_bits, sk_bits, sv_bits=None, v_dim0=None):
         """`exact_attention_core` on one query and two keys with scores s0 > s1
         (q = (127, 1, 0, ...), so a key (x, y, 0, ...) scores 127x + y), the
-        query scale `sq_bits` and both keys' scale `sk_bits` (float32 bits)."""
+        query scale `sq_bits` and both keys' scale `sk_bits` (float32 bits);
+        both V rows' scale `sv_bits` (default 0.01) and their dimension-0
+        values `v_dim0` (default random)."""
         import struct
         A = self.attention
         f32 = lambda bits: struct.unpack("<f", struct.pack("<I", bits))[0]
@@ -115,7 +117,9 @@ class TestExactDecodeAttention(unittest.TestCase):
         sk = torch.full((1, 1, 2, 1), f32(sk_bits), dtype=torch.float32, device="cuda")
         g = torch.Generator(device="cuda").manual_seed(0)
         vi = torch.randint(-127, 128, (1, 1, 2, d), generator=g, device="cuda").to(torch.int8)
-        sv = torch.full((1, 1, 2, 1), 0.01, device="cuda")
+        if v_dim0 is not None:
+            vi[0, 0, 0, 0], vi[0, 0, 1, 0] = v_dim0
+        sv = torch.full((1, 1, 2, 1), 0.01 if sv_bits is None else f32(sv_bits), device="cuda")
         table = A._table(torch.device("cuda"))
         out = {}
         for mode in ("torch", "y"):
@@ -179,6 +183,38 @@ class TestExactDecodeAttention(unittest.TestCase):
                                         (c, q_len, mode, v_int8))
         finally:
             kv.V_INT8 = True
+
+    def test_the_output_is_a_correctly_rounded_divide(self):
+        # out = float32((acc * wscale) / l). Found by search: these operands
+        # put dimension 0's quotient so close to a float32 rounding midpoint
+        # that multiplying by 1/l instead gives a different float32.
+        import struct
+        f32 = lambda bits: struct.unpack("<f", struct.pack("<I", bits))[0]
+        s0, s1, sq_b, sk_b, sv_b, v = 100370, 100347, 0x3F58533F, 0x3EEACC02, 0x3F5AE2AC, -72
+        want, got, a, sk = self.core_both(s0, s1, sq_b, sk_b, sv_b, (v, v))
+        tq = torch.round(((s0 * a) * sk) - ((s1 * a) * sk))
+        p = self.attention.exp2_neg_q16_16(torch.stack([tq * 0, tq]), self.attention._table("cpu"))
+        sv = torch.full((1, 1, 2), f32(sv_b), dtype=torch.float32).double()
+        W, wscale = self.kv.fold_scale_into_weights(p.reshape(1, 1, 2), sv, 28)
+        xs = float((W * v).sum()) * float(wscale.reshape(()))
+        l = float(p.sum())
+        div = torch.tensor(xs / l, dtype=torch.float64).float()
+        mul = torch.tensor(xs * (1.0 / l), dtype=torch.float64).float()
+        self.assertNotEqual(div.view(torch.int32).item(), mul.view(torch.int32).item(),
+                            "the case no longer discriminates")
+        self.assertEqual(want.reshape(-1)[0].view(torch.int32).item(), div.view(torch.int32).item())
+        self.assertTrue(torch.equal(got.view(torch.int32), want.view(torch.int32)), (got, want))
+
+    def test_subnormal_outputs(self):
+        # V rows near 1e-40 put the outputs in float32's subnormal range,
+        # where the kernel's reciprocal guard always divides. Exercised, not
+        # discriminating: a multiply and a divide differ there about once in
+        # 10^10 values, too rarely to find a case that would fail without it.
+        q, k, v, am, sc = _case(2, 14, 2, 40, 64, 1.0, 14, "pad")
+        v = v * 1e-40
+        want, got = self.run_both(q, k, v, am, sc)
+        self.assertGreater(int(((want != 0) & (want.abs() < 2.0 ** -126)).sum()), 1000)
+        self.assertEqual((got.view(torch.int32) != want.view(torch.int32)).sum().item(), 0)
 
     def test_prefill_stays_on_the_torch_ops(self):
         q, k, v, am, sc = _case(2, 14, 2, 9, 64, 1.0, 10, None)
