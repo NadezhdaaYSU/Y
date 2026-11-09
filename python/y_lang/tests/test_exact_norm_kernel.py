@@ -28,10 +28,15 @@ def _pairs(kind, n, rng):
     float64 ulp of a float32 rounding midpoint, "subnormal" pairs within about
     a float64 ulp of one below 2^-126, where float32's spacing is 2^-149 and
     the midpoints, (2k + 1) * 2^-150, do not have the bit pattern the kernel's
-    normal-range test looks for: only its |q| < 2^-126 test catches them."""
+    normal-range test looks for: only its |q| < 2^-126 test catches them;
+    "big" pairs put x / r at 2^127 and past float32's largest value, which
+    the kernel's integer rounding must not see."""
     if kind == "random":
         x = (rng.standard_normal(n) * np.exp(rng.uniform(-8, 8, n))).astype(np.float32)
         r = np.sqrt(np.exp(rng.uniform(-14, 14, n)) + 1e-6)
+    elif kind == "big":
+        x = (rng.uniform(0.5, 60, n) * np.sign(rng.standard_normal(n))).astype(np.float32)
+        r = np.ldexp(rng.uniform(1, 2, n), rng.integers(-134, -120, n))
     elif kind == "subnormal":
         x = (rng.uniform(0.5, 60, n) * np.sign(rng.standard_normal(n))).astype(np.float32)
         m = np.ldexp((2 * rng.integers(0, 1 << 23, n) + 1).astype(np.float64), -150)
@@ -49,11 +54,16 @@ class TestNormKernel(unittest.TestCase):
     def test_quotient_equals_the_divide(self):
         from y_lang.exact import norm_kernel as nk
         rng = np.random.default_rng(0)
-        for kind in ("random", "midpoint", "subnormal"):
+        for kind in ("random", "midpoint", "subnormal", "big"):
             x, r = _pairs(kind, 2_000_000, rng)
             want = (x.double() / r).float()
             self.assertEqual(_bits_differ(nk.quotient_to_f32(x, r), want), 0, kind)
-            if kind != "random":
+            if kind == "big":
+                # Both sides of float32's largest value are there.
+                self.assertGreater(int(torch.isinf(want).sum()), 100_000)
+                self.assertGreater(int((want.abs() >= 2.0 ** 127).sum()
+                                       - torch.isinf(want).sum()), 100_000)
+            elif kind != "random":
                 # Control: the multiply alone is wrong here, so the guard is
                 # what makes the result right.
                 cheap = (x.double() * (1.0 / r)).float()
@@ -91,6 +101,36 @@ class TestNormKernel(unittest.TestCase):
                 # A weight-free control still shows this comparison can fail:
                 self.assertGreater(_bits_differ(got, (xd / torch.sqrt(var + 1e-5)).float()
                                                 * norm.weight), 0)
+
+    def test_rows_off_the_integer_path(self):
+        """Rows the kernel converts on bits (normal or zero x) beside rows it
+        cannot (subnormal, infinite, NaN x), with eps = 0 so that the
+        squares of tiny values and of zeros decide r."""
+        from y_lang.exact import norm_kernel as nk
+        g = torch.Generator(device="cuda").manual_seed(1)
+        h = 3584
+        w = torch.rand(h, device="cuda", generator=g) + 0.5
+        x = torch.randn(8, h, device="cuda", generator=g)
+        x[0] *= 1e-37                                  # squares near 2^-250
+        x[0, ::3] = 0.0
+        x[1] = torch.exp2(torch.randint(-125, 127, (h,), device="cuda", generator=g)
+                          .float()) * x[1].sign()     # every float32 binade
+        x[2, 7] = float("inf")
+        x[3, 9] = float("nan")
+        x[4, 11] = 1e-40                               # subnormal
+        x[5] = 0.0
+        x[6, :100] = -0.0
+        for eps in (0.0, 1e-6):
+            xd = x.double()
+            var = xd.pow(2).sum(-1, keepdim=True) / xd.new_tensor(float(h))
+            want = (xd / torch.sqrt(var + eps)).float() * w
+            got = nk.rms_norm(x, w, eps)
+            nan = torch.isnan(want)
+            self.assertTrue(torch.equal(nan, torch.isnan(got)))
+            self.assertEqual(_bits_differ(got.masked_fill(nan, 0), want.masked_fill(nan, 0)), 0,
+                             eps)
+        # At eps = 1e-6: the NaN row, and inf / inf.
+        self.assertTrue(nan[3].all() and nan[2, 7] and int(nan.sum()) == h + 1)
 
     def test_no_approximate_instructions(self):
         import re

@@ -24,11 +24,24 @@ this argument (u = 2^-53, every rounding to nearest):
   within 3 ulp64" is `|(bits(q) & (2^29 - 1)) - 2^28| > 3`.
 * `q == 0` exactly when `x == 0`, and then both are `x`'s signed zero.
 
-Anything else (a midpoint within 3 ulp64, `|q| < 2^-126`, not finite) takes
-the true divide: when any element of a row needs it, the row is divided
-outright. On random activations that never happens; on inputs built to sit on
-midpoints the cheap path alone was wrong on 13% of them and the guarded one on
-none (`python/y_lang/tests/test_exact_norm_kernel.py`).
+Anything else (a midpoint within 3 ulp64, `|q| < 2^-126`, `|q| >= 2^127`, not
+finite) takes the true divide: when any element of a row needs it, the row is
+divided outright. On random activations that never happens; on inputs built to
+sit on midpoints the cheap path alone was wrong on 13% of them and the guarded
+one on none (`python/y_lang/tests/test_exact_norm_kernel.py`).
+
+The rest of the float64 work is done on bits, as integers, where the inputs
+allow it (float64 runs at 1/64 rate here, integers at full rate):
+
+* `x` and `x * x` as float64, when every `x` of the row is a normal float32 or
+  zero: `x`'s exponent is rebiased by 896 and its fraction shifted up 29 bits;
+  the square is the 48-bit integer `m * m` of the 24-bit significands, put in
+  float64 form directly (exact: it has at most 48 significant bits). A row
+  with a subnormal, infinite or NaN `x` converts as before.
+* `q` to float32, on the guarded path: `q` is then 0 or in `[2^-126, 2^127)`,
+  where float32's rounding is `q`'s bits plus 2^28, shifted down 29, exponent
+  rebiased; no tie can reach it, since the guard sent every `q` within 3
+  ulp64 of a midpoint to the divide.
 
 The float64 sum of squares is a tree sum here and a different order on the
 CPU, exactly as with the Inductor kernel this replaces; each square of a
@@ -50,29 +63,51 @@ def _quotient_to_f32(xd, r, rinv):
     # The other tests on |q|'s bits, as integers: a GeForce part compares
     # float64s at 1/64 rate, and four float64 compares per element cost more
     # than the norm's own float64 arithmetic. Non-negative float64s order as
-    # their bit patterns, so 0 < abits < bits(2^-126) is 0 < |q| < 2^-126 and
-    # abits >= bits(inf) is infinite or NaN. The first is one unsigned
-    # compare, abits - 1 wrapping to 2^64 - 1 at q == 0 (written as
-    # `abits != 0 & ...`, LLVM turns the zero test back into a float64
-    # compare). q == 0 is never unsafe: its dist is 2^28.
+    # their bit patterns, so 0 < abits < bits(2^-126) is 0 < |q| < 2^-126,
+    # one unsigned compare with abits - 1 wrapping to 2^64 - 1 at q == 0
+    # (written as `abits != 0 & ...`, LLVM turns the zero test back into a
+    # float64 compare). q == 0 is never unsafe: its dist is 2^28.
+    # abits >= bits(2^127) covers infinity and NaN, and keeps float32
+    # overflow off the integer rounding below.
     abits = bits & 0x7FFFFFFFFFFFFFFF
     tiny = (abits - 1).to(tl.uint64, bitcast=True) < 0x380FFFFFFFFFFFFF  # bits(2^-126) - 1
-    unsafe = tiny | (dist <= 3) | (abits >= 0x7FF0000000000000)
+    unsafe = tiny | (dist <= 3) | (abits >= 0x47E0000000000000)          # bits(2^127)
     if tl.max(unsafe.to(tl.int32), axis=0) > 0:
-        q = tl.where(unsafe, xd / r, q)   # float64 `/` is div.rn.f64
-    return q.to(tl.float32)
+        y = tl.where(unsafe, xd / r, q).to(tl.float32)   # float64 `/` is div.rn.f64
+    else:
+        # q is 0 or in [2^-126, 2^127) and no tie: float32(q) from its bits.
+        f = tl.maximum(((abits + 268435456) >> 29) - 7516192768, 0)  # 2^28; 896 << 23
+        y = (f | ((bits >> 32) & 2147483648)).to(tl.int32).to(tl.float32, bitcast=True)
+    return y
 
 
-@triton.jit
+# `H` unspecialised: Triton makes an integer argument equal to 1 a constant,
+# which has no `.to`.
+@triton.jit(do_not_specialize=["H"])
 def _rms_norm_kernel(x_ptr, w_ptr, out_ptr, eps_ptr, H, stride_x, stride_o,
                      BLOCK: tl.constexpr):
     row = tl.program_id(0)
     offs = tl.arange(0, BLOCK)
     mask = offs < H
     x = tl.load(x_ptr + row * stride_x + offs, mask=mask, other=0.0)
-    xd = x.to(tl.float64)
+    xb = x.to(tl.int32, bitcast=True)
+    ex = (xb >> 23) & 255
+    odd = ((ex == 0) & ((xb & 8388607) != 0)) | (ex == 255)  # subnormal, inf, NaN
+    if tl.max(odd.to(tl.int32), axis=0) > 0:
+        xd = x.to(tl.float64)
+        sq = xd * xd
+    else:
+        # Every x normal or zero (see the module docstring).
+        nz = ex != 0
+        xbits = ((xb & 2147483647).to(tl.int64) << 29) + tl.where(nz, 4035225266123964416, 0)
+        xd = (xbits | ((xb.to(tl.int64) >> 32) << 63)).to(tl.float64, bitcast=True)  # 896 << 52
+        m = ((xb & 8388607) | 8388608).to(tl.int64)
+        m2 = m * m                                # in [2^46, 2^48)
+        top = m2 >> 47
+        sbits = ((2 * ex.to(tl.int64) + 768 + top) << 52) + (m2 << (6 - top))
+        sq = tl.where(nz, sbits, 0).to(tl.float64, bitcast=True)
     eps = tl.load(eps_ptr)                       # float64: a Python float arg is float32
-    var = tl.sum(xd * xd, axis=0) / H.to(tl.float64)
+    var = tl.sum(sq, axis=0) / H.to(tl.float64)
     r = tl.sqrt(var + eps)                       # float64: sqrt.rn.f64
     rinv = 1.0 / r
     y = _quotient_to_f32(xd, r, rinv)
@@ -102,9 +137,12 @@ def rms_norm(x, weight, eps):
     out = torch.empty((x2.shape[0], H), dtype=torch.float32, device=x.device)
     if x2.shape[0]:
         BLOCK = triton.next_power_of_2(H)
+        # Every warp repeats the row's float64 sqrt and divide, so warps past
+        # a few cost more than they hide: at 32 x 3584 (7B decode) 16 warps
+        # took 8.6 us, 8 took 6.5, 4 took 6.0 and 2 took 9.8.
         _rms_norm_kernel[(x2.shape[0],)](
             x2, weight, out, _eps_tensor(eps, x.device), H, x2.stride(0), out.stride(0),
-            BLOCK=BLOCK, num_warps=8 if BLOCK >= 2048 else 4, enable_fp_fusion=False)
+            BLOCK=BLOCK, num_warps=4 if BLOCK <= 4096 else 8, enable_fp_fusion=False)
     return out.view(x.shape)
 
 
