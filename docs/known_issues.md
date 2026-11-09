@@ -338,6 +338,31 @@ source; each entry there now carries its status. What is still open:
   MATCHED 25 -> 26, REFUSED 17 -> 16 (`docs/ptxas_translation_validation.md`).
 - All in `docs/benchmarks/int8_gemm_2026-11-06/`.
 
+### Exact inference (`y_lang.exact`)
+
+- `ExactRMSNorm`'s float64 sum of squares is a tree sum on the GPU (Inductor's
+  or `norm_kernel`'s, each its own tree) and another order on the CPU. Each
+  square is exact; the additions round, so the two sums can differ in their
+  last bits, and the float32 result agrees only where that difference does
+  not cross a rounding midpoint. Measured, not proved: the current records
+  agree (0.5B with every Y switch, 2026-11-09, and 7B, 2026-11-08: 0 of 5
+  cases each), and the quantisation that follows absorbs a one-ulp change
+  almost always.
+- The decode cache grows by transformers' `DynamicLayer`, which concatenates
+  the whole cache with each new row: an O(T) copy every step, 5.5-8.5 us a
+  layer (two kernels, rough) at 7B's shapes, batch 32 and about 32 keys,
+  growing with T. An in-place cache
+  layer (rows in buffers with spare room) passes its CPU tests but is not
+  yet checked compiled.
+- `w8a8_gemv._quant_rows`, used only by `w8a8_linear` (benchmarks and
+  `exact_selftest`), divides the scale with Triton's approximate `/` and
+  the values with `libdevice.div_rn`, which flushes subnormals (Triton's
+  `enable_reflect_ftz` is on by default): a row whose largest |x| is below
+  about 1.5e-36 gets scale 1 where torch keeps a subnormal one. Its
+  self-test compares against torch's `x / 127.0`, itself a reciprocal
+  multiply on CUDA, not the model's tensor divide. `tl.div_rn` does
+  neither; the model's quantisers are torch's or use it.
+
 ### Python packaging
 
 The wheel builds and installs outside the repository since e94e29a
