@@ -27,6 +27,8 @@ import torch
 from torch.profiler import ProfilerActivity, profile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "tools"))
+import _exact_pkg  # noqa: E402
+_exact_pkg.add_path()                      # this checkout's python/ first
 from y_lang.exact import load  # noqa: E402
 from y_lang.exact import model as em  # noqa: E402
 from y_lang.exact.greedy import greedy  # noqa: E402
