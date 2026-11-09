@@ -689,6 +689,7 @@ const ARCH_FEATURES: &[ArchFeature] = &[
     },
     ArchFeature { what: "`shfl.sync`", min_sm: 30, min_ptx: "6.0", matches: |op| op.starts_with("shfl.sync") },
     ArchFeature { what: "`vote.sync`", min_sm: 30, min_ptx: "6.0", matches: |op| op.starts_with("vote.sync") },
+    ArchFeature { what: "`dp4a` / `dp2a`", min_sm: 61, min_ptx: "5.0", matches: |op| op.starts_with("dp4a") || op.starts_with("dp2a") },
 ];
 
 /// The rows of `ARCH_FEATURES` as `(what, min_sm, min_ptx)`, for the test
@@ -2507,7 +2508,8 @@ impl PtxEmitter {
         "thread_id", "global_thread_id", "thread_idx", "thread_idx_x", "thread_idx_y", "thread_idx_z",
         "block_idx_x", "block_idx_y", "block_idx_z", "block_dim_x", "block_dim_y", "block_dim_z",
         "grid_dim_x", "grid_dim_y", "grid_dim_z", "mul_wide_u32", "mul_wide_s32", "u64_lo32", "u64_hi32",
-        "f64_to_bits", "f64_from_bits", "f32_to_bits", "f32_from_bits",
+        "f64_to_bits", "f64_from_bits", "f32_to_bits", "f32_from_bits", "dp4a", "dp2a_lo",
+        "dp2a_hi",
     ];
 
     /// Loads, arithmetic and `DRIFT_THREAD_LOCAL_CALLS`; anything else may
@@ -5123,6 +5125,7 @@ impl PtxEmitter {
             "ld_global_v4_f32" | "load_v4" | "warp_reduce_sum" | "warp_reduce_max"
             | "u64_lo32" | "u64_hi32" | "shared_alloc_u32" | "f64_to_bits" | "f64_from_bits"
             | "f32_to_bits" | "f32_from_bits" => Arity::Exactly(1),
+            "dp4a" | "dp2a_lo" | "dp2a_hi" => Arity::Exactly(3),
             "store" | "mul_wide_u32" | "mul_wide_s32" | "shared_load_v4" | "drift_close" => Arity::Exactly(2),
             "atomic_add" | "atomic_max" | "drift_add_to" | "drift_add_at" | "drift_finish" | "drift_convert"
             | "swiglu_v4" | "swiglu_fast" | "vec_add_unrolled4" => {
@@ -8884,6 +8887,23 @@ declare it as a Q format.\n{}",
                             (crate::intrinsics::bit_reinterpretation(fname), args.len())
                         {
                             self.emit_bit_reinterpretation(fname, from, to, &args[0], cache_policy, hw_profile)
+                        } else if crate::intrinsics::integer_dot(fname) && args.len() == 3 {
+                            // One instruction; the operands are 32-bit words
+                            // whatever their signedness (the checker asks for I32).
+                            let a = self.emit_expr(&args[0], cache_policy, hw_profile);
+                            let b = self.emit_expr(&args[1], cache_policy, hw_profile);
+                            let c = self.emit_expr(&args[2], cache_policy, hw_profile);
+                            let a32 = self.emit_convert(&a, ScalarTy::I32);
+                            let b32 = self.emit_convert(&b, ScalarTy::I32);
+                            let c32 = self.emit_convert(&c, ScalarTy::I32);
+                            let op = match fname.as_str() {
+                                "dp4a" => "dp4a.s32.s32",
+                                "dp2a_lo" => "dp2a.lo.s32.s32",
+                                _ => "dp2a.hi.s32.s32",
+                            };
+                            let dst = self.alloc_ty(ScalarTy::I32);
+                            writeln!(&mut self.ptx_buffer, "    {} {}, {}, {}, {};", op, dst, a32, b32, c32).unwrap();
+                            dst
                         } else if fname == "u64_lo32" && args.len() == 1 {
                             // Truncation, i.e. `cvt.u32.u64` - spelled out
                             // rather than left to an implicit narrowing so the

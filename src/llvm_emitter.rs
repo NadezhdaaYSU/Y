@@ -6304,6 +6304,57 @@ representation, and whether that is lossless depends on the expression.",
         tmp
     }
 
+    /// `dp4a` / `dp2a_lo` / `dp2a_hi` (`intrinsics::integer_dot`): what PTX's
+    /// instructions compute, spelled out - each signed byte or half is a shift
+    /// left and an arithmetic shift right, and the multiplies and adds wrap
+    /// (no `nsw`), as the instructions' 32-bit sums do.
+    fn emit_integer_dot(&mut self, name: &str, args: &[Expr]) -> String {
+        if args.len() != 3 {
+            self.emit_errors.push(format!(
+                "[LLVM host backend] `{}` takes 3 I32 arguments, got {}", name, args.len()));
+            return "0".into();
+        }
+        let mut v = Vec::new();
+        for a in args {
+            let t = self.infer_type(a);
+            if t != "i32" {
+                self.emit_errors.push(format!(
+                    "[LLVM host backend] an operand of `{}` lowers to `{}`, not `i32`", name, t));
+                return "0".into();
+            }
+            v.push(self.emit_expr(a, None, Some("i32".to_string())));
+        }
+        // (shift left, arithmetic shift right) that extract a's and b's pieces.
+        let pairs: Vec<((u32, u32), (u32, u32))> = match name {
+            "dp4a" => (0..4).map(|i| ((24 - 8 * i, 24), (24 - 8 * i, 24))).collect(),
+            "dp2a_lo" => vec![((16, 16), (24, 24)), ((0, 16), (16, 24))],
+            _ => vec![((16, 16), (8, 24)), ((0, 16), (0, 24))],
+        };
+        let mut acc = v[2].clone();
+        for ((ash, aar), (bsh, bar)) in pairs {
+            let pa = self.emit_signed_piece(&v[0], ash, aar);
+            let pb = self.emit_signed_piece(&v[1], bsh, bar);
+            let m = self.fresh_tmp();
+            writeln!(&mut self.output, "  {} = mul i32 {}, {}", m, pa, pb).unwrap();
+            let s = self.fresh_tmp();
+            writeln!(&mut self.output, "  {} = add i32 {}, {}", s, acc, m).unwrap();
+            acc = s;
+        }
+        acc
+    }
+
+    fn emit_signed_piece(&mut self, x: &str, shl: u32, ashr: u32) -> String {
+        let mut t = x.to_string();
+        if shl > 0 {
+            let u = self.fresh_tmp();
+            writeln!(&mut self.output, "  {} = shl i32 {}, {}", u, t, shl).unwrap();
+            t = u;
+        }
+        let r = self.fresh_tmp();
+        writeln!(&mut self.output, "  {} = ashr i32 {}, {}", r, t, ashr).unwrap();
+        r
+    }
+
     fn emit_printf(&mut self, args: &[Expr]) -> String {
         let mut parts = Vec::new();
         for (i, arg) in args.iter().enumerate() {
@@ -6539,6 +6590,9 @@ representation, and whether that is lossless depends on the expression.",
                     if !self.fn_llvm_params.contains_key(&func_name) {
                         return self.emit_bit_reinterpretation(&func_name, from, to, args);
                     }
+                }
+                if crate::intrinsics::integer_dot(&func_name) && !self.fn_llvm_params.contains_key(&func_name) {
+                    return self.emit_integer_dot(&func_name, args);
                 }
 
                 if let Some(value) = self.try_emit_runtime_query(&func_name, args) {
@@ -7649,7 +7703,7 @@ representation, and whether that is lossless depends on the expression.",
                 }
                 // The Y type, so `f64_to_bits(x) >> 63` is a logical shift
                 // and a compare of two of them unsigned.
-                if let Some((_, to)) = crate::intrinsics::bit_reinterpretation(&func_name) {
+                if let Some((_, to)) = crate::intrinsics::exact_signature(&func_name) {
                     if !self.fn_llvm_params.contains_key(&func_name) {
                         return to.into();
                     }
@@ -7758,7 +7812,7 @@ representation, and whether that is lossless depends on the expression.",
                 if let Some(layout) = self.enum_variant_layouts.get(&func_name) {
                     return self.enum_value_type(layout);
                 }
-                if let Some((_, to)) = crate::intrinsics::bit_reinterpretation(&func_name) {
+                if let Some((_, to)) = crate::intrinsics::exact_signature(&func_name) {
                     if let (false, Some((k, b))) = (self.fn_llvm_params.contains_key(&func_name), cast_kind(to)) {
                         return cast_llvm_type(k, b).to_string();
                     }
@@ -8118,7 +8172,7 @@ representation, and whether that is lossless depends on the expression.",
                 if let Some(layout) = self.enum_variant_layouts.get(&func_name) {
                     return self.enum_value_type(layout);
                 }
-                if let Some((_, to)) = crate::intrinsics::bit_reinterpretation(&func_name) {
+                if let Some((_, to)) = crate::intrinsics::exact_signature(&func_name) {
                     if let (false, Some((k, b))) = (self.fn_llvm_params.contains_key(&func_name), cast_kind(to)) {
                         return cast_llvm_type(k, b).to_string();
                     }

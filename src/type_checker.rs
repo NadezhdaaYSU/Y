@@ -2824,19 +2824,26 @@ so the stored value is tested and a value outside the range stops the program"
         if signature.is_none() && !crate::intrinsics::is_known_function(name) && typed_vec_get.is_none() {
             self.errors.push(format!("Line {}: Unknown function `{}`.", span.line, name));
         }
-        // `f64_to_bits` and friends take exactly one operand of exactly their
-        // type: reinterpreting an F32 as 64 bits, or an I64 that a backend
-        // holds in a differently typed register, has no meaning to keep.
-        let bits_param = if signature.is_none() {
-            crate::intrinsics::bit_reinterpretation(name).map(|(from, _)| SemanticType::Primitive(from.into()))
+        // `f64_to_bits` and friends, and the packed integer dot products, take
+        // exactly their operand types: reinterpreting an F32 as 64 bits, or an
+        // I64 that a backend holds in a differently typed register, has no
+        // meaning to keep.
+        let exact_params: Vec<SemanticType> = if signature.is_none() {
+            crate::intrinsics::exact_signature(name)
+                .map(|(params, _)| params.iter().map(|p| SemanticType::Primitive((*p).into())).collect())
+                .unwrap_or_default()
         } else {
-            None
+            Vec::new()
         };
-        if let Some(SemanticType::Primitive(from)) = &bits_param {
-            if args.len() != 1 {
-                self.errors.push(format!("Line {}: `{}` takes one {} argument, got {}.",
-                    span.line, name, from, args.len()));
-            } else if Self::is_literal_only(&args[0]) {
+        if let Some(SemanticType::Primitive(from)) = exact_params.first() {
+            if args.len() != exact_params.len() {
+                let what = if exact_params.len() == 1 { format!("one {} argument", from) }
+                           else { format!("{} {} arguments", exact_params.len(), from) };
+                self.errors.push(format!("Line {}: `{}` takes {}, got {}.",
+                    span.line, name, what, args.len()));
+            } else if crate::intrinsics::bit_reinterpretation(name).is_some()
+                && Self::is_literal_only(&args[0])
+            {
                 self.errors.push(format!(
                     "Line {}: `{}` of a literal: bind it to a typed `let x: {} = ...;` first. \
                      A bare literal has no type of its own to reinterpret.", span.line, name, from));
@@ -2845,8 +2852,7 @@ so the stored value is tested and a value outside the range stops the program"
         let mut arg_types = Vec::new();
         for (i, arg) in args.iter().enumerate() {
             let expected = signature.as_ref().and_then(|s| s.params.get(i));
-            let actual = self.check_expr_with_expected(
-                arg, expected.or(if i == 0 { bits_param.as_ref() } else { None }));
+            let actual = self.check_expr_with_expected(arg, expected.or(exact_params.get(i)));
             self.reject_transfer_escape(&actual, &arg.span(), "as a function argument");
             if let Some(expected) = expected {
                 self.check_type_match(expected, &actual, &arg.span(), &format!("function `{}` argument {}", name, i + 1));
@@ -2854,7 +2860,7 @@ so the stored value is tested and a value outside the range stops the program"
             // Exactly, not `types_are_compatible`: that lets any integer
             // stand for any other, and `f64_from_bits` of an I32 would then
             // reach a backend as 32 bits to reinterpret as 64.
-            if let (0, Some(want)) = (i, &bits_param) {
+            if let Some(want) = exact_params.get(i) {
                 let same = matches!((&actual, want), (SemanticType::Primitive(a), SemanticType::Primitive(w))
                                     if a.eq_ignore_ascii_case(w));
                 if actual != SemanticType::Unknown && !same {
