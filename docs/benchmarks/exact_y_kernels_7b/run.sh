@@ -5,7 +5,8 @@
 # (Y_EXACT_NORM=triton), and the cache kept quantised and packed
 # (Y_EXACT_KV_PACK=1). First the CPU==GPU record with all three on; then
 # speed, one configuration per process, in the order vLLM, A B C D D C B A,
-# vLLM. Usage: run.sh <this directory>
+# vLLM; last, where the all-on step's time goes (profile_all.py).
+# Usage: run.sh <this directory>
 S=$1; PYV=/home/yumin/vllm_env/bin/python; V=$(cd $S/../vllm_fp8_7b_2026-11-08 && pwd)
 export HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True OMP_NUM_THREADS=16
@@ -41,4 +42,8 @@ vllm_arm
 y_arm base torch torch 0; y_arm attn y torch 0; y_arm attn_norm y triton 0; y_arm all y triton 1
 y_arm all y triton 1; y_arm attn_norm y triton 0; y_arm attn y torch 0; y_arm base torch torch 0
 vllm_arm
+echo "== profile (attention y, norm triton, kv pack) $(date +%T)  util $(util)%  others: $(others)"
+(cd $L/tools && Y_EXACT_GEMM=y Y_EXACT_V_INT8=1 Y_EXACT_NORM=triton Y_EXACT_ATTN=y Y_EXACT_KV_PACK=1 \
+  $PY $L/docs/benchmarks/exact_y_kernels_7b/profile_all.py $S/profile_all.json > $S/profile_all.log 2>&1)
+echo "exit $?"; grep -E '^greedy|^one decode|^launches' $S/profile_all.log
 echo "== done $(date +%T)"
