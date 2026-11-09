@@ -165,33 +165,33 @@ kernel exact_decode_attention(
     let acc1: I64 = 0;
     let acc2: I64 = 0;
     let acc3: I64 = 0;
-    // Up to 256 keys, a lane keeps its eight scores (key c * 32 + lane for
-    // chunk c) in registers from phase 0, and phases 1 and 2 neither stage K
-    // nor recompute a dot product. Past 256 they recompute, with the same
-    // result: the score is an exact integer either way.
+    // Up to 256 keys, a lane keeps, for its key c * 32 + lane of chunk c,
+    // phase 0's float64 logit and phase 1's float64 weight p * sv in
+    // registers: phase 1 then neither stages K nor recomputes a dot product,
+    // a logit or the key's K scale, and phase 2 neither recomputes p nor
+    // reloads the V scale. Past 256 keys every phase recomputes, with the
+    // same values: each is the same float64 operations on the same operands.
+    // A masked key keeps weight +0, which gives it W = 0 as the mask does.
     let cached: I32 = 0;
     if T <= 256 {
         cached = 1;
     }
-    let s0: I32 = 0;
-    let s1: I32 = 0;
-    let s2: I32 = 0;
-    let s3: I32 = 0;
-    let s4: I32 = 0;
-    let s5: I32 = 0;
-    let s6: I32 = 0;
-    let s7: I32 = 0;
-    // And phase 1's integer weights p (Q0.28, at most 2^28), so that phase 2
-    // reads them back instead of recomputing the logit and the exp. A masked
-    // key keeps p = 0, which gives it weight 0 as the mask does.
-    let p0: I32 = 0;
-    let p1: I32 = 0;
-    let p2: I32 = 0;
-    let p3: I32 = 0;
-    let p4: I32 = 0;
-    let p5: I32 = 0;
-    let p6: I32 = 0;
-    let p7: I32 = 0;
+    let lg0: F64 = zero;
+    let lg1: F64 = zero;
+    let lg2: F64 = zero;
+    let lg3: F64 = zero;
+    let lg4: F64 = zero;
+    let lg5: F64 = zero;
+    let lg6: F64 = zero;
+    let lg7: F64 = zero;
+    let wc0: F64 = zero;
+    let wc1: F64 = zero;
+    let wc2: F64 = zero;
+    let wc3: F64 = zero;
+    let wc4: F64 = zero;
+    let wc5: F64 = zero;
+    let wc6: F64 = zero;
+    let wc7: F64 = zero;
 
     @invariant(phase >= 0)
     for phase in 0..3 {
@@ -262,37 +262,38 @@ kernel exact_decode_attention(
             let t: I32 = c * 32 + lane;
             let wt: I32 = 0;
             if t < T {
-                // live: this key's p is known and its weight is wanted.
+                // live: this key's weight wv = p * sv is known and wanted.
                 let live: I32 = 0;
                 let p: I64 = 0;
+                let wv: F64 = zero;
                 let reuse: I32 = 0;
                 if phase == 2 {
                     reuse = cached;
                 }
                 if reuse == 1 {
-                    let pc: I32 = p0;
+                    let wvc: F64 = wc0;
                     if c == 1 {
-                        pc = p1;
+                        wvc = wc1;
                     }
                     if c == 2 {
-                        pc = p2;
+                        wvc = wc2;
                     }
                     if c == 3 {
-                        pc = p3;
+                        wvc = wc3;
                     }
                     if c == 4 {
-                        pc = p4;
+                        wvc = wc4;
                     }
                     if c == 5 {
-                        pc = p5;
+                        wvc = wc5;
                     }
                     if c == 6 {
-                        pc = p6;
+                        wvc = wc6;
                     }
                     if c == 7 {
-                        pc = p7;
+                        wvc = wc7;
                     }
-                    p = pc as I64;
+                    wv = wvc;
                     live = 1;
                 } else {
                     let blocked: I32 = 0;
@@ -300,10 +301,40 @@ kernel exact_decode_attention(
                         blocked = BLOCKED[b * T + t];
                     }
                     if blocked == 0 {
-                        let s: I32 = 0;
-                        if fresh == 1 {
+                        let logit: F64 = zero;
+                        let recall: I32 = 0;
+                        if phase == 1 {
+                            recall = cached;
+                        }
+                        if recall == 1 {
+                            let lc: F64 = lg0;
+                            if c == 1 {
+                                lc = lg1;
+                            }
+                            if c == 2 {
+                                lc = lg2;
+                            }
+                            if c == 3 {
+                                lc = lg3;
+                            }
+                            if c == 4 {
+                                lc = lg4;
+                            }
+                            if c == 5 {
+                                lc = lg5;
+                            }
+                            if c == 6 {
+                                lc = lg6;
+                            }
+                            if c == 7 {
+                                lc = lg7;
+                            }
+                            logit = lc;
+                        } else {
+                            // Here K is staged (phase 0, or no cache).
                             // Per 16 dimensions: one unit of Q's bytes, two of
                             // K's int16 pairs; dp2a_lo takes bytes 0-1, _hi 2-3.
+                            let s: I32 = 0;
                             @invariant(u >= 0)
                             for u in 0..dq16 {
                                 let qv: U32x4 = shared_load_v4(sq_s, w * 8 + u);
@@ -322,61 +353,38 @@ kernel exact_decode_attention(
                                 s = dp2a_lo(k1.z as I32, qw, s);
                                 s = dp2a_hi(k1.w as I32, qw, s);
                             }
+                            let skf: F32 = KP[(krow0 + t) * kwords + dq * 2];
+                            let sk: F64 = skf as F64;
+                            let sd: F64 = s as F64;
+                            let la: F64 = sd * a;
+                            logit = la * sk;
                             if cached == 1 {
                                 if c == 0 {
-                                    s0 = s;
+                                    lg0 = logit;
                                 }
                                 if c == 1 {
-                                    s1 = s;
+                                    lg1 = logit;
                                 }
                                 if c == 2 {
-                                    s2 = s;
+                                    lg2 = logit;
                                 }
                                 if c == 3 {
-                                    s3 = s;
+                                    lg3 = logit;
                                 }
                                 if c == 4 {
-                                    s4 = s;
+                                    lg4 = logit;
                                 }
                                 if c == 5 {
-                                    s5 = s;
+                                    lg5 = logit;
                                 }
                                 if c == 6 {
-                                    s6 = s;
+                                    lg6 = logit;
                                 }
                                 if c == 7 {
-                                    s7 = s;
+                                    lg7 = logit;
                                 }
                             }
-                        } else {
-                            s = s0;
-                            if c == 1 {
-                                s = s1;
-                            }
-                            if c == 2 {
-                                s = s2;
-                            }
-                            if c == 3 {
-                                s = s3;
-                            }
-                            if c == 4 {
-                                s = s4;
-                            }
-                            if c == 5 {
-                                s = s5;
-                            }
-                            if c == 6 {
-                                s = s6;
-                            }
-                            if c == 7 {
-                                s = s7;
-                            }
                         }
-                        let skf: F32 = KP[(krow0 + t) * kwords + dq * 2];
-                        let sk: F64 = skf as F64;
-                        let sd: F64 = s as F64;
-                        let la: F64 = sd * a;
-                        let logit: F64 = la * sk;
                         if phase == 0 {
                             let lb: I64 = f64_to_bits(logit) as I64;
                             let ls: I64 = lb >> 63;
@@ -430,48 +438,49 @@ kernel exact_decode_attention(
                                 p = 0;
                             }
                             live = 1;
-                            if cached == 1 {
-                                let pi: I32 = p as I32;
-                                if c == 0 {
-                                    p0 = pi;
-                                }
-                                if c == 1 {
-                                    p1 = pi;
-                                }
-                                if c == 2 {
-                                    p2 = pi;
-                                }
-                                if c == 3 {
-                                    p3 = pi;
-                                }
-                                if c == 4 {
-                                    p4 = pi;
-                                }
-                                if c == 5 {
-                                    p5 = pi;
-                                }
-                                if c == 6 {
-                                    p6 = pi;
-                                }
-                                if c == 7 {
-                                    p7 = pi;
-                                }
-                            }
                         }
                     }
                 }
                 if live == 1 {
-                    let svb: U32 = VP[(krow0 + t) * vwords + dq];
-                    let svf: F32 = f32_from_bits(svb);
-                    let sv: F64 = svf as F64;
-                    let pf: F64 = p as F64;
-                    let wv: F64 = pf * sv;
+                    if reuse == 0 {
+                        let svb: U32 = VP[(krow0 + t) * vwords + dq];
+                        let svf: F32 = f32_from_bits(svb);
+                        let sv: F64 = svf as F64;
+                        let pf: F64 = p as F64;
+                        wv = pf * sv;
+                    }
                     // wv >= +0: p >= 0 and the V scale is positive.
                     let wvb: U64 = f64_to_bits(wv);
                     if phase == 1 {
                         l_lane = l_lane + p;
                         if wvb > wmax_b {
                             wmax_b = wvb;
+                        }
+                        if cached == 1 {
+                            if c == 0 {
+                                wc0 = wv;
+                            }
+                            if c == 1 {
+                                wc1 = wv;
+                            }
+                            if c == 2 {
+                                wc2 = wv;
+                            }
+                            if c == 3 {
+                                wc3 = wv;
+                            }
+                            if c == 4 {
+                                wc4 = wv;
+                            }
+                            if c == 5 {
+                                wc5 = wv;
+                            }
+                            if c == 6 {
+                                wc6 = wv;
+                            }
+                            if c == 7 {
+                                wc7 = wv;
+                            }
                         }
                     } else {
                         // W = clamp(round(w * factor), 0, 2^28).
