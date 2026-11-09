@@ -129,11 +129,12 @@ kernel exact_decode_attention(
     let a: F64 = A[b * NH + h];
     let one: F64 = 1.0;
     let zero: F64 = 0.0;
-    // Below every logit. Python starts its max at the most negative double;
-    // the two differ only when every key is masked, and then every weight is
-    // forced to 0 whatever the max is.
-    let inf: F64 = one / zero;
-    let neg: F64 = zero - inf;
+    // Below every logit: -inf, from its bits (computing 1 / 0 took float64's
+    // divide slow path in every warp). Python starts its max at the most
+    // negative double; the two differ only when every key is masked, and then
+    // every weight is forced to 0 whatever the max is.
+    let negi: I64 = 0 - 4503599627370496;      // bits(-inf) = 0xFFF0...0, as an I64
+    let neg: F64 = f64_from_bits(negi as U64);
     let two52: F64 = 4503599627370496.0;
     let two28: F64 = 268435456.0;
     let inv28: F64 = 0.0000000037252902984619140625;
@@ -152,10 +153,8 @@ kernel exact_decode_attention(
     let kend: I32 = (krow0 + T) * kwords;
     let vend: I32 = (krow0 + T) * vwords;
 
-    let negb: I64 = f64_to_bits(neg) as I64;
-    let negs: I64 = negb >> 63;
-    let negm: I64 = negs & maxpos;
-    let m_key: I64 = negb ^ negm;
+    // The order key of -inf, bits ^ ((bits >> 63) & (2^63 - 1)).
+    let m_key: I64 = 0 - 9218868437227405313;
     let m: F64 = neg;
     let l_lane: I64 = 0;
     let l: I64 = 0;
