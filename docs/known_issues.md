@@ -14,6 +14,13 @@ source; each entry there now carries its status. What is still open:
 - The self-hosted type checker (`self_hosted/type_checker.ysu`) still checks
   `@divergence(uniform)` by looking for an identifier named `threadIdx` or
   `laneId`. The Rust compiler's check was replaced on 2026-11-05 (below).
+- The type checker's shared-memory coherence check (`verify_kernel_coherence`)
+  follows variables of a `SharedMemory<T>` type only. A buffer from
+  `shared_alloc_u32` is a `U64` address, so its `shared_store_v4` and
+  `shared_load_v4` accesses are invisible to it: a race on one is not
+  reported, and a barrier after its stores is called "redundant" (both of
+  `tests/exact_decode_attention.ysu`'s, which are needed; a warning only,
+  printed since before 2026-11-11).
 
 ### Benchmarks
 
