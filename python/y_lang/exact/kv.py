@@ -373,7 +373,9 @@ def quantize_kv(module, k, v, q_levels=127):
 #
 # `Y_EXACT_KV_PACK=inplace` also appends without the `cat` (`new_cache`): each
 # layer keeps its rows in buffers with spare room and writes a new row in
-# place, so a decode step copies one row, not the whole cache.
+# place, so a decode step copies one row, not the whole cache. One compiled
+# 0.5B decode step, batch 32, rough, same tokens: cat 571 kernels, 2270 us
+# GPU; in place 523 kernels, 2193 us.
 PACK = os.environ.get("Y_EXACT_KV_PACK", "0") != "0"
 INPLACE = os.environ.get("Y_EXACT_KV_PACK", "0") == "inplace"
 K_PAD, V_PAD = 8, 16
@@ -382,25 +384,36 @@ K_PAD, V_PAD = 8, 16
 APPEND_ROWS = 64
 
 
-def _bytes_of(scale, n_parts, part_bits):
-    """float32 `scale` [..., 1] as `n_parts` signed pieces of `part_bits`
-    bits, least significant first: the float's bytes in little-endian memory
-    order, as int16 or int8 values."""
+def _signed_byte(x):
+    """The low byte of int32 `x` as a signed int8 value (still int32)."""
+    return ((x & 0xFF) ^ 0x80) - 0x80
+
+
+def _packed_row(c, data, scale, at):
+    """A packed row as int8 [..., T, R]: int32 `data` [..., T, R] (byte values)
+    in the columns `c` < `at`, then float32 `scale` [..., T, 1]'s four bytes
+    in little-endian memory order, then zeros. `c` is the column index
+    [R] (int32).
+
+    Every column is a function of `c` and of loads from the inputs, with no
+    cat, stack or dtype view of different element size, so under
+    torch.compile the row is computed inside the kernel that stores it.
+    Built from pieces (a cat of the values, scale bytes and zeros; K as
+    int16 rows viewed as bytes), the copy into `AppendLayer`'s spare rows
+    read the row from memory after other kernels had built it: Inductor
+    (torch 2.13) made one new K + V row 7 kernels (a reduction each; K's
+    int16 rows, their bytes, the copy; V's row, the copy). This way it is 3:
+    one reduction for both, one kernel a row. The `cat` cache is 5 kernels
+    either way (0.5B shapes, batch and T symbolic)."""
     bits = scale.contiguous().view(torch.int32)
-    lim, mask = 1 << (part_bits - 1), (1 << part_bits) - 1
-    parts = []
-    for i in range(n_parts):
-        if i == n_parts - 1:
-            p = bits >> (part_bits * i)                    # arithmetic: signed top piece
-        else:
-            p = (bits >> (part_bits * i)) & mask
-            p = torch.where(p >= lim, p - (1 << part_bits), p)
-        parts.append(p)
-    return parts
+    sb = _signed_byte(bits >> ((c - at).clamp(0, 3) * 8))
+    zero = torch.zeros((), dtype=torch.int32, device=data.device)
+    return torch.where(c < at, data, torch.where(c < at + 4, sb, zero)).to(torch.int8)
 
 
 def _scale_from(pieces, part_bits):
-    """Inverse of `_bytes_of`: int pieces [..., n] -> float32 [..., 1]."""
+    """A float32 scale [..., 1] from its bytes as n signed int pieces [..., n] of
+    `part_bits` bits, least significant first (int16 or int8 values)."""
     x = pieces.to(torch.int32)
     n = x.shape[-1]
     mask = (1 << part_bits) - 1
@@ -416,10 +429,11 @@ def pack_k(ki, sk):
     (see `PACK`)."""
     if K_LEVELS > 32767:
         raise ValueError(f"K_LEVELS={K_LEVELS} does not fit int16")
-    pad = torch.zeros((*ki.shape[:-1], K_PAD - 2), dtype=torch.int16, device=ki.device)
-    lo, hi = _bytes_of(sk, 2, 16)
-    rows = torch.cat([ki.to(torch.int16), lo.to(torch.int16), hi.to(torch.int16), pad], dim=-1)
-    return rows.view(torch.int8)
+    d = ki.shape[-1]
+    c = torch.arange(2 * (d + K_PAD), dtype=torch.int32, device=ki.device)
+    r = ki.to(torch.int32)[..., (c >> 1).clamp(max=d - 1)]       # value c // 2
+    data = torch.where((c & 1) == 1, r >> 8, _signed_byte(r))      # its high, low byte
+    return _packed_row(c, data, sk, 2 * d)
 
 
 def pack_v(vi, sv):
@@ -427,9 +441,10 @@ def pack_v(vi, sv):
     as one int8 tensor [..., T, D + 16] (see `PACK`)."""
     if V_LEVELS > 127:
         raise ValueError(f"V_LEVELS={V_LEVELS} does not fit int8")
-    pad = torch.zeros((*vi.shape[:-1], V_PAD - 4), dtype=torch.int8, device=vi.device)
-    parts = [p.to(torch.int8) for p in _bytes_of(sv, 4, 8)]
-    return torch.cat([vi.to(torch.int8), *parts, pad], dim=-1)
+    d = vi.shape[-1]
+    c = torch.arange(d + V_PAD, dtype=torch.int32, device=vi.device)
+    data = torch.nn.functional.pad(vi.to(torch.int32), (0, V_PAD))
+    return _packed_row(c, data, sv, d)
 
 
 def unpack_k(kp, d):

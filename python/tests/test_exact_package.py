@@ -414,6 +414,52 @@ class TestLoad(unittest.TestCase):
                 self.assertTrue(torch.equal(un[1].view(torch.int32), sk.view(torch.int32)))
                 self.assertTrue(torch.equal(un[3].view(torch.int32), sv.view(torch.int32)))
 
+    def test_packed_rows_are_the_documented_bytes(self):
+        """Every int16 K value and every int8 V value, with edge and random
+        scale bit patterns: each packed row is the values' little-endian
+        bytes, the scale's four bytes, then zeros (kv.PACK). The reference is
+        Python's int.to_bytes, not unpack_k / unpack_v (which the round trip
+        uses and which do not read the padding)."""
+        import random
+        import torch
+        from y_lang.exact import kv
+        d, rows = 64, 1024
+        bits = [0, 1, -1, -2 ** 31, 2 ** 31 - 1, 0x7F800000, -0x800000, 0x7FC00001, 0x00800000,
+                0x3F800000]
+        rng = random.Random(3)
+        bits += [rng.randrange(-2 ** 31, 2 ** 31) for _ in range(rows - len(bits))]
+
+        def le(x, n):
+            return [b - 256 if b > 127 else b for b in x.to_bytes(n, "little", signed=True)]
+        kvals = list(range(-32768, 32768))                      # rows * d: every int16
+        vvals = [i % 256 - 128 for i in range(rows * d)]        # every int8, 256 times
+        k_ref, v_ref = [], []
+        for r in range(rows):
+            row = []
+            for x in kvals[r * d:(r + 1) * d]:
+                row += le(x, 2)
+            k_ref.append(row + le(bits[r], 4) + [0] * (2 * kv.K_PAD - 4))
+            v_ref.append(vvals[r * d:(r + 1) * d] + le(bits[r], 4) + [0] * (kv.V_PAD - 4))
+        k_ref = torch.tensor(k_ref, dtype=torch.int8).view(2, rows // 2, -1)
+        v_ref = torch.tensor(v_ref, dtype=torch.int8).view(2, rows // 2, -1)
+        devices = ["cpu"] + (["cuda"] if torch.cuda.is_available() else [])
+        for dev in devices:
+            s = torch.tensor(bits, dtype=torch.int64).to(torch.int32).view(torch.float32)
+            s = s.view(2, rows // 2, 1).to(dev)
+            ki = torch.tensor(kvals, dtype=torch.float32, device=dev).view(2, rows // 2, d)
+            vi = torch.tensor(vvals, dtype=torch.float32, device=dev).view(2, rows // 2, d)
+            packs = [("eager", kv.pack_k, kv.pack_v)]
+            if dev == "cuda":
+                # Compiled as the model runs them, with fixed and with
+                # symbolic sizes (Inductor lowers the column gather either way).
+                for dyn in (False, True):
+                    packs.append((f"compiled dynamic={dyn}", torch.compile(kv.pack_k, dynamic=dyn),
+                                  torch.compile(kv.pack_v, dynamic=dyn)))
+            for name, pk, pv in packs:
+                self.assertTrue(torch.equal(pk(ki, s).cpu(), k_ref), (dev, name, "K"))
+                for vdt in (torch.float32, torch.int8):
+                    self.assertTrue(torch.equal(pv(vi.to(vdt), s).cpu(), v_ref), (dev, name, "V", vdt))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -348,12 +348,16 @@ source; each entry there now carries its status. What is still open:
   agree (0.5B with every Y switch, 2026-11-09, and 7B, 2026-11-08: 0 of 5
   cases each), and the quantisation that follows absorbs a one-ulp change
   almost always.
-- The decode cache grows by transformers' `DynamicLayer`, which concatenates
-  the whole cache with each new row: an O(T) copy every step, 5.5-8.5 us a
-  layer (two kernels, rough) at 7B's shapes, batch 32 and about 32 keys,
-  growing with T. An in-place cache
-  layer (rows in buffers with spare room) passes its CPU tests but is not
-  yet checked compiled.
+- By default (and with `Y_EXACT_KV_PACK=1`) the decode cache grows by
+  transformers' `DynamicLayer`, which concatenates the whole cache with each
+  new row: an O(T) copy every step, 5.5-8.5 us a layer (two kernels, rough)
+  at 7B's shapes, batch 32 and about 32 keys, growing with T.
+  `Y_EXACT_KV_PACK=inplace` (opt-in) appends packed rows in place
+  (`kv.AppendCache`): compiled 0.5B, the same tokens, a CPU == GPU record
+  of 0 of 5 cases, and 523 kernels a decode step to cat's 571. It is not
+  yet priced at 7B. Part of what it saves may move into attention: Y's
+  kernel took 284 us a 0.5B step reading the in-place rows against 235
+  after the cat (rough), perhaps because the cat leaves the rows in L2.
 - `w8a8_gemv._quant_rows`, used only by `w8a8_linear` (benchmarks and
   `exact_selftest`), divides the scale with Triton's approximate `/` and
   the values with `libdevice.div_rn`, which flushes subnormals (Triton's
