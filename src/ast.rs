@@ -161,6 +161,21 @@ pub struct KernelDecl {
     /// f32-out contract); see `ptx_emitter::PtxEmitter::emit_kernel` for the
     /// dispatch and validation that consumes this.
     pub tile: Option<TileAttr>,
+    /// `@launch_bounds(max_threads[, min_blocks])` before `kernel`: the PTX
+    /// `.maxntid max_threads, 1, 1` (and `.minnctapersm min_blocks`), which
+    /// `ptxas` sizes the kernel's registers to, in place of the backend's own
+    /// `.maxnreg`. See `ptx_emitter::launch_limits_for_sm`.
+    pub launch_bounds: Option<LaunchBoundsAttr>,
+    pub span: Span,
+}
+
+/// `@launch_bounds(max_threads[, min_blocks])`: the kernel is launched with at
+/// most `max_threads` threads a block (a larger launch is refused by the
+/// driver), and `min_blocks` blocks of that size must fit an SM at once.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LaunchBoundsAttr {
+    pub max_threads: u32,
+    pub min_blocks: Option<u32>,
     pub span: Span,
 }
 

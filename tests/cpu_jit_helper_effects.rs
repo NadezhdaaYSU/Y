@@ -468,6 +468,7 @@ fn malformed_override_arguments_and_emitted_name_collisions_cannot_gain_runtime_
             span: span.clone(),
         },
         tile: None,
+        launch_bounds: None,
         span,
     }));
     assert!(!emit(&kernel_collision).contains("runtime.read"));

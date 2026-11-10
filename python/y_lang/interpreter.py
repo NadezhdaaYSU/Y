@@ -176,6 +176,9 @@ class _Func:
         self.labels: Dict[str, int] = {}
         self.shared: List[_Var] = []
         self.local: List[_Var] = []
+        # `.maxntid`: the GPU refuses a launch of more threads than this (in
+        # all: it bounds the product, not each dimension), and `_launch` too.
+        self.maxntid: Optional[Tuple[int, ...]] = None
 
 
 def _strip_comments(text: str) -> str:
@@ -287,6 +290,10 @@ class _Module:
         f = _Func(name, kind)
         f.rets = _decl_list(rets) if rets and rets.strip() else []
         f.params = _decl_list(params) if params and params.strip() else []
+        # Performance directives sit between the parameters and the body;
+        # `.maxntid` is also a launch rule (`_launch`).
+        for d in re.finditer(r"\.maxntid\s+(\d+(?:\s*,\s*\d+){0,2})", head[m.end():]):
+            f.maxntid = tuple(int(x) for x in d.group(1).replace(",", " ").split())
         for space, t, pname in f.params + f.rets:
             if space == "reg":
                 f.regs[pname] = t
@@ -648,6 +655,14 @@ class CPUInterpreter:
         if len(args) != len(entry.params):
             raise CPUInterpreterError(
                 f"`{self.kernel_name}` takes {len(entry.params)} arguments and was given {len(args)}")
+        if entry.maxntid is not None:
+            ceiling = int(np.prod(entry.maxntid))
+            threads = int(np.prod(block))
+            if threads > ceiling:
+                raise CPUInterpreterError(
+                    f"`{self.kernel_name}` is declared `.maxntid {', '.join(map(str, entry.maxntid))}` "
+                    f"(`@launch_bounds`: at most {ceiling} threads a block) and was launched with a "
+                    f"block of {threads}; the GPU refuses that launch")
 
         # Buffers: each tensor argument and each module variable, far apart.
         self.allocs: List[_Alloc] = []

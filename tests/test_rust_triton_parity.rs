@@ -44,6 +44,7 @@ fn test_rust_ptx_block_cdiv_and_arange_emission() {
                     span: Span { line: 1, col: 1 },
                 },
                 tile: None,
+                launch_bounds: None,
                 span: Span { line: 1, col: 1 },
             })
         ],

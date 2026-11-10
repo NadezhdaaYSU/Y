@@ -229,6 +229,38 @@ class StopsAtWhatTheGpuGetsWrong(unittest.TestCase):
                                 "out-of-bounds", "past its end", "PTX line")
         self.assertIn("block (195, 0, 0)", msg)
 
+    def test_a_block_past_the_launch_bounds_is_refused(self):
+        # `@launch_bounds(64)` is `.maxntid 64, 1, 1`: the driver refuses a
+        # larger block (tests/ptx_launch_bounds.rs), and so does the
+        # interpreter; a block within it runs.
+        src = """
+@launch_bounds(64)
+kernel k(Out: GlobalMemory<I32>) {
+    let t: I32 = thread_idx_x();
+    let base: I32 = block_idx_x() * 64 + t;
+    Out[base] = t + 1;
+}
+"""
+        k = kernel(src, "k")
+        self.assertIn(".maxntid 64, 1, 1", k.ptx)
+        out = torch.zeros(128, dtype=torch.int32)
+        interpret(k, (2, 1, 1), (64, 1, 1), [out])
+        self.assertTrue(torch.equal(out, (torch.arange(128) % 64 + 1).to(torch.int32)))
+        for block in ((65, 1, 1), (32, 3, 1), (8, 4, 3)):
+            out.zero_()
+            msg = self.assert_stops(src, "k", (2, 1, 1), block, [out], ".maxntid 64, 1, 1",
+                                    "the GPU refuses that launch")
+            self.assertIn(f"block of {block[0] * block[1] * block[2]}", msg)
+            self.assertFalse(out.any())
+        interpret(k, (1, 1, 1), (16, 2, 2), [out])           # 64 threads in 3 dimensions
+        if torch.cuda.is_available():
+            dev = torch.zeros(128, dtype=torch.int32, device="cuda")
+            with self.assertRaisesRegex(RuntimeError, "cuLaunchKernel failed"):
+                k.launch((2, 1, 1), (65, 1, 1), [dev])
+            k.launch((2, 1, 1), (64, 1, 1), [dev])
+            torch.cuda.synchronize()
+            self.assertTrue(torch.equal(dev.cpu(), (torch.arange(128) % 64 + 1).to(torch.int32)))
+
     def test_trap_is_reported(self):
         x, w = torch.randn(8, 1024), torch.randn(1024)
         self.assert_stops(RMSNORM, "rms", (8, 1, 1), (128, 1, 1), [x, w, torch.zeros_like(x), 1024, 1e-5], "`trap`")
