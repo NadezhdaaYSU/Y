@@ -81,6 +81,13 @@ class TestExactDecodeAttention(unittest.TestCase):
             (2, 28, 4, 256, 128, 2.0, 11, "pad"),
             (2, 14, 2, 257, 64, 2.0, 12, "pad"),
             (1, 28, 4, 300, 128, 6.0, 13, None),
+            # Other group sizes: with fewer than 7 warps a chunk of K takes
+            # the staging loop more than one pass, and V's two groups a warp
+            # more than one; with 8, a second V group is never stored.
+            (2, 8, 2, 70, 128, 2.0, 14, "pad"),     # 4 warps
+            (2, 4, 4, 45, 64, 2.0, 15, "pad"),      # 1 warp
+            (2, 8, 4, 100, 128, 2.0, 16, None),     # 2 warps
+            (2, 16, 2, 77, 128, 2.0, 17, "pad"),    # 8 warps
         ]
         for c in cases:
             q, k, v, am, sc = _case(*c)

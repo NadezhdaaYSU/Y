@@ -145,6 +145,28 @@ fn bounds_the_target_cannot_meet_are_refused() {
     assert!(ok, "the same @tile kernel without the bounds was refused:\n{log}");
 }
 
+/// The exact-attention kernel, under its bounds and with them deleted: the
+/// bounds are what keep it at two blocks an SM.
+#[test]
+fn ptxas_sizes_the_attention_kernel_to_its_bounds() {
+    let Some(tool) = ptxas::ptxas() else { return };
+    let src = std::fs::read_to_string(pinned::repo().join("tests/exact_decode_attention.ysu")).unwrap();
+    let attr = "@launch_bounds(256, 2)\n";
+    assert_eq!(src.matches(attr).count(), 1, "the kernel no longer states {attr:?}");
+    let mut regs = Vec::new();
+    for (tag, text) in [("bounded", src.clone()), ("unbounded", src.replace(attr, ""))] {
+        let (ok, log, ptx) = compile(&format!("attention_{tag}"), pinned::SM_FP8, &text);
+        assert!(ok, "{tag}: refused:\n{log}");
+        let (ok, log, r, spills) = assemble(&tool, &sm_name(pinned::SM_FP8), &ptx);
+        assert!(ok && r > 0, "{tag}: ptxas:\n{log}");
+        assert_eq!(spills, 0, "{tag}: spills:\n{log}");
+        regs.push(r);
+    }
+    // Two blocks of 8 warps an SM leave each thread 65536 / 512 = 128.
+    assert!(regs[0] <= 128, "under (256, 2) ptxas used {} registers", regs[0]);
+    assert!(regs[1] > 128, "without the bounds ptxas used {}: the test no longer shows them doing anything", regs[1]);
+}
+
 fn probe(tool: &PathBuf, sm: &str, version: &str, ntid: u32, blocks: u32) -> Result<bool, String> {
     let dir = pinned::scratch(&format!("launch_bounds_probe_{sm}_{ntid}_{blocks}"));
     let p = dir.join("p.ptx");

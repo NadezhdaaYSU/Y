@@ -347,9 +347,14 @@ source; each entry there now carries its status. What is still open:
   `Y_EXACT_KV_PACK=inplace` (opt-in) appends packed rows in place
   (`kv.AppendCache`): compiled 0.5B, the same tokens, a CPU == GPU record
   of 0 of 5 cases, and 523 kernels a decode step to cat's 571. It is not
-  yet priced at 7B. Part of what it saves may move into attention: Y's
+  yet priced at 7B. Part of what it saves moves into attention: Y's
   kernel took 284 us a 0.5B step reading the in-place rows against 235
-  after the cat (rough), perhaps because the cat leaves the rows in L2.
+  after the cat (rough). Measured alone, that is the rows' cache level, not
+  their layout: from DRAM 1.22-1.33x the time from L2, contiguous or as
+  views alike (the cat leaves them in L2). The kernel now waits on memory
+  once a chunk, not once a row, and takes 0.64-0.94x its old time either
+  way; DRAM still costs it 1.16-1.29x
+  (`docs/benchmarks/exact_attention_staging_2026-11-11/`).
 
 ### Python packaging
 

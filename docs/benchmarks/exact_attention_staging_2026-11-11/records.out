@@ -1,0 +1,9 @@
+gpu all 00:22:24
+exit 0
+gpu attn, cat cache 00:30:20
+exit 0
+cpu 30eec169d2f38da4
+gpu_all_compiled 30eec169d2f38da4 weights equal True self-check True cases differing: []
+gpu_attn_cat_compiled 30eec169d2f38da4 weights equal True self-check True cases differing: []
+
+[exited with code 0]
