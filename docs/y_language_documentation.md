@@ -406,6 +406,8 @@ Attr            = "@require" , "(" , Expr , ")"
                 | "@bounds" , "(" , Expr , ")"
                 | "@invariant" , "(" , Expr , ")"
                 | "@tile" (* on a kernel only; on a loop or fn REFUSED -- see 9.12 *)
+                | "@launch_bounds" , "(" , IntLit , [ "," , IntLit ] , ")"
+                  (* directly before "kernel" only -- see 9.18 *)
                 | "@ghost" | "@divergence"
                 | "@clock_domain" , [ "(" , Expr , ")" ]
                 (* "@prefetch_stride" is lexed and REFUSED -- see 9.14. *)
@@ -1482,6 +1484,23 @@ if block_idx_x() < limit {
 @static_assert(1024 % 32 == 0, "whole warps");
 fn main() {
     compile_time::assert!(2 * (3 + 4) == 14, "constant arithmetic");
+}
+```
+
+### 9.18 `@launch_bounds` — **directly before `kernel`; PTX only**
+* **Syntax**: `@launch_bounds(max_threads)` or `@launch_bounds(max_threads, min_blocks)`, positive integer literals, after any `@require` or `@tile` and directly before `kernel`. Anywhere else it is refused (it would have nowhere to be stored).
+* **Function**: The kernel is launched with at most `max_threads` threads a block, and (with `min_blocks`) that many blocks of that size must fit an SM at once. The PTX backend writes `.maxntid max_threads, 1, 1` and `.minnctapersm min_blocks`, and `ptxas` sizes the kernel's registers to them, in place of the `.maxnreg` the backend otherwise guesses from a virtual-register count and an assumed 256-thread block. CUDA C++'s `__launch_bounds__` is the same pair.
+* **Launch**: a block of more than `max_threads` threads (in all three dimensions together) is refused when launched: by the driver on the GPU (`cuLaunchKernel` fails; the context stays usable), and by the CPU interpreter.
+* **Checked against the target** (`ptx_emitter::launch_limits_for_sm`): a block has 1 to 1024 threads; `min_blocks` is at most the SM's resident blocks (16 on sm_75/86/87, 24 on sm_89/120, 32 otherwise); and `min_blocks` blocks of `max_threads` threads, counted in whole warps, fit the SM's threads (1024 on sm_75, 1536 on sm_86/87/89/120, 2048 otherwise). Past these `ptxas` does not fail: it warns that the directives "will be ignored" and sizes the kernel as if they were absent, so the compiler refuses them. An architecture with no recorded limits refuses the attribute. `tests/ptx_launch_bounds.rs` holds the table to `ptxas` at both edges for all 13 targets.
+* **Not allowed** on a `@tile` GEMM, which chooses its own block size and register budget. The other backends have no SM and do not read it.
+* **Why it exists**: `tests/exact_decode_attention.ysu` launches 7-warp blocks, two to an SM only at 128 registers or fewer. Under the guessed `.maxnreg 255`, `ptxas` gave its new K staging 142, and Qwen2.5-7B's 128 blocks ran in two waves on 66 SMs; under `@launch_bounds(256, 2)` it fits the same PTX in 124, without spilling.
+* **Example**:
+```ysu
+@launch_bounds(256, 2)
+kernel k(Out: GlobalMemory<U32>) {
+    let t: I32 = thread_idx_x();
+    let base: I32 = block_idx_x() * 256 + t;
+    Out[base] = t;
 }
 ```
 

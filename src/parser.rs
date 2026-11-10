@@ -244,15 +244,31 @@ impl Parser {
             let save_pos = self.pos;
             self.advance(); // consume '@tile'
             let parsed_tile = self.parse_tile_attr()?;
-            if self.check(TokenKind::Kernel) {
+            if self.check(TokenKind::Kernel) || self.check(TokenKind::AtLaunchBounds) {
                 kernel_tile = Some(parsed_tile);
             } else {
                 self.pos = save_pos;
             }
         }
 
+        // `@launch_bounds(N)` / `@launch_bounds(N, M)`, directly before
+        // `kernel`: stored on the kernel and nowhere else, so anywhere else it
+        // is refused rather than dropped (as `@require` is, above).
+        let mut launch_bounds = None;
+        if self.check(TokenKind::AtLaunchBounds) {
+            launch_bounds = Some(self.parse_launch_bounds_attr()?);
+            if !self.check(TokenKind::Kernel) {
+                return Err(format!(
+                    "Line {}: `@launch_bounds(...)` is only supported directly before `kernel` \
+                     (after any `@require` or `@tile`); here it would have nowhere to go.",
+                    launch_bounds.as_ref().map_or(0, |b: &LaunchBoundsAttr| b.span.line)
+                ));
+            }
+        }
+
         if self.match_token(TokenKind::Kernel) {
-            let kernel = self.parse_kernel(requires, kernel_tile)?;
+            let mut kernel = self.parse_kernel(requires, kernel_tile)?;
+            kernel.launch_bounds = launch_bounds;
             Ok(Item::Kernel(kernel))
         } else if !requires.is_empty() {
             // `requires` is threaded into `parse_kernel` and NOWHERE ELSE:
@@ -920,7 +936,49 @@ impl Parser {
             params,
             body,
             tile,
+            launch_bounds: None,
             span,
+        })
+    }
+
+    /// `@launch_bounds(max_threads)` or `@launch_bounds(max_threads,
+    /// min_blocks)`, each a positive integer literal: they become PTX
+    /// immediates, so an expression the parser would have to fold is refused
+    /// rather than guessed at. The ranges a target allows are checked where
+    /// the target is known (`ptx_emitter::launch_limits_for_sm`).
+    fn parse_launch_bounds_attr(&mut self) -> Result<LaunchBoundsAttr, String> {
+        let at = self.expect(TokenKind::AtLaunchBounds, "@launch_bounds")?;
+        self.expect(TokenKind::LParen, "'(' after @launch_bounds")?;
+        let mut values = Vec::new();
+        loop {
+            let e = self.parse_expr()?;
+            match e {
+                Expr::IntLit(v, _) if v > 0 && v <= u32::MAX as i64 => values.push(v as u32),
+                _ => {
+                    return Err(format!(
+                        "Line {}: `@launch_bounds` takes positive integer literals \
+                         (`@launch_bounds(256)` or `@launch_bounds(256, 2)`), found {:?}",
+                        at.line, e
+                    ))
+                }
+            }
+            if !self.match_token(TokenKind::Comma) {
+                break;
+            }
+        }
+        self.expect(TokenKind::RParen, "')' after @launch_bounds")?;
+        if values.len() > 2 {
+            return Err(format!(
+                "Line {}: `@launch_bounds` takes one or two values (threads a block, blocks an SM), \
+                 not {}",
+                at.line,
+                values.len()
+            ));
+        }
+        Ok(LaunchBoundsAttr {
+            max_threads: values[0],
+            min_blocks: values.get(1).copied(),
+            span: Span { line: at.line, col: at.col },
         })
     }
 

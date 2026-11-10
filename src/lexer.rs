@@ -143,6 +143,7 @@ pub enum TokenKind {
     AtZkSafe,
     AtZkAllowUnconstrained,
     AtMaxIterations,   // @max_iterations(N) attribute
+    AtLaunchBounds,    // @launch_bounds(N[, M]) on a kernel
     AtHint,            // @hint attribute / block
     AtUnknown(String), // future-proof
 
@@ -568,6 +569,7 @@ impl Lexer {
             "@zk_safe" => TokenKind::AtZkSafe,
             "@zk_allow_unconstrained" => TokenKind::AtZkAllowUnconstrained,
             "@max_iterations" => TokenKind::AtMaxIterations,
+            "@launch_bounds" => TokenKind::AtLaunchBounds,
             "@hint" => TokenKind::AtHint,
             "@divergence" => {
                 // Peek for (uniform)

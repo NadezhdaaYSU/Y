@@ -621,6 +621,27 @@ pub fn ptx_version_for_sm(sm: &str) -> &'static str {
     }
 }
 
+/// The threads and the blocks an SM of `sm` holds at once: the bounds `ptxas`
+/// checks a kernel's `.maxntid` and `.minnctapersm` against, threads counted
+/// in whole warps (`.maxntid 200` with `.minnctapersm 7` is 7 x 224 = 1568,
+/// past sm_89's 1536). Past them `ptxas` does not fail: it warns that the
+/// directives "will be ignored" and sizes the kernel as if they were absent,
+/// so `@launch_bounds` checks them itself. Read off `ptxas` (13.4, and 12.8
+/// for sm_60..sm_72), not off the programming guide, which gives sm_87 2048
+/// threads; `tests/ptx_launch_bounds.rs` holds every row to `ptxas` at both
+/// edges. An architecture not listed is `None`, and the attribute is refused
+/// there rather than checked against a guess.
+pub fn launch_limits_for_sm(sm: &str) -> Option<(u32, u32)> {
+    let s = sm.strip_prefix("sm_").unwrap_or(sm).replace('.', "");
+    match s.trim_end_matches(['a', 'f']) {
+        "60" | "61" | "62" | "70" | "72" | "80" | "90" | "100" => Some((2048, 32)),
+        "75" => Some((1024, 16)),
+        "86" | "87" => Some((1536, 16)),
+        "89" | "120" => Some((1536, 24)),
+        _ => None,
+    }
+}
+
 /// An instruction family with a hardware floor: `ptxas` rejects it below
 /// `min_sm` ("Feature 'cp.async' requires .target sm_80 or higher"), and on an
 /// arch that has it, below `min_ptx`.
@@ -5626,6 +5647,51 @@ or `shared_alloc_u32` for a shared-memory array.",
         }
     }
 
+    /// `.maxntid` (and `.minnctapersm`) for `@launch_bounds`, after the
+    /// checks `ptxas` would otherwise answer by ignoring them: a block of at
+    /// most 1024 threads (`ptxas` takes up to an SM's worth, and the launch
+    /// then fails), at most the target's blocks an SM, and the blocks' whole
+    /// warps within its threads an SM (`launch_limits_for_sm`).
+    fn emit_launch_bounds(&mut self, kernel: &KernelDecl, lb: &LaunchBoundsAttr, tile_gemm: bool) {
+        let at = format!("[PTX] Line {}: kernel `{}`: `@launch_bounds", lb.span.line, kernel.name);
+        if tile_gemm || kernel.tile.is_some() {
+            self.emit_errors.push(format!(
+                "{at}` on a `@tile` GEMM: that kernel chooses its own block size and \
+                 register budget, which the bounds would contradict"
+            ));
+            return;
+        }
+        let n = lb.max_threads;
+        if n == 0 || n > 1024 {
+            self.emit_errors.push(format!(
+                "{at}({n}, ..)`: a block has 1 to 1024 threads"
+            ));
+            return;
+        }
+        let Some((sm_threads, sm_blocks)) = launch_limits_for_sm(&self.sm_target) else {
+            self.emit_errors.push(format!(
+                "{at}` on {}: no limits are recorded for this architecture \
+                 (`launch_limits_for_sm`), and `ptxas` ignores bounds past them silently",
+                self.target_desc()
+            ));
+            return;
+        };
+        writeln!(&mut self.ptx_buffer, ".maxntid {}, 1, 1", n).unwrap();
+        if let Some(m) = lb.min_blocks {
+            let warp_threads = n.div_ceil(32) * 32;
+            if m == 0 || m > sm_blocks || u64::from(warp_threads) * u64::from(m) > u64::from(sm_threads) {
+                self.emit_errors.push(format!(
+                    "{at}({n}, {m})` on {}: {m} blocks of {n} threads ({warp_threads} in whole \
+                     warps) do not fit an SM, which holds {sm_threads} threads and {sm_blocks} \
+                     blocks; `ptxas` would ignore the bound",
+                    self.target_desc()
+                ));
+                return;
+            }
+            writeln!(&mut self.ptx_buffer, ".minnctapersm {}", m).unwrap();
+        }
+    }
+
     fn unsupported_intrinsic(&mut self, name: &str, reason: &str) {
         self.emit_errors.push(format!(
             "[PTX] `{}(...)` cannot be lowered for target {}: {}.",
@@ -6152,70 +6218,80 @@ or `shared_alloc_u32` for a shared-memory array.",
         }
         writeln!(&mut self.ptx_buffer, ")").unwrap();
 
-        // Calculate dynamic register pressure limit
-        let total_regs_used = self.reg_u32_count + self.reg_f32_count + self.reg_u64_count * 2;
-        let limit = if total_regs_used <= 32 {
-            32
-        } else if total_regs_used <= 64 {
-            64
-        } else if total_regs_used <= 128 {
-            128
+        if let Some(lb) = &kernel.launch_bounds {
+            // The kernel's own bounds, for `ptxas` to size its registers to,
+            // in place of the `.maxnreg` guessed below from a virtual-register
+            // count and an assumed 256-thread block (which, at 255, let
+            // exact_decode_attention take 142 registers and one block an SM
+            // where 7 warps x 2 blocks needed 128).
+            self.emit_launch_bounds(kernel, lb, tile_gemm_threads_per_cta.is_some());
+            writeln!(&mut self.ptx_buffer, "{{").unwrap();
         } else {
-            255
-        };
+            // Calculate dynamic register pressure limit
+            let total_regs_used = self.reg_u32_count + self.reg_f32_count + self.reg_u64_count * 2;
+            let limit = if total_regs_used <= 32 {
+                32
+            } else if total_regs_used <= 64 {
+                64
+            } else if total_regs_used <= 128 {
+                128
+            } else {
+                255
+            };
 
-        // block_size here assumes 256 threads/block for every kernel except
-        // a tile-aware GEMM (`tile_gemm_threads_per_cta`, its own real,
-        // autotuned thread count - which can be 512 for the largest
-        // candidates). That assumption isn't just a display-comment
-        // inaccuracy for those kernels: `limit` above is a coarse 32/64/
-        // 128/255 bucket of a virtual-register-count estimate that is not
-        // ptxas's real, final per-thread allocation, so `.maxnreg` was
-        // landing far above what a 512-thread block can actually afford
-        // (max_regs_per_sm=65536 / 512 threads = 128 regs/thread ceiling,
-        // vs the 255 this bucketing was picking) - confirmed on real
-        // hardware as CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES ("too many
-        // resources requested for launch") the first time a tile-aware
-        // kernel's real per-thread register need got close enough to that
-        // ceiling to matter. Clamping `limit` itself (not just the display
-        // math below) to what the real block size can afford fixes this at
-        // the source rather than papering over it in the estimate.
-        let block_size = tile_gemm_threads_per_cta.unwrap_or(256);
-        let max_regs_per_sm = hw_profile.max_regs_per_sm;
-        let max_threads_per_sm = hw_profile.max_threads_per_sm;
-        // The clamp only applies when there is a real register budget to
-        // clamp against. `HardwareProfile::default()` (no probe run, e.g. a
-        // cross-compile or any unit test that builds its own profile) leaves
-        // `max_regs_per_sm` at 0, and `limit.min(0 / block_size)` is 0 - which
-        // emits `.maxnreg 0` and makes ptxas reject the whole module with
-        // "Positive non-zero value expected for maxnreg". That produced
-        // structurally invalid PTX for EVERY kernel compiled without a
-        // hardware profile, not just this one; it went unnoticed because the
-        // PTX tests only string-matched their own expected substrings and
-        // never assembled the result (see
-        // `tests_paged_decode_attention::emitted_ptx_actually_assembles`,
-        // which is what caught it).
-        let ctas_per_sm = self.tile_gemm_ctas_per_sm.take().unwrap_or(1).max(1);
-        let limit = if block_size > 0 && max_regs_per_sm > 0 {
-            limit.min((max_regs_per_sm / (block_size * ctas_per_sm)).max(1))
-        } else {
-            limit
-        };
+            // block_size here assumes 256 threads/block for every kernel except
+            // a tile-aware GEMM (`tile_gemm_threads_per_cta`, its own real,
+            // autotuned thread count - which can be 512 for the largest
+            // candidates). That assumption isn't just a display-comment
+            // inaccuracy for those kernels: `limit` above is a coarse 32/64/
+            // 128/255 bucket of a virtual-register-count estimate that is not
+            // ptxas's real, final per-thread allocation, so `.maxnreg` was
+            // landing far above what a 512-thread block can actually afford
+            // (max_regs_per_sm=65536 / 512 threads = 128 regs/thread ceiling,
+            // vs the 255 this bucketing was picking) - confirmed on real
+            // hardware as CUDA_ERROR_LAUNCH_OUT_OF_RESOURCES ("too many
+            // resources requested for launch") the first time a tile-aware
+            // kernel's real per-thread register need got close enough to that
+            // ceiling to matter. Clamping `limit` itself (not just the display
+            // math below) to what the real block size can afford fixes this at
+            // the source rather than papering over it in the estimate.
+            let block_size = tile_gemm_threads_per_cta.unwrap_or(256);
+            let max_regs_per_sm = hw_profile.max_regs_per_sm;
+            let max_threads_per_sm = hw_profile.max_threads_per_sm;
+            // The clamp only applies when there is a real register budget to
+            // clamp against. `HardwareProfile::default()` (no probe run, e.g. a
+            // cross-compile or any unit test that builds its own profile) leaves
+            // `max_regs_per_sm` at 0, and `limit.min(0 / block_size)` is 0 - which
+            // emits `.maxnreg 0` and makes ptxas reject the whole module with
+            // "Positive non-zero value expected for maxnreg". That produced
+            // structurally invalid PTX for EVERY kernel compiled without a
+            // hardware profile, not just this one; it went unnoticed because the
+            // PTX tests only string-matched their own expected substrings and
+            // never assembled the result (see
+            // `tests_paged_decode_attention::emitted_ptx_actually_assembles`,
+            // which is what caught it).
+            let ctas_per_sm = self.tile_gemm_ctas_per_sm.take().unwrap_or(1).max(1);
+            let limit = if block_size > 0 && max_regs_per_sm > 0 {
+                limit.min((max_regs_per_sm / (block_size * ctas_per_sm)).max(1))
+            } else {
+                limit
+            };
 
-        let active_blocks = if limit > 0 && block_size > 0 {
-            (max_regs_per_sm / (block_size * limit))
-                .min(max_threads_per_sm / block_size)
-                .min(hw_profile.max_warps_per_sm * hw_profile.warp_size / block_size)
-        } else {
-            1
-        };
-        let occupancy = (active_blocks * block_size) as f64 / max_threads_per_sm as f64 * 100.0;
+            let active_blocks = if limit > 0 && block_size > 0 {
+                (max_regs_per_sm / (block_size * limit))
+                    .min(max_threads_per_sm / block_size)
+                    .min(hw_profile.max_warps_per_sm * hw_profile.warp_size / block_size)
+            } else {
+                1
+            };
+            let occupancy = (active_blocks * block_size) as f64 / max_threads_per_sm as f64 * 100.0;
 
-        writeln!(&mut self.ptx_buffer, "    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: {}", total_regs_used).unwrap();
-        writeln!(&mut self.ptx_buffer, "    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: {} (to maximize SM occupancy)", limit).unwrap();
-        writeln!(&mut self.ptx_buffer, "    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: {:.2}% ({} active blocks per SM)", occupancy, active_blocks).unwrap();
-        writeln!(&mut self.ptx_buffer, ".maxnreg {}", limit).unwrap();
-        writeln!(&mut self.ptx_buffer, "{{").unwrap();
+            writeln!(&mut self.ptx_buffer, "    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated registers per thread: {}", total_regs_used).unwrap();
+            writeln!(&mut self.ptx_buffer, "    // [ADVANCED WARP REGISTER ALLOCATOR] Selected register limit: {} (to maximize SM occupancy)", limit).unwrap();
+            writeln!(&mut self.ptx_buffer, "    // [ADVANCED WARP REGISTER ALLOCATOR] Estimated occupancy: {:.2}% ({} active blocks per SM)", occupancy, active_blocks).unwrap();
+            writeln!(&mut self.ptx_buffer, ".maxnreg {}", limit).unwrap();
+            writeln!(&mut self.ptx_buffer, "{{").unwrap();
+        }
 
         // Declare registers with exact counts used
         writeln!(&mut self.ptx_buffer, "    .reg .b32 %r<{}>;", self.reg_u32_count.max(1)).unwrap();
