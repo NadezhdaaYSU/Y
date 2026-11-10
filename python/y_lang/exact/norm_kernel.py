@@ -49,7 +49,8 @@ allow it (float64 runs at 1/64 rate here, integers at full rate):
 
 The sum of squares is exact integer arithmetic, so the tree order of the
 reductions here, Inductor's and the CPU's give the same bits
-(`python/y_lang/tests/test_exact_norm_kernel.py`).
+(`python/y_lang/tests/test_exact_sum_of_squares.py`). Its limb arithmetic,
+as `_grid_sum_of_squares` spells it, is proved in `proofs/NormGridSum.v`.
 """
 
 import torch
