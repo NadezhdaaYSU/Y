@@ -41,16 +41,19 @@
 // arguments, one where m - logit is exactly k + 0.5 with k even
 // (python/y_lang/tests/test_exact_decode_attention.py).
 //
-// Layout (all contiguous): QI [B][NH][D] (integer-valued float32), A [B][NH]
-// (`sq * scaling * log2(e) * 65536`, float64, computed by the caller exactly
-// as the Python path does), KP and VP the packed cache rows of
-// `y_lang.exact.kv.pack_k` / `pack_v`: KP [B][NKV][T][D + 8] int16, the D
-// integers of a K row then its float32 scale's four bytes and padding, read
-// here as float32 words (two int16s each, the scale one word); VP
-// [B][NKV][T][D + 16] int8, the D integers of a V row then its scale's four
-// bytes and padding, read as 32-bit words. BLOCKED [B][T] (1 = masked; not
-// read when HAS_MASK is 0, for a batch with no mask at all),
-// TABLE [64] (the exp2 table), OUT [B][NH][D].
+// Layout (contiguous, but for K's and V's row stride): QI [B][NH][D]
+// (integer-valued float32), A [B][NH] (`sq * scaling * log2(e) * 65536`,
+// float64, computed by the caller exactly as the Python path does), KP and VP
+// the packed cache rows of `y_lang.exact.kv.pack_k` / `pack_v`:
+// KP [B][NKV][TS][D + 8] int16, the D integers of a K row then its float32
+// scale's four bytes and padding, read here as float32 words (two int16s
+// each, the scale one word); VP [B][NKV][TS][D + 16] int8, the D integers of
+// a V row then its scale's four bytes and padding, read as 32-bit words. Only
+// the first T of each (sequence, KV head)'s TS >= T rows are read: TS = T for
+// a contiguous cache, more for a view of buffers with spare room
+// (`y_lang.exact.kv.AppendLayer`). BLOCKED [B][T] (1 = masked; not read when
+// HAS_MASK is 0, for a batch with no mask at all), TABLE [64] (the exp2
+// table), OUT [B][NH][D].
 // Launch: grid (NKV, B), REP warps (REP = NH / NKV <= 8). D is a multiple of
 // 16 and at most 128.
 kernel exact_decode_attention(
@@ -62,6 +65,7 @@ kernel exact_decode_attention(
     TABLE: GlobalMemory<I64>,
     OUT: GlobalMemory<F32>,
     T: I32,
+    TS: I32,
     NH: I32,
     NKV: I32,
     REP: I32,
@@ -84,7 +88,7 @@ kernel exact_decode_attention(
     let vwords: I32 = dq + 4;
     let h: I32 = g * rep + w;
     let kstride: I32 = dq8 + 1;
-    let krow0: I32 = (b * NKV + g) * T;
+    let krow0: I32 = (b * NKV + g) * TS;
     let qrow: I32 = (b * NH + h) * D;
     // Q as int8 bytes, one row per head: 8 x 8 units of 16 bytes. K, 32 keys
     // a chunk, as int16 pairs in rows of D/8 + 1 sixteen-byte units (the
