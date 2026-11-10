@@ -24,7 +24,7 @@ This module swaps all three for order-independent versions:
 and, so the same tokens come out of a CPU and a GPU, the two float ops left:
 
   * `ExactSiLU`     - the sigmoid as integer interpolation in a host table.
-  * `ExactRotary`   - RoPE cos/sin from a host-built float64 table.
+  * `ExactRotary`   - RoPE cos/sin from a host-built table, each entry correctly rounded.
 
 Accuracy is a separate question from invariance and is reported separately:
 W8A8 with per-channel weights and per-token activations is a standard scheme,
@@ -692,23 +692,93 @@ class ExactSiLU(nn.Module):
         return (x.to(torch.float32) * sig).to(x.dtype)
 
 
+# A float64 cos or sin is not correctly rounded: glibc, SLEEF (torch's CPU
+# kernels) and CUDA each err by up to about an ulp, and differently. Rounding
+# one to float32 still gives the correctly rounded float32 unless the true
+# value lies within a few float64 ulps of a float32 rounding midpoint; there,
+# another host's libm could round the other way. `cos_sin_f32` finds those
+# entries (the float64 value's low 29 fraction bits within ROPE_MARGIN of
+# 2^28, the pattern of a midpoint, as in `norm_kernel`) and decides them in
+# mpmath (ROPE_MP_BITS). Every entry is then the correctly rounded
+# float32 of cos(arg) * scale, on any host whose float64 cos/sin errs by less
+# than ROPE_LIBM_ULPS ulps (libms claim 1).
+ROPE_LIBM_ULPS = 4
+ROPE_MARGIN = 2 * ROPE_LIBM_ULPS + 2          # float64 ulps: libm, the scale's rounding
+ROPE_MP_BITS = (160, 320, 640, 1280, 2560)   # tried in turn until the rounding is decided
+
+
+def _rn32_by_mpmath(fn, arg, scale):
+    """The correctly rounded float32 of fn(arg) * scale (mpmath's cos or sin,
+    float `arg` and `scale`), as a Python float: the value's significand
+    scaled to 24 bits (float32's subnormals included) and rounded to nearest,
+    at more bits until the value is clearly off the rounding midpoint. cos and
+    sin of a nonzero float are never exactly a midpoint, but can come close:
+    sin(x) is x - x^3/6 + ..., so for a tiny x on a float32 midpoint it lies
+    about 2^-300 below it."""
+    import mpmath
+    for bits in ROPE_MP_BITS:
+        with mpmath.workprec(bits):
+            v = fn(mpmath.mpf(arg)) * mpmath.mpf(scale)
+            if v == 0:
+                return 0.0
+            e = max(int(mpmath.frexp(v)[1]) - 1, -126)       # floor(log2 |v|), float32's floor
+            if e > 127:
+                raise ArithmeticError(f"RoPE table: fn({arg!r}) * {scale!r} overflows float32")
+            q = mpmath.ldexp(v, 23 - e)                       # |q| < 2^24
+            n = int(mpmath.floor(q))
+            r = q - n
+            if abs(r - mpmath.mpf(0.5)) > mpmath.ldexp(1, 28 - bits):
+                return float(mpmath.ldexp(n + (r > 0.5), e - 23))
+    raise ArithmeticError(f"RoPE table: fn({arg!r}) * {scale!r} is too close to a float32 "
+                          f"rounding midpoint to decide at {ROPE_MP_BITS[-1]} bits")
+
+
+def cos_sin_f32(arg, scale=1.0, approx=(torch.cos, torch.sin)):
+    """float32 cos(arg) * scale and sin(arg) * scale, each correctly rounded,
+    for a float64 tensor `arg` (see ROPE_LIBM_ULPS). `approx` are the float64
+    functions that propose each value (the host's; tests pass others)."""
+    import mpmath
+    if arg.dtype != torch.float64:
+        raise TypeError(f"cos_sin_f32 takes float64 arguments, not {arg.dtype}")
+    out = []
+    for fn, exact in zip(approx, (mpmath.cos, mpmath.sin)):
+        y = fn(arg) * scale
+        f = y.to(torch.float32)
+        bits = y.contiguous().view(torch.int64)
+        abits = bits & 0x7FFFFFFFFFFFFFFF
+        dist = ((abits & ((1 << 29) - 1)) - (1 << 28)).abs()
+        # Near a midpoint, or below 2^-126 (where float32's midpoints have
+        # another pattern; this takes sin(0) = 0 too), or not finite.
+        unsafe = (dist <= ROPE_MARGIN) | (abits < 0x3810000000000000) | ~torch.isfinite(y)
+        idx = unsafe.nonzero(as_tuple=True)
+        if idx[0].numel():
+            f[idx] = torch.tensor([_rn32_by_mpmath(exact, a, scale) for a in arg[idx].tolist()],
+                                  dtype=torch.float32)
+        out.append(f)
+    return out[0], out[1]
+
+
 class ExactRotary(nn.Module):
-    """RoPE cos/sin read from a table built once, on the host, in float64.
+    """RoPE cos/sin read from a table built once, on the host.
 
     The stock module evaluates cos/sin in float32 on whatever device runs the
     model, and libm and CUDA differ there by an ulp. The table is computed from
-    the module's own float32 `inv_freq`, rounded once to float32, and indexed
-    by position, so no device evaluates a transcendental function at all.
+    the module's own float32 `inv_freq` at positions 0 .. max_positions - 1:
+    each entry the correctly rounded float32 of cos or sin of
+    `position * inv_freq` (a float64 product: exact for a float32 `inv_freq`
+    below 2^29 positions, and an IEEE multiply anyway) times
+    `attention_scaling` (`cos_sin_f32`), so no device evaluates a
+    transcendental function and no host's libm decides a bit.
     """
 
     def __init__(self, rot, max_positions):
         super().__init__()
         inv = rot.inv_freq.detach().to("cpu", torch.float64)
         pos = torch.arange(max_positions, dtype=torch.float64)
-        emb = torch.cat((pos[:, None] * inv[None, :],) * 2, dim=-1)
         scale = float(getattr(rot, "attention_scaling", 1.0))
-        self.register_buffer("cos", (emb.cos() * scale).to(torch.float32), persistent=False)
-        self.register_buffer("sin", (emb.sin() * scale).to(torch.float32), persistent=False)
+        cos, sin = cos_sin_f32(pos[:, None] * inv[None, :], scale)
+        self.register_buffer("cos", torch.cat((cos, cos), dim=-1), persistent=False)
+        self.register_buffer("sin", torch.cat((sin, sin), dim=-1), persistent=False)
 
     def forward(self, x, position_ids):
         return self.cos[position_ids].to(x.dtype), self.sin[position_ids].to(x.dtype)

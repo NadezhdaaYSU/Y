@@ -732,8 +732,9 @@ interleaved (`hostemb_cost.py` beside the logs: 78 us a step), which is 0.25%
 of a 7B step, inside the third digit of the ratio.
 
 What this does not cover: a second GPU architecture, a non-deterministic int8
-baseline and int8 accuracy at 7B, and the cos/sin table, which is still float64
-rounded once and so near certain (around 2^-29 per value), not exact.
+baseline and int8 accuracy at 7B, and the cos/sin table, which was still float64
+rounded once and so near certain (around 2^-29 per value), not exact (correctly
+rounded since 2026-11-10: "The RoPE table, correctly rounded", below).
 
 #### On Y's own GEMM: the kernel that runs is the kernel that is proved (2026-11-07)
 
@@ -807,6 +808,33 @@ its float64 adds ran at 1/64 rate and integer adds do not
 digest `30eec169d2f38da4`, and GPU compiled records with the default norm
 and with every Y switch match it, 0 of 5 cases each. Tests:
 `python/y_lang/tests/test_exact_sum_of_squares.py`.
+
+#### The RoPE table, correctly rounded (2026-11-10)
+
+`ExactRotary` built its cos/sin table on the host in float64 and rounded each
+entry to float32 once. A float64 cos or sin is not correctly rounded (glibc,
+SLEEF and CUDA each err by up to an ulp, differently), so an entry whose true
+value lies within a few float64 ulps of a float32 rounding midpoint could
+round the other way on another host: near certain, not exact. `cos_sin_f32`
+now finds those entries (the float64 value's low 29 fraction bits within 10
+of 2^28, the midpoint pattern, or below float32's normal range) and decides
+them in mpmath, at 160 bits and more until the value is clearly off the
+midpoint (sin of a tiny float on a midpoint lies about 2^-300 below it). Each
+entry is then the correctly rounded float32 of cos or sin of
+`position * inv_freq` times the module's scale, on any host whose float64
+cos/sin err by less than 4 ulps (libms claim 1; the tests check this host's).
+
+On this host the new tables equal the old ones bit for bit, for Qwen2.5-0.5B
+and 7B at all 32,768 positions, so every record above stands. mpmath decided
+32 entries at 0.5B and 65 at 7B: sin(0) in each column, and one 7B cosine
+(position 8312, frequency 39) 10.2 float64 ulps from a midpoint. No libm
+within 4 ulps rounds that one wrongly, so the old tables were right here;
+now that is checked, entry by entry, for any model. Building a table takes
+0.01-0.02 s. Tests: `python/y_lang/tests/test_exact_rotary.py`, arguments
+built by acos/asin of float32 midpoints (each checked to lie within 2 float64
+ulps of its midpoint), float64 results moved up to 4 ulps to stand for
+another libm, an mpmath oracle of its own; 10 mutants fail it, and the one
+that passes rounds a tie the gap check never lets through.
 
 ## Finding 13 — `0/16` is also what a broken arm scores
 
