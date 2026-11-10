@@ -59,7 +59,13 @@ def _quant_rows(X, X8, SX, M, K, stride_xm, BLOCK_K: tl.constexpr):
         k = k0 + tl.arange(0, BLOCK_K)
         x = tl.load(X + row * stride_xm + k, mask=k < K, other=0.0).to(tl.float32)
         amax = tl.maximum(amax, tl.max(tl.abs(x)))
-    s = amax / 127.0
+    # Both divides are `tl.div_rn`: correctly rounded, and keeping subnormals.
+    # The plain `/` is Triton's approximate divide, and libdevice's `div_rn`
+    # flushes subnormals (Triton compiles libdevice with `enable_reflect_ftz`
+    # on), so a row whose largest |x| is below 127 * 2^-126 got scale 1 and
+    # all-zero integers where the model's quantiser (`model._q_per_row`, a
+    # tensor divide) keeps a subnormal scale.
+    s = tl.div_rn(amax, 127.0)
     s = tl.where(s == 0.0, 1.0, s)
     tl.store(SX + row, s)
     for k0 in range(0, K, BLOCK_K):
@@ -72,8 +78,9 @@ def _quant_rows(X, X8, SX, M, K, stride_xm, BLOCK_K: tl.constexpr):
         # decode shapes, and it is the same class of bug as `ex2.approx.f32`:
         # an *unspecified* operation, which is precisely what a determinism
         # project cannot contain. Quantisation is a step function, so a 1-ulp
-        # divide error becomes a whole int8 step.
-        q = tl.extra.cuda.libdevice.rint(tl.extra.cuda.libdevice.div_rn(x, s))
+        # divide error becomes a whole int8 step. (`rint` of a flushed
+        # subnormal quotient is 0 either way: |x / s| < 2^-126 rounds to 0.)
+        q = tl.extra.cuda.libdevice.rint(tl.div_rn(x, s))
         q = tl.minimum(tl.maximum(q, -127.0), 127.0)
         tl.store(X8 + row * K + k, q.to(tl.int8), mask=k < K)
 

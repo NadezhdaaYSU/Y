@@ -276,7 +276,7 @@ def check_pad_is_load_bearing(dev, fail):
 
 
 def check_quantiser_at_volume(dev, fail):
-    """The Triton quantiser must match `torch.round(x/s)` over MILLIONS of rows.
+    """The Triton quantiser must match the model's over MILLIONS of rows.
 
     This is a volume test on purpose. The Triton kernel originally used the
     default float divide, which is the *approximate* one, and it disagreed with
@@ -288,16 +288,21 @@ def check_quantiser_at_volume(dev, fail):
     The reason a 1-ulp divide error matters at all is that quantisation is a
     STEP function: it does not stay 1 ulp, it becomes a whole int8 level, and
     from there a different token. `tl.fdiv(..., ieee_rounding=True)` does NOT
-    fix it (verified); `libdevice.div_rn` does.
+    fix it (verified); `libdevice.div_rn` did, except on subnormals, which it
+    flushes; the kernel now uses `tl.div_rn`. The reference is the model's
+    quantiser, `_q_per_row`, whose scale is a tensor divide. Until 2026-11-10
+    it was `amax / 127.0`, which torch computes on CUDA as a reciprocal
+    multiply, and which agreed with the kernel's approximate `amax / 127.0`
+    where the model's divide does not (112 of 2048 rows of randn). Subnormal
+    scales: python/y_lang/tests/test_exact_quant_rows.py.
     """
     if w8a8 is None:
         return "SKIP: triton kernel not importable"
     total = 0
     for (M, K) in ((512, 896), (2048, 896), (2048, 4864)):
         x = torch.randn(M, K, device=dev)
-        s = x.abs().amax(-1, keepdim=True) / 127.0
-        s = torch.where(s == 0, torch.ones_like(s), s)
-        want = torch.round(x / s).clamp(-127, 127).to(torch.int8)
+        want, s = EM._q_per_row(x, 127)
+        want = want.to(torch.int8)
         got = torch.empty((M, K), dtype=torch.int8, device=dev)
         sx = torch.empty((M,), dtype=torch.float32, device=dev)
         w8a8._quant_rows[(M,)](x, got, sx, M, K, x.stride(0),
@@ -305,10 +310,10 @@ def check_quantiser_at_volume(dev, fail):
         n = int((got != want).sum())
         if n:
             fail(f"quantiser differs on {n}/{M * K} elements at M={M} K={K}")
-        if not torch.equal(sx, s.squeeze(-1)):
+        if not torch.equal(sx.view(torch.int32), s.squeeze(-1).view(torch.int32)):
             fail(f"row scales differ at M={M} K={K}")
         total += M * K
-    return f"Triton quantiser == torch.round(x/s) on {total:,} elements"
+    return f"Triton quantiser == the model's _q_per_row on {total:,} elements"
 
 
 def check_bias_is_not_fused(dev, fail):
