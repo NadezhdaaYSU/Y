@@ -8,7 +8,8 @@ Reads, without recomputing anything:
   lines were printed;
 * `vllm_fp8_graphs.<HHMMSS>.json`: vLLM FP8 with CUDA graphs;
 * `gpu_sm89_y_kernels_compiled.json` against the 7B CPU record
-  (`../exact_cross_device_7b_2026-11-04/cpu_zen5_eager.json`);
+  (`../exact_norm_sum_2026-11-10/cpu_zen5_eager_7b.json`, recorded with the
+  integer sum of squares; same tokens as the 2026-11-04 record);
 * `profile_all.json`, if present: the all-on step's kernels.
 Runs are listed in the order they ran (their HHMMSS), so a drift across the
 run shows. Prints Markdown.
@@ -59,7 +60,7 @@ def vllm_runs():
 
 def record():
     g = os.path.join(D, "gpu_sm89_y_kernels_compiled.json")
-    c = os.path.join(D, "..", "exact_cross_device_7b_2026-11-04", "cpu_zen5_eager.json")
+    c = os.path.join(D, "..", "exact_norm_sum_2026-11-10", "cpu_zen5_eager_7b.json")
     if not (os.path.exists(g) and os.path.exists(c)):
         return None
     ga, ca = json.load(open(g))["arms"]["exact"], json.load(open(c))["arms"]["exact"]

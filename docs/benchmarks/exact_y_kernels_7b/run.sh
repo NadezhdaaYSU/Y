@@ -21,7 +21,7 @@ echo "== record (attention y, norm triton, kv pack inplace) $(date +%T)  util $(
 echo "exit $?"
 (cd $L/tools && $PY -c "
 import json
-c=json.load(open('$S/../exact_cross_device_7b_2026-11-04/cpu_zen5_eager.json'))['arms']['exact']
+c=json.load(open('$S/../exact_norm_sum_2026-11-10/cpu_zen5_eager_7b.json'))['arms']['exact']
 g=json.load(open('$S/gpu_sm89_y_kernels_compiled.json'))['arms']['exact']
 print('digest', g['digest'], 'cpu', c['digest'], 'weights', g['weight_fingerprint'], c['weight_fingerprint'],
       'cases differing:', [k for k in c['cases'] if g['cases'][k] != c['cases'][k]])")
