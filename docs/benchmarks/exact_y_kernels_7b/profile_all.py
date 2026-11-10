@@ -32,7 +32,7 @@ _exact_pkg.add_path()                      # this checkout's python/ first
 from y_lang.exact import load  # noqa: E402
 from y_lang.exact import model as em  # noqa: E402
 from y_lang.exact.greedy import greedy  # noqa: E402
-from transformers import DynamicCache  # noqa: E402
+from y_lang.exact.kv import new_cache  # noqa: E402  (greedy's cache: AppendCache in place)
 
 PROMPT = ("Explain, step by step and in detail, how a suspension bridge carries "
           "the load of the traffic crossing it down into the ground. ")
@@ -74,7 +74,7 @@ busy = busy_us / 1000.0
 position_ids = (att.long().cumsum(-1) - 1).masked_fill(att == 0, 0)
 issue, latency = [], []
 with torch.no_grad():
-    cache = DynamicCache(config=model.config.get_text_config(decoder=True))
+    cache = new_cache(model.config.get_text_config(decoder=True))
     out = model(input_ids=inp, attention_mask=att, position_ids=position_ids,
                 past_key_values=cache, use_cache=True, logits_to_keep=1, return_dict=True)
     token = out.logits[:, -1].float().argmax(-1)
