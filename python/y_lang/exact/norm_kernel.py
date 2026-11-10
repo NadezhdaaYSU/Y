@@ -1,7 +1,8 @@
 """`ExactRMSNorm`'s float64 divide without dividing, on CUDA (Triton).
 
 `ExactRMSNorm` computes, per row of float32 `x`, `r = sqrt(sum(x^2)/H + eps)`
-in float64 and then `float32(x / r) * weight`: a correctly rounded float64
+in float64, the sum `model.sum_of_squares`'s, and then
+`float32(x / r) * weight`: a correctly rounded float64
 divide per element, rounded to float32. A GeForce GPU runs float64 at 1/64 of
 its float32 rate, and that divide was half of the norm's kernel at the 7B
 decode shape (`docs/benchmarks/exact_persistent_7b_2026-11-08/`).
@@ -33,19 +34,22 @@ one on none (`python/y_lang/tests/test_exact_norm_kernel.py`).
 The rest of the float64 work is done on bits, as integers, where the inputs
 allow it (float64 runs at 1/64 rate here, integers at full rate):
 
-* `x` and `x * x` as float64, when every `x` of the row is a normal float32 or
-  zero: `x`'s exponent is rebiased by 896 and its fraction shifted up 29 bits;
-  the square is the 48-bit integer `m * m` of the 24-bit significands, put in
-  float64 form directly (exact: it has at most 48 significant bits). A row
+* `x` as float64, when every `x` of the row is a normal float32 or zero:
+  `x`'s exponent is rebiased by 896 and its fraction shifted up 29 bits. A row
   with a subnormal, infinite or NaN `x` converts as before.
+* The sum of squares (`_grid_sum_of_squares`): the 48-bit integer squares
+  `m * m` of the 24-bit significands, put on the row's fixed grid and added
+  as two 40-bit-limb integer sums, as `model.sum_of_squares` defines it. A
+  row with an infinite or NaN `x` sums float64 squares instead (inf or NaN
+  in any order).
 * `q` to float32, on the guarded path: `q` is then 0 or in `[2^-126, 2^127)`,
   where float32's rounding is `q`'s bits plus 2^28, shifted down 29, exponent
   rebiased; no tie can reach it, since the guard sent every `q` within 3
   ulp64 of a midpoint to the divide.
 
-The float64 sum of squares is a tree sum here and a different order on the
-CPU, exactly as with the Inductor kernel this replaces; each square of a
-float32 is exact in float64, so only the additions round.
+The sum of squares is exact integer arithmetic, so the tree order of the
+reductions here, Inductor's and the CPU's give the same bits
+(`python/y_lang/tests/test_exact_norm_kernel.py`).
 """
 
 import torch
@@ -81,33 +85,73 @@ def _quotient_to_f32(xd, r, rinv):
     return y
 
 
+@triton.jit
+def _max2(a0, a1, b0, b1):
+    return tl.maximum(a0, b0), tl.maximum(a1, b1)
+
+
+@triton.jit
+def _add2(a0, a1, b0, b1):
+    return a0 + b0, a1 + b1
+
+
+@triton.jit
+def _grid_sum_of_squares(frac, ex, p, e):
+    """`model.sum_of_squares` for one row, from its float32 values' fraction
+    bits `frac` and biased exponents `ex` (no infinite or NaN value), with
+    `p = 2 * max(ex, 1)` (x^2 = m^2 * 2^(p - 300)) and `e` the row's largest
+    p: the squares on the row's fixed grid, summed as integers (any order
+    gives the same sum), then one rounding to float64. See model.SUMSQ_F."""
+    m = tl.where(ex == 0, frac, frac | 8388608).to(tl.int64)
+    m2 = m * m
+    s = (e - p).to(tl.int64)                        # >= 0, even
+    # T = floor(m^2 * 2^(32 - s)) = hi * 2^40 + lo.
+    hi = m2 >> tl.minimum(s + 8, 63)
+    sa = tl.minimum(s, 32)
+    lo_near = (m2 & (1099511627775 >> (32 - sa))) << (32 - sa)        # 2^40 - 1
+    lo_far = (m2 >> tl.minimum(tl.maximum(s - 32, 0), 63)) & 1099511627775
+    lo = tl.where(s <= 32, lo_near, lo_far)
+    big, small = tl.reduce((hi, lo), 0, _add2)      # one pass for both limbs
+    big = big + (small >> 40)                       # < 2^53 for H <= 8192
+    small = small & 1099511627775
+    total = big.to(tl.float64) * 1099511627776.0 + small.to(tl.float64)  # one rounding
+    scale = ((e.to(tl.int64) + 691) << 52).to(tl.float64, bitcast=True)  # 2^(e - 332)
+    return total * scale
+
+
 # `H` unspecialised: Triton makes an integer argument equal to 1 a constant,
 # which has no `.to`.
 @triton.jit(do_not_specialize=["H"])
-def _rms_norm_kernel(x_ptr, w_ptr, out_ptr, eps_ptr, H, stride_x, stride_o,
-                     BLOCK: tl.constexpr):
+def _rms_norm_kernel(x_ptr, w_ptr, out_ptr, eps_ptr, H, stride_x, stride_o, sum_ptr,
+                     BLOCK: tl.constexpr, WRITE_SUM: tl.constexpr):
     row = tl.program_id(0)
     offs = tl.arange(0, BLOCK)
     mask = offs < H
     x = tl.load(x_ptr + row * stride_x + offs, mask=mask, other=0.0)
     xb = x.to(tl.int32, bitcast=True)
     ex = (xb >> 23) & 255
-    odd = ((ex == 0) & ((xb & 8388607) != 0)) | (ex == 255)  # subnormal, inf, NaN
-    if tl.max(odd.to(tl.int32), axis=0) > 0:
+    frac = xb & 8388607
+    # 2: infinite or NaN, 1: subnormal, 0: normal or zero. One reduction
+    # gives the row's worst kind and its largest p (a zero's p is 2, the
+    # smallest, so zeros never raise it).
+    kind = tl.where(ex == 255, 2, tl.where((ex == 0) & (frac != 0), 1, 0))
+    p = 2 * tl.maximum(ex, 1)
+    e, worst = tl.reduce((p, kind), 0, _max2)
+    if worst > 0:
         xd = x.to(tl.float64)
-        sq = xd * xd
     else:
         # Every x normal or zero (see the module docstring).
         nz = ex != 0
         xbits = ((xb & 2147483647).to(tl.int64) << 29) + tl.where(nz, 4035225266123964416, 0)
         xd = (xbits | ((xb.to(tl.int64) >> 32) << 63)).to(tl.float64, bitcast=True)  # 896 << 52
-        m = ((xb & 8388607) | 8388608).to(tl.int64)
-        m2 = m * m                                # in [2^46, 2^48)
-        top = m2 >> 47
-        sbits = ((2 * ex.to(tl.int64) + 768 + top) << 52) + (m2 << (6 - top))
-        sq = tl.where(nz, sbits, 0).to(tl.float64, bitcast=True)
+    if worst == 2:
+        sumsq = tl.sum(xd * xd, axis=0)             # inf or NaN, in any order
+    else:
+        sumsq = _grid_sum_of_squares(frac, ex, p, e)
+    if WRITE_SUM:                                # tests read the sum this kernel uses
+        tl.store(sum_ptr + row, sumsq)
     eps = tl.load(eps_ptr)                       # float64: a Python float arg is float32
-    var = tl.sum(sq, axis=0) / H.to(tl.float64)
+    var = sumsq / H.to(tl.float64)
     r = tl.sqrt(var + eps)                       # float64: sqrt.rn.f64
     rinv = 1.0 / r
     y = _quotient_to_f32(xd, r, rinv)
@@ -126,11 +170,15 @@ def _quotient_kernel(x_ptr, r_ptr, out_ptr, n, BLOCK: tl.constexpr):
     tl.store(out_ptr + offs, _quotient_to_f32(xd, r, rinv), mask=mask)
 
 
-def rms_norm(x, weight, eps):
+def rms_norm(x, weight, eps, sums=None):
     """`ExactRMSNorm`'s value for float32 CUDA `x` (`[..., H]`, last dim
     contiguous) and float32 `weight`: `float32(x / sqrt(mean(x^2) + eps)) *
-    weight`, the mean and root in float64."""
+    weight`, the mean and root in float64. With `sums` (float64, one per row),
+    the kernel also writes there the sum of squares it used (for tests)."""
     H = x.shape[-1]
+    if H > 8192:
+        raise ValueError(f"exact_rms_norm: rows of {H} > 8192 values would overflow the sum "
+                         f"of squares' 40-bit limbs (model.SUMSQ_MAX_H)")
     x2 = x.reshape(-1, H)
     if x2.stride(-1) != 1:
         x2 = x2.contiguous()
@@ -142,7 +190,9 @@ def rms_norm(x, weight, eps):
         # took 8.6 us, 8 took 6.5, 4 took 6.0 and 2 took 9.8.
         _rms_norm_kernel[(x2.shape[0],)](
             x2, weight, out, _eps_tensor(eps, x.device), H, x2.stride(0), out.stride(0),
-            BLOCK=BLOCK, num_warps=4 if BLOCK <= 4096 else 8, enable_fp_fusion=False)
+            sums if sums is not None else out, BLOCK=BLOCK,
+            WRITE_SUM=sums is not None, num_warps=4 if BLOCK <= 4096 else 8,
+            enable_fp_fusion=False)
     return out.view(x.shape)
 
 
@@ -164,3 +214,13 @@ def quotient_to_f32(x, r):
     _quotient_kernel[(triton.cdiv(n, 1024),)](x, r, out, n, BLOCK=1024,
                                               enable_fp_fusion=False)
     return out
+
+
+
+def sum_of_squares(x):
+    """The sum of squares `rms_norm`'s kernel computes for float32 CUDA `x`
+    [rows, H] (last dim contiguous), read back from that kernel: float64
+    [rows, 1], for tests."""
+    sums = torch.empty((x.shape[0], 1), dtype=torch.float64, device=x.device)
+    rms_norm(x, torch.ones(x.shape[-1], device=x.device), 1.0, sums=sums)
+    return sums

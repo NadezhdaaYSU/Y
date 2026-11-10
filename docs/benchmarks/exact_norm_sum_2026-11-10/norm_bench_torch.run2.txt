@@ -1,0 +1,5 @@
+old: min 29.80 us  median 30.97 us
+new: min 22.96 us  median 24.47 us
+int8 outputs differ in 0 of 114688
+old kernels: ['triton_red_fused__to_copy_abs_add_amax_div_mul_pow_round_sqrt_sum_0']
+new kernels: ['triton_red_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_ones_like_pow_round_rsub_sqrt_sub_sum_view_where_0']

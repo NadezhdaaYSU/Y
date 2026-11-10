@@ -503,12 +503,76 @@ class ExactLinear(nn.Module):
         return y.reshape(*shape[:-1], self.out_features).to(x.dtype)
 
 
+# ExactRMSNorm's sum of squares, the same bits in any order (`sum_of_squares`).
+#
+# A float32 x is m * 2^(p/2 - 150) with m a 24-bit integer (the hidden bit
+# set for a normal x; a subnormal has p = 2), so x^2 = m^2 * 2^(p - 300) with
+# m^2 < 2^48: exact in float64, but a float64 sum of 3584 of them rounds at
+# each add, and its bits depend on the order (a CPU's loop, Inductor's tree,
+# a Triton kernel's tree differ). Here each square goes onto a fixed grid,
+# 2^-SUMSQ_F of the row's largest square's unit (2^(E - 300), E the row's
+# largest p), truncated, and the grid values are added as integers: exact,
+# so every order gives the same integer S. The sum is float64(S) * 2^(E - 300
+# - SUMSQ_F), one rounding. It is not math.fsum's correctly rounded sum: the
+# truncation moves it by less than H * 2^-SUMSQ_F units, 2^-66 of the row's
+# largest square at H = 3584, so the two differ only where the exact sum lies
+# that close to a float64 rounding boundary. It is closer to the exact sum than
+# a float64 loop's ((H - 1) * 2^-53 relative, at worst).
+#
+# S has up to 48 + SUMSQ_F + 13 bits, so it is carried as two integer limbs of
+# SUMSQ_W bits (each limb's sum stays below 2^53 for H <= 8192), and the
+# float64 conversion is one correctly rounded add of two exact float64s. A row
+# with an infinite or NaN x has no grid; its float64 sum is inf or NaN in any
+# order, and that is the sum.
+SUMSQ_F, SUMSQ_W, SUMSQ_MAX_H = 32, 40, 8192
+
+
+def sum_of_squares(x):
+    """sum(x^2) over the last dimension of float32 `x`, as float64 [..., 1],
+    computed so that every device and every order gives the same bits (see
+    SUMSQ_F). float16 / bfloat16 `x` is widened to float32 first (exact)."""
+    if x.dtype in (torch.float16, torch.bfloat16):
+        x = x.to(torch.float32)
+    if x.dtype != torch.float32:
+        raise TypeError(f"sum_of_squares takes float32 (or 16-bit) values, not {x.dtype}")
+    h = x.shape[-1]
+    if h > SUMSQ_MAX_H:
+        raise ValueError(f"sum_of_squares: rows of {h} > {SUMSQ_MAX_H} values would overflow "
+                         f"its {SUMSQ_W}-bit limbs' float64-exact sums")
+    xb = x.contiguous().view(torch.int32)
+    ex = (xb >> 23) & 255
+    frac = (xb & 0x7FFFFF).to(torch.int64)
+    m = torch.where(ex == 0, frac, frac | 0x800000)
+    p = 2 * ex.clamp(min=1).to(torch.int64)                  # x^2 = m^2 * 2^(p - 300)
+    m2 = m * m
+    # A zero has p = 2, the smallest, so zeros never raise the maximum (and
+    # an all-zero row sums to 0 at any scale).
+    e = p.amax(dim=-1, keepdim=True)
+    s = (e - p).clamp(min=0)                                 # binades below the largest
+    one = torch.ones_like(s)
+    # T = floor(m^2 * 2^(F - s)) as hi * 2^W + lo, W = F + 8.
+    hi = m2 >> (s + (SUMSQ_W - SUMSQ_F)).clamp(max=63)
+    sa = s.clamp(max=SUMSQ_F)
+    lo_near = (m2 & ((one << (sa + (SUMSQ_W - SUMSQ_F))) - 1)) << (SUMSQ_F - sa)
+    lo_far = (m2 >> (s - SUMSQ_F).clamp(0, 63)) & ((1 << SUMSQ_W) - 1)
+    lo = torch.where(s <= SUMSQ_F, lo_near, lo_far)
+    big, small = hi.sum(dim=-1, keepdim=True), lo.sum(dim=-1, keepdim=True)
+    big = big + (small >> SUMSQ_W)                           # < 2^53: exact in float64
+    small = small & ((1 << SUMSQ_W) - 1)
+    total = big.to(torch.float64) * float(1 << SUMSQ_W) + small.to(torch.float64)
+    # 2^(E - 300 - F) from its bits (normal for every E: E - 332 is in [-330, 176]).
+    scale = ((e - (300 + SUMSQ_F) + 1023) << 52).view(torch.float64)
+    total = total * scale
+    odd = (ex == 255).any(dim=-1, keepdim=True)              # an infinite or NaN x
+    return torch.where(odd, x.to(torch.float64).pow(2).sum(dim=-1, keepdim=True), total)
+
+
 class ExactRMSNorm(nn.Module):
     """RMSNorm whose reduction length is fixed by the model, not the batch.
 
     The sum is over the hidden dimension, so its extent does not change with
-    batch size; carrying it in float64 keeps the intermediate wide enough that
-    the f32 result is the same however the kernel splits it.
+    batch size, and `sum_of_squares` makes it the same bits in any order, so
+    on any device and however a kernel splits it.
     """
 
     def __init__(self, norm):
@@ -524,7 +588,7 @@ class ExactRMSNorm(nn.Module):
             # (`norm_kernel`); one graph node under torch.compile.
             return _NORM_OP(x, self.weight, self.eps)
         xd = x.to(torch.float64)
-        var = xd.pow(2).sum(dim=-1, keepdim=True) / divisor(xd.shape[-1], xd)
+        var = sum_of_squares(x) / divisor(xd.shape[-1], xd)
         # sqrt and a tensor/tensor divide are correctly rounded on every IEEE
         # device; `rsqrt` is not specified to the last bit, so x / sqrt(v)
         # gives the same float64 on a CPU and a GPU where x * rsqrt(v) may not.

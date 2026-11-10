@@ -1,0 +1,3 @@
+old: min 6.66 us  median 6.98 us
+new: min 6.64 us  median 6.73 us
+bits: old vs new outputs differ in 0 of 114688
