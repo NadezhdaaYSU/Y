@@ -56,6 +56,13 @@
 // table), OUT [B][NH][D].
 // Launch: grid (NKV, B), REP warps (REP = NH / NKV <= 8). D is a multiple of
 // 16 and at most 128.
+//
+// Two blocks of up to 8 warps an SM: 128 registers a thread. Without the
+// bounds the backend's `.maxnreg 255` let ptxas take 142 for the staging
+// below, and Qwen2.5-7B's 128 blocks (4 KV heads x 32 sequences) then ran in
+// two waves on 66 SMs: 1.22-1.37x the time of the old staging. Under them
+// ptxas fits it in 124, without spilling.
+@launch_bounds(256, 2)
 kernel exact_decode_attention(
     QI: GlobalMemory<F32>,
     A: GlobalMemory<F64>,
@@ -88,6 +95,12 @@ kernel exact_decode_attention(
     let vwords: I32 = dq + 4;
     let h: I32 = g * rep + w;
     let kstride: I32 = dq8 + 1;
+    // A chunk of K is ku units; the block's nt threads copy it nt3 units an
+    // iteration. V's eight groups of four rows go two a warp.
+    let ku: I32 = 32 * kstride;
+    let nt: I32 = 32 * rep;
+    let nt3: I32 = 3 * nt;
+    let rep2: I32 = 2 * rep;
     let krow0: I32 = (b * NKV + g) * TS;
     let qrow: I32 = (b * NH + h) * D;
     // Q as int8 bytes, one row per head: 8 x 8 units of 16 bytes. K, 32 keys
@@ -231,33 +244,59 @@ kernel exact_decode_attention(
                 fresh = 1;
             }
             if fresh == 1 {
-                @invariant(r >= 0)
-                for r in w..32 step rep {
-                    let krow: I32 = (krow0 + c * 32 + r) * kwords;
-                    // Sixteen bytes, eight int16s, copied as they are.
-                    @invariant(k8 >= 0)
-                    for k8 in lane..dq8 step 32 {
-                        let k8v: F32x4 = block_ptr2d_load_v4(KP, 0, krow + k8 * 4, 0, 1, kend);
-                        let fa: F32 = k8v.x;
-                        let fb: F32 = k8v.y;
-                        let fc: F32 = k8v.z;
-                        let fd: F32 = k8v.w;
-                        shared_store_v4(sk_s, r * kstride + k8, f32_to_bits(fa), f32_to_bits(fb),
-                                        f32_to_bits(fc), f32_to_bits(fd));
+                // The chunk's 32 rows lie one after another in KP, and a row
+                // is kstride sixteen-byte units (D int16s, then the scale's
+                // unit), so the chunk is staged as it lies, scale included:
+                // a copy of ku units. Three loads go out before their stores,
+                // so a thread waits on memory once, not once a unit (with 7
+                // warps a D = 128 chunk is 544 units, under 3 x 224). A load
+                // past the chunk is not stored; past the head's T rows it is
+                // inside the buffer, or past kend and not made.
+                let kbase: I32 = (krow0 + c * 32) * kwords;
+                @invariant(i0 >= 0)
+                for i0 in tid..ku step nt3 {
+                    let i1: I32 = i0 + nt;
+                    let i2: I32 = i1 + nt;
+                    let x0: F32x4 = block_ptr2d_load_v4(KP, 0, kbase + i0 * 4, 0, 1, kend);
+                    let x1: F32x4 = block_ptr2d_load_v4(KP, 0, kbase + i1 * 4, 0, 1, kend);
+                    let x2: F32x4 = block_ptr2d_load_v4(KP, 0, kbase + i2 * 4, 0, 1, kend);
+                    shared_store_v4(sk_s, i0, f32_to_bits(x0.x), f32_to_bits(x0.y),
+                                    f32_to_bits(x0.z), f32_to_bits(x0.w));
+                    if i1 < ku {
+                        shared_store_v4(sk_s, i1, f32_to_bits(x1.x), f32_to_bits(x1.y),
+                                        f32_to_bits(x1.z), f32_to_bits(x1.w));
+                    }
+                    if i2 < ku {
+                        shared_store_v4(sk_s, i2, f32_to_bits(x2.x), f32_to_bits(x2.y),
+                                        f32_to_bits(x2.z), f32_to_bits(x2.w));
                     }
                 }
             }
             if phase == 2 {
+                // Two groups of four rows a warp, j4 and j4 + rep, their eight
+                // loads out before the stores (with 7 warps, warp 0 would
+                // otherwise wait for group 7 after group 0). The second
+                // group's loads are made even when it is past the chunk's 8
+                // and not stored.
                 @invariant(j4 >= 0)
-                for j4 in w..8 step rep {
+                for j4 in w..8 step rep2 {
+                    let ja: I32 = j4 + rep;
                     let vrow: I32 = (krow0 + c * 32 + j4 * 4) * vwords;
+                    let vrowa: I32 = (krow0 + c * 32 + ja * 4) * vwords;
                     @invariant(wd >= 0)
                     for wd in lane..dq step 32 {
                         let v0: U32 = block_ptr2d_load(VP, 0, vrow + wd, 0, 1, vend);
                         let v1: U32 = block_ptr2d_load(VP, 0, vrow + vwords + wd, 0, 1, vend);
                         let v2: U32 = block_ptr2d_load(VP, 0, vrow + 2 * vwords + wd, 0, 1, vend);
                         let v3: U32 = block_ptr2d_load(VP, 0, vrow + 3 * vwords + wd, 0, 1, vend);
+                        let va0: U32 = block_ptr2d_load(VP, 0, vrowa + wd, 0, 1, vend);
+                        let va1: U32 = block_ptr2d_load(VP, 0, vrowa + vwords + wd, 0, 1, vend);
+                        let va2: U32 = block_ptr2d_load(VP, 0, vrowa + 2 * vwords + wd, 0, 1, vend);
+                        let va3: U32 = block_ptr2d_load(VP, 0, vrowa + 3 * vwords + wd, 0, 1, vend);
                         shared_store_v4(sv_s, wd * 9 + j4, v0, v1, v2, v3);
+                        if ja < 8 {
+                            shared_store_v4(sv_s, wd * 9 + ja, va0, va1, va2, va3);
+                        }
                     }
                 }
             }
@@ -357,7 +396,9 @@ kernel exact_decode_attention(
                                 s = dp2a_lo(k1.z as I32, qw, s);
                                 s = dp2a_hi(k1.w as I32, qw, s);
                             }
-                            let skf: F32 = KP[(krow0 + t) * kwords + dq * 2];
+                            // The scale is word 0 of the row's last unit, staged with it.
+                            let su: U32x4 = shared_load_v4(sk_s, lane * kstride + dq8);
+                            let skf: F32 = f32_from_bits(su.x);
                             let sk: F64 = skf as F64;
                             let sd: F64 = s as F64;
                             let la: F64 = sd * a;

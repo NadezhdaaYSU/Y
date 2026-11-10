@@ -1,0 +1,29 @@
+# mutate.py (this directory), one mutant at a time, each against the test named in it.
+# K4 first survived (every attention test case had 7 warps a block); the
+# 1, 2, 4 and 8-warp cases were added and it was run again: caught.
+# K8 (step 2 x threads, three units stored) stores some units twice: equivalent.
+CAUGHT   R1 whole warps not counted
+CAUGHT   R2 one block too many
+CAUGHT   R3 block up to 2048
+CAUGHT   R4 sm_89 32 blocks
+CAUGHT   R5 no .minnctapersm
+CAUGHT   R6 @tile allowed
+CAUGHT   R7 .maxnreg kept too
+CAUGHT   R8 bounds dropped before non-kernel
+CAUGHT   R9 three values taken
+CAUGHT   R10 zero taken
+CAUGHT   R11 maxntid doubled
+CAUGHT   R12 sm_75 2048 threads
+CAUGHT   R13 attribute ignored
+CAUGHT   R14 unlisted arch guessed
+CAUGHT   P1 one thread over taken
+CAUGHT   P2 header not read
+CAUGHT   P3 largest dimension only
+CAUGHT   K1 scale from the unit before
+CAUGHT   K2 third unit not stored near the end
+CAUGHT   K3 V group 7 not stored
+CAUGHT   K4 third unit misplaced   (first SURVIVED, then caught)
+CAUGHT   K5 K units from one unit on
+CAUGHT   K6 second V group from the first
+CAUGHT   K7 bounds removed
+SURVIVED K8 two units an iteration

@@ -1,0 +1,10 @@
+old.ptx regs 124 224 thr: 2 blocks/SM 256 thr: 2 blocks/SM
+new.ptx regs 142 224 thr: 1 blocks/SM 256 thr: 1 blocks/SM
+onlyK.ptx regs 137 224 thr: 1 blocks/SM 256 thr: 1 blocks/SM
+onlyV.ptx regs 128 224 thr: 2 blocks/SM 256 thr: 2 blocks/SM
+KS.ptx regs 138 224 thr: 1 blocks/SM 256 thr: 1 blocks/SM
+3ld.ptx regs 139 224 thr: 1 blocks/SM 256 thr: 1 blocks/SM
+2ld.ptx regs 134 224 thr: 1 blocks/SM 256 thr: 1 blocks/SM
+new_r128.ptx regs 123 224 thr: 2 blocks/SM 256 thr: 2 blocks/SM
+3ld_lb.ptx regs 124 224 thr: 2 blocks/SM 256 thr: 2 blocks/SM
+final.cubin regs 124 224 thr: 2 blocks/SM 256 thr: 2 blocks/SM

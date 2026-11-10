@@ -1,0 +1,6 @@
+0.5B T= 32 cache  0.46 MB (DRAM floor  0.68 us, ring 439): hot contiguous:    6.51 (   6.54)  hot view:    6.52 (   6.54)  cold contiguous:    7.94 (   8.14)  cold view:    8.01 (   8.14)
+0.5B T=100 cache  1.43 MB (DRAM floor  2.13 us, ring 141): hot contiguous:   16.08 (  16.13)  hot view:   16.10 (  16.12)  cold contiguous:   20.43 (  20.65)  cold view:   20.42 (  20.75)
+0.5B T=256 cache  3.67 MB (DRAM floor  5.46 us, ring 55): hot contiguous:   29.99 (  30.13)  hot view:   30.11 (  30.16)  cold contiguous:   39.79 (  40.58)  cold view:   40.43 (  40.59)
+7B T= 32 cache  1.70 MB (DRAM floor  2.54 us, ring 119): hot contiguous:    8.81 (   8.84)  hot view:    8.78 (   8.81)  cold contiguous:   10.64 (  11.02)  cold view:   10.68 (  10.99)
+7B T=100 cache  5.32 MB (DRAM floor  7.92 us, ring 38): hot contiguous:   19.86 (  19.93)  hot view:   19.93 (  19.95)  cold contiguous:   25.04 (  25.31)  cold view:   25.07 (  26.05)
+7B T=256 cache 13.63 MB (DRAM floor 20.28 us, ring 15): hot contiguous:   36.73 (  36.75)  hot view:   36.74 (  36.76)  cold contiguous:   47.21 (  47.73)  cold view:   47.19 (  47.68)
