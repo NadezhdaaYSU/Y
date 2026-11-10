@@ -769,7 +769,9 @@ GPU), 1.01-1.04x. Running the proved kernel now costs nothing there.
 
 In Y mode the int32 product of every linear layer is computed by a kernel
 with a machine-checked proof. The rest is tested, not proved:
-- the quantisation, the epilogue, attention and the norms;
+- the quantisation, the epilogue, attention and the norms (since 2026-11-10
+  the norm's integer sum of squares is proved, `proofs/NormGridSum.v`; its
+  float steps are not);
 - `ptxas`, and the ISA semantics of `mma.sync`, `ldmatrix` and `cp.async`, are
   trusted.
 
@@ -804,10 +806,14 @@ GPU): the Triton kernel is unchanged within the noise once its reductions
 were merged (6.64-6.70 us against 6.66-6.75), and the compiled default path,
 residual add + norm + quantise, takes 23.0-23.2 us against 29.8-29.9, since
 its float64 adds ran at 1/64 rate and integer adds do not
-(`docs/benchmarks/exact_norm_sum_2026-11-10/`). Qwen2.5-0.5B, 5 cases x 160 tokens: a new CPU record has the old one's
-digest `30eec169d2f38da4`, and GPU compiled records with the default norm
-and with every Y switch match it, 0 of 5 cases each. Tests:
-`python/y_lang/tests/test_exact_sum_of_squares.py`.
+(`docs/benchmarks/exact_norm_sum_2026-11-10/`). Qwen2.5-0.5B, 5 cases x 160
+tokens: a new CPU record has the old one's digest `30eec169d2f38da4`, and GPU
+compiled records with the default norm and with every Y switch match it, 0 of
+5 cases each. Tests:
+`python/y_lang/tests/test_exact_sum_of_squares.py`. Proof of the integer
+part (the kernel's limbs are the grid value, the carried sums are the row's
+in any order, everything fits int64 and float64 up to 8192 values, and not
+past them): `proofs/NormGridSum.v`.
 
 #### The RoPE table, correctly rounded (2026-11-10)
 

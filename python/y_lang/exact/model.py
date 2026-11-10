@@ -524,6 +524,9 @@ class ExactLinear(nn.Module):
 # float64 conversion is one correctly rounded add of two exact float64s. A row
 # with an infinite or NaN x has no grid; its float64 sum is inf or NaN in any
 # order, and that is the sum.
+# The limb arithmetic (shifts, masks, clamps, carry, the bounds and the order
+# independence) is proved in proofs/NormGridSum.v for the kernel's spelling,
+# and for this file's mask.
 SUMSQ_F, SUMSQ_W, SUMSQ_MAX_H = 32, 40, 8192
 
 

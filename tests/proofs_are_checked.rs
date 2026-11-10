@@ -1031,6 +1031,25 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "one_trip_short_leaves_the_corner_stale",
             ][..],
         ),
+        (
+            // ExactRMSNorm's sum of squares (`model.sum_of_squares`,
+            // `norm_kernel._grid_sum_of_squares`): the kernel's two 40-bit
+            // limbs are the grid value, which is the floor its comments
+            // define; the carried limb sums are the row's exact grid sum in
+            // any order and fit int64 and float64. The last entry is what
+            // stops the 8192-value licence being decoration: past it the high
+            // limb reaches 2^53, where its float64 conversion would round.
+            "NormGridSum.v",
+            &[
+                "Print Assumptions the_limbs_are_the_grid_value",
+                "Print Assumptions the_grid_value_is_the_floor",
+                "Print Assumptions the_torch_mask_is_the_kernel_mask",
+                "Print Assumptions the_carried_limbs_are_the_row_sum",
+                "Print Assumptions the_sum_does_not_depend_on_the_order",
+                "Print Assumptions the_limb_sums_fit",
+                "Print Assumptions past_8192_values_big_can_reach_2_53",
+            ][..],
+        ),
     ]
 }
 
