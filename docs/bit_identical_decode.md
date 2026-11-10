@@ -783,6 +783,31 @@ since) and q/k/v plus gate/up each kept the CPU's tokens too
 (`docs/benchmarks/exact_merged_7b_2026-11-08/`,
 `docs/benchmarks/exact_greedy_loop_7b_2026-11-08/`).
 
+#### The norm's sum of squares, the same bits in any order (2026-11-10)
+
+`ExactRMSNorm` summed its float64 squares in whatever order the device chose:
+a loop on the CPU, a tree in Inductor's kernel, another in `norm_kernel`.
+Each square of a float32 is exact in float64, but the additions round, so the
+CPU and the GPU agreed only where their sums' last-bit difference did not
+cross a float32 rounding midpoint: every record agreed, and none of that was
+a guarantee. `model.sum_of_squares` now puts each square on a fixed grid,
+2^-32 of the row's largest square's unit, adds the grid values as integers
+and rounds once. Integer addition is exact, so every order, and so every
+device, gives the same bits; `norm_kernel` computes the same integers. It is
+not `math.fsum`'s correctly rounded sum (the grid drops less than 2^-66 of
+the largest square at H = 3584), and it is closer to the exact sum than a
+float64 loop.
+
+It costs nothing measurable (32 x 3584, CUDA graphs, rough, desktop on the
+GPU): the Triton kernel is unchanged within the noise once its reductions
+were merged (6.64-6.70 us against 6.66-6.75), and the compiled default path,
+residual add + norm + quantise, takes 23.0-23.2 us against 29.8-29.9, since
+its float64 adds ran at 1/64 rate and integer adds do not
+(`docs/benchmarks/exact_norm_sum_2026-11-10/`). Qwen2.5-0.5B, 5 cases x 160 tokens: a new CPU record has the old one's
+digest `30eec169d2f38da4`, and GPU compiled records with the default norm
+and with every Y switch match it, 0 of 5 cases each. Tests:
+`python/y_lang/tests/test_exact_sum_of_squares.py`.
+
 ## Finding 13 — `0/16` is also what a broken arm scores
 
 Finding 11's fixed-order-float arm read **12/16** on its first run. Two of my own

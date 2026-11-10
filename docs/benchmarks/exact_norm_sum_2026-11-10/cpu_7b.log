@@ -1,0 +1,19 @@
+
+Recording on cpu:x86_64 (sm_cpu, 32 SMs, driver None)
+  5 cases x 160 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- exact ---
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights:  21%|██        | 70/339 [00:00<00:00, 658.98it/s]Loading weights:  41%|████      | 138/339 [00:00<00:00, 670.98it/s]Loading weights:  68%|██████▊   | 232/339 [00:00<00:00, 764.70it/s]Loading weights:  91%|█████████ | 309/339 [00:00<00:00, 736.59it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 796.73it/s]
+  gate: ok -- canary ok, 94 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights fa21999abf0abea9, tokens 7700e3e28f1d21d1
+  self-check (same card, twice): identical
+
+  written to /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/b9a51335-89c6-4cae-8abe-dfd078cfbe01/scratchpad/rec_norm7b/cpu_zen5_eager_7b.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/b9a51335-89c6-4cae-8abe-dfd078cfbe01/scratchpad/rec_norm7b/cpu_zen5_eager_7b.json other.json

@@ -1,0 +1,24 @@
+
+Recording on NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0)
+  5 cases x 160 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- exact ---
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  53%|█████▎    | 153/290 [00:00<00:00, 1523.98it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1805.05it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1110 19:08:00.630000 138235 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+    [Warning] Line 225: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 264: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+  gate: ok -- canary ok, 83 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 6ed356ce48583cd0, tokens 30eec169d2f38da4
+  self-check (same card, twice): identical
+
+  written to /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/b9a51335-89c6-4cae-8abe-dfd078cfbe01/scratchpad/rec_norm/gpu_all_compiled.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/b9a51335-89c6-4cae-8abe-dfd078cfbe01/scratchpad/rec_norm/gpu_all_compiled.json other.json

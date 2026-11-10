@@ -88,7 +88,7 @@ class TestNormKernel(unittest.TestCase):
                 x[0, :5] = 0.0
                 x[-1, 5:9] = torch.tensor([1e-30, -1e-38, 3e-39, -0.0], device="cuda")
                 xd = x.double()
-                var = xd.pow(2).sum(-1, keepdim=True) / xd.new_tensor(float(h))
+                var = em.sum_of_squares(x) / xd.new_tensor(float(h))
                 want = ((xd / torch.sqrt(var + norm.eps)).float() * norm.weight)
                 got = nk.rms_norm(x, norm.weight, norm.eps)
                 self.assertEqual(_bits_differ(got, want), 0, (h, rows))
@@ -106,6 +106,7 @@ class TestNormKernel(unittest.TestCase):
         """Rows the kernel converts on bits (normal or zero x) beside rows it
         cannot (subnormal, infinite, NaN x), with eps = 0 so that the
         squares of tiny values and of zeros decide r."""
+        import y_lang.exact.model as em
         from y_lang.exact import norm_kernel as nk
         g = torch.Generator(device="cuda").manual_seed(1)
         h = 3584
@@ -122,7 +123,7 @@ class TestNormKernel(unittest.TestCase):
         x[6, :100] = -0.0
         for eps in (0.0, 1e-6):
             xd = x.double()
-            var = xd.pow(2).sum(-1, keepdim=True) / xd.new_tensor(float(h))
+            var = em.sum_of_squares(x) / xd.new_tensor(float(h))
             want = (xd / torch.sqrt(var + eps)).float() * w
             got = nk.rms_norm(x, w, eps)
             nan = torch.isnan(want)
@@ -139,8 +140,8 @@ class TestNormKernel(unittest.TestCase):
         w = torch.rand(3584, device="cuda")
         out = torch.empty_like(x)
         k = nk._rms_norm_kernel[(4,)](x, w, out, nk._eps_tensor(1e-6, x.device), 3584,
-                                      x.stride(0), out.stride(0), BLOCK=4096, num_warps=8,
-                                      enable_fp_fusion=False)
+                                      x.stride(0), out.stride(0), out, BLOCK=4096,
+                                      WRITE_SUM=False, num_warps=4, enable_fp_fusion=False)
         ptx = k.asm["ptx"]
         self.assertNotIn("approx", ptx)
         self.assertNotRegex(ptx, r"\bfma\.[a-z.]*f64")
