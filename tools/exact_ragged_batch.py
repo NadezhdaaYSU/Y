@@ -89,6 +89,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer  # noqa: E402
 
 import batch_invariance_demo as D  # noqa: E402
 import exact_model  # noqa: E402
+from y_lang.exact import kv  # noqa: E402
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
 MAX_T = []      # key lengths reached, so the dbits claim stays checkable
@@ -178,6 +179,12 @@ def decode_target(model, tok, others, pos, n_new, device):
             input_ids=enc.input_ids, attention_mask=enc.attention_mask,
             max_new_tokens=n_new, do_sample=False, num_beams=1, use_cache=True,
             pad_token_id=tok.eos_token_id,
+            # Y_EXACT_KV_PACK=inplace: the cache the greedy loop uses, so a
+            # record covers it (the same rows as generate's own). Otherwise
+            # generate's own, as before. It is any arm's cache, a stock
+            # model's too: record a stock arm without the switch.
+            **({"past_key_values": kv.new_cache(model.config.get_text_config(decoder=True))}
+               if kv.INPLACE else {}),
         )
     return out[pos, enc.input_ids.shape[1]:].tolist()
 

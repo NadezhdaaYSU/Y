@@ -30,11 +30,11 @@ def greedy(model, input_ids, attention_mask, max_new_tokens):
     `input_ids` and `attention_mask` are `generate`'s: `(batch, length)`, left
     padded where rows differ in length.
     """
-    from transformers import DynamicCache
+    from .kv import new_cache
 
     if max_new_tokens < 1:
         raise ValueError(f"max_new_tokens must be at least 1, not {max_new_tokens}")
-    cache = DynamicCache(config=model.config.get_text_config(decoder=True))
+    cache = new_cache(model.config.get_text_config(decoder=True))
     position_ids = attention_mask.long().cumsum(-1) - 1
     position_ids = position_ids.masked_fill(attention_mask == 0, 0)
     out = model(input_ids=input_ids, attention_mask=attention_mask,

@@ -184,6 +184,39 @@ class TestExactDecodeAttention(unittest.TestCase):
         finally:
             kv.V_INT8 = True
 
+    def test_rows_in_a_buffer_with_spare_room(self):
+        # `kv.AppendLayer` holds the cache's rows as the first T of a
+        # bigger buffer per (sequence, KV head). Y's kernel reads them there,
+        # without a copy, and returns the contiguous rows' bits; the spare
+        # rows hold junk, which must not be read. The torch path unpacks the
+        # same views.
+        A, kv = self.attention, self.kv
+        g = torch.Generator(device="cuda").manual_seed(5)
+        try:
+            for c in [(3, 14, 2, 37, 64, 2.0, 0, "pad"), (2, 28, 4, 300, 128, 6.0, 13, None),
+                      (1, 8, 8, 1, 16, 3.0, 0, None)]:
+                q, k, v, am, sc = _case(*c)
+                kp, vp = kv.quantize_and_pack(k, v)
+                B, NKV, T = kp.shape[:3]
+                for spare in (1, 64):
+                    kb = torch.randint(-128, 128, (B, NKV, T + spare, kp.shape[-1]),
+                                       dtype=torch.int8, device="cuda", generator=g)
+                    vb = torch.randint(-128, 128, (B, NKV, T + spare, vp.shape[-1]),
+                                       dtype=torch.int8, device="cuda", generator=g)
+                    kb[:, :, :T] = kp
+                    vb[:, :, :T] = vp
+                    kv_view, vv_view = kb.narrow(2, 0, T), vb.narrow(2, 0, T)
+                    self.assertFalse(kv_view.is_contiguous())
+                    for mode in ("y", "torch"):
+                        A.ATTN = mode
+                        with torch.no_grad():
+                            want = A.exact_attention(None, q, kp, vp, am, scaling=sc)[0]
+                            got = A.exact_attention(None, q, kv_view, vv_view, am, scaling=sc)[0]
+                        self.assertTrue(torch.equal(got.view(torch.int32), want.view(torch.int32)),
+                                        (c, spare, mode))
+        finally:
+            A.ATTN = "y"
+
     def test_the_output_is_a_correctly_rounded_divide(self):
         # out = float32((acc * wscale) / l). Found by search: these operands
         # put dimension 0's quotient so close to a float32 rounding midpoint

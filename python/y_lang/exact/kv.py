@@ -361,16 +361,25 @@ def quantize_kv(module, k, v, q_levels=127):
 # bytes): transformers' DynamicLayer creates its empty V with K's dtype, and
 # `cat` would then promote int8 V rows to int16.
 # The integers and scales are the ones the unpacked path computes, bit for bit
-# (`check_pack_round_trip`, python/tests/test_exact_package.py). The cache
-# still grows by `cat`, now over 2 + 1 bytes a value instead of 4 + 4.
+# (python/tests/test_exact_package.py, test_packed_rows_round_trip_bit_for_bit).
+# In transformers' DynamicLayer the cache still grows by `cat`, now over
+# 2 + 1 bytes a value instead of 4 + 4 (but see `inplace` below).
 #
 # It pays with Y's attention kernel (`Y_EXACT_ATTN=y`), which reads the packed
 # rows as they are. The torch path unpacks the whole cache every step, which
 # costs about what it saves: one compiled 0.5B decode step, batch 32, rough
 # (desktop on the GPU), same tokens in all four: Y kernel 2485 -> 2301 us GPU
 # (497 -> 473 kernels) packed; torch path 2709 -> 2738 us (677 -> 725).
-PACK =os.environ.get("Y_EXACT_KV_PACK", "0") != "0"
+#
+# `Y_EXACT_KV_PACK=inplace` also appends without the `cat` (`new_cache`): each
+# layer keeps its rows in buffers with spare room and writes a new row in
+# place, so a decode step copies one row, not the whole cache.
+PACK = os.environ.get("Y_EXACT_KV_PACK", "0") != "0"
+INPLACE = os.environ.get("Y_EXACT_KV_PACK", "0") == "inplace"
 K_PAD, V_PAD = 8, 16
+# `AppendLayer`'s buffers hold whole multiples of this many rows a head,
+# with at least this many spare after a reallocation.
+APPEND_ROWS = 64
 
 
 def _bytes_of(scale, n_parts, part_bits):
@@ -441,6 +450,139 @@ def quantize_and_pack(k, v, q_levels=127):
     ki, sk = quantize_rows(k, k_lv)
     vi, sv = quantize_rows(v, V_LEVELS)
     return pack_k(ki, sk), pack_v(vi, sv)
+
+
+def _append_classes():
+    """`(AppendLayer, AppendCache)`, built on first use: transformers is
+    imported only by the code that decodes."""
+    global _APPEND
+    if _APPEND is not None:
+        return _APPEND
+    from transformers.cache_utils import DynamicCache, DynamicLayer
+
+    class AppendLayer(DynamicLayer):
+        """A DynamicLayer that appends in place instead of by `torch.cat`.
+
+        DynamicLayer's update concatenates the whole cache with the new rows,
+        a copy of every row each decode step. Here `keys` / `values` are
+        buffers `[B, H, capacity, row]` whose first T rows are the cache;
+        update writes the new rows after them and returns views of the
+        filled rows, so attention sees the rows `cat` would give it, in
+        strided memory (Y's kernel reads them there). Capacity grows by
+        `APPEND_ROWS` rows, each growth one copy.
+
+        T is the shape of `_len`, a (T, 0) tensor with no bytes, and not an
+        int: dynamo would specialise on an int and recompile every token.
+        Nor is it read from a view of the buffer: under torch.compile a view
+        beside the buffer it views, which the step writes, is an aliased
+        mutated input, which AOTAutograd refuses with symbolic sizes. Every
+        method that changes the rows keeps `_len` in step.
+        """
+
+        def lazy_initialization(self, key_states, value_states):
+            super().lazy_initialization(key_states, value_states)
+            self._len = key_states.new_empty((0, 0))
+
+        def _rows(self):
+            t = self.get_seq_length()
+            return self.keys.narrow(2, 0, t), self.values.narrow(2, 0, t)
+
+        def _hold(self, k, v, t, spare):
+            """Buffers with room for `t + spare` rows, the first t from k, v."""
+            cap = ((t + spare) // APPEND_ROWS + 2) * APPEND_ROWS
+            kb = k.new_empty((*k.shape[:2], cap, k.shape[-1]))
+            vb = v.new_empty((*v.shape[:2], cap, v.shape[-1]))
+            if t:
+                kb.narrow(2, 0, t).copy_(k.narrow(2, 0, t))
+                vb.narrow(2, 0, t).copy_(v.narrow(2, 0, t))
+            self.keys, self.values = kb, vb
+            self._len = k.new_empty((t, 0))
+
+        def update(self, key_states, value_states, *args, **kwargs):
+            if not self.is_initialized:
+                self.lazy_initialization(key_states, value_states)
+                self._hold(key_states, value_states, 0, key_states.shape[-2])
+            t, n = self._len.shape[0], key_states.shape[-2]
+            if t + n > self.keys.shape[-2]:
+                self._hold(self.keys, self.values, t, n)
+            self.keys.narrow(2, t, n).copy_(key_states)
+            self.values.narrow(2, t, n).copy_(value_states)
+            self._len = key_states.new_empty((t + n, 0))
+            return self.keys.narrow(2, 0, t + n), self.values.narrow(2, 0, t + n)
+
+        def get_seq_length(self):
+            return self._len.shape[0] if self.is_initialized else 0
+
+        def crop(self, tokens_to_remove):
+            # DynamicLayer's meaning: a positive value is the length to keep
+            # (deprecated), a negative one the number of rows to drop.
+            t = self.get_seq_length()
+            keep = tokens_to_remove if tokens_to_remove > 0 else t - abs(tokens_to_remove)
+            if 0 <= keep < t:
+                self._len = self._len.new_empty((keep, 0))
+
+        def reorder_cache(self, beam_idx):
+            if self.get_seq_length() > 0:
+                self.keys = self.keys.index_select(0, beam_idx.to(self.keys.device))
+                self.values = self.values.index_select(0, beam_idx.to(self.values.device))
+
+        def batch_repeat_interleave(self, repeats):
+            if self.get_seq_length() > 0:
+                k, v = self._rows()
+                t = k.shape[2]
+                self._hold(k.repeat_interleave(repeats, dim=0), v.repeat_interleave(repeats, dim=0),
+                           t, 0)
+
+        def batch_select_indices(self, indices):
+            if self.get_seq_length() > 0:
+                self.keys, self.values = self.keys[indices, ...], self.values[indices, ...]
+
+        # reset: DynamicLayer's, which zeroes the rows and keeps the length.
+
+    class AppendCache(DynamicCache):
+        """A DynamicCache of `AppendLayer`s (see there). Refuses what it has
+        not been checked with: a model whose layers are not all plain
+        dynamic ones (sliding windows, say), initial data (`ddp_cache_data`,
+        which it would drop when it replaces the layers) and offloading."""
+
+        def __init__(self, config=None, **kwargs):
+            if kwargs.get("ddp_cache_data") is not None or kwargs.get("offloading"):
+                raise ValueError("AppendCache takes neither initial data nor offloading; "
+                                 "use DynamicCache")
+            super().__init__(config=config, **kwargs)
+            if self.layers:
+                if any(type(layer) is not DynamicLayer for layer in self.layers):
+                    raise ValueError("AppendCache: this model's cache layers are not all "
+                                     "DynamicLayers; use DynamicCache")
+                self.layers = [AppendLayer() for _ in self.layers]
+            else:
+                self.layer_class_to_replicate = AppendLayer
+
+        def __iter__(self):
+            # DynamicCache yields each layer's keys / values, which here are
+            # whole buffers: only their filled rows are the cache.
+            for layer in self.layers:
+                if getattr(layer, "is_initialized", False) and isinstance(layer, AppendLayer):
+                    k, v = layer._rows()
+                else:
+                    k, v = layer.keys, layer.values
+                yield k, v, getattr(layer, "_sliding_window_tensor", None)
+
+    _APPEND = (AppendLayer, AppendCache)
+    return _APPEND
+
+
+_APPEND = None
+
+
+def new_cache(config):
+    """The decode cache for `config`: an `AppendCache` (rows appended in place)
+    under `Y_EXACT_KV_PACK=inplace`, else transformers' DynamicCache. Both
+    hold the same rows, so they give the same tokens."""
+    if INPLACE:
+        return _append_classes()[1](config=config)
+    from transformers import DynamicCache
+    return DynamicCache(config=config)
 
 
 def fold_scale_into_weights(p, sv_t, p_bits=28):

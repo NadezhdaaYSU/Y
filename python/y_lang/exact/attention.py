@@ -390,8 +390,10 @@ def _y_exact_decode_attention(qi, a, kp, vp, blocked, table, rep):
 
     qi f32 [B, NH, D] (integer-valued), a f64 [B, NH], kp int8
     [B, NKV, T, 2 * (D + 8)] (D + 8 int16s a row) and vp int8
-    [B, NKV, T, D + 16] (the packed rows of `kv.pack_k` / `kv.pack_v`),
-    blocked int32 [B, T] (or None: no key is masked), table int64 [64].
+    [B, NKV, T, D + 16] (the packed rows of `kv.pack_k` / `kv.pack_v`; the
+    first T rows of buffers with more, as `kv.AppendLayer` holds them, are
+    read in place), blocked int32 [B, T] (or None: no key is masked), table
+    int64 [64].
     Returns f32 [B, NH, D]. Launched on torch's current stream, without a
     synchronisation.
     """
@@ -406,7 +408,14 @@ def _y_exact_decode_attention(qi, a, kp, vp, blocked, table, rep):
         raise ValueError(f"exact_decode_attention: K {tuple(kp.shape)} {kp.dtype} and V "
                          f"{tuple(vp.shape)} {vp.dtype} are not the packed rows of a "
                          f"[{B}, {NKV}, {T}, {D}] cache")
-    if B * NKV * T * (D + V_PAD) >= 1 << 31 or B * NH * D >= 1 << 31:
+    # Rows TS apart a (sequence, KV head), T of them used: a view of a buffer
+    # with spare rows, read where it is. Any other layout is copied.
+    wk, wv = 2 * (D + K_PAD), D + V_PAD
+    TS = kp.stride(1) // wk
+    if not (TS >= T and kp.stride() == (NKV * TS * wk, TS * wk, wk, 1)
+            and vp.stride() == (NKV * TS * wv, TS * wv, wv, 1)):
+        kp, vp, TS = kp.contiguous(), vp.contiguous(), T
+    if B * NKV * TS * (D + V_PAD) >= 1 << 31 or B * NH * D >= 1 << 31:
         raise ValueError("exact_decode_attention forms 32-bit offsets; this cache is "
                          "too large for it")
     if T * (1 << P_BITS) * 127 >= 1 << 53:
@@ -419,9 +428,9 @@ def _y_exact_decode_attention(qi, a, kp, vp, blocked, table, rep):
     has_mask = blocked is not None
     if not has_mask:
         blocked = table.view(torch.int32)      # any int32 buffer: not read
-    args = [qi.contiguous(), a.contiguous(), kp.contiguous().view(torch.float32),
-            vp.contiguous().view(torch.int32), blocked.contiguous(), table, out,
-            T, NH, NKV, rep, D, int(has_mask)]
+    args = [qi.contiguous(), a.contiguous(), kp.view(torch.float32),
+            vp.view(torch.int32), blocked.contiguous(), table, out,
+            T, TS, NH, NKV, rep, D, int(has_mask)]
     grid, block = (NKV, B, 1), (32 * rep, 1, 1)
     if index == torch.cuda.current_device():
         kern.launch(grid, block, args)

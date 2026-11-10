@@ -232,7 +232,7 @@ class TestLoad(unittest.TestCase):
         from y_lang.exact import kv
 
         def decode_logits(n):
-            cache = DynamicCache(config=model.config)
+            cache = kv.new_cache(model.config)
             att = batch.attention_mask
             pos = (att.long().cumsum(-1) - 1).masked_fill(att == 0, 0)
             logits = []
@@ -264,6 +264,113 @@ class TestLoad(unittest.TestCase):
         self.assertEqual(packed_cache.layers[0].values.dtype, torch.int8)
         self.assertTrue(torch.equal(got_logits, want_logits), "packing the cache changed logits")
         self.assertEqual(packed_tokens.tolist(), got.tolist())
+
+        # kv.INPLACE: packed rows appended in place (`kv.new_cache`, an
+        # AppendCache), with buffers small enough to grow several times in 6
+        # steps, then a crop and a batch reorder (beam search's) before 3
+        # more steps: the same logits as `cat`, and the rows really sit in
+        # buffers with spare room.
+        def crop_and_continue(cache, logits, n):
+            cache.crop(-2)
+            beam = torch.tensor([2, 0, 1])
+            cache.reorder_cache(beam)
+            att = batch.attention_mask
+            att = torch.cat([att, att.new_ones((att.shape[0], 6 - 2))], dim=-1)[beam]
+            pos = (att.long().cumsum(-1) - 1)[:, -1:]
+            out = []
+            nxt = logits[-1].argmax(-1, keepdim=True)[beam]
+            with torch.no_grad():
+                for _ in range(n):
+                    att = torch.cat([att, att.new_ones((att.shape[0], 1))], dim=-1)
+                    pos = pos + 1
+                    o = model(input_ids=nxt, attention_mask=att, position_ids=pos,
+                              past_key_values=cache, use_cache=True)
+                    out.append(o.logits[:, -1])
+                    nxt = o.logits[:, -1].argmax(-1, keepdim=True)
+            return torch.stack(out)
+
+        saved = (kv.PACK, kv.INPLACE, kv.APPEND_ROWS)
+        try:
+            kv.PACK, kv.INPLACE = True, False
+            want_logits, cat_cache = decode_logits(6)
+            cat_len = cat_cache.get_seq_length()
+            cat_rows = [(k.clone(), v.clone()) for k, v, _ in cat_cache]
+            want_more = crop_and_continue(cat_cache, want_logits, 3)
+            kv.INPLACE, kv.APPEND_ROWS = True, 4
+            got_logits, inplace_cache = decode_logits(6)
+            layer = inplace_cache.layers[0]
+            self.assertEqual(type(layer).__name__, "AppendLayer")
+            self.assertGreater(layer.keys.shape[2], layer.get_seq_length())
+            self.assertEqual(layer.get_seq_length(), cat_len)
+            # Iterating gives the filled rows, as DynamicCache's does.
+            got_rows = [(k, v) for k, v, _ in inplace_cache]
+            self.assertEqual(len(got_rows), len(cat_rows))
+            for (gk, gv), (wk, wv) in zip(got_rows, cat_rows):
+                self.assertTrue(torch.equal(gk, wk) and torch.equal(gv, wv))
+            with self.assertRaisesRegex(ValueError, "neither initial data nor offloading"):
+                kv.new_cache(model.config).__class__(config=model.config, offloading=True)
+            with self.assertRaisesRegex(ValueError, "neither initial data nor offloading"):
+                kv.new_cache(model.config).__class__(ddp_cache_data=list(cat_rows))
+            got_more = crop_and_continue(inplace_cache, got_logits, 3)
+            inplace_tokens = greedy(model, batch.input_ids, batch.attention_mask, 10)
+        finally:
+            kv.PACK, kv.INPLACE, kv.APPEND_ROWS = saved
+        self.assertTrue(torch.equal(got_logits, want_logits), "appending in place changed logits")
+        self.assertTrue(torch.equal(got_more, want_more), "appending after a crop changed logits")
+        self.assertEqual(inplace_tokens.tolist(), got.tolist())
+
+    def test_append_layer_matches_dynamic_layer(self):
+        """kv.AppendLayer against transformers' DynamicLayer, through every
+        method that changes the rows (and reset, which zeroes them): what
+        update returns, the length and the rows are the same after each
+        step, while the append layer's rows stay in buffers with spare
+        room."""
+        import torch
+        from transformers.cache_utils import DynamicLayer
+        from y_lang.exact import kv
+        AppendLayer, _ = kv._append_classes()
+        saved = kv.APPEND_ROWS
+        kv.APPEND_ROWS = 3
+        try:
+            g = torch.Generator().manual_seed(0)
+            a, d = AppendLayer(), DynamicLayer()
+            self.assertEqual(a.get_seq_length(), 0)
+
+            def rows(n, b=None):
+                b = b if b is not None else (a.keys.shape[0] if a.is_initialized else 2)
+                return (torch.randint(-128, 128, (b, 2, n, 6), generator=g, dtype=torch.int8),
+                        torch.randint(-128, 128, (b, 2, n, 4), generator=g, dtype=torch.int8))
+
+            steps = [("update", 5), ("update", 1), ("update", 1), ("crop", -2), ("update", 1),
+                     # 6 rows here: keep 4 (a positive crop is the length to keep;
+                     # read as rows to drop it would keep 2).
+                     ("crop", 4), ("update", 4), ("repeat", 2), ("update", 1),
+                     ("select", torch.tensor([3, 0, 2])), ("update", 2),
+                     ("reorder", torch.tensor([1, 2, 0])), ("update", 1), ("crop", 100),
+                     ("update", 7), ("reset", None)]
+            for op, arg in steps:
+                if op == "update":
+                    k, v = rows(arg)
+                    (ka, va), (kd, vd) = a.update(k, v), d.update(k, v)
+                    self.assertTrue(torch.equal(ka, kd) and torch.equal(va, vd), (op, arg))
+                    self.assertGreaterEqual(a.keys.shape[2], a.get_seq_length())
+                elif op == "crop":
+                    a.crop(arg), d.crop(arg)
+                elif op == "repeat":
+                    a.batch_repeat_interleave(arg), d.batch_repeat_interleave(arg)
+                elif op == "select":
+                    a.batch_select_indices(arg), d.batch_select_indices(arg)
+                elif op == "reorder":
+                    a.reorder_cache(arg), d.reorder_cache(arg)
+                else:
+                    a.reset(), d.reset()
+                self.assertEqual(a.get_seq_length(), d.get_seq_length(), (op, arg))
+                self.assertEqual(a.get_mask_sizes(1), d.get_mask_sizes(1), (op, arg))
+                t = a.get_seq_length()
+                self.assertTrue(torch.equal(a.keys[:, :, :t], d.keys) and
+                                torch.equal(a.values[:, :, :t], d.values), (op, arg))
+        finally:
+            kv.APPEND_ROWS = saved
 
     def test_packed_rows_round_trip_bit_for_bit(self):
         import torch
