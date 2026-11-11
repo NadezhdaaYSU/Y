@@ -82,10 +82,37 @@ def _verify_loaded_library(lib, signature, path):
     raise RuntimeError("Could not verify the loaded Y compiler library identity")
 
 
+def _point_at_installed_z3() -> Optional[str]:
+    """Set `Y_Z3_PATH` to the `z3` that pip installed beside this Python, when
+    nothing else names one, and return it.
+
+    The compiler proves `@invariant`s with Z3 and refuses a kernel it cannot
+    check (`type_checker::z3_candidates`: `Y_Z3_PATH`, then `z3` on `PATH`,
+    then repository venvs). `z3-solver`, a dependency of this package, puts
+    its `z3` in the interpreter's scripts directory, which is on `PATH` only
+    in an activated environment: run as `venv/bin/python`, or under a
+    notebook's kernel, the compiler found no solver and refused y_lang.exact's
+    kernels (a Kaggle T4, 2026-11-11). Without any Z3 it still refuses.
+    """
+    if os.environ.get("Y_Z3_PATH"):
+        return None
+    import shutil
+    if shutil.which("z3"):
+        return None
+    import sysconfig
+    for scripts in {sysconfig.get_path("scripts"), os.path.dirname(sys.executable)}:
+        candidate = os.path.join(scripts, "z3") if scripts else None
+        if candidate and os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            os.environ["Y_Z3_PATH"] = candidate
+            return candidate
+    return None
+
+
 class YCompilerLib:
     _instance = None
 
     def __init__(self):
+        _point_at_installed_z3()
         lib_path = Path(_find_liby()).resolve()
         self.lib_path = str(lib_path)
         self._signature = _library_signature(lib_path)
