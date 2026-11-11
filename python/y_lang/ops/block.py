@@ -6,7 +6,7 @@ They are PyTorch calls on whole tensors; no Y kernel runs. `block_scan` is
 `torch.cumsum` and its relatives, `block_sort` is `torch.sort`.
 """
 
-from typing import Optional, Callable, Any, Union
+from typing import Optional, Callable, Any, Tuple, Union
 import torch
 
 def cdiv(a: Union[int, torch.Tensor], b: Union[int, torch.Tensor]) -> Union[int, torch.Tensor]:

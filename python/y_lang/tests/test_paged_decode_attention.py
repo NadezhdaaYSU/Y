@@ -36,7 +36,7 @@ import unittest
 import torch
 
 from test_launch import PINNED_PROFILE
-from y_lang.torch_interop import TorchKernel
+from y_lang.torch_interop import TorchKernel, device_target
 
 PARAMS7 = ("Q: GlobalMemory<F16>, KCache: GlobalMemory<F16>, VCache: GlobalMemory<F16>, "
            "PageTable: GlobalMemory<I32>, SeqLens: GlobalMemory<I32>, Out: GlobalMemory<F16>")
@@ -74,7 +74,7 @@ def pinned_kernel(src, name):
             f.write(PINNED_PROFILE)
         os.chdir(d)
         try:
-            return TorchKernel(src, kernel_name=name, target_sm="sm_89")
+            return TorchKernel(src, kernel_name=name, target_sm=device_target(default="sm_89"))
         finally:
             os.chdir(saved)
 

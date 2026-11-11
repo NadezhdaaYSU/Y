@@ -20,7 +20,7 @@ import unittest
 import torch
 
 from y_lang import torch_interop
-from y_lang.torch_interop import TorchKernel
+from y_lang.torch_interop import TorchKernel, device_target
 
 
 def native_module():
@@ -278,7 +278,7 @@ kernel many(Out: GlobalMemory<I32>, OutF: GlobalMemory<F32>, x: F32, {params}) {
         OutF[0] = x;
     }}
 }}
-""", kernel_name="many", target_sm="sm_80")
+""", kernel_name="many", target_sm=device_target())
 
 
 class WithLauncher:
@@ -321,7 +321,7 @@ class LaunchesThroughTheNativePath(WithLauncher, unittest.TestCase):
                 self.assertEqual(out_f.item(), -2.5)
 
     def test_a_launch_the_driver_refuses_raises(self):
-        k = self.loaded(TorchKernel(VEC_ADD, kernel_name="vec_add", target_sm="sm_80"))
+        k = self.loaded(TorchKernel(VEC_ADD, kernel_name="vec_add", target_sm=device_target()))
         a = torch.zeros(1024, device="cuda")
         # 2048 threads in a block: CUDA_ERROR_INVALID_VALUE.
         with self.assertRaisesRegex(RuntimeError, "cuLaunchKernel failed with CUDA error code 1$"):
@@ -334,7 +334,7 @@ class LaunchesThroughTheNativePath(WithLauncher, unittest.TestCase):
         self.assertTrue(torch.equal(c, b + b))
 
     def test_an_unsupported_argument_launches_nothing(self):
-        k = self.loaded(TorchKernel(VEC_ADD, kernel_name="vec_add", target_sm="sm_80"))
+        k = self.loaded(TorchKernel(VEC_ADD, kernel_name="vec_add", target_sm=device_target()))
         a = torch.ones(1024, device="cuda")
         c = torch.zeros(1024, device="cuda")
         with self.assertRaisesRegex(TypeError, "Unsupported argument type: <class 'str'>"):
@@ -351,7 +351,7 @@ CHILD = """
 import os, sys, torch
 from y_lang import torch_interop
 from y_lang.torch_interop import TorchKernel
-k = TorchKernel({src!r}, kernel_name="vec_add", target_sm="sm_80")
+k = TorchKernel({src!r}, kernel_name="vec_add", target_sm={target!r})
 a = torch.arange(1024, device="cuda", dtype=torch.float32)
 c = torch.zeros_like(a)
 try:
@@ -373,7 +373,7 @@ class TheLauncherIsChosenOncePerProcess(unittest.TestCase):
             full = dict(os.environ, YSU_CACHE_DIR=cache)
             full.pop("Y_LAUNCHER", None)
             full.update(env)
-            out = subprocess.run([sys.executable, "-c", CHILD.format(src=VEC_ADD)], capture_output=True,
+            out = subprocess.run([sys.executable, "-c", CHILD.format(src=VEC_ADD, target=device_target())], capture_output=True,
                                  text=True, env=full, timeout=300)
             built = {f: os.stat(os.path.join(cache, f)).st_mtime_ns
                      for f in os.listdir(cache) if f.startswith("_ylaunch_")}

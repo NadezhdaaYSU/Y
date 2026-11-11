@@ -96,13 +96,43 @@ SCHEMA = "y-exact-cross-device/1"
 
 
 def device_identity(dev):
-    """What makes two runs 'the same device' for the purpose of this test."""
+    """What makes two runs 'the same device' for the purpose of this test.
+
+    A GPU by name and capability; a CPU by its model (`cpu_model`). Every CPU
+    used to be `cpu:x86_64`, so an Intel Xeon and an AMD Zen 5 were "the same
+    device" (2026-11-11); a record from before the field names no model."""
+    if dev.get("capability") == "cpu":
+        return ("cpu", dev.get("cpu_model"))
     return (dev.get("gpu_name"), dev.get("capability"))
 
 
+def _same_device(ida, idb):
+    """Equal identities, or two CPUs either of which names no model: those
+    may be one machine, and are refused like one."""
+    if ida[0] == "cpu" and idb[0] == "cpu" and (ida[1] is None or idb[1] is None):
+        return True
+    return ida == idb
+
+
 def _fmt_dev(dev):
+    if dev.get("capability") == "cpu":
+        return (f"{dev.get('gpu_name')} ({dev.get('cpu_model') or 'model not recorded'}, "
+                f"{dev.get('multi_processor_count')} CPUs)")
     return (f"{dev.get('gpu_name')} (sm_{str(dev.get('capability','?')).replace('.','')}, "
             f"{dev.get('multi_processor_count')} SMs, driver {dev.get('driver')})")
+
+
+def _cpu_model():
+    """This machine's CPU model, from /proc/cpuinfo (`platform.processor()`
+    elsewhere), or None."""
+    try:
+        with open("/proc/cpuinfo") as f:
+            for line in f:
+                if line.lower().startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or None
 
 
 def compare_artifacts(a, b, allow_same_device=False, out=print):
@@ -134,7 +164,7 @@ def compare_artifacts(a, b, allow_same_device=False, out=print):
     # (1) Same device is vacuous: one card is deterministic for a fixed batch
     # even in bf16, so this would measure re-run determinism instead.
     ida, idb = device_identity(a["device"]), device_identity(b["device"])
-    same_device = ida == idb
+    same_device = _same_device(ida, idb)
     if same_device and not allow_same_device:
         summary["refused"] = "same_device"
         out(f"  *** both artifacts came from {_fmt_dev(a['device'])}. ***\n"
@@ -268,11 +298,13 @@ def compare_artifacts(a, b, allow_same_device=False, out=print):
 
 def _art(gpu="RTX 4070 Ti SUPER", cap="8.9", *, stock, exact,
          gate_ok=True, wfp="wf-1", exp="0xAAAA", labels=("c0", "c1", "c2"),
-         self_check=True):
+         self_check=True, cpu_model=None):
+    device = {"gpu_name": gpu, "capability": cap, "multi_processor_count": 66, "driver": "580.00"}
+    if cap == "cpu":
+        device["cpu_model"] = cpu_model
     return {
         "schema": SCHEMA,
-        "device": {"gpu_name": gpu, "capability": cap,
-                   "multi_processor_count": 66, "driver": "580.00"},
+        "device": device,
         "config": {"model": "Qwen/Qwen2.5-0.5B-Instruct", "tokens": 160,
                    "case_labels": list(labels), "workload_hash": "wh-1"},
         "exp2_domain_digest": {"cpu": "0xAAAA", "device": exp},
@@ -338,6 +370,16 @@ def check_gate_logic():
          _art(stock=MOVED, exact=SAME),
          _art(*A100, stock=SAME, exact=SAME, labels=("c0", "c1", "cX")),
          False, 2, "refused"),
+
+        ("two CPUs of different models",
+         _art("cpu:x86_64", "cpu", stock=MOVED, exact=SAME, cpu_model="AMD Ryzen 9 9950X"),
+         _art("cpu:x86_64", "cpu", stock=SAME, exact=SAME, cpu_model="Intel(R) Xeon(R) CPU @ 2.00GHz"),
+         False, 0, "two devices, as two GPUs would be"),
+
+        ("a CPU record that names no model",
+         _art("cpu:x86_64", "cpu", stock=MOVED, exact=SAME),
+         _art("cpu:x86_64", "cpu", stock=SAME, exact=SAME, cpu_model="Intel(R) Xeon(R) CPU @ 2.00GHz"),
+         False, 2, "refused: it may be the same machine"),
     ]
 
     bad = 0
@@ -353,7 +395,8 @@ def check_gate_logic():
     # is what pins that. Stated here so the file says why 8 scenarios and not 3.
     print("\n  scenarios 2/3 pin the same-device refusal in both directions;")
     print("  4 is the control, 5 the claim being false, 6-9 the four ways two")
-    print("  runs can fail to be comparable at all.")
+    print("  runs can fail to be comparable at all; 10-11 tell two CPUs apart")
+    print("  by model, and refuse a record that names none.")
     if bad:
         print(f"\n{bad} scenario(s) wrong: the gate's own logic is broken.")
         return 1
@@ -419,6 +462,7 @@ def _device_block(device):
         })
     else:
         d.update({"gpu_name": f"cpu:{platform.machine()}", "capability": "cpu",
+                  "cpu_model": _cpu_model(),
                   "multi_processor_count": os.cpu_count(), "driver": None})
     return d
 

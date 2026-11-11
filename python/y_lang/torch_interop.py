@@ -185,6 +185,22 @@ def _fill_slots(slots, args):
 
 _MODULE_CACHE: Dict[str, Tuple[Any, Any]] = {}
 
+def device_target(device=None, default: str = "sm_80") -> str:
+    """The PTX target of a CUDA device, `sm_<major><minor>` (the current
+    device when none is named), or `default` without one.
+
+    A module built for a newer target than the card does not load there: the
+    driver's PTX JIT refuses it (CUDA error 218, `cuModuleLoadData`). Tests
+    built their GPU kernels for a fixed sm_80, and on a Tesla T4 (sm_75)
+    every one of those launches failed so (2026-11-11). A kernel launched on
+    a card is built for that card."""
+    import torch
+    if not torch.cuda.is_available():
+        return default
+    major, minor = torch.cuda.get_device_capability(device)
+    return f"sm_{major}{minor}"
+
+
 class TorchKernel:
     """Wrapper class for loading PTX kernels and executing them directly on PyTorch Tensors."""
     def __init__(self, ysu_source: str, kernel_name: str = "main", target_sm: str = "auto"):

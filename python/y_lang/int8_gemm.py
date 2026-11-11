@@ -123,8 +123,8 @@ def split_factor(ctas: int, k_tiles: int, sms: int) -> int:
 
 
 def _target(device) -> str:
-    major, minor = torch.cuda.get_device_capability(device)
-    return f"sm_{major}{minor}"
+    from .torch_interop import device_target
+    return device_target(device)
 
 
 def kernel_for(m: int, n: int, k: int, device):

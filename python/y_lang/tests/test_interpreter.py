@@ -8,6 +8,7 @@ with the GPU on the same PTX, bit for bit where the instructions are exact.
 """
 
 import os
+import re
 import subprocess
 import unittest
 from pathlib import Path
@@ -15,7 +16,7 @@ from pathlib import Path
 import torch
 
 from y_lang.interpreter import CPUInterpreter, CPUInterpreterError, debug_interpret
-from y_lang.torch_interop import TorchKernel
+from y_lang.torch_interop import TorchKernel, device_target
 
 REPO = Path(__file__).resolve().parents[3]
 Y_BIN = REPO / "target" / "release" / "Y"
@@ -68,7 +69,12 @@ kernel iops(A: GlobalMemory<I32>, B: GlobalMemory<I32>, U: GlobalMemory<U32>, Ou
 """
 
 
-def kernel(src, name, target="sm_80"):
+# Built for the GPU the differential tests launch on (an sm_80 module does
+# not load on a T4); sm_80 without one, for the interpreter alone.
+GPU_TARGET = device_target()
+
+
+def kernel(src, name, target=GPU_TARGET):
     return TorchKernel(src, kernel_name=name, target_sm=target)
 
 
@@ -77,9 +83,18 @@ def interpret(k, grid, block, args):
 
 
 class PtxKernel(TorchKernel):
-    """A TorchKernel over PTX that did not come from Y source."""
+    """A TorchKernel over PTX that did not come from Y source.
+
+    Its `.target` is lowered to the GPU's when the GPU is older: these
+    fixtures say sm_80, an sm_80 module does not load on an sm_75 card (CUDA
+    error 218 on a Tesla T4, 2026-11-11), and the instructions they use
+    (carry chains, narrow loads, dynamic shared memory) exist there. A
+    fixture using something the card lacks then fails to load, loudly."""
 
     def __init__(self, ptx, name):
+        m = re.search(r"\.target sm_(\d+)", ptx)
+        if m and torch.cuda.is_available() and int(GPU_TARGET[3:]) < int(m.group(1)):
+            ptx = ptx.replace(m.group(0), f".target {GPU_TARGET}", 1)
         self.source, self.kernel_name, self.target_sm, self.ptx = None, name, None, ptx
         self._module = self._function = None
 
@@ -215,7 +230,7 @@ class DynamicSharedMemory(unittest.TestCase):
 
 
 class StopsAtWhatTheGpuGetsWrong(unittest.TestCase):
-    def assert_stops(self, src, name, grid, block, args, *phrases, target="sm_80"):
+    def assert_stops(self, src, name, grid, block, args, *phrases, target=GPU_TARGET):
         with self.assertRaises(CPUInterpreterError) as cm:
             interpret(kernel(src, name, target), grid, block, args)
         for p in phrases:
@@ -437,6 +452,7 @@ kernel swiglu(Gate: GlobalMemory<F32>, Up: GlobalMemory<F32>, Out: GlobalMemory<
         self.both(kernel(src, "swiglu"), ((n // 4 + 127) // 128, 1, 1), (128, 1, 1),
                   [torch.randn(n, generator=gen), torch.randn(n, generator=gen), torch.zeros(n), n], exact=False, tol=1e-6)
 
+    @unittest.skipUnless(int(GPU_TARGET[3:]) >= 80, "cp.async needs sm_80 or later")
     def test_cp_async_reads_only_its_source_size(self):
         # Y's GEMM zero-fills tiles past the matrix edge with a register
         # src-size of 0 (`selp.u32 %r, 16, 0, %in_bounds`). Such a thread reads

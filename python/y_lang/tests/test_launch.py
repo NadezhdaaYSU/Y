@@ -21,7 +21,7 @@ import torch
 
 from test_native_launch import WithLauncher
 from y_lang.compiler import is_interpreter_enabled
-from y_lang.torch_interop import TorchKernel, _get_cuda_driver
+from y_lang.torch_interop import TorchKernel, _get_cuda_driver, device_target
 
 VEC_ADD = """
 kernel vec_add(A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>, N: I32) {
@@ -132,7 +132,7 @@ class LaunchesTheNamedKernelOnTheCallersStream(WithLauncher, unittest.TestCase):
     def loaded_vec_add(self):
         # Launched once first: loading the module waits for the GPU to go
         # idle, which would hide a launch on the wrong stream.
-        k = TorchKernel(VEC_ADD, kernel_name="vec_add", target_sm="sm_80")
+        k = TorchKernel(VEC_ADD, kernel_name="vec_add", target_sm=device_target())
         k.launch(self.grid, self.block, [self.a, self.b, torch.zeros_like(self.a), self.n])
         torch.cuda.synchronize()
         return k
@@ -140,7 +140,7 @@ class LaunchesTheNamedKernelOnTheCallersStream(WithLauncher, unittest.TestCase):
     def test_a_name_the_module_lacks_is_refused(self):
         # The module also holds `main`, which a missing name used to run.
         src = VEC_ADD + VEC_ADD.replace("kernel vec_add", "kernel main")
-        k = TorchKernel(src, kernel_name="vec_adds", target_sm="sm_80")
+        k = TorchKernel(src, kernel_name="vec_adds", target_sm=device_target())
         c = torch.zeros_like(self.a)
         with self.assertRaisesRegex(RuntimeError, "no kernel 'vec_adds'"):
             k.launch(self.grid, self.block, [self.a, self.b, c, self.n])
