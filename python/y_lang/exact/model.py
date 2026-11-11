@@ -59,6 +59,20 @@ USE_TRITON = os.environ.get("Y_EXACT_TRITON", "1") != "0"
 GEMM = os.environ.get("Y_EXACT_GEMM") or ("triton" if USE_TRITON else "torch")
 if GEMM not in ("triton", "torch", "y"):
     raise ValueError(f"Y_EXACT_GEMM={GEMM!r}: expected 'triton', 'torch' or 'y'")
+# Named, not the default: then a device that cannot run it is an error, not a
+# quiet switch (`convert`).
+GEMM_EXPLICIT = bool(os.environ.get("Y_EXACT_GEMM"))
+
+
+def triton_int8_dot_ok(device):
+    """Whether Triton can build `w8a8_gemv`'s int8 `tl.dot` for `device`.
+
+    Not below sm_80: on a Tesla T4 (sm_75, Kaggle, 2026-11-11) Triton 3.7
+    failed to compile it ('arith.extf' given int8 operands, in
+    TritonGPUAccelerateMatmul), so the exact path died before its first
+    token. sm_89 builds it. A CPU device never takes the Triton path."""
+    device = torch.device(device)
+    return device.type == "cuda" and torch.cuda.get_device_capability(device) >= (8, 0)
 _Y_INT8_MM = None
 
 
@@ -343,6 +357,10 @@ class ExactLinear(nn.Module):
         # `exact_kv.quantize_kv` arrived at by getting it wrong six times.
         self.a_levels = act_levels_for(lin.in_features)
         self.split_act = self.a_levels > 127
+        # `convert` clears it on a device whose Triton cannot build the int8
+        # dot (`triton_int8_dot_ok`); the layer then takes `torch._int_mm` or
+        # float64, which give the same bits.
+        self.triton_ok = True
         divisor(self.a_levels if self.split_act else 127, self.sw)
         # Refuse rather than wrap. Both paths accumulate in int32, and neither
         # said so out loud until `tools/exact_bounds_check.py` asked: the plain
@@ -395,7 +413,7 @@ class ExactLinear(nn.Module):
         m.register_buffer("bias", None if biases[0] is None else torch.cat(biases))
         m.in_features = first.in_features
         m.out_features = sum(p.out_features for p in parts)
-        for f in ("fp32_exact", "a_levels", "split_act"):
+        for f in ("fp32_exact", "a_levels", "split_act", "triton_ok"):
             setattr(m, f, getattr(first, f))
         return m
 
@@ -407,7 +425,7 @@ class ExactLinear(nn.Module):
         x8, sx = _q_per_row(xf)
         x8 = x8.to(torch.int8)
         if (GEMM == "triton" and w8a8_matmul is not None and x.is_cuda
-                and xf.dtype == torch.float32):
+                and self.triton_ok and xf.dtype == torch.float32):
             # Only the GEMM is Triton. The quantisation above stays in torch on
             # purpose so inductor can fuse it into the preceding RMSNorm/SiLU -
             # doing it inside the Triton kernel instead was measured at a net
@@ -466,7 +484,7 @@ class ExactLinear(nn.Module):
         qi = q.to(torch.int32)
         hi, lo = split_digits(qi, self.a_levels)
         if (GEMM == "triton" and w8a8_matmul_hilo is not None and x.is_cuda
-                and xf.dtype == torch.float32):
+                and self.triton_ok and xf.dtype == torch.float32):
             y = w8a8_matmul_hilo(hi.contiguous(), lo.contiguous(),
                                  sx.reshape(-1).float(), self.w8t, self.sw,
                                  self.bias)
@@ -978,8 +996,20 @@ def convert(model, linears=True, norms=True, floats=None, merge=None):
     # nothing is being traced. Doing it lazily on first call put the benchmark
     # inside `torch.compile`, where N and K are SymInts and the kernel cannot
     # even be launched. Five distinct shapes here, a few hundred ms total.
-    if (shapes and dev is not None and dev.type == "cuda"
-            and GEMM == "triton" and w8a8_matmul is not None):
+    triton = (shapes and dev is not None and dev.type == "cuda"
+              and GEMM == "triton" and w8a8_matmul is not None)
+    if triton and not triton_int8_dot_ok(dev):
+        if GEMM_EXPLICIT:
+            raise ValueError(
+                f"Y_EXACT_GEMM=triton: Triton cannot build the int8 dot for "
+                f"{torch.cuda.get_device_name(dev)} (sm_"
+                f"{''.join(map(str, torch.cuda.get_device_capability(dev)))}; it "
+                f"needs sm_80 or later). Unset Y_EXACT_GEMM to use torch._int_mm "
+                f"(or float64 where that is refused), which gives the same bits")
+        for m in exact:
+            m.triton_ok = False
+        triton = False
+    if triton:
         from . import w8a8_gemv
         w8a8_gemv.prime(shapes, dev)
     return n_lin, n_norm
