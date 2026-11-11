@@ -20,6 +20,10 @@ dependencies = [
     "torch",
     # CPUInterpreter; loaded on first use, so `import y_lang` does not need it.
     "numpy",
+    # The compiler proves a kernel's `@invariant`s with Z3 and refuses what it
+    # cannot check; y_lang.exact's attention and exact_pv kernels carry them.
+    # Its `z3` is found beside the interpreter (`compiler._point_at_installed_z3`).
+    "z3-solver",
 ]
 
 [project.optional-dependencies]
