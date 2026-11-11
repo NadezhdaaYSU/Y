@@ -1220,8 +1220,16 @@ untested on a real model.
 
 The cross-device claim, the strongest thing exactness buys over pinning the
 order, is measured CPU against GPU (Finding 12: exact 0/5, stock 5/5, at 0.5B
-and 7B). **It has never been run on a second GPU.** `tools/exact_cross_device.py`
-is the harness for both; `--record` writes a per-device artifact (tokens, the
+and 7B). ~~**It has never been run on a second GPU.**~~ Since 2026-11-11 it has,
+at 0.5B: a Tesla T4 (sm_75, Turing, a Kaggle notebook) decodes the Zen 5 CPU's
+and the RTX 4070 Ti SUPER's exact tokens, 0/5 against both, eager and compiled
+with every switch the card can run (Y's attention and `exact_pv` kernels
+compiled by Y for sm_75); stock changed 5/5 against both
+(`docs/benchmarks/exact_cross_gpu_t4_2026-11-11/`). Getting there found two
+bugs: the default Triton int8 GEMM, which Triton cannot build below sm_80, and
+a wheel that did not bring the Z3 its kernels' proofs need. Still one GPU
+vendor and one model family; 7B on the T4 is not yet run.
+`tools/exact_cross_device.py` is the harness for both; `--record` writes a per-device artifact (tokens, the
 integer-exp domain digest, a CPU-side weight fingerprint, the sanity-gate
 verdict, and a same-card re-run check); `--compare` is pure Python and refuses
 six ways for a comparison to be vacuous — same device, a control that did not
@@ -1329,7 +1337,9 @@ flattering direction.
   0/16 as well, so the framing did change: this work bought *portability and
   tuning freedom*, not determinism. The pitch is now the second sentence of that
   finding, not the first.
-- **Run a second GPU. This is now the top item, not the second.** Once a pinned
+- ~~**Run a second GPU.**~~ **Done at 0.5B (2026-11-11): a Tesla T4, 0/5
+  against the CPU and the 4070 Ti, stock 5/5** (`docs/benchmarks/exact_cross_gpu_t4_2026-11-11/`).
+  The text below is as it was. **Run a second GPU. This is now the top item, not the second.** Once a pinned
   float order also gives 0/16, cross-hardware bit-identity is the *only*
   remaining thing exactness uniquely buys that has no measurement behind it —
   Finding 12 argues it and measures the exp alone. **The harness is built and

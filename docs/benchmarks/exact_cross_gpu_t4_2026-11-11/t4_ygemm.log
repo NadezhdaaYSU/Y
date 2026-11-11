@@ -1,0 +1,124 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  1 cases x 8 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- exact ---
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:36,  2.99it/s]
+Loading weights:  71%|███████▏  | 207/290 [00:00<00:00, 616.47it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 538.11it/s]
+Traceback (most recent call last):
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 661, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 655, in main
+    return record(a)
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 522, in record
+    canary = D.canary_text(model, tok, args.device)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/exact/attention.py", line 754, in canary_text
+    out = model.generate(
+        input_ids=enc.input_ids, attention_mask=enc.attention_mask,
+    ...<2 lines>...
+        **({"cache_implementation": "static"} if static_cache else {}),
+    )
+  File "/usr/local/lib/python3.13/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 2668, in generate
+    result = decoding_method(
+        self,
+    ...<5 lines>...
+        **model_kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 2868, in _sample
+    outputs = self._prefill(
+        input_ids,
+    ...<2 lines>...
+        is_first_iteration=not generation_config.is_assistant,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 3948, in _prefill
+    return self(**model_inputs, return_dict=True)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 939, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 452, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ~~~~~~~~~~^
+        input_ids=input_ids,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/output_capturing.py", line 262, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+        hidden_states,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
+    return super().__call__(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ~~~~~~~~~~~~~~^
+        hidden_states=hidden_states,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/exact/model.py", line 843, in _merged_attention_forward
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/exact/model.py", line 443, in forward
+    acc = y_int8_mm()(x8.contiguous(), self.w8t.t()).to(torch.float32)
+          ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/int8_gemm.py", line 254, in int8_mm
+    return _int8_mm(a, b)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/int8_gemm.py", line 194, in _int8_mm
+    kern, threads, ctas, z = _KERNELS.get((dev.index, mb, n, k)) or kernel_for(mb, n, k, dev)
+                                                                    ~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/int8_gemm.py", line 139, in kernel_for
+    kern = TorchKernel(source(m, n, k), kernel_name=KERNEL_NAME,
+                       target_sm=_target(device))
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/torch_interop.py", line 194, in __init__
+    self.ptx = compile_to_ptx(ysu_source, target_sm=target_sm, name=kernel_name)
+               ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/compiler.py", line 420, in compile_to_ptx
+    raise ValueError(f"Y Compilation Error:\n{err_msg}")
+ValueError: Y Compilation Error:
+[PTX] kernel `y_int8_mm` uses `cp.async` (`cp.async.cg.shared.global`), which needs sm_80 or later; this module targets sm_75. The backend has no lowering of it for older cards, so `ptxas` would reject the module and the driver refuse it. Compile for sm_80 or newer (SM_VERSION in .ysu_hw_profile), or leave this kernel out of the build for this card.
+[PTX] kernel `y_int8_mm` uses `mma.sync` m16n8k16 / m16n8k32 (`mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32`), which needs sm_80 or later; this module targets sm_75. The backend has no lowering of it for older cards, so `ptxas` would reject the module and the driver refuse it. Compile for sm_80 or newer (SM_VERSION in .ysu_hw_profile), or leave this kernel out of the build for this card.

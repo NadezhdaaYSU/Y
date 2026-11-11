@@ -1,0 +1,278 @@
+0.00s - Debugger warning: It seems that frozen modules are being used, which may
+0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+0.00s - to python to disable frozen modules.
+0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+0.00s - Debugger warning: It seems that frozen modules are being used, which may
+0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+0.00s - to python to disable frozen modules.
+0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+index, name, compute_cap, driver_version, memory.total [MiB]
+0, Tesla T4, 7.5, 580.178.04, 15360 MiB
+1, Tesla T4, 7.5, 580.178.04, 15360 MiB
+3.13.16 Linux-6.18.55+-x86_64-with-glibc2.39
+wheel: /kaggle/input/datasets/umutkorkmazysu/y-lang-wheel/y_lang-1.1.0-py3-none-linux_x86_64.whl
+[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+easyocr 1.7.2 requires torchvision>=0.5, which is not installed.
+fastai 2.8.12 requires torchvision>=0.11, which is not installed.
+timm 1.0.30 requires torchvision, which is not installed.
+libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.
+libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.[0m[31m
+[0mtorch 2.13.0+cu126 cuda 12.6
+transformers 5.15.0
+y_lang 1.1.0 /usr/local/lib/python3.13/dist-packages/y_lang/__init__.py
+device Tesla T4 (7, 5)
+ 
+Triton int8 GEMM usable here: False (default GEMM: triton)
+torch._int_mm works here, exact: True
+ 
+source: 426dd88 docs(known-issues): the coherence check cannot see shared_alloc_u32 buffers
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  5 cases x 160 tokens, arms: stock, exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+--- stock ---
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:  78%|███████▊  | 226/290 [00:00<00:00, 2256.84it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2323.69it/s]
+  gate: ok -- canary ok, 91 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights bb0ff32dd5022852, tokens 33e852ed3e1b8fd7
+  self-check (same card, twice): identical
+--- exact ---
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:59,  2.42it/s]
+Loading weights:  78%|███████▊  | 225/290 [00:00<00:00, 574.22it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 477.38it/s]
+  gate: ok -- canary ok, 83 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 6ed356ce48583cd0, tokens 30eec169d2f38da4
+  self-check (same card, twice): identical
+  written to /kaggle/working/t4_eager.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /kaggle/working/t4_eager.json other.json
+--- t4_eager: exit 0, 4.4 min
+=== exact: this GPU against the Zen 5 CPU (want 0/5 changed) ===
+
+Cross-device bit-identity
+  /kaggle/working/Y/docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json  vs  /kaggle/working/t4_eager.json
+  A: cpu:x86_64 (sm_cpu, 32 SMs, driver None)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+ 
+=== stock and exact: this GPU against the RTX 4070 Ti SUPER ===
+    (stock is expected to change: that is the control; exact must not)
+
+Cross-device bit-identity
+  /kaggle/working/Y/docs/benchmarks/exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json  vs  /kaggle/working/t4_eager.json
+  A: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 13
+                 '+3 long, middle' first differs at token 13
+                 'mixed 8, pos 5' first differs at token 20
+                 'mixed 32, pos 17' first differs at token 108
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================
+ 
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  5 cases x 160 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+--- exact ---
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:42,  2.81it/s]
+Loading weights:  68%|██████▊   | 197/290 [00:00<00:00, 551.98it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 492.47it/s]
+W1111 17:29:43.553000 214 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+  gate: ok -- canary ok, 83 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 6ed356ce48583cd0, tokens 30eec169d2f38da4
+  self-check (same card, twice): identical
+  written to /kaggle/working/t4_all_compiled.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /kaggle/working/t4_all_compiled.json other.json
+--- t4_all_compiled: exit 0, 37.6 min
+=== this GPU, compiled, against the Zen 5 CPU (want 0/5 changed) ===
+
+Cross-device bit-identity
+  /kaggle/working/Y/docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json  vs  /kaggle/working/t4_all_compiled.json
+  A: cpu:x86_64 (sm_cpu, 32 SMs, driver None)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+ 
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  1 cases x 8 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+--- exact ---
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:36,  2.99it/s]
+Loading weights:  71%|███████▏  | 207/290 [00:00<00:00, 616.47it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 538.11it/s]
+Traceback (most recent call last):
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 661, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 655, in main
+    return record(a)
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 522, in record
+    canary = D.canary_text(model, tok, args.device)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/exact/attention.py", line 754, in canary_text
+    out = model.generate(
+        input_ids=enc.input_ids, attention_mask=enc.attention_mask,
+    ...<2 lines>...
+        **({"cache_implementation": "static"} if static_cache else {}),
+    )
+  File "/usr/local/lib/python3.13/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 2668, in generate
+    result = decoding_method(
+        self,
+    ...<5 lines>...
+        **model_kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 2868, in _sample
+    outputs = self._prefill(
+        input_ids,
+    ...<2 lines>...
+        is_first_iteration=not generation_config.is_assistant,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 3948, in _prefill
+    return self(**model_inputs, return_dict=True)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 939, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 452, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ~~~~~~~~~~^
+        input_ids=input_ids,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/output_capturing.py", line 262, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+        hidden_states,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
+    return super().__call__(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ~~~~~~~~~~~~~~^
+        hidden_states=hidden_states,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/exact/model.py", line 843, in _merged_attention_forward
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/exact/model.py", line 443, in forward
+    acc = y_int8_mm()(x8.contiguous(), self.w8t.t()).to(torch.float32)
+          ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/int8_gemm.py", line 254, in int8_mm
+    return _int8_mm(a, b)
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/int8_gemm.py", line 194, in _int8_mm
+    kern, threads, ctas, z = _KERNELS.get((dev.index, mb, n, k)) or kernel_for(mb, n, k, dev)
+                                                                    ~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/int8_gemm.py", line 139, in kernel_for
+    kern = TorchKernel(source(m, n, k), kernel_name=KERNEL_NAME,
+                       target_sm=_target(device))
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/torch_interop.py", line 194, in __init__
+    self.ptx = compile_to_ptx(ysu_source, target_sm=target_sm, name=kernel_name)
+               ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/y_lang/compiler.py", line 420, in compile_to_ptx
+    raise ValueError(f"Y Compilation Error:\n{err_msg}")
+ValueError: Y Compilation Error:
+[PTX] kernel `y_int8_mm` uses `cp.async` (`cp.async.cg.shared.global`), which needs sm_80 or later; this module targets sm_75. The backend has no lowering of it for older cards, so `ptxas` would reject the module and the driver refuse it. Compile for sm_80 or newer (SM_VERSION in .ysu_hw_profile), or leave this kernel out of the build for this card.
+[PTX] kernel `y_int8_mm` uses `mma.sync` m16n8k16 / m16n8k32 (`mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32`), which needs sm_80 or later; this module targets sm_75. The backend has no lowering of it for older cards, so `ptxas` would reject the module and the driver refuse it. Compile for sm_80 or newer (SM_VERSION in .ysu_hw_profile), or leave this kernel out of the build for this card.
+--- t4_ygemm: exit 1, 0.2 min
+refused by name: True
+t4_eager         exact  digest 30eec169d2f38da4  self-check True
+t4_eager         stock  digest 33e852ed3e1b8fd7  self-check True
+t4_all_compiled  exact  digest 30eec169d2f38da4  self-check True
+CPU (Zen 5) exact digest: 30eec169d2f38da4
+exit codes: {'eager': 0, 'compiled': 0, 'y_gemm_refused': 1}
+/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+  cells[i][c] = re.sub('\\\\\|', '|', cell)
+/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+[NbConvertApp] Writing 35225 bytes to __notebook__.ipynb
+[NbConvertApp] Converting notebook __notebook__.ipynb to html
+[NbConvertApp] Writing 321105 bytes to __results__.html

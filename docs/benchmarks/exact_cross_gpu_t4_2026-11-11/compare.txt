@@ -1,0 +1,39 @@
+### Zen 5 CPU vs T4, eager
+    exact_norm_sum_2026-11-10/cpu_0p5b.json
+    exact_cross_gpu_t4_2026-11-11/t4_eager.json
+  exact       0/5 cases changed across the two devices
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+    (exit 1)
+
+### RTX 4070 Ti SUPER vs T4, eager, both arms
+    exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json
+    exact_cross_gpu_t4_2026-11-11/t4_eager.json
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+    (exit 0)
+
+### Zen 5 CPU vs T4, compiled, every switch
+    exact_norm_sum_2026-11-10/cpu_0p5b.json
+    exact_cross_gpu_t4_2026-11-11/t4_all_compiled.json
+  exact       0/5 cases changed across the two devices
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+    (exit 1)
+
+### RTX 4070 Ti SUPER vs T4, both compiled, every switch
+    exact_attention_staging_2026-11-11/gpu_all_compiled.json
+    exact_cross_gpu_t4_2026-11-11/t4_all_compiled.json
+  exact       0/5 cases changed across the two devices
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+    (exit 1)
+
+### Zen 5 CPU vs T4, eager, both arms (the CPU record before the integer norm sum)
+    exact_y_gemm_2026-11-07/cpu_zen5_0p5b.json
+    exact_cross_gpu_t4_2026-11-11/t4_eager.json
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+    (exit 0)
+
