@@ -23,6 +23,9 @@
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -103,6 +106,9 @@ fn every_real_flag_still_compiles() {
 
 #[test]
 fn the_bare_invocation_still_works() {
+    if !verification::clang_host() {
+        return;
+    }
     let (ok, text) = run(&[]);
     assert!(ok && !text.contains("unrecognised option"), "{text}");
 }

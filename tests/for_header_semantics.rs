@@ -20,6 +20,9 @@
 //! kernel whose step is a register, which is the path whose evaluation moved.
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -109,6 +112,9 @@ fn y(path: &std::path::Path, args: &[&str]) -> (bool, String) {
 
 #[test]
 fn the_llvm_backend_reads_the_header_once() {
+    if !verification::clang_host() {
+        return;
+    }
     let path = source("llvm", PROGRAM);
     let bin = path.with_extension("bin");
     let (ok, out) = y(&path, &["-o", bin.to_str().unwrap()]);

@@ -15,6 +15,9 @@
 use std::path::Path;
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -63,6 +66,9 @@ fn a_main_returning_a_float_is_refused() {
 /// expected status differs from the others and from 0 mod 256 where it can.
 #[test]
 fn an_integer_or_absent_result_is_the_exit_status() {
+    if !verification::clang_host() {
+        return;
+    }
     let cases: &[(&str, &str, i32)] = &[
         ("i32", "fn main() -> I32 {\n    return 7;\n}\n", 7),
         ("void", "fn main() {\n    let x: I32 = 32;\n    x = x + 1;\n}\n", 0),

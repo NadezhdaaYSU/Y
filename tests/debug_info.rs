@@ -32,6 +32,9 @@ use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -379,6 +382,9 @@ fn the_line_table_names_the_y_source_and_its_lines() {
     if !have("llvm-dwarfdump") {
         return skip("the_line_table_names_the_y_source_and_its_lines", "llvm-dwarfdump");
     }
+    if !have("clang") {
+        return skip("the_line_table_names_the_y_source_and_its_lines", "clang");
+    }
     let dir = scratch("lines");
     let bin = build(&dir, "fixture", FIXTURE, true);
     let out = Command::new("llvm-dwarfdump").arg("--debug-line").arg(&bin).output().expect("dwarfdump");
@@ -401,6 +407,9 @@ fn the_line_table_names_the_y_source_and_its_lines() {
 fn gdb_prints_y_values_with_y_types() {
     if !have("gdb") {
         return skip("gdb_prints_y_values_with_y_types", "gdb");
+    }
+    if !have("clang") {
+        return skip("gdb_prints_y_values_with_y_types", "clang");
     }
     let dir = scratch("values");
     let bin = build(&dir, "fixture", FIXTURE, true);
@@ -450,6 +459,9 @@ fn stepping_into_a_call_finds_its_arguments_already_stored() {
     if !have("gdb") {
         return skip("stepping_into_a_call_finds_its_arguments_already_stored", "gdb");
     }
+    if !have("clang") {
+        return skip("stepping_into_a_call_finds_its_arguments_already_stored", "clang");
+    }
     let dir = scratch("step");
     let bin = build(&dir, "fixture", FIXTURE, true);
     let call = line_of(FIXTURE, "call");
@@ -476,6 +488,9 @@ fn a_function_breakpoint_stops_after_the_parameters_are_stored() {
     if !have("gdb") {
         return skip("a_function_breakpoint_stops_after_the_parameters_are_stored", "gdb");
     }
+    if !have("clang") {
+        return skip("a_function_breakpoint_stops_after_the_parameters_are_stored", "clang");
+    }
     let dir = scratch("fnbreak");
     let bin = build(&dir, "fixture", FIXTURE, true);
     let out = gdb(&dir, &bin, "break scale\nrun\ninfo args\nkill\n");
@@ -492,6 +507,9 @@ fn a_function_breakpoint_stops_after_the_parameters_are_stored() {
 fn next_visits_each_statement_of_a_loop_once_per_iteration() {
     if !have("gdb") {
         return skip("next_visits_each_statement_of_a_loop_once_per_iteration", "gdb");
+    }
+    if !have("clang") {
+        return skip("next_visits_each_statement_of_a_loop_once_per_iteration", "clang");
     }
     let dir = scratch("loop");
     let bin = build(&dir, "fixture", FIXTURE, true);
@@ -517,6 +535,9 @@ fn next_visits_each_statement_of_a_loop_once_per_iteration() {
 fn a_for_loop_increment_belongs_to_the_for_line() {
     if !have("gdb") {
         return skip("a_for_loop_increment_belongs_to_the_for_line", "gdb");
+    }
+    if !have("clang") {
+        return skip("a_for_loop_increment_belongs_to_the_for_line", "clang");
     }
     let dir = scratch("for");
     let bin = build(&dir, "fixture", FIXTURE, true);
@@ -569,6 +590,9 @@ fn next_from_a_functions_last_line_returns_to_the_caller() {
     if !have("gdb") {
         return skip("next_from_a_functions_last_line_returns_to_the_caller", "gdb");
     }
+    if !have("clang") {
+        return skip("next_from_a_functions_last_line_returns_to_the_caller", "clang");
+    }
     let dir = scratch("epilogue");
     let bin = build(&dir, "fixture", FIXTURE, true);
     let l = |t| line_of(FIXTURE, t);
@@ -595,6 +619,9 @@ fn next_from_a_functions_last_line_returns_to_the_caller() {
 fn a_zero_drift_accumulator_is_shown_as_its_raw_representation() {
     if !have("gdb") {
         return skip("a_zero_drift_accumulator_is_shown_as_its_raw_representation", "gdb");
+    }
+    if !have("clang") {
+        return skip("a_zero_drift_accumulator_is_shown_as_its_raw_representation", "clang");
     }
     let src = "@unsafe\nfn main() -> I32 {\n    @ZeroDrift @bounds(-1000, 1000)\n    let acc: F32 = 0.0;\n    acc += 1.5;\n    acc += 2.25;\n    let done: I32 = 1; // L:after\n    return done;\n}\n";
     let dir = scratch("drift");
@@ -626,6 +653,9 @@ fn an_imported_function_is_reported_in_its_own_file() {
     if !have("gdb") {
         return skip("an_imported_function_is_reported_in_its_own_file", "gdb");
     }
+    if !have("clang") {
+        return skip("an_imported_function_is_reported_in_its_own_file", "clang");
+    }
     let dir = scratch("import");
     let util = "// helper module\n\nfn helper(x: I32) -> I32 {\n    let y: I32 = x + 100; // L:helper\n    return y;\n}\n";
     fs::write(dir.join("util.ysu"), util).expect("write util");
@@ -647,6 +677,9 @@ fn an_imported_function_is_reported_in_its_own_file() {
 fn debug_starts_gdb_on_the_first_line_of_main() {
     if !have("gdb") {
         return skip("debug_starts_gdb_on_the_first_line_of_main", "gdb");
+    }
+    if !have("clang") {
+        return skip("debug_starts_gdb_on_the_first_line_of_main", "clang");
     }
     let dir = scratch("launcher");
     let path = dir.join("fixture.ysu");
@@ -801,6 +834,9 @@ fn a_variable_is_visible_exactly_where_its_scope_is() {
     if !have("gdb") {
         return skip("a_variable_is_visible_exactly_where_its_scope_is", "gdb");
     }
+    if !have("clang") {
+        return skip("a_variable_is_visible_exactly_where_its_scope_is", "clang");
+    }
     let dir = scratch("scopes");
     let bin = build(&dir, "scopes", SCOPES, true);
     let mut script = String::from(
@@ -889,6 +925,9 @@ fn an_unreachable_binding_is_not_described() {
     if !have("gdb") {
         return skip("an_unreachable_binding_is_not_described", "gdb");
     }
+    if !have("clang") {
+        return skip("an_unreachable_binding_is_not_described", "clang");
+    }
     let src = "fn main() -> I32 {\n    let a: I32 = 3;\n    if a > 1 {\n        return a; // L:ret\n    }\n    \
                return 0;\n    let dead_v: I32 = 7;\n}\n";
     let dir = scratch("dead");
@@ -974,6 +1013,9 @@ fn exact_decimal(raw: i128, frac: u32) -> String {
 fn y_values_print_as_y() {
     if !have("gdb") {
         return skip("y_values_print_as_y", "gdb");
+    }
+    if !have("clang") {
+        return skip("y_values_print_as_y", "clang");
     }
     let dir = scratch("printers");
     let bin = build(&dir, "printers", PRINTERS, true);
@@ -1075,6 +1117,9 @@ fn a_data_enum_prints_its_variant_and_fields() {
     if !have("gdb") {
         return skip("a_data_enum_prints_its_variant_and_fields", "gdb");
     }
+    if !have("clang") {
+        return skip("a_data_enum_prints_its_variant_and_fields", "clang");
+    }
     let dir = scratch("data_enums");
     let bin = build(&dir, "data_enums", DATA_ENUMS, true);
     let out = gdb_y(
@@ -1117,6 +1162,9 @@ fn a_data_enum_prints_its_variant_and_fields() {
 fn a_backtrace_shows_the_y_frames() {
     if !have("gdb") {
         return skip("a_backtrace_shows_the_y_frames", "gdb");
+    }
+    if !have("clang") {
+        return skip("a_backtrace_shows_the_y_frames", "clang");
     }
     let dir = scratch("bt");
     let bin = build(&dir, "printers", PRINTERS, true);
@@ -1164,6 +1212,9 @@ fn a_runtime_frame_above_y_code_is_kept() {
     if !have("gdb") {
         return skip("a_runtime_frame_above_y_code_is_kept", "gdb");
     }
+    if !have("clang") {
+        return skip("a_runtime_frame_above_y_code_is_kept", "clang");
+    }
     let dir = scratch("bt_runtime");
     let bin = build(&dir, "printers", PRINTERS, true);
     let out = gdb_y(&dir, &bin, "break println\nrun\necho @@bt\\n\nbt\nkill\n");
@@ -1187,6 +1238,9 @@ fn outside_the_safe_path_gdb_shows_the_raw_view() {
     if !have("gdb") {
         return skip("outside_the_safe_path_gdb_shows_the_raw_view", "gdb");
     }
+    if !have("clang") {
+        return skip("outside_the_safe_path_gdb_shows_the_raw_view", "clang");
+    }
     let dir = scratch("declined");
     let bin = build(&dir, "printers", PRINTERS, true);
     let out = gdb(
@@ -1203,6 +1257,9 @@ fn outside_the_safe_path_gdb_shows_the_raw_view() {
 /// the program's own facts.
 #[test]
 fn the_embedded_extension_is_the_compilers_file() {
+    if !verification::clang_host() {
+        return;
+    }
     if !have("objcopy") {
         return skip("the_embedded_extension_is_the_compilers_file", "objcopy");
     }
@@ -1235,6 +1292,9 @@ fn the_embedded_extension_is_the_compilers_file() {
 /// as a string HANDLE, which it read as text: `String_new("hi")` printed `(`.
 #[test]
 fn string_new_holds_the_text_it_was_given() {
+    if !verification::clang_host() {
+        return;
+    }
     let dir = scratch("string_new");
     let bin = build(
         &dir,
@@ -1321,6 +1381,9 @@ fn an_inlined_function_is_still_a_frame() {
     if !have("gdb") {
         return skip("an_inlined_function_is_still_a_frame", "gdb");
     }
+    if !have("clang") {
+        return skip("an_inlined_function_is_still_a_frame", "clang");
+    }
     let dir = scratch("opt_inline");
     for o in ["-O0", "-O1", "-O2", "-O3"] {
         let bin = build_with(&dir, "optimised", OPTIMISED, &["-g", o]);
@@ -1358,6 +1421,9 @@ fn an_inlined_function_is_still_a_frame() {
 fn an_optimised_build_never_shows_a_wrong_value() {
     if !have("gdb") {
         return skip("an_optimised_build_never_shows_a_wrong_value", "gdb");
+    }
+    if !have("clang") {
+        return skip("an_optimised_build_never_shows_a_wrong_value", "clang");
     }
     let dir = scratch("opt_values");
     let stops: [(&str, &[(&str, &str)]); 3] = [
@@ -1471,6 +1537,9 @@ fn an_optimisation_level_is_refused_where_it_would_do_nothing() {
 fn an_attributed_statement_is_on_its_keywords_line() {
     if !have("gdb") {
         return skip("an_attributed_statement_is_on_its_keywords_line", "gdb");
+    }
+    if !have("clang") {
+        return skip("an_attributed_statement_is_on_its_keywords_line", "clang");
     }
     let dir = scratch("attr_line");
     let src = "\

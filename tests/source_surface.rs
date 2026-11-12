@@ -16,6 +16,9 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -402,6 +405,9 @@ fn documented_y_commands() -> Vec<(String, Vec<String>)> {
 /// compile.
 #[test]
 fn every_documented_y_command_over_a_repo_fixture_succeeds() {
+    if !verification::clang_host() {
+        return;
+    }
     let cmds = documented_y_commands();
     assert!(
         cmds.len() >= 3,

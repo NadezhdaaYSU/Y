@@ -54,6 +54,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -504,6 +507,9 @@ fn the_packed_kernel_computes_what_the_naive_nest_computes() {
 /// that agree can be wrong together.
 #[test]
 fn the_exact_kernel_is_bit_identical_to_the_naive_nest() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     if !have("clang") {
         eprintln!("skipping: clang not found");
         return;
@@ -560,6 +566,9 @@ fn the_exact_kernel_is_bit_identical_to_the_naive_nest() {
 /// faster, under a certificate claiming exactness.
 #[test]
 fn a_truncating_product_is_refused_rather_than_widened_by_the_kernel() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let dir = std::env::temp_dir().join(format!("y_gemm_trunc_{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("temp dir");
@@ -621,6 +630,9 @@ fn a_truncating_product_is_refused_rather_than_widened_by_the_kernel() {
 /// `the_exact_kernel_is_bit_identical_to_the_naive_nest`.
 #[test]
 fn an_f32_zero_drift_nest_falls_back_to_scalar_exact_lowering() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     use y::cpu_gemm::{plan_exact_gemm, DriftAccumulator, ExactGemmPlan};
     let licensed = DriftAccumulator {
         ty: "F32".into(),

@@ -53,6 +53,9 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -362,6 +365,9 @@ fn run(exe: &PathBuf, threads: &str, canary: bool) -> Report {
 /// fails - and that is a useful failure: it says the rewrite can go.
 #[test]
 fn the_attribute_rewrite_is_what_instruments_the_kernel() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ll) = emit("attr");
     if !tsan_available(&dir) {
         eprintln!("skipping: no working ThreadSanitizer");
@@ -396,6 +402,9 @@ fn the_attribute_rewrite_is_what_instruments_the_kernel() {
 /// nothing passes every assertion below.
 #[test]
 fn the_sanitizer_reports_a_race_when_there_is_one() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ll) = emit("canary");
     if !tsan_available(&dir) {
         eprintln!("skipping: no working ThreadSanitizer");
@@ -429,6 +438,9 @@ fn the_sanitizer_reports_a_race_when_there_is_one() {
 /// worker's buffers without the join that orders them.
 #[test]
 fn the_threaded_kernel_is_race_free_at_every_thread_count() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ll) = emit("counts");
     if !tsan_available(&dir) {
         eprintln!("skipping: no working ThreadSanitizer");
@@ -465,6 +477,9 @@ fn the_threaded_kernel_is_race_free_at_every_thread_count() {
 /// answer alone could not have: every writer stored the same value.
 #[test]
 fn concurrent_callers_do_not_race_on_the_memoised_thread_count() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ll) = emit("concurrent");
     if !tsan_available(&dir) {
         eprintln!("skipping: no working ThreadSanitizer");
@@ -497,6 +512,9 @@ fn concurrent_callers_do_not_race_on_the_memoised_thread_count() {
 /// schedules they happen to explore, while this cannot be got past by timing.
 #[test]
 fn the_memoised_thread_count_is_accessed_atomically() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ll) = emit("atomic");
     let ir = std::fs::read_to_string(&ll).expect("emitted IR");
 

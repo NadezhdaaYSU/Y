@@ -33,6 +33,9 @@ mod validator;
 #[path = "common/pinned.rs"]
 mod pinned;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 const B: usize = 8; // batch * KV heads
 const T: usize = 67; // a key length, deliberately not a power of two
 const D: usize = 64; // head_dim
@@ -99,6 +102,44 @@ fn compile() -> ValidatedExactPv {
     );
     ValidatedExactPv::open(&bundle, Some(&expected_ptx_sha256))
         .expect("validated exact_pv artifact binding failed")
+}
+
+/// The device tests run the translation-validated cubin, and validation needs
+/// what it validates with: `ptxas` and `nvdisasm` on `PATH` (the validator
+/// calls them by name), and an sm_89 card (the validator licenses sm_89 only,
+/// and a cubin for it does not load elsewhere). A machine with a GPU driver
+/// but no CUDA toolkit has a device and no validator; without these the
+/// compiler refuses verified execution, as it must, and there is nothing here
+/// to run.
+fn validated_device() -> Option<CudaContext> {
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver -- verified exact_pv was not executed.");
+        return None;
+    };
+    for tool in ["ptxas", "nvdisasm"] {
+        let found = std::process::Command::new(tool)
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success());
+        if !verification::prerequisite_available(
+            found,
+            &format!("`{tool}` on PATH (exact_pv translation validation runs it)"),
+        ) {
+            return None;
+        }
+    }
+    // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR / _MINOR
+    let cc = (
+        ctx.device_attribute(75).expect("compute capability major"),
+        ctx.device_attribute(76).expect("compute capability minor"),
+    );
+    if !verification::prerequisite_available(
+        cc == (8, 9),
+        &format!("an sm_89 device for the sm_89-validated exact_pv cubin (this one is sm_{}{})", cc.0, cc.1),
+    ) {
+        return None;
+    }
+    Some(ctx)
 }
 
 /// A cheap deterministic PRNG, so the fixture needs no dev-dependency.
@@ -172,8 +213,7 @@ fn run(ctx: &CudaContext, p: &[u32], v: &[i8]) -> Vec<i64> {
 
 #[test]
 fn the_device_kernel_equals_an_exact_integer_reference() {
-    let Some(ctx) = CudaContext::new() else {
-        eprintln!("SKIP: no CUDA driver -- verified exact_pv was not executed.");
+    let Some(ctx) = validated_device() else {
         return;
     };
     let (p, v) = inputs(0x5eed_1234);
@@ -242,8 +282,7 @@ fn the_result_does_not_depend_on_summation_order() {
     // The property the whole deterministic path rests on. Reversing `t`
     // reverses the order the device sums in for a fixed lane; integer addition
     // is associative, so the answer must be bit-identical.
-    let Some(ctx) = CudaContext::new() else {
-        eprintln!("SKIP: no CUDA driver.");
+    let Some(ctx) = validated_device() else {
         return;
     };
     let (p, v) = inputs(0xa5a5_0f0f);

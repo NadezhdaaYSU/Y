@@ -54,6 +54,9 @@ use std::path::PathBuf;
 use std::process::Command;
 use y::cpu_gemm::{split_axis, SplitAxis, KSPLIT_MIN_BAND, MSPLIT_MIN_ROWS, VNNI_MR};
 
+#[path = "common/verification.rs"]
+mod verification;
+
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -242,6 +245,9 @@ fn run(exe: &PathBuf, dir: &PathBuf, threads: usize, m: usize, n: usize, k: usiz
 
 #[test]
 fn the_two_axes_give_the_same_bits() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     if !have("clang") {
         eprintln!("skipping: clang not found");
         return;
@@ -278,6 +284,9 @@ fn the_two_axes_give_the_same_bits() {
 
 #[test]
 fn the_emitted_dispatch_is_the_axis_the_model_predicts() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     if !have("clang") {
         eprintln!("skipping: clang not found");
         return;
@@ -406,6 +415,9 @@ fn region<'a>(ir: &'a str, from: &str, to: &str) -> &'a str {
 
 #[test]
 fn the_row_bands_write_the_callers_c_at_the_callers_stride() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let ir = emitted_ir("stride");
     let m = region(&ir, "mspawn.body:", "mjoin.head:");
 
@@ -444,6 +456,9 @@ fn the_row_bands_write_the_callers_c_at_the_callers_stride() {
 
 #[test]
 fn the_m_path_allocates_no_private_c_and_reduces_nothing() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let ir = emitted_ir("noprivc");
     let m = region(&ir, "mspawn.pre:", "mcleanup:");
 

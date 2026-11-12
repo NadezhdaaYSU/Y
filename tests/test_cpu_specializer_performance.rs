@@ -7,6 +7,9 @@ use y::cpu_specializer::{CpuHardwareProfile, CpuShapeDispatcher, CpuMatrixRegime
 use y::cpu_emitter::CpuEmitter;
 use std::time::Instant;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[test]
 fn test_cpu_specializer_all_five_regimes_dispatch() {
     // AVX-512 named explicitly. The `IrregularMasked` regime is gated on
@@ -44,6 +47,9 @@ fn test_cpu_specializer_all_five_regimes_dispatch() {
 
 #[test]
 fn test_cpu_specializer_codegen_emission() {
+    if !verification::avx512_host() {
+        return;
+    }
     let mut emitter = CpuEmitter::new();
     
     let start = Instant::now();

@@ -26,6 +26,9 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 const PLAIN: &str = r#"
 kernel mm(A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>, M: I32, N: I32, K: I32) {
     @invariant(i >= 0)
@@ -130,6 +133,9 @@ fn a_zero_drift_matmul_is_not_lowered_to_the_f32_kernel() {
 /// and would send someone hunting a bug that does not exist.
 #[test]
 fn an_unlicensed_matmul_says_why_the_fast_path_was_skipped() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let drifted = PLAIN.replace(
         "            let mut sum: F32 = 0.0;",
         "            @bounds(min=-1000, max=1000)\n            @ZeroDrift\n            let mut sum: F32 = 0.0;",
@@ -156,6 +162,9 @@ fn an_unlicensed_matmul_says_why_the_fast_path_was_skipped() {
 /// input, and the reason text would still match.
 #[test]
 fn a_licensed_matmul_reports_the_licence_and_its_terms() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let licensed = PLAIN
         .replace(
             "            let mut sum: F32 = 0.0;",

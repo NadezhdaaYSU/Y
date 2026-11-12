@@ -21,6 +21,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -81,6 +84,9 @@ fn wide(op: &str, first: &str, second: &str) -> String {
 
 #[test]
 fn the_declared_range_is_tested_after_every_store() {
+    if !verification::clang_host() {
+        return;
+    }
     let (code, out) = run("in_range", &bounded(5, "100.0"));
     assert_eq!((code, out.trim()), (Some(0), "500"), "the control");
     let (code, out) = run("past_range", &bounded(20, "100.0"));
@@ -90,6 +96,9 @@ fn the_declared_range_is_tested_after_every_store() {
 
 #[test]
 fn a_term_the_format_cannot_hold_stops_the_program() {
+    if !verification::clang_host() {
+        return;
+    }
     // 1e12 in the accumulator's units is beyond any i64; the conversion was
     // poison and the program printed 0.
     let (code, out) = run("huge_term", &bounded(1, "1000000000000.0"));
@@ -105,6 +114,9 @@ fn a_term_the_format_cannot_hold_stops_the_program() {
 
 #[test]
 fn an_accumulator_that_overflows_stops_the_program() {
+    if !verification::clang_host() {
+        return;
+    }
     let (code, out) = run("wide_in", &wide("+=", "4000000000000000000", "4000000000000000000"));
     assert_eq!((code, out.trim()), (Some(0), "8000000000000000000"), "the control");
     for (tag, op, a, b) in [

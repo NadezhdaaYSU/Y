@@ -31,6 +31,9 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -204,6 +207,9 @@ fn coqc(dir: &PathBuf, name: &str) -> (bool, String) {
 /// for a real compilation is a well-formed instance of it.
 #[test]
 fn a_substituted_exact_gemm_emits_a_certificate_that_coqc_accepts() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let dir = scratch("accepts");
     let out = compile(&dir, &exact_source(1024), &[]);
     assert!(
@@ -311,6 +317,9 @@ fn a_nest_left_on_the_scalar_path_emits_no_certificate() {
 /// default and NOT the one the other tests use.
 #[test]
 fn the_certificate_states_the_source_s_own_bound() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let dir = scratch("bound");
     compile(&dir, &exact_source(4000), &[]);
     let text = std::fs::read_to_string(dir.join("gemm_certificate.v")).expect("certificate");
@@ -332,6 +341,9 @@ fn the_certificate_states_the_source_s_own_bound() {
 /// uncovered by the certificate while the kernel happily consumes them.
 #[test]
 fn a_fractional_bound_is_certified_at_the_integer_above_it() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let dir = scratch("fractional");
     let src = exact_source(1024).replace("=-1024, max=1024", "=-1024.5, max=1024.5");
     let out = compile(&dir, &src, &[]);
@@ -404,6 +416,9 @@ fn the_certificate_refuses_exactly_the_bounds_the_compiler_refuses() {
 /// The escape hatch works, and says so rather than going quiet.
 #[test]
 fn the_certificate_can_be_suppressed() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let dir = scratch("suppressed");
     let out = compile(&dir, &exact_source(1024), &[("Y_NO_CERTIFICATE", "1")]);
     assert!(
@@ -445,6 +460,9 @@ fn the_naive_reading_of_the_same_source_emits_no_certificate() {
 /// instructions would be wrong.
 #[test]
 fn a_source_name_that_is_not_a_coq_identifier_is_sanitised() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let dir = scratch("stem");
     let out = compile_named(&dir, "4-bit gemm.ysu", &exact_source(1024), &[]);
     assert!(out.contains("EXACT vpdpwssd kernel substituted"), "{out}");

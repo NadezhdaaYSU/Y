@@ -57,6 +57,9 @@ use y::exact_attention_certificate::{
 };
 use y::exact_gemm_certificate::{Check, TrustItem, CAPSTONE, TRUST_BOUNDARY};
 
+#[path = "common/verification.rs"]
+mod verification;
+
 /// The marker locating each capstone's exclusion list.
 ///
 /// They differ because the two files were written years apart in this
@@ -147,6 +150,9 @@ fn emitted_certificate(tag: &str) -> String {
 /// including - especially - the ones nothing checks.
 #[test]
 fn every_trust_item_reaches_the_emitted_certificate() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let cert = emitted_certificate("reaches");
 
     // Rendering wraps, so compare on collapsed whitespace rather than on the

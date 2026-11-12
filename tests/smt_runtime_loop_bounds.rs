@@ -223,6 +223,9 @@ fn the_current_exact_pv_source_emits_checked_ptx() {
 
 #[test]
 fn canonical_exact_cpu_gemm_with_runtime_m_n_k_still_substitutes() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     if !solver_available() {
         return;
     }

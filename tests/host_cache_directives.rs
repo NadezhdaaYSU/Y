@@ -46,6 +46,9 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use y::lexer::Lexer;
 use y::parser::Parser;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -217,6 +220,9 @@ fn names_the_refusal(text: &str) -> bool {
 /// name.** Exiting 0 with the directive dropped is the one thing none may do.
 #[test]
 fn every_backend_honours_or_refuses_a_cache_policy() {
+    if !verification::clang_host() {
+        return;
+    }
     let mut flags = vec![String::new()]; // no flag: the default LLVM backend
     flags.extend(backend_flags());
 
@@ -454,6 +460,9 @@ fn gpu_uncached_is_volatile_and_never_non_temporal() {
 /// without it compiles, so the refusal is about the directive.
 #[test]
 fn prefetch_stride_is_refused_on_every_backend() {
+    if !verification::clang_host() {
+        return;
+    }
     let host = "fn main() -> I32 {\n    let mut acc: I32 = 0;\n    @prefetch_stride(64)\n    @invariant(i >= 0)\n    for i in 0..4 {\n        acc = acc + i;\n    }\n    return acc;\n}\n";
     // The form the language reference used: above a `let`, where the parser
     // used to drop it outright.

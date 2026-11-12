@@ -17,6 +17,9 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -71,6 +74,9 @@ fn run_llvm(tag: &str, src: &str) -> (Option<i32>, String) {
 
 #[test]
 fn the_llvm_backend_stops_a_value_outside_its_bounds() {
+    if !verification::clang_host() {
+        return;
+    }
     let (code, out) = run_llvm("llvm_out", &program(ARRAY, "1000000"));
     assert_eq!(code, Some(1), "{out}");
     assert!(out.contains("Y: line 11: 1000000 lies outside @bounds(0, 3); stopping"), "{out}");
@@ -93,6 +99,9 @@ fn the_jit_stops_it_too() {
 /// compares unordered (a NaN is outside), and a Q format at its scale.
 #[test]
 fn every_scalar_kind_compares_as_its_own_type() {
+    if !verification::clang_host() {
+        return;
+    }
     let cases = [
         ("u32_out", "@unsafe\nfn get(n: U32) -> U32 {\n    return n;\n}\n\nfn main() -> I32 {\n    @bounds(0, 100)\n    let u: U32 = get(3000000000);\n    return 7;\n}\n", Some(1)),
         ("u32_in", "@unsafe\nfn get(n: U32) -> U32 {\n    return n;\n}\n\nfn main() -> I32 {\n    @bounds(0, 100)\n    let u: U32 = get(50);\n    return 7;\n}\n", Some(7)),

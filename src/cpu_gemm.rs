@@ -6246,6 +6246,14 @@ kernel mm(A: GlobalMemory<F32>, B: GlobalMemory<F32>, C: GlobalMemory<F32>, M: I
     /// `Option`.
     #[test]
     fn an_unlicensed_plan_is_not_an_error() {
+        // On a host without AVX-512 VNNI the plan is Unavailable before the
+        // licence is consulted; that is the host, not this test's subject.
+        if !crate::sentinel::host_has_avx512_vnni() {
+            assert!(std::env::var_os("Y_VERIFICATION_STRICT").is_none_or(|v| v != "1"),
+                    "Y_VERIFICATION_STRICT=1 requires a host with AVX-512 VNNI");
+            eprintln!("SKIP: a host with AVX-512 VNNI is unavailable");
+            return;
+        }
         let unbounded = DriftAccumulator {
             ty: "F32".into(),
             bounds: Some((-1000.0, 1000.0)),

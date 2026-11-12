@@ -50,6 +50,9 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 /// Both GEMM modules, both reachable. See the note above on why one kernel is
 /// not enough: the f32 entry is `internal` and DCE deletes it.
 const SOURCE: &str = r#"
@@ -174,6 +177,9 @@ fn groups_named_by_each_function(ir: &str) -> BTreeMap<String, Vec<u32>> {
 
 #[test]
 fn no_attribute_group_is_defined_twice() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ir) = emit("dup");
     let defs = group_definitions(&ir);
     assert!(
@@ -196,6 +202,9 @@ fn no_attribute_group_is_defined_twice() {
 
 #[test]
 fn every_group_a_function_names_is_defined() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ir) = emit("defined");
     let defined: Vec<u32> = group_definitions(&ir);
     let named = groups_named_by_each_function(&ir);
@@ -223,6 +232,9 @@ fn every_group_a_function_names_is_defined() {
 
 #[test]
 fn no_function_names_the_same_group_twice() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ir) = emit("twice");
     let named = groups_named_by_each_function(&ir);
     for (f, gs) in &named {
@@ -243,6 +255,9 @@ fn no_function_names_the_same_group_twice() {
 
 #[test]
 fn the_host_target_cpu_is_what_llvm_actually_reads() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     if !have("llvm-as") || !have("llvm-dis") {
         eprintln!("SKIP: llvm-as/llvm-dis not found");
         return;
@@ -292,6 +307,9 @@ fn the_host_target_cpu_is_what_llvm_actually_reads() {
 /// the target cannot execute.
 #[test]
 fn on_a_host_without_avx512_only_the_vnni_kernels_use_it() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     if !have("clang") {
         eprintln!("SKIP: clang not found");
         return;
@@ -384,6 +402,9 @@ fn on_a_host_without_avx512_only_the_vnni_kernels_use_it() {
 /// is a distinct number rather than a deletion.
 #[test]
 fn the_vnni_group_still_carries_what_vpdpwssd_needs() {
+    if !verification::exact_cpu_gemm_host() {
+        return;
+    }
     let (dir, ir) = emit("vnnigroup");
     let group = y::cpu_gemm::VNNI_ATTR_GROUP;
     let want = format!("attributes {group} = ");

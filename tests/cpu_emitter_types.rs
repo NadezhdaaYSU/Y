@@ -12,6 +12,9 @@
 use std::path::Path;
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -51,6 +54,9 @@ fn compile(dir: &Path, tag: &str, src: &str, args: &[&str]) -> String {
 
 #[test]
 fn every_case_runs_on_the_llvm_backend_as_stated() {
+    if !verification::clang_host() {
+        return;
+    }
     for (tag, src, want) in CASES {
         let dir = pinned::pinned_scratch(&format!("cputy_llvm_{tag}"), pinned::SM_PINNED);
         let bin = dir.join(format!("{tag}.bin"));
@@ -92,6 +98,9 @@ fn emit_cpu_computes_what_the_llvm_backend_computes() {
 /// `main` that does, and built WITHOUT `-O`: overflow checks on.
 #[test]
 fn field_arithmetic_wraps_in_a_debug_build_as_the_llvm_backend_does() {
+    if !verification::clang_host() {
+        return;
+    }
     let fns = "struct Pair {\n    a: U8,\n    b: I32,\n}\n\nfn sum(p: &Pair) -> I32 {\n    return p.a + p.b;\n}\n\n\
                fn bump(p: &mut Pair) {\n    p.a = p.a + 100;\n}\n";
     let llvm = format!("{fns}\nfn main() -> I32 {{\n    let p = Pair {{ a: 200, b: 5 }};\n    bump(&mut p);\n    return sum(&p);\n}}\n");

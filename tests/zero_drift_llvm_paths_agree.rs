@@ -14,6 +14,9 @@
 use std::path::Path;
 use std::process::Command;
 
+#[path = "common/verification.rs"]
+mod verification;
+
 #[path = "common/pinned.rs"]
 mod pinned;
 
@@ -30,6 +33,9 @@ fn reports(dir: &Path, args: &[&str]) -> Vec<String> {
 
 #[test]
 fn both_llvm_paths_choose_the_same_representation() {
+    if !verification::clang_host() {
+        return;
+    }
     let dir = pinned::pinned_scratch("drift_paths", pinned::SM_PINNED);
     // A profile whose costs, if a path read them, would pick `I64` over the
     // narrower `Q16.16` that also holds this accumulator.

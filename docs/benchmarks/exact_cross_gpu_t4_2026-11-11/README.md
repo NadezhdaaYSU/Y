@@ -157,6 +157,18 @@ the 40 failures none is a wrong value:
 Both are the suites' assumptions about the machine, and on a laptop without
 AVX-512 (most Intel parts) they would show the same failures.
 
+Those tests now report a skip on such a machine, naming what it lacks, and
+fail under `Y_VERIFICATION_STRICT=1` (`tests/common/verification.rs`:
+`exact_cpu_gemm_host`, `avx512_host`, `clang_host`). The development machine
+played that host for the whole suite (`Y_NO_AVX512_VNNI=1`, a `PATH` without
+clang, and without the CUDA toolkit): 1420 passed and 3 failed. One was
+`the_predicate_agrees_with_the_machine`, which reads the real CPU and refuses
+the override by design. The other two were the `exact_pv` device tests
+(`tests/ptx_exact_pv.rs`): with a GPU but no `ptxas` the translation validator
+cannot run. Those two now skip without `ptxas` and `nvdisasm`, or on a card
+other than sm_89, which is the only one the validator licenses; a T4 running
+`cargo test` would have failed them the same way.
+
 ## Not covered
 
 One NVIDIA vendor line (Turing, Ada); x86 CPUs from AMD (Zen 5) and Intel (two
