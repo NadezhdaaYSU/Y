@@ -1,0 +1,33 @@
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.exec_prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Recording on cpu:x86_64 (AMD Ryzen 9 9950X 16-Core Processor, 32 CPUs)
+  5 cases x 160 tokens, arms: stock, exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- stock ---
+Loading weights:   0%|          | 0/434 [00:00<?, ?it/s]Loading weights:  22%|██▏       | 97/434 [00:00<00:00, 947.83it/s]Loading weights:  44%|████▍     | 192/434 [00:00<00:00, 831.21it/s]Loading weights:  64%|██████▎   | 276/434 [00:00<00:00, 827.50it/s]Loading weights:  83%|████████▎ | 360/434 [00:00<00:00, 805.48it/s]Loading weights: 100%|██████████| 434/434 [00:00<00:00, 833.10it/s]
+  gate: ok -- canary ok, 91 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights de4101d908728218, tokens c1389ce3339bc3d1
+  self-check (same card, twice): identical
+
+--- exact ---
+Loading weights:   0%|          | 0/434 [00:00<?, ?it/s]Loading weights: 100%|██████████| 434/434 [00:00<00:00, 20943.77it/s]
+  gate: ok -- canary ok, 92 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 0f60c809aa1e752a, tokens f349e1e481daccd2
+  self-check (same card, twice): identical
+
+  written to /home/yumin/kaggle_y/results_local/cpu_zen5_3b_lowmem.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /home/yumin/kaggle_y/results_local/cpu_zen5_3b_lowmem.json other.json

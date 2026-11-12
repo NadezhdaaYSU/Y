@@ -25,6 +25,7 @@ JOBS = {
     "y-night-cpu-0p5b": (False, [("cpu_0p5b_full", ["--arms", "stock,exact", "--model", M05, "--full"], {})]),
     "y-night-cpu-1p5b": (False, [("cpu_1p5b", ["--arms", "stock,exact", "--model", M15], {})]),
     "y-night-cpu-3b": (False, [("cpu_3b", ["--arms", "stock,exact", "--model", M3], {})]),
+    "y-t4-3b": (True, [("t4_3b", ["--arms", "stock,exact", "--model", M3, "--low-memory"], {})]),
     "y-night-cargo": (False, None),
 }
 

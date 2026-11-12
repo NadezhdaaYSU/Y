@@ -424,11 +424,26 @@ def _weight_fingerprint(model):
 
     Buffers are listed as the unmerged model's (`unmerged_buffer_shapes`), so
     a model with q/k/v merged matches records made before merging existed.
+
+    A tied `lm_head` counts once, as the embedding it is. `named_parameters`
+    lists a shared parameter once, but the low-memory build on a GPU keeps
+    the embedding on the host and gives the head its own copy on the device,
+    which it lists twice: Qwen2.5-3B's stock weights on a T4 fingerprinted
+    `4548a1af4d9f1c10` against the CPU's `de4101d908728218`, the same weights
+    (`python/tests/test_weight_fingerprint.py`). The copy is left out only
+    while it equals the embedding, so a tie that broke still shows.
     """
     import torch
     from y_lang.exact.model import unmerged_buffer_shapes
+    params = dict(model.named_parameters())
+    config = getattr(model, "config", None)
+    head, embed = params.get("lm_head.weight"), params.get("model.embed_tokens.weight")
+    if (getattr(config, "tie_word_embeddings", False) and head is not None
+            and embed is not None and head.shape == embed.shape
+            and torch.equal(head.detach().cpu(), embed.detach().cpu())):
+        del params["lm_head.weight"]
     h = hashlib.sha256()
-    for name, p in sorted(model.named_parameters(), key=lambda kv: kv[0]):
+    for name, p in sorted(params.items(), key=lambda kv: kv[0]):
         h.update(name.encode())
         h.update(str(tuple(p.shape)).encode())
         flat = p.detach().flatten()

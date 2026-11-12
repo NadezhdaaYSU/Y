@@ -130,11 +130,40 @@ sm_89: tensor-core and FP8 kernels, which say so); `python/tests` only the
 |---|---|
 | 0.5B, all 17 cases of `exact_ragged_batch`, T4 (`t4_0p5b_full.*`) vs a Kaggle CPU, `Intel(R) Xeon(R) CPU @ 2.20GHz` (`kaggle_cpu_0p5b_full.*`, 414 minutes) | exact **0/17 changed**, digest `23e14cd41b101a6e`; stock 17/17 changed |
 | 7B, compiled, every switch (`t4_7b_all_compiled.*`) vs the Zen 5's eager 7B record | exact **0/5 changed**, `7700e3e28f1d21d1` (45 minutes, mostly compiling) |
-| Qwen2.5-1.5B, T4, both arms (`t4_1p5b.*`) | recorded (exact `22178ff4d2aede57`); its Kaggle CPU twin ran out its 12 hours on 4 cores: no comparison yet |
-| Qwen2.5-3B, T4 (`t4_3b.log`) | stock recorded; exact ran out of the T4's memory, being built without `--low-memory` (a harness error); its CPU twin, out of time |
+| Qwen2.5-1.5B, T4, both arms (`t4_1p5b.*`) | recorded (exact `22178ff4d2aede57`); its Kaggle CPU twin ran out its 12 hours on 4 cores; compared below |
+| Qwen2.5-3B, T4 (`t4_3b_without_low_memory.log`) | stock recorded; exact ran out of the T4's memory, being built without `--low-memory` (a harness error); its CPU twin, out of time; rerun below |
 | the Rust suites, `cargo test`, Kaggle CPU, no GPU | see below |
 
 The record tool's `cpu_model` (above) is in the Xeon record.
+
+## 1.5B and 3B (2026-11-12)
+
+The CPU twins ran on the development machine's Zen 5 instead (`cpu_zen5_1p5b.*`,
+4 minutes; `cpu_zen5_3b.*`, 9 minutes). The 3B T4 record was made again with
+`--low-memory` (`t4_3b.*`, 9.3 minutes; job `y-t4-3b` in
+`make_overnight_jobs.py`).
+
+| comparison | exact | stock (control) |
+|---|---|---|
+| Qwen2.5-1.5B, Zen 5 vs T4 (`compare_1p5b.txt`) | **0/5 changed** | 5/5 changed |
+| Qwen2.5-3B, Zen 5 vs T4 (`compare_3b.txt`) | **0/5 changed** | 5/5 changed |
+| Qwen2.5-3B, Zen 5 built with `--low-memory` vs T4 (`compare_3b_lowmem.txt`) | **0/5 changed** | 5/5 changed |
+
+The two Zen 5 3B records, one per builder, are the same in every field the
+comparison reads (tokens `f349e1e481daccd2` exact, `c1389ce3339bc3d1` stock).
+
+**The first 3B comparison refused its control, wrongly.** The T4's stock
+weights fingerprinted `4548a1af4d9f1c10` against the CPU's `de4101d908728218`,
+so `--compare` called the stock arm inconclusive. They were the same weights.
+Qwen2.5-3B ties `lm_head` to the embedding, and the low-memory build on a GPU
+keeps the embedding on the host and gives the head its own copy on the device,
+which `named_parameters` then listed a second time. Recomputed on the CPU with
+the head listed separately, the fingerprint is `4548a1af4d9f1c10` exactly. The
+fingerprint now counts a tied head once while it equals the embedding
+(`tools/exact_cross_device.py`, `python/tests/test_weight_fingerprint.py`,
+which fails on two mutants: the head always counted, and the head always
+dropped). Existing records keep their fingerprints: a tie that stays shared was
+already listed once. The T4 record was made again with the fixed tool.
 
 ## The Rust suites on Kaggle's CPUs
 
@@ -172,5 +201,6 @@ other than sm_89, which is the only one the validator licenses; a T4 running
 ## Not covered
 
 One NVIDIA vendor line (Turing, Ada); x86 CPUs from AMD (Zen 5) and Intel (two
-Xeon models); one model family, 0.5B and 7B compared (1.5B and 3B not yet). Y's own GEMM and the Triton int8 GEMM need sm_80, so on the T4 the
-linear layers ran on cuBLASLt (`torch._int_mm`).
+Xeon models); one model family, Qwen2.5 at 0.5B, 1.5B, 3B and 7B. Y's own
+GEMM and the Triton int8 GEMM need sm_80, so on the T4 the linear layers ran on
+cuBLASLt (`torch._int_mm`).

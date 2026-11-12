@@ -1,0 +1,33 @@
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.exec_prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Recording on cpu:x86_64 (AMD Ryzen 9 9950X 16-Core Processor, 32 CPUs)
+  5 cases x 160 tokens, arms: stock, exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- stock ---
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]Loading weights:  27%|██▋       | 92/338 [00:00<00:00, 862.65it/s]Loading weights:  53%|█████▎    | 179/338 [00:00<00:00, 766.61it/s]Loading weights:  76%|███████▌  | 257/338 [00:00<00:00, 771.94it/s]Loading weights: 100%|██████████| 338/338 [00:00<00:00, 858.44it/s]
+  gate: ok -- canary ok, 86 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 991fd2499a0029b9, tokens 1aee8ae56c7d579f
+  self-check (same card, twice): identical
+
+--- exact ---
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]Loading weights:   0%|          | 1/338 [00:00<00:40,  8.29it/s]Loading weights:  39%|███▉      | 133/338 [00:00<00:00, 718.25it/s]Loading weights:  75%|███████▌  | 255/338 [00:00<00:00, 918.84it/s]Loading weights: 100%|██████████| 338/338 [00:00<00:00, 755.26it/s]
+  gate: ok -- canary ok, 107 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 726c7a06603488d6, tokens 22178ff4d2aede57
+  self-check (same card, twice): identical
+
+  written to /home/yumin/kaggle_y/results_local/cpu_zen5_15b.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /home/yumin/kaggle_y/results_local/cpu_zen5_15b.json other.json
