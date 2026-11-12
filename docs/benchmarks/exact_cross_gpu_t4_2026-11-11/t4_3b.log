@@ -1,0 +1,40 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  5 cases x 160 tokens, arms: stock, exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- stock ---
+Fetching 2 files:   0%|          | 0/2 [00:00<?, ?it/s]Fetching 2 files:  50%|█████     | 1/2 [00:33<00:33, 33.60s/it]Fetching 2 files: 100%|██████████| 2/2 [00:33<00:00, 16.80s/it]
+Loading weights:   0%|          | 0/434 [00:00<?, ?it/s]Loading weights:  64%|██████▎   | 276/434 [00:00<00:00, 2758.21it/s]Loading weights: 100%|██████████| 434/434 [00:00<00:00, 2751.29it/s]
+  gate: ok -- canary ok, 90 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights de4101d908728218, tokens aacee5db30c13841
+  self-check (same card, twice): identical
+
+--- exact ---
+Loading weights:   0%|          | 0/434 [00:00<?, ?it/s]Loading weights:   0%|          | 1/434 [00:01<09:04,  1.26s/it]Loading weights:  26%|██▌       | 111/434 [00:01<00:02, 111.80it/s]Loading weights:  39%|███▉      | 170/434 [00:01<00:02, 121.65it/s]Loading weights:  48%|████▊     | 209/434 [00:02<00:02, 107.62it/s]Loading weights:  54%|█████▍    | 236/434 [00:02<00:01, 108.60it/s]Loading weights:  59%|█████▉    | 257/434 [00:02<00:01, 111.65it/s]Loading weights:  64%|██████▎   | 276/434 [00:02<00:01, 118.99it/s]Loading weights:  68%|██████▊   | 294/434 [00:02<00:01, 113.04it/s]Loading weights:  71%|███████   | 309/434 [00:03<00:01, 111.30it/s]Loading weights:  74%|███████▍  | 323/434 [00:03<00:00, 114.69it/s]Loading weights:  78%|███████▊  | 337/434 [00:03<00:00, 119.41it/s]Loading weights:  81%|████████  | 351/434 [00:03<00:00, 109.88it/s]Loading weights:  84%|████████▍ | 364/434 [00:03<00:00, 107.02it/s]Loading weights:  87%|████████▋ | 377/434 [00:03<00:00, 90.27it/s] Loading weights:  89%|████████▉ | 387/434 [00:04<00:01, 42.82it/s]Loading weights:  91%|█████████ | 395/434 [00:04<00:01, 31.67it/s]Loading weights:  95%|█████████▍| 411/434 [00:05<00:00, 39.34it/s]Loading weights: 100%|██████████| 434/434 [00:05<00:00, 82.06it/s]
+[W1111 22:10:12.971035577 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 90177536 bytes (free: 63766528, total: 15636037632).
+[W1111 22:10:12.971195179 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 90177536 bytes (free: 63766528, total: 15636037632).
+Traceback (most recent call last):
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 705, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 699, in main
+    return record(a)
+  File "/kaggle/working/Y/tools/exact_cross_device.py", line 563, in record
+    model = R.build(arm, args.device)
+  File "/kaggle/working/Y/tools/exact_ragged_batch.py", line 158, in build
+    exact_model.convert(m)
+    ~~~~~~~~~~~~~~~~~~~^^^
+  File "/kaggle/working/Y/python/y_lang/exact/model.py", line 963, in convert
+    new = ExactLinear(child).to(child.weight.device)
+          ~~~~~~~~~~~^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/exact/model.py", line 326, in __init__
+    w8 = torch.round(w / sw).clamp(-127, 127).to(torch.int8)
+         ~~~~~~~~~~~^^^^^^^^
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 86.00 MiB. GPU 0 has a total capacity of 14.56 GiB of which 60.81 MiB is free. Including non-PyTorch memory, this process has 14.50 GiB memory in use. Of the allocated memory 14.27 GiB is allocated by PyTorch, and 109.89 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True to avoid fragmentation.  See documentation for Memory Management  (https://docs.pytorch.org/docs/stable/notes/cuda.html#optimizing-memory-usage-with-pytorch-cuda-alloc-conf)

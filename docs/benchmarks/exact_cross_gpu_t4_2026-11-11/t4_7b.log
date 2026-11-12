@@ -1,0 +1,32 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  5 cases x 160 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- exact ---
+
+Fetching 4 files:   0%|          | 0/4 [00:00<?, ?it/s]
+Fetching 4 files:  25%|██▌       | 1/4 [01:02<03:06, 62.30s/it]
+Fetching 4 files: 100%|██████████| 4/4 [01:13<00:00, 14.75s/it]
+Fetching 4 files: 100%|██████████| 4/4 [01:13<00:00, 18.31s/it]
+
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]
+Loading weights:  42%|████▏     | 144/339 [00:00<00:00, 1362.85it/s]
+Loading weights:  83%|████████▎ | 281/339 [00:00<00:00, 1048.71it/s]
+Loading weights: 100%|██████████| 339/339 [00:00<00:00, 1212.36it/s]
+[W1111 19:02:37.613872892 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 224395264 bytes (free: 86835200, total: 15636037632).
+[W1111 19:02:37.801737920 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 448790528 bytes (free: 17629184, total: 15636037632).
+[W1111 19:02:38.136115791 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 448790528 bytes (free: 300744704, total: 15636037632).
+  gate: ok -- canary ok, 94 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights fa21999abf0abea9, tokens 7700e3e28f1d21d1
+  self-check (same card, twice): identical
+
+  written to /kaggle/working/t4_7b.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /kaggle/working/t4_7b.json other.json

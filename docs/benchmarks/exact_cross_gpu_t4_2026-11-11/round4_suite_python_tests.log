@@ -1,0 +1,254 @@
+test_every_annotation_resolves (test_annotations_resolve.TestAnnotationsResolve.test_every_annotation_resolves) ... ok
+test_a_clear_win_above_the_floor_is_accepted (test_autotune_decision.TestAutotuneDecision.test_a_clear_win_above_the_floor_is_accepted)
+The control. Without this, "always return the model" passes. ... ok
+test_a_win_narrower_than_the_run_s_own_noise_is_rejected (test_autotune_decision.TestAutotuneDecision.test_a_win_narrower_than_the_run_s_own_noise_is_rejected) ... ok
+test_nothing_below_the_launch_cost_floor_can_win (test_autotune_decision.TestAutotuneDecision.test_nothing_below_the_launch_cost_floor_can_win)
+The rule that a consistent microsecond difference is not a result. ... ok
+test_the_floor_is_a_boundary_not_a_slope (test_autotune_decision.TestAutotuneDecision.test_the_floor_is_a_boundary_not_a_slope) ... ok
+test_the_floor_is_a_plausible_launch_cost (test_autotune_decision.TestAutotuneDecision.test_the_floor_is_a_plausible_launch_cost)
+A floor of 0 disables the rule; a huge one disables measurement. ... ok
+test_bad_argument_types_counts_and_aggregates_are_refused (test_cpu_jit.TestCPUJit.test_bad_argument_types_counts_and_aggregates_are_refused) ... ok
+test_compilation_timings_are_owned_complete_and_exclude_calls (test_cpu_jit.TestCPUJit.test_compilation_timings_are_owned_complete_and_exclude_calls) ... ok
+test_compile_errors_and_input_validation (test_cpu_jit.TestCPUJit.test_compile_errors_and_input_validation) ... ok
+test_context_close_and_callable_lifetime (test_cpu_jit.TestCPUJit.test_context_close_and_callable_lifetime) ... ok
+test_cpu_import_does_not_require_tensor_dependencies (test_cpu_jit.TestCPUJit.test_cpu_import_does_not_require_tensor_dependencies) ... ok
+test_ctypes_pointer_arguments_mutate_host_storage (test_cpu_jit.TestCPUJit.test_ctypes_pointer_arguments_mutate_host_storage) ... ok
+test_declared_c_api_arities_match_rust_exports (test_cpu_jit.TestCPUJit.test_declared_c_api_arities_match_rust_exports) ... ok
+test_default_policy_can_use_older_library_without_options_exports (test_cpu_jit.TestCPUJit.test_default_policy_can_use_older_library_without_options_exports) ... ok
+test_float_precision_negative_zero_and_nan (test_cpu_jit.TestCPUJit.test_float_precision_negative_zero_and_nan) ... ok
+test_instrumented_counts_and_profiled_recompilation_are_explicit (test_cpu_jit.TestCPUJit.test_instrumented_counts_and_profiled_recompilation_are_explicit) ... ok
+test_integer_widths_signedness_and_high_bits (test_cpu_jit.TestCPUJit.test_integer_widths_signedness_and_high_bits) ... ok
+test_materialization_timings_are_owned_partitioned_and_session_local (test_cpu_jit.TestCPUJit.test_materialization_timings_are_owned_partitioned_and_session_local) ... ok
+test_metadata_and_mixed_scalar_abi (test_cpu_jit.TestCPUJit.test_metadata_and_mixed_scalar_abi) ... ok
+test_optimization_timings_are_owned_partitioned_and_session_local (test_cpu_jit.TestCPUJit.test_optimization_timings_are_owned_partitioned_and_session_local) ... ok
+test_options_validation_happens_before_loading_or_recompiling (test_cpu_jit.TestCPUJit.test_options_validation_happens_before_loading_or_recompiling) ... ok
+test_profile_boundary_rejects_changed_source_and_uninstrumented_sessions (test_cpu_jit.TestCPUJit.test_profile_boundary_rejects_changed_source_and_uninstrumented_sessions) ... ok
+test_profiled_and_original_callable_ownership_are_independent (test_cpu_jit.TestCPUJit.test_profiled_and_original_callable_ownership_are_independent) ... ok
+test_profiled_bulk_strings_and_dynamic_vectors_preserve_values_and_lifetimes (test_cpu_jit.TestCPUJit.test_profiled_bulk_strings_and_dynamic_vectors_preserve_values_and_lifetimes) ... ok
+test_profiled_local_runtime_queries_preserve_mutation_and_lifetimes (test_cpu_jit.TestCPUJit.test_profiled_local_runtime_queries_preserve_mutation_and_lifetimes) ... ok
+test_session_calls_and_close_reject_other_threads (test_cpu_jit.TestCPUJit.test_session_calls_and_close_reject_other_threads) ... ok
+test_training_and_codegen_options_preserve_counts_and_recompilation_policy (test_cpu_jit.TestCPUJit.test_training_and_codegen_options_preserve_counts_and_recompilation_policy) ... ok
+test_versioned_c_options_match_layout_and_reject_bad_fields (test_cpu_jit.TestCPUJit.test_versioned_c_options_match_layout_and_reject_bad_fields) ... ok
+test_cpus_by_architecture_alone_fail_it (test_cross_device_gate.TestCrossDeviceGate.test_cpus_by_architecture_alone_fail_it) ... ok
+test_every_scenario_behaves (test_cross_device_gate.TestCrossDeviceGate.test_every_scenario_behaves) ... ok
+test_a_tiny_qwen2_is_converted_close_and_batch_invariant (test_exact_package.TestLoad.test_a_tiny_qwen2_is_converted_close_and_batch_invariant) ... Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]
+Writing model shards: 100%|██████████| 1/1 [00:00<00:00, 59.54it/s]
+
+Loading weights:   0%|          | 0/26 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 26/26 [00:00<00:00, 2737.11it/s]
+    (15 linear layers + 5 norms converted to exact form)
+
+Loading weights:   0%|          | 0/26 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 26/26 [00:00<00:00, 3187.16it/s]
+
+Loading weights:   0%|          | 0/26 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 26/26 [00:00<00:00, 2454.58it/s]
+ok
+test_append_layer_matches_dynamic_layer (test_exact_package.TestLoad.test_append_layer_matches_dynamic_layer)
+kv.AppendLayer against transformers' DynamicLayer, through every ... [transformers] Calling `crop` with a positive value is deprecated and will be removed in version 5.18. Please use a negative integer to remove that number of tokens from the cache instead.
+ok
+test_packed_rows_are_the_documented_bytes (test_exact_package.TestLoad.test_packed_rows_are_the_documented_bytes)
+Every int16 K value and every int8 V value, with edge and random ... /usr/local/lib/python3.13/dist-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+ok
+test_packed_rows_round_trip_bit_for_bit (test_exact_package.TestLoad.test_packed_rows_round_trip_bit_for_bit) ... ok
+test_refuses_another_architecture (test_exact_package.TestLoad.test_refuses_another_architecture) ... ok
+test_the_kernel_sources_are_the_tests_ones (test_exact_package.TestOldNames.test_the_kernel_sources_are_the_tests_ones) ... ok
+test_tools_names_are_the_package_modules (test_exact_package.TestOldNames.test_tools_names_are_the_package_modules) ... FAIL
+test_bool_parameters_are_declared_as_bool (test_ffi_signatures.TestFfiSignatures.test_bool_parameters_are_declared_as_bool)
+`is_fp8: bool` must not be declared as a c_uint32 or omitted. ... ok
+test_c_api_source_is_readable (test_ffi_signatures.TestFfiSignatures.test_c_api_source_is_readable)
+The control: if the source moved, every assertion below is vacuous. ... ok
+test_every_declared_argtypes_matches_rust (test_ffi_signatures.TestFfiSignatures.test_every_declared_argtypes_matches_rust) ... ok
+test_the_loaded_library_is_not_older_than_the_c_api (test_ffi_signatures.TestFfiSignatures.test_the_loaded_library_is_not_older_than_the_c_api)
+A stale `liby.so` answers instead of raising, so staleness is checked. ... ok
+test_automated_vectorizing_loop_pass_ptx (test_gpu_architect_features.TestGpuArchitectFeatures.test_automated_vectorizing_loop_pass_ptx) ... y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_block_tile_boundary_masking_ptx (test_gpu_architect_features.TestGpuArchitectFeatures.test_block_tile_boundary_masking_ptx) ... ok
+test_disk_binary_cache (test_gpu_architect_features.TestGpuArchitectFeatures.test_disk_binary_cache) ... ok
+test_a_library_call_is_quiet_but_says_it_probed (test_gpu_probe_lookup.TestGpuProbeBesideTheLibrary.test_a_library_call_is_quiet_but_says_it_probed) ... ok
+test_the_probe_beside_the_library_runs (test_gpu_probe_lookup.TestGpuProbeBesideTheLibrary.test_the_probe_beside_the_library_runs) ... ok
+test_without_a_probe_the_profile_names_no_gpu (test_gpu_probe_lookup.TestGpuProbeBesideTheLibrary.test_without_a_probe_the_profile_names_no_gpu) ... ok
+test_y_verbose_prints_the_profile (test_gpu_probe_lookup.TestGpuProbeBesideTheLibrary.test_y_verbose_prints_the_profile) ... ok
+test_changed_y_lib_path_requires_restart_then_uses_selected_compiler (test_ptx_cache.TestPtxCache.test_changed_y_lib_path_requires_restart_then_uses_selected_compiler) ... ok
+test_clear_cache_preserves_public_statistics (test_ptx_cache.TestPtxCache.test_clear_cache_preserves_public_statistics) ... ok
+test_codegen_environment_change_invalidates_cache (test_ptx_cache.TestPtxCache.test_codegen_environment_change_invalidates_cache) ... ok
+test_compiler_change_invalidates_existing_memory_and_disk_keys (test_ptx_cache.TestPtxCache.test_compiler_change_invalidates_existing_memory_and_disk_keys) ... ok
+test_explicit_target_still_depends_on_profile_tuning (test_ptx_cache.TestPtxCache.test_explicit_target_still_depends_on_profile_tuning) ... ok
+test_in_place_library_update_requires_restart (test_ptx_cache.TestPtxCache.test_in_place_library_update_requires_restart) ... ok
+test_legacy_cache_file_is_ignored (test_ptx_cache.TestPtxCache.test_legacy_cache_file_is_ignored) ... ok
+test_loader_mapping_matches_actual_artifact (test_ptx_cache.TestPtxCache.test_loader_mapping_matches_actual_artifact) ... ok
+test_loader_mapping_of_a_deleted_file_is_rejected (test_ptx_cache.TestPtxCache.test_loader_mapping_of_a_deleted_file_is_rejected) ... ok
+test_loader_mapping_of_another_path_is_rejected (test_ptx_cache.TestPtxCache.test_loader_mapping_of_another_path_is_rejected) ... ok
+test_loader_reusing_an_old_inode_is_rejected (test_ptx_cache.TestPtxCache.test_loader_reusing_an_old_inode_is_rejected) ... ok
+test_missing_profile_bypasses_auto_cache (test_ptx_cache.TestPtxCache.test_missing_profile_bypasses_auto_cache) ... ok
+test_profile_change_invalidates_auto_target_memory_and_disk (test_ptx_cache.TestPtxCache.test_profile_change_invalidates_auto_target_memory_and_disk) ... ok
+test_profile_created_during_compile_is_not_mislabeled (test_ptx_cache.TestPtxCache.test_profile_created_during_compile_is_not_mislabeled) ... ok
+test_rebuild_during_initial_load_is_rejected (test_ptx_cache.TestPtxCache.test_rebuild_during_initial_load_is_rejected) ... ok
+test_rebuild_in_loaded_process_refuses_stale_disk_hit (test_ptx_cache.TestPtxCache.test_rebuild_in_loaded_process_refuses_stale_disk_hit) ... ok
+test_rebuild_in_loaded_process_refuses_stale_memory_hit (test_ptx_cache.TestPtxCache.test_rebuild_in_loaded_process_refuses_stale_memory_hit) ... ok
+test_target_architectures_have_separate_entries (test_ptx_cache.TestPtxCache.test_target_architectures_have_separate_entries) ... ok
+test_unchanged_compiler_hits_memory_and_disk (test_ptx_cache.TestPtxCache.test_unchanged_compiler_hits_memory_and_disk) ... ok
+test_unchanged_compiler_reuses_disk_cache_in_new_instance (test_ptx_cache.TestPtxCache.test_unchanged_compiler_reuses_disk_cache_in_new_instance) ... ok
+test_warm_hit_does_not_hash_or_reload_library (test_ptx_cache.TestPtxCache.test_warm_hit_does_not_hash_or_reload_library) ... ok
+test_the_freshly_built_library_is_accepted_where_it_lives (test_ptx_cache.TestRealLibraryMapping.test_the_freshly_built_library_is_accepted_where_it_lives) ... ok
+test_a_g_compile_describes_the_file_it_writes (test_ptx_debug.TestPtxDebug.test_a_g_compile_describes_the_file_it_writes) ... y: no hardware profile at /tmp/y-ptx-debug-7xbf2p5t/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_a_library_without_the_entry_point_refuses (test_ptx_debug.TestPtxDebug.test_a_library_without_the_entry_point_refuses) ... ok
+test_a_lineinfo_compile_has_lines_and_nothing_else (test_ptx_debug.TestPtxDebug.test_a_lineinfo_compile_has_lines_and_nothing_else) ... y: no hardware profile at /tmp/y-ptx-debug-bm4a477x/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_the_c_api_refuses_what_it_cannot_describe (test_ptx_debug.TestPtxDebug.test_the_c_api_refuses_what_it_cannot_describe) ... y: no hardware profile at /tmp/y-ptx-debug-t6mk6z_u/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_the_cache_keeps_the_modes_apart (test_ptx_debug.TestPtxDebug.test_the_cache_keeps_the_modes_apart) ... y: no hardware profile at /tmp/y-ptx-debug-a5gmnlxu/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_the_environment_chooses_the_debug_information (test_ptx_debug.TestPtxDebug.test_the_environment_chooses_the_debug_information) ... ok
+test_the_instructions_are_the_plain_compiles (test_ptx_debug.TestPtxDebug.test_the_instructions_are_the_plain_compiles) ... y: no hardware profile at /tmp/y-ptx-debug-9xc8riak/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_the_interpreter_runs_debug_ptx_as_the_plain_ptx (test_ptx_debug.TestPtxDebug.test_the_interpreter_runs_debug_ptx_as_the_plain_ptx) ... y: no hardware profile at /tmp/y-ptx-debug-id6t62m0/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_autotune_decorator (test_python_jit_debug.TestPythonJITAndDebugMode.test_autotune_decorator)
+A decorated stub must return the MODEL's pick, deterministically. ... ok
+test_autotune_is_shape_sensitive (test_python_jit_debug.TestPythonJITAndDebugMode.test_autotune_is_shape_sensitive)
+...and it must not collapse to one answer for every shape. ... ok
+test_autotune_still_follows_a_real_measurement (test_python_jit_debug.TestPythonJITAndDebugMode.test_autotune_still_follows_a_real_measurement)
+The control: falling back to the model must not become ignoring ... ok
+test_cpu_debug_interpreter_mode (test_python_jit_debug.TestPythonJITAndDebugMode.test_cpu_debug_interpreter_mode) ... ok
+test_jit_decorator_grid_launch (test_python_jit_debug.TestPythonJITAndDebugMode.test_jit_decorator_grid_launch) ... ok
+test_microsecond_differences_do_not_decide_a_tile (test_python_jit_debug.TestPythonJITAndDebugMode.test_microsecond_differences_do_not_decide_a_tile)
+A consistent but sub-launch-cost difference must NOT pick a tile. ... ok
+test_a_named_solver_is_not_replaced (test_solver_lookup.TestSolverBesideTheInterpreter.test_a_named_solver_is_not_replaced) ... ok
+test_the_solver_pip_installed_is_found (test_solver_lookup.TestSolverBesideTheInterpreter.test_the_solver_pip_installed_is_found) ... ok
+test_without_one_the_invariant_is_still_refused (test_solver_lookup.TestSolverBesideTheInterpreter.test_without_one_the_invariant_is_still_refused) ... ok
+test_a_solver_beside_the_library_is_found (test_solver_lookup.TestSolverBesideTheLibrary.test_a_solver_beside_the_library_is_found) ... ok
+test_without_one_the_invariant_is_refused (test_solver_lookup.TestSolverBesideTheLibrary.test_without_one_the_invariant_is_refused) ... ok
+test_every_linked_crate_has_its_licence_text (test_wheel.TestThirdPartyNotices.test_every_linked_crate_has_its_licence_text) ... skipped 'cargo is not installed'
+test_notices_match_the_linked_crates (test_wheel.TestThirdPartyNotices.test_notices_match_the_linked_crates) ... skipped 'cargo is not installed'
+test_carries_the_library_and_the_probe (test_wheel.TestWheel.test_carries_the_library_and_the_probe) ... FAIL
+test_dep_info_limits_the_sources_to_the_ones_used (test_wheel.TestWheel.test_dep_info_limits_the_sources_to_the_ones_used) ... FAIL
+test_dep_info_naming_a_missing_file_falls_back_to_every_source (test_wheel.TestWheel.test_dep_info_naming_a_missing_file_falls_back_to_every_source) ... FAIL
+test_installed_package_probes_into_the_user_cache (test_wheel.TestWheel.test_installed_package_probes_into_the_user_cache) ... FAIL
+test_named_library_is_the_one_carried_and_is_checked_too (test_wheel.TestWheel.test_named_library_is_the_one_carried_and_is_checked_too) ... FAIL
+test_refuses_a_library_older_than_a_source (test_wheel.TestWheel.test_refuses_a_library_older_than_a_source) ... FAIL
+test_refuses_a_missing_library (test_wheel.TestWheel.test_refuses_a_missing_library) ... FAIL
+test_refuses_a_missing_probe (test_wheel.TestWheel.test_refuses_a_missing_probe) ... FAIL
+test_refuses_without_the_rust_std_notice (test_wheel.TestWheel.test_refuses_without_the_rust_std_notice) ... FAIL
+test_ysu_cache_dir_holds_the_profile_too (test_wheel.TestWheel.test_ysu_cache_dir_holds_the_profile_too) ... FAIL
+test_ysu_hw_profile_names_the_profile (test_wheel.TestWheel.test_ysu_hw_profile_names_the_profile) ... FAIL
+
+======================================================================
+FAIL: test_tools_names_are_the_package_modules (test_exact_package.TestOldNames.test_tools_names_are_the_package_modules)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_package.py", line 79, in test_tools_names_are_the_package_modules
+    self.assertEqual(out["exact_gemm_profile"], str(ROOT / ".ysu_exact_gemm"))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/root/.cache/y-lang/exact_gemm' != '/kaggle/working/Y/.ysu_exact_gemm'
+- /root/.cache/y-lang/exact_gemm
++ /kaggle/working/Y/.ysu_exact_gemm
+
+
+======================================================================
+FAIL: test_carries_the_library_and_the_probe (test_wheel.TestWheel.test_carries_the_library_and_the_probe)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_dep_info_limits_the_sources_to_the_ones_used (test_wheel.TestWheel.test_dep_info_limits_the_sources_to_the_ones_used)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_dep_info_naming_a_missing_file_falls_back_to_every_source (test_wheel.TestWheel.test_dep_info_naming_a_missing_file_falls_back_to_every_source)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_installed_package_probes_into_the_user_cache (test_wheel.TestWheel.test_installed_package_probes_into_the_user_cache)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_named_library_is_the_one_carried_and_is_checked_too (test_wheel.TestWheel.test_named_library_is_the_one_carried_and_is_checked_too)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_refuses_a_library_older_than_a_source (test_wheel.TestWheel.test_refuses_a_library_older_than_a_source)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_refuses_a_missing_library (test_wheel.TestWheel.test_refuses_a_missing_library)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_refuses_a_missing_probe (test_wheel.TestWheel.test_refuses_a_missing_probe)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_refuses_without_the_rust_std_notice (test_wheel.TestWheel.test_refuses_without_the_rust_std_notice)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_ysu_cache_dir_holds_the_profile_too (test_wheel.TestWheel.test_ysu_cache_dir_holds_the_profile_too)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+======================================================================
+FAIL: test_ysu_hw_profile_names_the_profile (test_wheel.TestWheel.test_ysu_hw_profile_names_the_profile)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_wheel.py", line 99, in setUp
+    self.assertTrue(LIB.is_file(), f"{LIB} is missing: run `cargo build --release` first")
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : /kaggle/working/Y/target/release/liby.so is missing: run `cargo build --release` first
+
+----------------------------------------------------------------------
+Ran 102 tests in 64.632s
+
+FAILED (failures=12, skipped=2)

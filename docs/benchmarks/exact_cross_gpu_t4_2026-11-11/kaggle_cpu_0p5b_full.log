@@ -1,0 +1,55 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Recording on cpu:x86_64 (Intel(R) Xeon(R) CPU @ 2.20GHz, 4 CPUs)
+  17 cases x 160 tokens, arms: stock, exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- stock ---
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  64%|██████▍   | 185/290 [00:00<00:00, 1842.81it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1859.23it/s]
+  gate: ok -- canary ok, 97 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 short, first              160 tokens
+  +3 short, last               160 tokens
+  +3 long, first               160 tokens
+  +3 long, middle              160 tokens
+  +3 long, last                160 tokens
+  +1 short +1 long             160 tokens
+  +3 medium                    160 tokens
+  mixed 8, pos 0               160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 12, pos 7              160 tokens
+  mixed 12 reordered           160 tokens
+  mixed 32, pos 0              160 tokens
+  mixed 32, pos 17             160 tokens
+  uniform 32 (demo shape)      160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  mixed 8 + extra-long         160 tokens
+  weights bb0ff32dd5022852, tokens 5dca7dc4a58a6f48
+  self-check (same card, twice): identical
+
+--- exact ---
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:01<08:12,  1.70s/it]Loading weights:  88%|████████▊ | 256/290 [00:01<00:00, 196.24it/s]Loading weights: 100%|██████████| 290/290 [00:01<00:00, 149.65it/s]
+  gate: ok -- canary ok, 83 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 short, first              160 tokens
+  +3 short, last               160 tokens
+  +3 long, first               160 tokens
+  +3 long, middle              160 tokens
+  +3 long, last                160 tokens
+  +1 short +1 long             160 tokens
+  +3 medium                    160 tokens
+  mixed 8, pos 0               160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 12, pos 7              160 tokens
+  mixed 12 reordered           160 tokens
+  mixed 32, pos 0              160 tokens
+  mixed 32, pos 17             160 tokens
+  uniform 32 (demo shape)      160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  mixed 8 + extra-long         160 tokens
+  weights 6ed356ce48583cd0, tokens 23e14cd41b101a6e
+  self-check (same card, twice): identical
+
+  written to /kaggle/working/cpu_0p5b_full.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /kaggle/working/cpu_0p5b_full.json other.json

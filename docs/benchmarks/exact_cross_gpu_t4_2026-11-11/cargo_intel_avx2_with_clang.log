@@ -1,0 +1,1104 @@
+warning: variable does not need to be mutable
+   --> tests/emitted_attribute_groups.rs:330:9
+    |
+330 |     let mut flush = |name: &str, body: &str, off: &mut Vec<(String, usize)>, ok: &mut usize| {
+    |         ----^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: `Y-compiler` (test "emitted_attribute_groups") generated 1 warning (run `cargo fix --test "emitted_attribute_groups" -p Y-compiler` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.22s
+     Running unittests src/lib.rs (/kaggle/temp/target/debug/deps/y-fd3ad2cac6bd4e16)
+
+running 272 tests
+test adaptive_jit::cache::tests::miss_does_not_create_a_directory_and_keys_cannot_escape ... ok
+test adaptive_jit::cache::tests::rejects_corruption_truncation_oversize_and_wrong_key ... ok
+test adaptive_jit::cache::tests::rejects_extra_duplicate_missing_and_noncanonical_fields ... ok
+test adaptive_jit::cache::tests::filesystem_errors_and_failed_rename_are_reported_and_cleaned ... ok
+test adaptive_jit::cache::tests::rejects_resigned_nonfinite_invalid_candidates_and_geometry ... ok
+test adaptive_jit::tests::a_known_incorrect_baseline_is_rejected_instead_of_used_as_fallback ... ok
+test adaptive_jit::tests::break_even_estimate_requires_real_positive_savings ... ok
+test adaptive_jit::tests::coarse_screening_results_cannot_trigger_promotion ... ok
+test adaptive_jit::tests::hotness_and_failure_do_not_retry_tuning ... ok
+test adaptive_jit::tests::invalid_shapes_and_policies_are_rejected ... ok
+test adaptive_jit::tests::persistent_identity_separates_device_driver_compiler_shape_and_policy ... ok
+test adaptive_jit::tests::persistent_kernel_identity_includes_code_and_each_launch_requirement ... ok
+test adaptive_jit::tests::promotion_requires_a_resolved_improvement ... ok
+test adaptive_jit::tests::restored_decisions_do_not_claim_new_tuning_or_schedule_more_work ... ok
+test adaptive_jit_ffi::tests::boundary_catches_panics_and_sanitizes_error_strings ... ok
+test adaptive_jit_ffi::tests::config_init_and_null_handle_errors_obey_ownership_contract ... ok
+test adaptive_jit_ffi::tests::json_escapes_all_control_characters_and_nonfinite_numbers ... ok
+test adaptive_jit_ffi::tests::rejects_config_versions_sizes_and_invalid_values_before_cuda ... ok
+test autotuner::tests::forced_config_short_circuits_and_always_clears ... ok
+test autotuner::tests::persist_key_separates_shape_precision_and_gpu ... ok
+test autotuner::tests::persisted_values_round_trip_and_reject_garbage ... ok
+test autotuner::tests::split_candidates_add_the_large_tiles_that_fit ... ok
+test autotuner::tests::test_autotuner_candidate_generation ... ok
+test autotuner::tests::test_autotuner_selection ... ok
+test bank_conflict::tests::test_auto_swizzle_layout_pass ... ok
+test bank_conflict::tests::test_no_swizzle_conflicts ... ok
+test bank_conflict::tests::test_swizzle_128b_xor_ldmatrix_x4 ... ok
+test bank_conflict::tests::test_swizzle_solves_conflicts ... ok
+test coprocessor_scheduler::tests::test_interleaved_double_buffer ... ok
+test cpu_gemm::tests::a_leading_dimension_is_recorded_not_refused ... ok
+test cpu_gemm::tests::a_zero_drift_accumulator_is_recorded_with_its_bounds ... ok
+test cpu_gemm::tests::an_unlicensed_plan_is_not_an_error ... FAILED
+test cpu_gemm::tests::canonical_matmul_is_recognized ... ok
+test cpu_gemm::tests::emitted_module_has_the_expected_pieces ... ok
+test cpu_gemm::tests::near_misses_are_refused ... ok
+test cpu_gemm::tests::one_bounded_operand_does_not_licence_the_pair ... ok
+test cpu_gemm::tests::operand_bounds_are_carried_from_the_loads ... ok
+test cpu_gemm::tests::over_budget_tiles_are_refused ... ok
+test cpu_gemm::tests::oversized_operand_bounds_are_refused ... ok
+test cpu_gemm::tests::runtime_kc_rule_matches_the_measured_optima ... ok
+test adaptive_jit::cache::tests::evicts_oldest_owned_records_and_preserves_foreign_files ... ok
+test cpu_gemm::tests::scratch_layout_holds_for_the_largest_runtime_kc ... ok
+test adaptive_jit::cache::tests::roundtrips_promoted_and_retained_baselines ... ok
+test cpu_jit::loops::tests::nested_dominance_spans_bitset_words ... ok
+test cpu_jit::loops::tests::nested_loops_merge_latches_and_select_only_strict_outers ... ok
+test cpu_jit::loops::tests::unreachable_irreducible_shared_and_overlapping_regions_preserve_policy ... ok
+test cpu_jit::loops::native_tests::existing_metadata_nonbranch_latches_and_ambiguous_cfgs_are_unchanged ... ok
+test cpu_jit::object_observer_tests::callback_preserves_buffer_and_handles_poisoned_and_nonunique_observations ... ok
+test cpu_jit::loops::native_tests::distinct_loop_ids_share_all_latches_and_preserve_inner_loops_and_profiles ... ok
+test cpu_jit::option_tests::invalid_training_override_is_rejected_before_semantic_checks_or_llvm ... ok
+test cpu_jit::profile::tests::fingerprints_include_all_original_ir_bytes ... ok
+test cpu_jit::profile::tests::dominance_bitsets_handle_loops_across_word_boundaries ... ok
+test cpu_jit::profile::tests::natural_loop_controls_preserve_work_breaks_and_multiple_backedges ... ok
+test cpu_jit::profile::tests::snapshots_own_counts_and_total_does_not_overflow_u64 ... ok
+test cpu_jit::profile::tests::unreachable_and_irreducible_cycles_do_not_receive_loop_policy ... ok
+test cpu_jit::profile::tests::weights_preserve_measured_ratios_and_zero_outcomes ... ok
+test cpu_jit::runtime::tests::equality_accepts_c_text_and_llvm_wrapped_literals ... ok
+test cpu_jit::runtime::tests::headers_match_compiler_visible_cpu_jit_layouts ... ok
+test cpu_jit::runtime::tests::strings_support_handle_references_binary_contents_and_self_append ... ok
+test cpu_jit::runtime::tests::file_callbacks_round_trip_binary_strings_and_missing_files ... ok
+test cpu_jit::runtime::tests::vectors_preserve_typed_values_and_sources_across_growth ... ok
+test cpu_jit::profile::tests::instrumentation_and_profile_use_verify_with_effect_attributes ... ok
+test cpu_jit_ffi::tests::options_ffi_initializes_defaults_and_checks_header_before_fields ... ok
+test cpu_jit_ffi::tests::ffi_calls_native_code_and_reports_errors ... ok
+test cpu_jit_ffi::tests::options_ffi_rejects_invalid_levels_in_every_compilation_mode ... ok
+test cpu_jit_ffi::tests::dynamic_ffi_checks_metadata_tags_and_arity_before_executing ... ok
+test cpu_jit_ffi::tests::profile_ffi_rejects_nulls_stale_source_and_nontraining_sessions ... ok
+test cpu_jit_ffi::tests::profile_json_escapes_names_and_controls ... ok
+test cpu_specializer::tests::irregular_shapes_do_not_take_the_masked_path_without_avx512 ... ok
+test cpu_specializer::tests::test_classify_decode_gemv ... ok
+test cpu_specializer::tests::test_classify_deep_k ... ok
+test cpu_specializer::tests::test_classify_irregular_masked ... ok
+test cpu_specializer::tests::test_classify_nice_square ... ok
+test cpu_specializer::tests::test_classify_small_direct ... ok
+test cuda_runtime::tests::borrowed_context_preserves_host_context_and_device ... ok
+test cuda_runtime::tests::borrowed_context_rejects_missing_and_failed_context_queries ... ok
+test cuda_runtime::tests::borrowed_context_rejects_unterminated_device_name ... ok
+test cuda_runtime::tests::cache_identity_driver_build_is_bounded_and_validated ... ok
+test cuda_runtime::tests::cache_identity_driver_build_propagates_read_errors ... ok
+test cuda_runtime::tests::cache_identity_preserves_device_uuid_and_driver_versions ... ok
+test cuda_runtime::tests::cache_identity_rejects_failed_driver_queries ... ok
+test cuda_runtime::tests::cache_identity_rejects_unavailable_optional_symbols ... ok
+test cuda_runtime::tests::cache_identity_rejects_unidentified_success_results ... ok
+test cuda_runtime::tests::context_drop_only_destroys_owned_contexts ... ok
+test cpu_jit_ffi::tests::profile_ffi_records_explicit_calls_and_owns_each_native_session ... ok
+test cuda_runtime::tests::exact_pv_checked_tests::checked_launch_preserves_read_only_input_aliasing_and_touching_output_boundaries ... ok
+test cuda_runtime::tests::exact_pv_checked_tests::checked_launch_propagates_pre_launch_launch_and_completion_errors_without_fallback ... ok
+test cuda_runtime::tests::exact_pv_checked_tests::checked_launch_refuses_short_misaligned_wrapping_or_overlapping_allocations ... ok
+test cuda_runtime::tests::exact_pv_checked_tests::checked_launch_requires_the_originating_current_context_and_allocation_generation ... ok
+test cuda_runtime::tests::exact_pv_checked_tests::checked_launch_uses_the_reviewed_module_exact_geometry_and_typed_parameter_abi ... ok
+test cuda_runtime::tests::exact_pv_checked_tests::memory_bindings_refuse_legacy_only_size_or_pointer_abis ... ok
+test cuda_runtime::tests::f16_decode_matches_known_values ... ok
+test cuda_runtime::tests::generated_f16_is_always_a_bounded_normal ... ok
+test cuda_runtime::tests::launch_marshals_owned_pointer_arguments_for_three_and_other_counts ... ok
+test cuda_runtime::tests::launch_preserves_driver_errors_for_stack_and_fallback_arguments ... ok
+test cuda_runtime::tests::verified_exact_pv_loads_the_identical_cubin_without_ptx_jit ... ok
+test cuda_runtime::tests::verified_exact_pv_rejects_mutation_target_and_failed_validation_before_loading ... ok
+test debug_info::tests::a_path_is_escaped_byte_for_byte ... ok
+test debug_info::tests::a_semicolon_inside_inline_asm_text_is_not_a_comment ... ok
+test debug_info::tests::a_trailing_comment_stays_after_the_attachment ... ok
+test debug_info::tests::new_metadata_starts_above_the_modules_own ... ok
+test debug_info::tests::struct_layout_matches_the_c_rules_llvm_uses ... ok
+test empirical_autotune::tests::a_split_wins_only_where_it_is_measurably_faster ... ok
+test empirical_autotune::tests::adaptive_final_pass_keeps_a_screened_out_baseline ... ok
+test empirical_autotune::tests::adaptive_screen_honors_the_configured_improvement_threshold ... ok
+test empirical_autotune::tests::adaptive_screen_keeps_the_baseline_when_no_challenger_clears_the_margin ... ok
+test empirical_autotune::tests::adaptive_screen_preserves_a_clear_first_pass_gain_without_retrying ... ok
+test empirical_autotune::tests::adaptive_screen_rejects_invalid_timing_instead_of_caching_a_decision ... ok
+test cuda_runtime::tests::exact_pv_checked_tests::checked_launch_refuses_unidentified_or_insufficient_device_and_function_limits ... ok
+test empirical_autotune::tests::adaptive_screen_retries_only_when_dispersion_makes_a_challenger_plausible ... ok
+test empirical_autotune::tests::adaptive_screen_sends_promising_challengers_to_full_validation ... ok
+test empirical_autotune::tests::adaptive_screen_uses_dispersion_to_admit_ambiguous_challengers ... ok
+test empirical_autotune::tests::candidate_codegen_still_accepts_a_type_checked_gemm ... ok
+test empirical_autotune::tests::distinct_budget_handles_empty_limits_and_propagates_codegen_errors ... ok
+test empirical_autotune::tests::distinct_budget_retains_effective_stage_differences ... ok
+test empirical_autotune::tests::distinct_budget_skips_k_clamped_stages_and_preserves_ranked_order ... ok
+test empirical_autotune::tests::emittability_matches_the_emitters_own_contract ... ok
+test empirical_autotune::tests::gemm_identity_ignores_line_comments_but_keeps_code_and_literals ... ok
+test empirical_autotune::tests::gemm_identity_keeps_each_launch_requirement ... ok
+test empirical_autotune::tests::known_wrong_baseline_is_fatal_but_other_candidate_failures_are_not ... ok
+test empirical_autotune::tests::launch_config_is_parsed_from_the_emitter_comment ... ok
+test empirical_autotune::tests::launch_config_reports_zero_smem_on_the_synchronous_fallback ... ok
+test empirical_autotune::tests::median_is_order_independent ... ok
+test empirical_autotune::tests::missing_gemm_comment_is_an_error_not_a_silent_default ... ok
+test empirical_autotune::tests::probe_source_is_shaped_like_the_shipping_gemm_tests ... ok
+test empirical_autotune::tests::split_probe_is_the_split_k_shape_with_both_entries ... ok
+test empirical_autotune::tests::tie_band_tracks_the_regimes_noise_floor_not_a_fixed_percentage ... ok
+test empirical_autotune::tests::tie_break_is_deterministic_for_identical_structure ... ok
+test empirical_autotune::tests::tie_break_prefers_warps_then_k_depth_but_never_overrides_a_real_gap ... ok
+test empirical_autotune::tests::weight_replication_defeats_l2_only_where_it_has_to ... ok
+test exact_gemm_certificate::tests::a_module_stem_is_a_legal_coq_identifier ... ok
+test exact_gemm_certificate::tests::rounding_up_never_breaks_a_licence_y_granted ... ok
+test exact_gemm_certificate::tests::the_integer_bound_rounds_up ... ok
+test fixed_exp::tests::exp2_of_zero_is_exactly_one ... ok
+test fixed_exp::tests::integral_arguments_are_exact_powers_of_two ... ok
+test empirical_autotune::tests::distinct_budget_skips_shared_memory_clamped_stages ... ok
+test adaptive_jit::cache::tests::concurrent_writers_publish_only_complete_records ... ok
+test fixed_exp::tests::the_saturation_guard_covers_the_whole_input_range ... ok
+test fixed_exp::tests::the_series_is_truncated_at_the_right_place ... ok
+test cpu_jit_ffi::tests::options_ffi_matches_rust_training_and_final_ir_and_native_outputs ... ok
+test guarantees::tests::identical_facts_are_written_once ... ok
+test guarantees::tests::json_strings_are_ascii_and_escaped ... ok
+test intrinsics::tests::a_known_namespace_does_not_admit_arbitrary_functions ... ok
+test intrinsics::tests::coprocessor_mapping_entries_have_frontend_names ... ok
+test intrinsics::tests::ptx_named_dispatch_entries_have_frontend_names ... ok
+test intrinsics::tests::shape_dependent_results_are_not_reported_as_scalars_or_void ... ok
+test ir_grapher::tests::test_operator_fusion_pass ... ok
+test lexer::tests::test_arrow_and_range ... ok
+test lexer::tests::test_attribute ... ok
+test lexer::tests::test_block_comment_skipped ... ok
+test lexer::tests::test_cache_policy_attr ... ok
+test lexer::tests::test_eof ... ok
+test lexer::tests::test_float_literal ... ok
+test lexer::tests::test_fragment_type ... ok
+test lexer::tests::test_kernel_keyword ... ok
+test lexer::tests::test_line_comment_skipped ... ok
+test lexer::tests::test_memory_types ... ok
+test lexer::tests::test_pipeline_type ... ok
+test lexer::tests::test_tokenize ... ok
+test lexer::tests::test_tokenize_complex ... ok
+test lexer::tests::test_tokenize_empty ... ok
+test lexer::tests::test_tokenize_experimental_attributes ... ok
+test lexer::tests::test_tokenize_lines_and_columns ... ok
+test lexer::tests::test_tokenize_unknown_characters ... ok
+test lexer::tests::test_unterminated_block_comment ... ok
+test lexer::tests::test_unterminated_string ... ok
+test lexical_scope::tests::a_callee_is_never_renamed ... ok
+test lexical_scope::tests::a_function_that_binds_no_name_twice_is_unchanged ... ok
+test lexical_scope::tests::a_parameter_keeps_its_name_and_a_let_of_it_does_not ... ok
+test lexical_scope::tests::an_initialiser_reads_the_binding_it_shadows ... ok
+test lexical_scope::tests::an_inner_binding_shadows_and_the_outer_one_comes_back ... ok
+test lexical_scope::tests::the_source_name_is_recovered ... ok
+test parser::tests::prefetch_stride_is_refused_wherever_it_is_written ... ok
+test parser::tests::test_parse_empty_program ... ok
+test parser::tests::test_parse_experimental_features ... ok
+test parser::tests::test_parse_fn_level_tile_directive_still_works ... ok
+test parser::tests::test_parse_kernel_level_tile_directive ... ok
+test parser::tests::test_parse_kernel_without_tile_leaves_tile_none ... ok
+test parser::tests::test_parse_multiple_items ... ok
+test parser::tests::test_parse_simple_program ... ok
+test ptx_debug_info::tests::a_register_name_is_its_ascii_bytes ... ok
+test ptx_emitter::tests::an_fp8_tile_that_does_not_divide_is_refused ... ok
+test ptx_emitter::tests::fp8_padded_tile_picks_the_measured_best ... ok
+test ptx_emitter::tests::test_128bit_simd_v4_vectorization ... ok
+test ptx_emitter::tests::test_2d_tensor_block_pointer ... ok
+test ptx_emitter::tests::test_adaptive_cta_tile_selection ... ok
+test ptx_emitter::tests::test_automated_vectorizing_loop_pass ... ok
+test ptx_emitter::tests::test_block_tile_boundary_masking ... ok
+test ptx_emitter::tests::test_cp_async_double_buffering ... ok
+test fixed_exp::tests::it_is_monotonically_non_increasing ... ok
+test ptx_emitter::tests::test_fp8_gemm_kernel_async_copies_raw_tiles ... ok
+test fixed_exp::tests::it_is_sub_ulp_accurate_everywhere ... ok
+test ptx_emitter::tests::test_fp8_gemm_kernel_multiwarp_cta_tiling ... ok
+test ptx_emitter::tests::test_fp8_gemm_kernel_pipelined_double_buffering ... ok
+test ptx_emitter::tests::test_fp8_gemm_kernel_small_tile_selection ... ok
+test ptx_emitter::tests::test_fp8_gemm_kernel_reachable_and_uses_mma_sync_m16n8k32 ... ok
+test ptx_emitter::tests::test_fp8_gemm_operands_rejects_wrong_element_type ... ok
+test ptx_emitter::tests::test_fused_bias_relu_epilogue_dispatch ... ok
+test ptx_emitter::tests::test_fused_swiglu_epilogue_dispatch ... ok
+test ptx_emitter::tests::test_gemm_compute_block_uses_ldmatrix_mma_sync_not_wmma_load ... ok
+test ptx_emitter::tests::test_gemm_k_not_multiple_of_8_is_rejected_not_silently_wrong - should panic ... ok
+test ptx_emitter::tests::test_fused_swiglu_pipelined_dispatch_with_real_hw_profile ... ok
+test ptx_emitter::tests::test_grid_swizzle_pass ... ok
+test ptx_emitter::tests::test_gemm_k_tail_is_covered_not_truncated ... ok
+test ptx_emitter::tests::test_hierarchical_cta_tiling ... ok
+test ptx_emitter::tests::test_ldmatrix_addressing_bank_conflict_free_with_existing_padding ... ok
+test ptx_emitter::tests::test_ldmatrix_addressing_bank_conflict_free_with_the_swizzle ... ok
+test ptx_emitter::tests::test_plain_gemm_epilogue_unaffected_by_fused_shape ... ok
+test ptx_emitter::tests::test_warp_butterfly_shuffle_reductions ... ok
+test ptx_emitter::tests_3d::test_3d_block_pointer_ptx ... ok
+test ptx_emitter::tests_3d::test_blackwell_5000_series_ptx_version_target ... ok
+test ptx_emitter::tests_builtin_arity::arity_shapes_accept_exactly_what_they_say ... ok
+test ptx_emitter::tests::test_fp8_gemm_kernel_tile_selection_boundary ... ok
+test ptx_emitter::tests_builtin_arity::path_arity_covers_every_lowered_path ... ok
+test ptx_emitter::tests_element_reads::a_loaded_value_used_as_an_address_is_found ... ok
+test ptx_emitter::tests_builtin_arity::builtin_arity_covers_every_lowered_name ... ok
+test ptx_emitter::tests_paged_decode_attention::emitted_ptx_actually_assembles ... ok
+test ptx_emitter::tests_paged_decode_attention::dispatches_and_emits_the_online_softmax_core ... ok
+test ptx_emitter::tests_paged_decode_attention::rejects_shapes_the_codegen_cannot_lower ... ok
+test ptx_emitter::tests_paged_decode_attention::split_shape_merges_gqa_heads_and_emits_both_entries ... ok
+test fixed_exp::tests::the_whole_domain_digest_is_the_cross_language_anchor ... ok
+test ptx_emitter::tests_swiglu_tile_override::override_guard_rejects_infeasible_tiles ... ok
+test quantization_pass::tests::test_epilogue_fusion_relu_gelu_silu ... ok
+test require::tests::every_advertised_feature_is_recognised_even_when_unprobed ... ok
+test require::tests::sm_versions_parse_both_spellings ... ok
+test require::tests::the_operators_are_the_ones_the_message_advertises ... ok
+test ptx_emitter::tests_paged_decode_attention::warp_count_defaults_to_32_and_is_overridable_by_name ... ok
+test sentinel::profile_write_tests::a_profile_is_written_into_a_directory_that_does_not_exist_yet ... ok
+test sentinel::profile_write_tests::the_profile_path_rules ... ok
+test ptx_emitter::tests_paged_decode_attention::loop_layout_follows_the_register_budget ... ok
+test type_checker::tests::test_enum_item_does_not_produce_type_errors ... ok
+test type_checker::tests::test_eval_interval_div ... ok
+test type_checker::tests::test_kernel_level_tile_fused_bias_relu_shape_passes ... ok
+test type_checker::tests::test_kernel_level_tile_rejects_missing_k ... ok
+test type_checker::tests::test_kernel_level_tile_rejects_wrong_param_shape ... ok
+test type_checker::tests::test_kernel_level_tile_swiglu_shape_passes ... ok
+test type_checker::tests::test_kernel_level_tile_valid_shape_passes ... ok
+test type_checker::tests::test_type_checker_starts_with_clean_state ... ok
+test uniformity::tests::a_chisel_block_may_write_what_it_names_and_may_branch ... ok
+test uniformity::tests::a_loop_carried_value_reaches_the_loops_own_condition ... ok
+test uniformity::tests::a_return_some_threads_take_is_an_exit ... ok
+test uniformity::tests::instructions_are_classified_by_what_they_require ... ok
+test uniformity::tests::only_a_collective_the_region_cannot_run_is_reported ... ok
+test type_checker::tests::bitwise_and_remainder_intervals_hold_every_value_they_cover ... ok
+test uniformity::tests::thread_indices_memory_and_branches_make_values_differ ... ok
+test verified_exact_pv::tests::verified_exact_pv_fails_closed_for_receipts_and_missing_artifacts ... ok
+test verified_exact_pv::tests::verified_exact_pv_checks_and_pins_all_artifacts ... ok
+test verified_exact_pv::tests::verified_exact_pv_rejects_wrong_index_even_with_a_fresh_valid_receipt ... ok
+test verified_exact_pv::tests::verified_exact_pv_subject_identity_ignores_comments_and_whitespace ... ok
+test zero_drift::tests::a_non_power_of_two_flush_interval_is_refused ... ok
+test zero_drift::tests::an_operand_wider_than_int16_is_refused_for_the_right_reason ... ok
+test zero_drift::tests::an_overflowing_nest_is_refused_with_a_workable_reason ... ok
+test zero_drift::tests::an_unknown_type_name_is_refused_not_guessed ... ok
+test zero_drift::tests::bounds_make_a_float_accumulator_satisfiable ... ok
+test zero_drift::tests::cost_table_round_trips_through_the_profile ... ok
+test zero_drift::tests::falls_back_to_narrowest_without_measurements ... ok
+test zero_drift::tests::floats_are_never_selected_even_when_fastest ... ok
+test zero_drift::tests::impossible_requirement_returns_none ... ok
+test zero_drift::tests::missing_operand_bounds_are_a_refusal_not_a_default ... ok
+test zero_drift::tests::only_fixed_point_counts_as_exact ... ok
+test zero_drift::tests::probe_is_not_constant_foldable ... ok
+test zero_drift::tests::probe_ptx_has_the_requested_chain_length ... ok
+test zero_drift::tests::q32_32_and_int64_probes_are_identical ... ok
+test zero_drift::tests::selection_follows_measured_cost ... ok
+test zero_drift::tests::the_derivation_can_never_exceed_int16 ... ok
+test zero_drift::tests::the_kahan_probe_compensates ... ok
+test zero_drift::tests::the_measured_probe_configuration_is_licensed ... ok
+test zero_drift::tests::the_operand_bound_is_derived_from_the_flush_interval ... ok
+test zero_drift::tests::the_report_names_what_lost_and_not_only_what_won ... ok
+test ptx_emitter::tests::test_grid_swizzle_uneven_grid_is_bijection ... ok
+test verified_exact_pv::tests::verified_exact_pv_rejects_unidentified_or_incompatible_elf ... ok
+test sentinel::profile_write_tests::a_reader_never_sees_a_partial_profile ... ok
+
+failures:
+
+---- cpu_gemm::tests::an_unlicensed_plan_is_not_an_error stdout ----
+
+thread 'cpu_gemm::tests::an_unlicensed_plan_is_not_an_error' (7119) panicked at src/cpu_gemm.rs:6257:17:
+must say why: this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+
+
+failures:
+    cpu_gemm::tests::an_unlicensed_plan_is_not_an_error
+
+test result: FAILED. 271 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.11s
+
+error: test failed, to rerun pass `--lib`
+     Running tests/bounds_runtime_check.rs (/kaggle/temp/target/debug/deps/bounds_runtime_check-61171a2604271f44)
+
+running 7 tests
+test a_proved_bound_emits_no_check ... ok
+test the_gpu_traps_a_value_outside_its_bounds ... ok
+test the_jit_stops_it_too ... ok
+test emit_cpu_panics_and_native_refuses ... ok
+test the_exact_gemm_scans_its_operands_before_computing ... ok
+test the_llvm_backend_stops_a_value_outside_its_bounds ... ok
+test every_scalar_kind_compares_as_its_own_type ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 9.14s
+
+     Running tests/certificate_states_its_trust_boundary.rs (/kaggle/temp/target/debug/deps/certificate_states_its_trust_boundary-f0b877639ec5c590)
+
+running 7 tests
+test every_named_check_is_a_file_that_exists ... ok
+test the_capstone_and_the_certificate_claim_the_same_exclusions ... ok
+test the_certificate_states_the_boundary_below_the_model_too ... ok
+test the_gpu_certificate_states_the_ptxas_boundary_below_the_model ... ok
+test the_gpu_capstone_and_its_certificate_claim_the_same_exclusions ... ok
+test every_proof_of_the_chain_is_reachable_from_the_capstone ... ok
+test every_trust_item_reaches_the_emitted_certificate ... FAILED
+
+failures:
+
+---- every_trust_item_reaches_the_emitted_certificate stdout ----
+
+thread 'every_trust_item_reaches_the_emitted_certificate' (7493) panicked at tests/certificate_states_its_trust_boundary.rs:137:5:
+no certificate was emitted for a nest that licenses the substitution. Either the substitution stopped happening or the certificate stopped being written; `tests/exact_gemm_certificate.rs` owns telling those apart.
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    every_trust_item_reaches_the_emitted_certificate
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+error: test failed, to rerun pass `--test certificate_states_its_trust_boundary`
+     Running tests/cpu_emitter_types.rs (/kaggle/temp/target/debug/deps/cpu_emitter_types-8b611fd1dfc9f4cc)
+
+running 3 tests
+test emit_cpu_computes_what_the_llvm_backend_computes ... ok
+test field_arithmetic_wraps_in_a_debug_build_as_the_llvm_backend_does ... ok
+test every_case_runs_on_the_llvm_backend_as_stated ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.59s
+
+     Running tests/cpu_gemm_exact_accumulation.rs (/kaggle/temp/target/debug/deps/cpu_gemm_exact_accumulation-78abd39d36549b59)
+
+running 4 tests
+test an_unlicensed_matmul_says_why_the_fast_path_was_skipped ... FAILED
+test a_licensed_matmul_reports_the_licence_and_its_terms ... FAILED
+test a_zero_drift_matmul_is_not_lowered_to_the_f32_kernel ... ok
+test a_plain_matmul_still_gets_the_f32_kernel ... ok
+
+failures:
+
+---- an_unlicensed_matmul_says_why_the_fast_path_was_skipped stdout ----
+
+thread 'an_unlicensed_matmul_says_why_the_fast_path_was_skipped' (7733) panicked at tests/cpu_gemm_exact_accumulation.rs:144:5:
+the advisory must explain that the accumulator's bound does not imply an operand bound, which is the whole reason this nest is unlicensed:
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Generic GPU Emitter Target / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: false
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 26 / 27 / 390 / 752 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.00 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 7074 cycles
+    -> Loaded GPU Name: Generic GPU Emitter Target
+    -> Loaded GPU Vendor: Generic
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 32 / 35 / 110 / 220
+    -> GPU Tensor Core Latencies (F16/TF32): 44 / 70
+    -> Warp Shuffle vs SMEM Exchange: 1.2 / 6 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4 / 4 vs 6.27
+    -> Branch Divergence Penalty: 4 cycles (uniform=4, divergent=8)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 4 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4 / 4 | LOP3.LUT: 4
+    -> FP64 DADD: 48 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 8192MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+[1;36m[*][0m Reading source: /tmp/y_exact_7729_unlicensed/mm.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 178 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting LLVM IR...
+      -> @ZeroDrift matmul MxN: using scalar lowering, which is still EXACT. The fast vpdpwssd kernel is unavailable because this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+      -> @ZeroDrift sum: F32 -> Q32.32 (no device measurements, narrowest sufficient, 4 of 5 representations rejected; Y_DRIFT_EXPLAIN=1 for why)
+      -> Written to: /tmp/y_exact_7729_unlicensed/mm.ll
+      Compile manually: clang -O2 -o output /tmp/y_exact_7729_unlicensed/mm.ll c_src/runtime.c -lm
+
+[1;32mCompilation Successful![0m
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_licensed_matmul_reports_the_licence_and_its_terms stdout ----
+
+thread 'a_licensed_matmul_reports_the_licence_and_its_terms' (7730) panicked at tests/cpu_gemm_exact_accumulation.rs:174:5:
+operands bounded by 1024 must be licensed at the default flush interval:
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Generic GPU Emitter Target / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: false
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 26 / 27 / 390 / 752 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.00 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 7074 cycles
+    -> Loaded GPU Name: Generic GPU Emitter Target
+    -> Loaded GPU Vendor: Generic
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 32 / 35 / 110 / 220
+    -> GPU Tensor Core Latencies (F16/TF32): 44 / 70
+    -> Warp Shuffle vs SMEM Exchange: 1.2 / 6 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4 / 4 vs 6.27
+    -> Branch Divergence Penalty: 4 cycles (uniform=4, divergent=8)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 4 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4 / 4 | LOP3.LUT: 4
+    -> FP64 DADD: 48 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 8192MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+[1;36m[*][0m Reading source: /tmp/y_exact_7729_licensed/mm.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 200 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting LLVM IR...
+      -> @ZeroDrift matmul MxN: using scalar lowering, which is still EXACT. The fast vpdpwssd kernel is unavailable because this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+      -> @ZeroDrift sum: F32 -> Q32.32 (no device measurements, narrowest sufficient, 4 of 5 representations rejected; Y_DRIFT_EXPLAIN=1 for why)
+      -> Written to: /tmp/y_exact_7729_licensed/mm.ll
+      Compile manually: clang -O2 -o output /tmp/y_exact_7729_licensed/mm.ll c_src/runtime.c -lm
+
+[1;32mCompilation Successful![0m
+
+
+
+
+failures:
+    a_licensed_matmul_reports_the_licence_and_its_terms
+    an_unlicensed_matmul_says_why_the_fast_path_was_skipped
+
+test result: FAILED. 2 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+error: test failed, to rerun pass `--test cpu_gemm_exact_accumulation`
+     Running tests/debug_info.rs (/kaggle/temp/target/debug/deps/debug_info-78138261dd7d65c2)
+
+running 32 tests
+test a_data_enum_prints_its_variant_and_fields ... ok
+test a_backtrace_shows_the_y_frames ... ok
+test a_for_loop_increment_belongs_to_the_for_line ... ok
+test a_function_breakpoint_stops_after_the_parameters_are_stored ... ok
+test a_runtime_frame_above_y_code_is_kept ... ok
+test a_variable_is_visible_exactly_where_its_scope_is ... ok
+test an_attributed_statement_is_on_its_keywords_line ... ok
+test a_zero_drift_accumulator_is_shown_as_its_raw_representation ... ok
+test an_imported_function_is_reported_in_its_own_file ... ok
+test an_inlined_function_is_still_a_frame ... ok
+test an_optimised_build_never_shows_a_wrong_value ... ok
+test a_for_loop_increment_carries_the_for_line_in_the_module ... ok
+test an_unreachable_binding_is_not_described ... ok
+test debug_starts_gdb_on_the_first_line_of_main ... ok
+test an_optimisation_level_is_refused_where_it_would_do_nothing ... ok
+test every_backend_without_debug_information_refuses_g_by_name ... ok
+test every_corpus_program_the_backend_accepts_still_verifies_with_g ... ok
+test gdb_prints_y_values_with_y_types ... ok
+test next_from_a_functions_last_line_returns_to_the_caller ... ok
+test next_visits_each_statement_of_a_loop_once_per_iteration ... ok
+test outside_the_safe_path_gdb_shows_the_raw_view ... ok
+test stepping_into_a_call_finds_its_arguments_already_stored ... ok
+test string_new_holds_the_text_it_was_given ... ok
+test the_debug_information_says_when_it_is_optimised ... ok
+test a_g_build_behaves_like_a_plain_build ... ok
+test the_line_table_names_the_y_source_and_its_lines ... ok
+test with_g_every_function_and_variable_is_described ... ok
+test without_g_the_module_carries_no_debug_information ... ok
+test y_values_print_as_y ... ok
+test the_embedded_extension_is_the_compilers_file ... ok
+test an_optimised_g_build_behaves_like_a_plain_one ... ok
+test every_corpus_program_that_builds_at_o2_builds_with_g has been running for over 60 seconds
+test every_corpus_program_that_builds_at_o2_builds_with_g ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 142.43s
+
+     Running tests/emitted_attribute_groups.rs (/kaggle/temp/target/debug/deps/emitted_attribute_groups-6d3b27337f2707fc)
+
+running 6 tests
+test no_attribute_group_is_defined_twice ... FAILED
+test no_function_names_the_same_group_twice ... FAILED
+test the_host_target_cpu_is_what_llvm_actually_reads ... ok
+test every_group_a_function_names_is_defined ... FAILED
+test on_a_host_without_avx512_only_the_vnni_kernels_use_it ... FAILED
+test the_vnni_group_still_carries_what_vpdpwssd_needs ... FAILED
+
+failures:
+
+---- no_attribute_group_is_defined_twice stdout ----
+
+thread 'no_attribute_group_is_defined_twice' (8649) panicked at tests/emitted_attribute_groups.rs:133:5:
+the fixture must emit BOTH the f32 and the exact GEMM module
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- no_function_names_the_same_group_twice stdout ----
+
+thread 'no_function_names_the_same_group_twice' (8650) panicked at tests/emitted_attribute_groups.rs:133:5:
+the fixture must emit BOTH the f32 and the exact GEMM module
+
+---- every_group_a_function_names_is_defined stdout ----
+
+thread 'every_group_a_function_names_is_defined' (8648) panicked at tests/emitted_attribute_groups.rs:133:5:
+the fixture must emit BOTH the f32 and the exact GEMM module
+
+---- on_a_host_without_avx512_only_the_vnni_kernels_use_it stdout ----
+
+thread 'on_a_host_without_avx512_only_the_vnni_kernels_use_it' (8651) panicked at tests/emitted_attribute_groups.rs:133:5:
+the fixture must emit BOTH the f32 and the exact GEMM module
+
+---- the_vnni_group_still_carries_what_vpdpwssd_needs stdout ----
+
+thread 'the_vnni_group_still_carries_what_vpdpwssd_needs' (8751) panicked at tests/emitted_attribute_groups.rs:133:5:
+the fixture must emit BOTH the f32 and the exact GEMM module
+
+
+failures:
+    every_group_a_function_names_is_defined
+    no_attribute_group_is_defined_twice
+    no_function_names_the_same_group_twice
+    on_a_host_without_avx512_only_the_vnni_kernels_use_it
+    the_vnni_group_still_carries_what_vpdpwssd_needs
+
+test result: FAILED. 1 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.18s
+
+error: test failed, to rerun pass `--test emitted_attribute_groups`
+     Running tests/exact_gemm_certificate.rs (/kaggle/temp/target/debug/deps/exact_gemm_certificate-a2018a0430aae87c)
+
+running 8 tests
+test a_source_name_that_is_not_a_coq_identifier_is_sanitised ... FAILED
+test a_fractional_bound_is_certified_at_the_integer_above_it ... FAILED
+test the_certificate_refuses_exactly_the_bounds_the_compiler_refuses ... ok
+test a_nest_left_on_the_scalar_path_emits_no_certificate ... ok
+test a_substituted_exact_gemm_emits_a_certificate_that_coqc_accepts ... FAILED
+test the_certificate_states_the_source_s_own_bound ... FAILED
+test the_certificate_can_be_suppressed ... FAILED
+test the_naive_reading_of_the_same_source_emits_no_certificate ... ok
+
+failures:
+
+---- a_source_name_that_is_not_a_coq_identifier_is_sanitised stdout ----
+
+thread 'a_source_name_that_is_not_a_coq_identifier_is_sanitised' (8784) panicked at tests/exact_gemm_certificate.rs:450:5:
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Generic GPU Emitter Target / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: false
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 26 / 27 / 390 / 752 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.00 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 7074 cycles
+    -> Loaded GPU Name: Generic GPU Emitter Target
+    -> Loaded GPU Vendor: Generic
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 32 / 35 / 110 / 220
+    -> GPU Tensor Core Latencies (F16/TF32): 44 / 70
+    -> Warp Shuffle vs SMEM Exchange: 1.2 / 6 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4 / 4 vs 6.27
+    -> Branch Divergence Penalty: 4 cycles (uniform=4, divergent=8)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 4 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4 / 4 | LOP3.LUT: 4
+    -> FP64 DADD: 48 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 8192MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+[1;36m[*][0m Reading source: /tmp/y_cert_8781_stem/4-bit gemm.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 189 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting LLVM IR...
+      -> @ZeroDrift matmul MxN: using scalar lowering, which is still EXACT. The fast vpdpwssd kernel is unavailable because this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+      -> @ZeroDrift sum: I64 -> I64 (no device measurements, narrowest sufficient, 4 of 5 representations rejected; Y_DRIFT_EXPLAIN=1 for why)
+      -> Written to: /tmp/y_cert_8781_stem/4-bit gemm.ll
+      Compile manually: clang -O2 -o output /tmp/y_cert_8781_stem/4-bit gemm.ll c_src/runtime.c -lm
+
+[1;32mCompilation Successful![0m
+
+
+
+---- a_fractional_bound_is_certified_at_the_integer_above_it stdout ----
+
+thread 'a_fractional_bound_is_certified_at_the_integer_above_it' (8782) panicked at tests/exact_gemm_certificate.rs:338:5:
+the fractional bound did not survive the front end, so this test is measuring the integer case again:
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Generic GPU Emitter Target / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: false
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 26 / 27 / 390 / 752 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.00 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 7074 cycles
+    -> Loaded GPU Name: Generic GPU Emitter Target
+    -> Loaded GPU Vendor: Generic
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 32 / 35 / 110 / 220
+    -> GPU Tensor Core Latencies (F16/TF32): 44 / 70
+    -> Warp Shuffle vs SMEM Exchange: 1.2 / 6 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4 / 4 vs 6.27
+    -> Branch Divergence Penalty: 4 cycles (uniform=4, divergent=8)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 4 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4 / 4 | LOP3.LUT: 4
+    -> FP64 DADD: 48 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 8192MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+[1;36m[*][0m Reading source: /tmp/y_cert_8781_fractional/gemm.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 189 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting LLVM IR...
+      -> @ZeroDrift matmul MxN: using scalar lowering, which is still EXACT. The fast vpdpwssd kernel is unavailable because this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+      -> @ZeroDrift sum: I64 -> I64 (no device measurements, narrowest sufficient, 4 of 5 representations rejected; Y_DRIFT_EXPLAIN=1 for why)
+      -> Written to: /tmp/y_cert_8781_fractional/gemm.ll
+      Compile manually: clang -O2 -o output /tmp/y_cert_8781_fractional/gemm.ll c_src/runtime.c -lm
+
+[1;32mCompilation Successful![0m
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_substituted_exact_gemm_emits_a_certificate_that_coqc_accepts stdout ----
+
+thread 'a_substituted_exact_gemm_emits_a_certificate_that_coqc_accepts' (8785) panicked at tests/exact_gemm_certificate.rs:209:5:
+the fixture stopped being substituted, so this test is measuring nothing:
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Generic GPU Emitter Target / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: false
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 26 / 27 / 390 / 752 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.00 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 7074 cycles
+    -> Loaded GPU Name: Generic GPU Emitter Target
+    -> Loaded GPU Vendor: Generic
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 32 / 35 / 110 / 220
+    -> GPU Tensor Core Latencies (F16/TF32): 44 / 70
+    -> Warp Shuffle vs SMEM Exchange: 1.2 / 6 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4 / 4 vs 6.27
+    -> Branch Divergence Penalty: 4 cycles (uniform=4, divergent=8)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 4 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4 / 4 | LOP3.LUT: 4
+    -> FP64 DADD: 48 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 8192MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+[1;36m[*][0m Reading source: /tmp/y_cert_8781_accepts/gemm.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 189 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting LLVM IR...
+      -> @ZeroDrift matmul MxN: using scalar lowering, which is still EXACT. The fast vpdpwssd kernel is unavailable because this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+      -> @ZeroDrift sum: I64 -> I64 (no device measurements, narrowest sufficient, 4 of 5 representations rejected; Y_DRIFT_EXPLAIN=1 for why)
+      -> Written to: /tmp/y_cert_8781_accepts/gemm.ll
+      Compile manually: clang -O2 -o output /tmp/y_cert_8781_accepts/gemm.ll c_src/runtime.c -lm
+
+[1;32mCompilation Successful![0m
+
+
+
+---- the_certificate_states_the_source_s_own_bound stdout ----
+
+thread 'the_certificate_states_the_source_s_own_bound' (8838) panicked at tests/exact_gemm_certificate.rs:316:72:
+certificate: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+---- the_certificate_can_be_suppressed stdout ----
+
+thread 'the_certificate_can_be_suppressed' (8834) panicked at tests/exact_gemm_certificate.rs:409:5:
+suppression was silent:
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming Generic GPU Emitter Target / no GPU architecture recorded; PTX targets sm_80).
+    -> Loaded AVX: true
+    -> Loaded AVX-512: false
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 26 / 27 / 390 / 752 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.00 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 7074 cycles
+    -> Loaded GPU Name: Generic GPU Emitter Target
+    -> Loaded GPU Vendor: Generic
+    -> Loaded SM Version / Compute Capability: 0.0 / 0.0
+    -> Loaded SM (Multiprocessor) Count: 108
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 41.55
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 32 / 35 / 110 / 220
+    -> GPU Tensor Core Latencies (F16/TF32): 44 / 70
+    -> Warp Shuffle vs SMEM Exchange: 1.2 / 6 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4 / 4 vs 6.27
+    -> Branch Divergence Penalty: 4 cycles (uniform=4, divergent=8)
+    -> Texture Unit (TEX1D): 70.57 cycles
+    -> IMAD.WIDE: 4 cycles | SFU (EX2/SIN/RSQ/LG2): 17.56 / 23.5 / 39.53 / 39.53
+    -> Reduced Precision (HFMA2/BF16x2): 4 / 4 | LOP3.LUT: 4
+    -> FP64 DADD: 48 | REDUX.SUM: 60.01 | MEMBAR.GPU: 205.25 | LDC: 70.57
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 8192MB VRAM
+    -> Zero Drift Types: ["Q32.32", "F64"]
+[1;36m[*][0m Reading source: /tmp/y_cert_8781_suppressed/gemm.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 189 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting LLVM IR...
+      -> @ZeroDrift matmul MxN: using scalar lowering, which is still EXACT. The fast vpdpwssd kernel is unavailable because this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+      -> @ZeroDrift sum: I64 -> I64 (no device measurements, narrowest sufficient, 4 of 5 representations rejected; Y_DRIFT_EXPLAIN=1 for why)
+      -> Written to: /tmp/y_cert_8781_suppressed/gemm.ll
+      Compile manually: clang -O2 -o output /tmp/y_cert_8781_suppressed/gemm.ll c_src/runtime.c -lm
+
+[1;32mCompilation Successful![0m
+
+
+
+
+failures:
+    a_fractional_bound_is_certified_at_the_integer_above_it
+    a_source_name_that_is_not_a_coq_identifier_is_sanitised
+    a_substituted_exact_gemm_emits_a_certificate_that_coqc_accepts
+    the_certificate_can_be_suppressed
+    the_certificate_states_the_source_s_own_bound
+
+test result: FAILED. 3 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+error: test failed, to rerun pass `--test exact_gemm_certificate`
+     Running tests/exact_gemm_msplit.rs (/kaggle/temp/target/debug/deps/exact_gemm_msplit-f129542978155759)
+
+running 5 tests
+test a_short_m_still_takes_the_contraction_axis ... ok
+test the_m_path_allocates_no_private_c_and_reduces_nothing ... FAILED
+test the_row_bands_write_the_callers_c_at_the_callers_stride ... FAILED
+test the_two_axes_give_the_same_bits ... FAILED
+test the_emitted_dispatch_is_the_axis_the_model_predicts ... FAILED
+
+failures:
+
+---- the_m_path_allocates_no_private_c_and_reduces_nothing stdout ----
+
+thread 'the_m_path_allocates_no_private_c_and_reduces_nothing' (8885) panicked at tests/exact_gemm_msplit.rs:400:45:
+no `mspawn.pre:` block
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- the_row_bands_write_the_callers_c_at_the_callers_stride stdout ----
+
+thread 'the_row_bands_write_the_callers_c_at_the_callers_stride' (8886) panicked at tests/exact_gemm_msplit.rs:400:45:
+no `mspawn.body:` block
+
+---- the_two_axes_give_the_same_bits stdout ----
+
+thread 'the_two_axes_give_the_same_bits' (8889) panicked at tests/exact_gemm_msplit.rs:172:5:
+the nest must be routed through the threaded entry
+
+---- the_emitted_dispatch_is_the_axis_the_model_predicts stdout ----
+
+thread 'the_emitted_dispatch_is_the_axis_the_model_predicts' (8884) panicked at tests/exact_gemm_msplit.rs:172:5:
+the nest must be routed through the threaded entry
+
+
+failures:
+    the_emitted_dispatch_is_the_axis_the_model_predicts
+    the_m_path_allocates_no_private_c_and_reduces_nothing
+    the_row_bands_write_the_callers_c_at_the_callers_stride
+    the_two_axes_give_the_same_bits
+
+test result: FAILED. 1 passed; 4 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+error: test failed, to rerun pass `--test exact_gemm_msplit`
+     Running tests/exact_gemm_thread_sanitizer.rs (/kaggle/temp/target/debug/deps/exact_gemm_thread_sanitizer-f1bbaef3a6213204)
+
+running 5 tests
+test the_memoised_thread_count_is_accessed_atomically ... FAILED
+test the_sanitizer_reports_a_race_when_there_is_one ... FAILED
+test the_attribute_rewrite_is_what_instruments_the_kernel ... FAILED
+test concurrent_callers_do_not_race_on_the_memoised_thread_count ... FAILED
+test the_threaded_kernel_is_race_free_at_every_thread_count ... FAILED
+
+failures:
+
+---- the_memoised_thread_count_is_accessed_atomically stdout ----
+
+thread 'the_memoised_thread_count_is_accessed_atomically' (8945) panicked at tests/exact_gemm_thread_sanitizer.rs:212:5:
+the nest must route through the exact threaded entry
+
+---- the_sanitizer_reports_a_race_when_there_is_one stdout ----
+
+thread 'the_sanitizer_reports_a_race_when_there_is_one' (8946) panicked at tests/exact_gemm_thread_sanitizer.rs:212:5:
+the nest must route through the exact threaded entry
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- the_attribute_rewrite_is_what_instruments_the_kernel stdout ----
+
+thread 'the_attribute_rewrite_is_what_instruments_the_kernel' (8944) panicked at tests/exact_gemm_thread_sanitizer.rs:212:5:
+the nest must route through the exact threaded entry
+
+---- concurrent_callers_do_not_race_on_the_memoised_thread_count stdout ----
+
+thread 'concurrent_callers_do_not_race_on_the_memoised_thread_count' (8943) panicked at tests/exact_gemm_thread_sanitizer.rs:212:5:
+the nest must route through the exact threaded entry
+
+---- the_threaded_kernel_is_race_free_at_every_thread_count stdout ----
+
+thread 'the_threaded_kernel_is_race_free_at_every_thread_count' (8995) panicked at tests/exact_gemm_thread_sanitizer.rs:212:5:
+the nest must route through the exact threaded entry
+
+
+failures:
+    concurrent_callers_do_not_race_on_the_memoised_thread_count
+    the_attribute_rewrite_is_what_instruments_the_kernel
+    the_memoised_thread_count_is_accessed_atomically
+    the_sanitizer_reports_a_race_when_there_is_one
+    the_threaded_kernel_is_race_free_at_every_thread_count
+
+test result: FAILED. 0 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+error: test failed, to rerun pass `--test exact_gemm_thread_sanitizer`
+     Running tests/for_header_semantics.rs (/kaggle/temp/target/debug/deps/for_header_semantics-9de35478be8e2e3f)
+
+running 5 tests
+test a_register_step_on_the_device ... ok
+test the_jit_reads_the_header_once ... ok
+test emit_cpu_reads_the_header_once_and_compares_in_32_bits ... ok
+test a_zero_step_is_refused_everywhere ... ok
+test the_llvm_backend_reads_the_header_once ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.44s
+
+     Running tests/gemm_substitution_differential.rs (/kaggle/temp/target/debug/deps/gemm_substitution_differential-97357f13bab3eb20)
+
+running 4 tests
+test an_f32_zero_drift_nest_falls_back_to_scalar_exact_lowering ... FAILED
+test a_truncating_product_is_refused_rather_than_widened_by_the_kernel ... FAILED
+test the_exact_kernel_is_bit_identical_to_the_naive_nest ... FAILED
+test the_packed_kernel_computes_what_the_naive_nest_computes ... ok
+
+failures:
+
+---- an_f32_zero_drift_nest_falls_back_to_scalar_exact_lowering stdout ----
+
+thread 'an_f32_zero_drift_nest_falls_back_to_scalar_exact_lowering' (9074) panicked at tests/gemm_substitution_differential.rs:632:5:
+a bounded operand pair must still be licensed
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- a_truncating_product_is_refused_rather_than_widened_by_the_kernel stdout ----
+
+thread 'a_truncating_product_is_refused_rather_than_widened_by_the_kernel' (9073) panicked at tests/gemm_substitution_differential.rs:599:5:
+the widened form must still be substituted, or this test would pass with the exact path deleted entirely
+
+---- the_exact_kernel_is_bit_identical_to_the_naive_nest stdout ----
+
+thread 'the_exact_kernel_is_bit_identical_to_the_naive_nest' (9075) panicked at tests/gemm_substitution_differential.rs:518:5:
+the exact vpdpwssd kernel was NOT substituted, so this compared a program against itself. Check the licence: the operands need `@bounds` and must be declared `I64` so the product does not truncate.
+
+
+failures:
+    a_truncating_product_is_refused_rather_than_widened_by_the_kernel
+    an_f32_zero_drift_nest_falls_back_to_scalar_exact_lowering
+    the_exact_kernel_is_bit_identical_to_the_naive_nest
+
+test result: FAILED. 1 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.04s
+
+error: test failed, to rerun pass `--test gemm_substitution_differential`
+     Running tests/host_cache_directives.rs (/kaggle/temp/target/debug/deps/host_cache_directives-5d9d7b6a0ddc4562)
+
+running 4 tests
+test a_policy_is_found_in_every_place_a_let_can_be_written ... ok
+test gpu_uncached_is_volatile_and_never_non_temporal ... ok
+test every_backend_honours_or_refuses_a_cache_policy ... ok
+test prefetch_stride_is_refused_on_every_backend ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.70s
+
+     Running tests/host_main_contract.rs (/kaggle/temp/target/debug/deps/host_main_contract-592f986680ba59bb)
+
+running 3 tests
+test a_main_with_parameters_is_refused_by_every_host_entry ... ok
+test a_main_returning_a_float_is_refused ... ok
+test an_integer_or_absent_result_is_the_exit_status ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.89s
+
+     Running tests/smt_runtime_loop_bounds.rs (/kaggle/temp/target/debug/deps/smt_runtime_loop_bounds-a8836c58335fa385)
+
+running 10 tests
+test proved_i64_headers_are_converted_before_execution_and_assembly ... ok
+test generic_ptx_uses_the_signed_i32_loop_guard ... ok
+test signed_runtime_endpoints_do_not_need_a_nonnegative_assumption ... ok
+test canonical_exact_cpu_gemm_with_runtime_m_n_k_still_substitutes ... FAILED
+test the_current_exact_pv_source_emits_checked_ptx ... ok
+test signed_runtime_loops_execute_like_an_independent_reference ... ok
+test unsafe_latches_and_nonpositive_steps_are_still_refused ... ok
+test wide_or_overflowing_endpoints_are_still_refused ... ok
+test overlapping_gemm_buffers_execute_the_original_sequential_source ... ok
+test substituted_float_gemm_preserves_empty_signed_source_loops ... ok
+
+failures:
+
+---- canonical_exact_cpu_gemm_with_runtime_m_n_k_still_substitutes stdout ----
+
+thread 'canonical_exact_cpu_gemm_with_runtime_m_n_k_still_substitutes' (9296) panicked at tests/smt_runtime_loop_bounds.rs:256:5:
+substitution stopped:
+========================================
+=== Y Compiler v1.0 ===
+========================================
+
+[*] Found existing .ysu_hw_profile, skipping Sentinel Probe (assuming PinnedByTest / sm_80).
+    -> NOTE: .ysu_hw_profile says AVX=false AVX512=false, this machine reports AVX=true AVX512=false. Using the machine. Delete the file to re-probe.
+    -> Loaded AVX: true
+    -> Loaded AVX-512: false
+    -> Loaded L2 Cache Line Size: 64 bytes
+    -> Loaded CPU Memory Latency Sweep (L1/L2/L3/Mem): 4 / 12 / 40 / 120 cycles
+    -> Loaded CPU AVX-512 Instruction Throughput: 0.50 cycles per op
+    -> Loaded CPU Thread Scheduling/Context Switch Handoff Cost: 2000 cycles
+    -> Loaded GPU Name: PinnedByTest
+    -> Loaded GPU Vendor: Unknown
+    -> Loaded SM Version / Compute Capability: 8.0 / 8.0
+    -> Loaded SM (Multiprocessor) Count: 66
+    -> GPU FMA/IMAD/MUFU Latencies: 4 / 4 / 40
+    -> GPU Memory Latencies (SMEM/L1/L2/VRAM): 28 / 33 / 90 / 300
+    -> GPU Tensor Core Latencies (F16/TF32): 42 / 66
+    -> Warp Shuffle vs SMEM Exchange: 1 / 5 cycles
+    -> Bit-Field (BFE/BFI vs AND+SHIFT): 4.5 / 4.5 vs 7
+    -> Branch Divergence Penalty: 4.5 cycles (uniform=4.5, divergent=9)
+    -> Texture Unit (TEX1D): 70 cycles
+    -> IMAD.WIDE: 2.6 cycles | SFU (EX2/SIN/RSQ/LG2): 17.5 / 23.5 / 39.5 / 39.5
+    -> Reduced Precision (HFMA2/BF16x2): 4.5 / 4 | LOP3.LUT: 4.5
+    -> FP64 DADD: 48.5 | REDUX.SUM: 60 | MEMBAR.GPU: 205 | LDC: 70
+    -> HW Limits: 255 regs/thread, 65536 regs/SM, warp=32, 48KB smem/SM, 0MB VRAM
+    -> Zero Drift Types: []
+[1;36m[*][0m Reading source: /tmp/y_pinned_runtime_bounds_exact_cpu_9295_0/input.ysu
+[1;32m[1/4][0m Running Lexer...
+      -> Extracted 188 tokens.
+[1;32m[2/4][0m Constructing AST...
+      -> Successfully parsed 2 item(s).
+[1;32m[3/4][0m Running Semantic Type-Checker...
+      -> 0 Bank Conflicts Detected.
+      -> Fragment Roles & Linear Obligations verified.
+
+[1;32mFront-end analysis complete.[0m
+
+[1;32m[4/4][0m Emitting LLVM IR...
+      -> @ZeroDrift matmul MxN: using scalar lowering, which is still EXACT. The fast vpdpwssd kernel is unavailable because this machine does not have AVX-512 VNNI, so `vpdpwssd` would fault at runtime (checked with CPUID plus the OS XSAVE state, not CPUID alone). The scalar lowering below is still exact.
+      -> @ZeroDrift sum: I64 -> I64 (no device measurements, narrowest sufficient, 4 of 5 representations rejected; Y_DRIFT_EXPLAIN=1 for why)
+      -> Written to: /tmp/y_pinned_runtime_bounds_exact_cpu_9295_0/input.ll
+      Compile manually: clang -O2 -o output /tmp/y_pinned_runtime_bounds_exact_cpu_9295_0/input.ll c_src/runtime.c -lm
+
+[1;32mCompilation Successful![0m
+
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    canonical_exact_cpu_gemm_with_runtime_m_n_k_still_substitutes
+
+test result: FAILED. 9 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.07s
+
+error: test failed, to rerun pass `--test smt_runtime_loop_bounds`
+     Running tests/source_surface.rs (/kaggle/temp/target/debug/deps/source_surface-183f64c32c5bab99)
+
+running 6 tests
+test every_lexed_directive_is_matched_by_the_parser ... ok
+test every_source_file_is_either_a_module_or_a_binary ... ok
+test the_readme_layout_names_only_files_that_exist ... ok
+test the_ypm_docs_name_the_right_binary_and_the_right_manifest ... ok
+test an_unknown_directive_is_still_refused_with_a_line_number ... ok
+test every_documented_y_command_over_a_repo_fixture_succeeds ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.57s
+
+     Running tests/test_cpu_specializer_performance.rs (/kaggle/temp/target/debug/deps/test_cpu_specializer_performance-e921da8be25ae7ea)
+
+running 2 tests
+test test_cpu_specializer_all_five_regimes_dispatch ... ok
+test test_cpu_specializer_codegen_emission ... FAILED
+
+failures:
+
+---- test_cpu_specializer_codegen_emission stdout ----
+
+thread 'test_cpu_specializer_codegen_emission' (9472) panicked at tests/test_cpu_specializer_performance.rs:60:5:
+assertion failed: emitter.host_buffer.contains("test_irregular_cpu_irregular_masked")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    test_cpu_specializer_codegen_emission
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `--test test_cpu_specializer_performance`
+     Running tests/unknown_flags_are_rejected.rs (/kaggle/temp/target/debug/deps/unknown_flags_are_rejected-c00904393c189c13)
+
+running 5 tests
+test no_input_file_is_a_usage_error ... ok
+test the_message_points_at_the_flag_people_actually_want ... ok
+test a_flag_that_does_not_exist_is_an_error_not_a_no_op ... ok
+test the_bare_invocation_still_works ... ok
+test every_real_flag_still_compiles ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.38s
+
+     Running tests/zero_drift_llvm_paths_agree.rs (/kaggle/temp/target/debug/deps/zero_drift_llvm_paths_agree-fd3308a257dd9005)
+
+running 1 test
+test both_llvm_paths_choose_the_same_representation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.35s
+
+     Running tests/zero_drift_runtime_checks.rs (/kaggle/temp/target/debug/deps/zero_drift_runtime_checks-d411cc255b15c384)
+
+running 5 tests
+test the_gpu_traps_where_the_host_stops ... ok
+test the_jit_stops_too ... ok
+test a_term_the_format_cannot_hold_stops_the_program ... ok
+test the_declared_range_is_tested_after_every_store ... ok
+test an_accumulator_that_overflows_stops_the_program ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.94s
+
+error: 10 targets failed:
+    `--lib`
+    `--test certificate_states_its_trust_boundary`
+    `--test cpu_gemm_exact_accumulation`
+    `--test emitted_attribute_groups`
+    `--test exact_gemm_certificate`
+    `--test exact_gemm_msplit`
+    `--test exact_gemm_thread_sanitizer`
+    `--test gemm_substitution_differential`
+    `--test smt_runtime_loop_bounds`
+    `--test test_cpu_specializer_performance`

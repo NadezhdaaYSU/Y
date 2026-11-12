@@ -1,0 +1,31 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  5 cases x 160 tokens, arms: stock, exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- stock ---
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]Loading weights:  81%|████████▏ | 275/338 [00:00<00:00, 2737.30it/s]Loading weights: 100%|██████████| 338/338 [00:00<00:00, 2785.13it/s]
+  gate: ok -- canary ok, 80 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 991fd2499a0029b9, tokens 7531f989f6e424b9
+  self-check (same card, twice): identical
+
+--- exact ---
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]Loading weights:   0%|          | 1/338 [00:00<04:07,  1.36it/s]Loading weights:  37%|███▋      | 124/338 [00:00<00:01, 195.53it/s]Loading weights:  55%|█████▍    | 185/338 [00:01<00:00, 207.23it/s]Loading weights:  68%|██████▊   | 229/338 [00:01<00:00, 221.64it/s]Loading weights:  79%|███████▊  | 266/338 [00:01<00:00, 229.41it/s]Loading weights:  88%|████████▊ | 299/338 [00:01<00:00, 214.69it/s]Loading weights:  97%|█████████▋| 327/338 [00:01<00:00, 208.88it/s]Loading weights: 100%|██████████| 338/338 [00:01<00:00, 191.68it/s]
+  gate: ok -- canary ok, 107 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 726c7a06603488d6, tokens 22178ff4d2aede57
+  self-check (same card, twice): identical
+
+  written to /kaggle/working/t4_1p5b.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /kaggle/working/t4_1p5b.json other.json

@@ -1,0 +1,277 @@
+test_every_pattern_widens_as_torch_widens_it (test_bf16.Conversions.test_every_pattern_widens_as_torch_widens_it) ... skipped 'needs an sm_80 or later GPU'
+test_float32_narrows_as_torch_narrows_it (test_bf16.Conversions.test_float32_narrows_as_torch_narrows_it) ... skipped 'needs an sm_80 or later GPU'
+test_float64_rounds_once (test_bf16.Conversions.test_float64_rounds_once) ... skipped 'needs an sm_80 or later GPU'
+test_at_32_rows_the_compensated_sum_is_closer (test_bf16.TheGemm.test_at_32_rows_the_compensated_sum_is_closer) ... skipped 'needs an sm_80 or later GPU'
+test_the_same_bits_as_cublas_above_32_rows (test_bf16.TheGemm.test_the_same_bits_as_cublas_above_32_rows) ... skipped 'needs an sm_80 or later GPU'
+test_autotune_search_space (test_c_api.TestYLangPythonAPI.test_autotune_search_space) ... ok
+test_compile_simple_ysu (test_c_api.TestYLangPythonAPI.test_compile_simple_ysu) ... ok
+test_jit_decorator (test_c_api.TestYLangPythonAPI.test_jit_decorator) ... ok
+test_an_acc_that_was_not_zero_stops_the_kernel (test_drift_grid_sum.GridSumUnderTheInterpreter.test_an_acc_that_was_not_zero_stops_the_kernel) ... ok
+test_every_shape_gives_the_exact_total_and_leaves_acc_zero (test_drift_grid_sum.GridSumUnderTheInterpreter.test_every_shape_gives_the_exact_total_and_leaves_acc_zero) ... ok
+test_a_header_that_does_not_match_stops (test_drift_scatter.CloseAndConvertUnderTheInterpreter.test_a_header_that_does_not_match_stops) ... ok
+test_between_the_kernels_acc_holds_the_low_words_then_the_high_words (test_drift_scatter.CloseAndConvertUnderTheInterpreter.test_between_the_kernels_acc_holds_the_low_words_then_the_high_words) ... ok
+test_every_misuse_of_the_pair_stops (test_drift_scatter.CloseAndConvertUnderTheInterpreter.test_every_misuse_of_the_pair_stops) ... ok
+test_the_converter_reads_the_high_word_at_n_plus_i (test_drift_scatter.CloseAndConvertUnderTheInterpreter.test_the_converter_reads_the_high_word_at_n_plus_i) ... ok
+test_the_two_kernels_give_the_exact_totals_and_leave_acc_zero (test_drift_scatter.CloseAndConvertUnderTheInterpreter.test_the_two_kernels_give_the_exact_totals_and_leave_acc_zero) ... ok
+test_an_acc_that_was_not_zero_stops_the_kernel (test_drift_scatter.ScatterUnderTheInterpreter.test_an_acc_that_was_not_zero_stops_the_kernel) ... ok
+test_an_index_outside_the_totals_stops_the_kernel (test_drift_scatter.ScatterUnderTheInterpreter.test_an_index_outside_the_totals_stops_the_kernel) ... ok
+test_every_shape_gives_the_exact_totals_and_leaves_acc_zero (test_drift_scatter.ScatterUnderTheInterpreter.test_every_shape_gives_the_exact_totals_and_leaves_acc_zero) ... ok
+test_a_loop_in_its_thread_stops_before_the_store_after_it (test_drift_stop_point.WhereALoopStops.test_a_loop_in_its_thread_stops_before_the_store_after_it) ... ok
+test_a_loop_that_stores_stops_at_the_bad_term (test_drift_stop_point.WhereALoopStops.test_a_loop_that_stores_stops_at_the_bad_term) ... ok
+test_good_terms_store_the_exact_sums (test_drift_stop_point.WhereALoopStops.test_good_terms_store_the_exact_sums) ... ok
+test_the_two_loops_are_emitted_differently (test_drift_stop_point.WhereALoopStops.test_the_two_loops_are_emitted_differently) ... ok
+test_bits_equal_the_torch_ops (test_exact_decode_attention.TestExactDecodeAttention.test_bits_equal_the_torch_ops) ...     [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+ok
+test_packed_cache_rows_give_the_same_bits (test_exact_decode_attention.TestExactDecodeAttention.test_packed_cache_rows_give_the_same_bits) ... ok
+test_prefill_stays_on_the_torch_ops (test_exact_decode_attention.TestExactDecodeAttention.test_prefill_stays_on_the_torch_ops) ... ok
+test_rows_in_a_buffer_with_spare_room (test_exact_decode_attention.TestExactDecodeAttention.test_rows_in_a_buffer_with_spare_room) ... ok
+test_subnormal_outputs (test_exact_decode_attention.TestExactDecodeAttention.test_subnormal_outputs) ... ok
+test_the_comparison_can_fail (test_exact_decode_attention.TestExactDecodeAttention.test_the_comparison_can_fail) ... ok
+test_the_exp_argument_rounds_half_to_even (test_exact_decode_attention.TestExactDecodeAttention.test_the_exp_argument_rounds_half_to_even) ... ok
+test_the_logit_is_formed_in_pythons_order (test_exact_decode_attention.TestExactDecodeAttention.test_the_logit_is_formed_in_pythons_order) ... ok
+test_the_output_is_a_correctly_rounded_divide (test_exact_decode_attention.TestExactDecodeAttention.test_the_output_is_a_correctly_rounded_divide) ... ok
+test_a_triton_gemm_named_explicitly_is_refused_below_sm80 (test_exact_gemm_choice.TestGemmChoice.test_a_triton_gemm_named_explicitly_is_refused_below_sm80) ... ok
+test_below_sm80_the_default_skips_triton_and_keeps_the_bits (test_exact_gemm_choice.TestGemmChoice.test_below_sm80_the_default_skips_triton_and_keeps_the_bits) ... ok
+test_on_this_card_convert_follows_the_rule (test_exact_gemm_choice.TestGemmChoice.test_on_this_card_convert_follows_the_rule) ... ok
+test_the_rule_reads_the_device (test_exact_gemm_choice.TestGemmChoice.test_the_rule_reads_the_device) ... ok
+test_no_approximate_instructions (test_exact_norm_kernel.TestNormKernel.test_no_approximate_instructions) ... /usr/local/lib/python3.13/dist-packages/triton/compiler/code_generator.py:629: DeprecationWarning: AnnAssign.__init__ missing 1 required positional argument: 'simple'. This will become an error in Python 3.15.
+  init_node = ast.AnnAssign(target=st_target, value=default_value, annotation=annotation)
+ok
+test_norm_equals_the_formula (test_exact_norm_kernel.TestNormKernel.test_norm_equals_the_formula) ... ok
+test_quotient_equals_the_divide (test_exact_norm_kernel.TestNormKernel.test_quotient_equals_the_divide) ... ok
+test_rows_off_the_integer_path (test_exact_norm_kernel.TestNormKernel.test_rows_off_the_integer_path)
+Rows the kernel converts on bits (normal or zero x) beside rows it ... ok
+test_both_divides_are_ieee_without_flush (test_exact_quant_rows.TestQuantRows.test_both_divides_are_ieee_without_flush) ... ok
+test_subnormal_scales_and_values (test_exact_quant_rows.TestQuantRows.test_subnormal_scales_and_values) ... ok
+test_the_models_quantiser_at_volume (test_exact_quant_rows.TestQuantRows.test_the_models_quantiser_at_volume) ... ok
+test_a_qwen_table_against_the_oracle (test_exact_rotary.TestRopeTable.test_a_qwen_table_against_the_oracle) ... ok
+test_estimates_a_float32_step_or_two_off (test_exact_rotary.TestRopeTable.test_estimates_a_float32_step_or_two_off)
+A float64 estimate one or two float32 steps (2^29, 2^30 float64 ... ok
+test_midpoint_arguments_round_correctly_under_any_libm (test_exact_rotary.TestRopeTable.test_midpoint_arguments_round_correctly_under_any_libm) ... ok
+test_the_hard_path_is_taken (test_exact_rotary.TestRopeTable.test_the_hard_path_is_taken) ... ok
+test_this_hosts_float64_cos_sin_meet_the_bound (test_exact_rotary.TestRopeTable.test_this_hosts_float64_cos_sin_meet_the_bound)
+The rounding is correct on hosts whose float64 cos/sin err by less ... ok
+test_every_order_gives_the_oracles_bits (test_exact_sum_of_squares.TestSumOfSquares.test_every_order_gives_the_oracles_bits) ... /usr/local/lib/python3.13/dist-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/usr/local/lib/python3.13/dist-packages/triton/compiler/code_generator.py:629: DeprecationWarning: AnnAssign.__init__ missing 1 required positional argument: 'simple'. This will become an error in Python 3.15.
+  init_node = ast.AnnAssign(target=st_target, value=default_value, annotation=annotation)
+/usr/local/lib/python3.13/dist-packages/triton/compiler/code_generator.py:629: DeprecationWarning: AnnAssign.__init__ missing 1 required positional argument: 'simple'. This will become an error in Python 3.15.
+  init_node = ast.AnnAssign(target=st_target, value=default_value, annotation=annotation)
+/usr/local/lib/python3.13/dist-packages/triton/language/semantic.py:1680: UserWarning: tl.where with a non-boolean condition is deprecated and will error out in a future triton release. Got int8
+  warnings.warn(
+ok
+test_infinite_and_nan_rows (test_exact_sum_of_squares.TestSumOfSquares.test_infinite_and_nan_rows) ... /usr/local/lib/python3.13/dist-packages/triton/compiler/code_generator.py:629: DeprecationWarning: AnnAssign.__init__ missing 1 required positional argument: 'simple'. This will become an error in Python 3.15.
+  init_node = ast.AnnAssign(target=st_target, value=default_value, annotation=annotation)
+ok
+test_not_fsum_where_the_grid_drops_a_square (test_exact_sum_of_squares.TestSumOfSquares.test_not_fsum_where_the_grid_drops_a_square)
+1 + 2 * (2^-27)^2 is exactly the float64 midpoint 1 + 2^-53, which ... /usr/local/lib/python3.13/dist-packages/triton/compiler/code_generator.py:629: DeprecationWarning: AnnAssign.__init__ missing 1 required positional argument: 'simple'. This will become an error in Python 3.15.
+  init_node = ast.AnnAssign(target=st_target, value=default_value, annotation=annotation)
+ok
+test_refuses_what_it_does_not_define (test_exact_sum_of_squares.TestSumOfSquares.test_refuses_what_it_does_not_define) ... ok
+test_the_largest_values_and_every_subnormal (test_exact_sum_of_squares.TestSumOfSquares.test_the_largest_values_and_every_subnormal) ... /usr/local/lib/python3.13/dist-packages/triton/compiler/code_generator.py:629: DeprecationWarning: AnnAssign.__init__ missing 1 required positional argument: 'simple'. This will become an error in Python 3.15.
+  init_node = ast.AnnAssign(target=st_target, value=default_value, annotation=annotation)
+ok
+test_ctas_past_the_matrix_store_nothing (test_f16_gemm.F16GemmIsExact.test_ctas_past_the_matrix_store_nothing) ... skipped 'needs an sm_89 or later GPU'
+test_every_tile_divisible_and_ragged (test_f16_gemm.F16GemmIsExact.test_every_tile_divisible_and_ragged) ... skipped 'needs an sm_89 or later GPU'
+test_every_tile_rounds_alike_and_close (test_f16_gemm.F16GemmIsExact.test_every_tile_rounds_alike_and_close) ... skipped 'needs an sm_89 or later GPU'
+test_the_next_tile_is_waited_for_between_the_last_two_k_steps (test_f16_gemm.F16GemmIsExact.test_the_next_tile_is_waited_for_between_the_last_two_k_steps) ... skipped 'needs an sm_89 or later GPU'
+test_the_pipeline_commits_waits_and_synchronises_in_order (test_f16_gemm.F16GemmIsExact.test_the_pipeline_commits_waits_and_synchronises_in_order) ... skipped 'needs an sm_89 or later GPU'
+test_the_staging_path_follows_divisibility (test_f16_gemm.F16GemmIsExact.test_the_staging_path_follows_divisibility) ... skipped 'needs an sm_89 or later GPU'
+test_no_access_outside_a_b_or_c (test_f16_gemm.F16GemmReadsOnlyItsOperands.test_no_access_outside_a_b_or_c) ... skipped 'needs an sm_89 or later GPU'
+test_a_literal_is_rounded_from_its_double (test_fp8_e4m3.E4m3Conversions.test_a_literal_is_rounded_from_its_double) ... skipped 'needs an sm_89 or later GPU'
+test_a_load_widens_every_byte_exactly (test_fp8_e4m3.E4m3Conversions.test_a_load_widens_every_byte_exactly) ... skipped 'needs an sm_89 or later GPU'
+test_a_store_rounds_to_nearest_even_and_saturates (test_fp8_e4m3.E4m3Conversions.test_a_store_rounds_to_nearest_even_and_saturates) ... skipped 'needs an sm_89 or later GPU'
+test_an_f64_is_rounded_once (test_fp8_e4m3.E4m3Conversions.test_an_f64_is_rounded_once) ... skipped 'needs an sm_89 or later GPU'
+test_the_v4_forms_move_four_bytes (test_fp8_e4m3.E4m3Conversions.test_the_v4_forms_move_four_bytes) ... skipped 'needs an sm_89 or later GPU'
+test_every_tile_on_whole_and_ragged_shapes (test_fp8_e4m3.E4m3GemmIsExact.test_every_tile_on_whole_and_ragged_shapes) ... skipped 'needs an sm_89 or later GPU'
+test_partial_sums_are_added_in_float32 (test_fp8_e4m3.E4m3GemmIsExact.test_partial_sums_are_added_in_float32) ... skipped 'needs an sm_89 or later GPU'
+test_the_pinned_tile_is_the_one_compiled (test_fp8_e4m3.E4m3GemmIsExact.test_the_pinned_tile_is_the_one_compiled) ... skipped 'needs an sm_89 or later GPU'
+test_the_scales_multiply_the_result (test_fp8_e4m3.E4m3GemmIsExact.test_the_scales_multiply_the_result) ... skipped 'needs an sm_89 or later GPU'
+test_no_access_outside_a_b_or_c (test_fp8_e4m3.E4m3GemmReadsOnlyItsOperands.test_no_access_outside_a_b_or_c) ... skipped 'needs an sm_89 or later GPU'
+test_both_quantize_kernels_give_torchs_bytes (test_fp8_e4m3.E4m3QuantizeKernels.test_both_quantize_kernels_give_torchs_bytes) ... skipped 'needs an sm_89 or later GPU'
+test_every_shape (test_fp8_gemm.Fp8GemmIsExact.test_every_shape) ... skipped 'needs an sm_89 or later GPU'
+test_partial_sums_are_added_in_float32 (test_fp8_gemm.Fp8GemmIsExact.test_partial_sums_are_added_in_float32) ... skipped 'needs an sm_89 or later GPU'
+test_scales_divide_before_quantizing_and_multiply_after (test_fp8_gemm.Fp8GemmIsExact.test_scales_divide_before_quantizing_and_multiply_after) ... skipped 'needs an sm_89 or later GPU'
+test_no_access_outside_a_b_or_c (test_fp8_gemm.Fp8GemmReadsOnlyItsOperands.test_no_access_outside_a_b_or_c) ... skipped 'needs an sm_89 or later GPU'
+test_a_cpu_graph_is_not_lowered_and_says_why (test_inductor.YInductorTest.test_a_cpu_graph_is_not_lowered_and_says_why) ... ok
+test_a_group_never_needs_its_own_output (test_inductor.YInductorTest.test_a_group_never_needs_its_own_output) ... y: no hardware profile at /tmp/y_inductor_cache_uipsi7sw/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_a_multiply_shares_a_kernel_with_the_add_it_feeds (test_inductor.YInductorTest.test_a_multiply_shares_a_kernel_with_the_add_it_feeds) ... y: no hardware profile at /tmp/y_inductor_cache__0tvpcac/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_a_swiglu_runs_as_one_y_kernel_bit_for_bit (test_inductor.YInductorTest.test_a_swiglu_runs_as_one_y_kernel_bit_for_bit) ... y: no hardware profile at /tmp/y_inductor_cache_gosomysz/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_an_elementwise_graph_runs_as_y_kernels_bit_for_bit (test_inductor.YInductorTest.test_an_elementwise_graph_runs_as_y_kernels_bit_for_bit) ... y: no hardware profile at /tmp/y_inductor_cache_air0bahg/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_broadcasting_and_other_dtypes_are_not_lowered (test_inductor.YInductorTest.test_broadcasting_and_other_dtypes_are_not_lowered) ... ok
+test_every_spelling_of_silu_and_sigmoid_is_lowered (test_inductor.YInductorTest.test_every_spelling_of_silu_and_sigmoid_is_lowered) ... y: no hardware profile at /tmp/y_inductor_cache_a0syn6hy/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_in_place_activations_are_not_lowered (test_inductor.YInductorTest.test_in_place_activations_are_not_lowered) ... y: no hardware profile at /tmp/y_inductor_cache_x0703yix/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_relu_matches_eager_on_every_special_value (test_inductor.YInductorTest.test_relu_matches_eager_on_every_special_value) ... y: no hardware profile at /tmp/y_inductor_cache_5x7j5bzh/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_scalar_operands_are_exact_or_not_lowered (test_inductor.YInductorTest.test_scalar_operands_are_exact_or_not_lowered) ... y: no hardware profile at /tmp/y_inductor_cache_p1gaon9x/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_silu_and_sigmoid_match_eager_on_every_float32 (test_inductor.YInductorTest.test_silu_and_sigmoid_match_eager_on_every_float32) ... y: no hardware profile at /tmp/y_inductor_cache_3ndktuw0/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_the_module_path_lowers_and_falls_back_at_runtime (test_inductor.YInductorTest.test_the_module_path_lowers_and_falls_back_at_runtime) ... y: no hardware profile at /tmp/y_inductor_cache_6gt_oqg1/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_training_through_the_backend_keeps_autograd (test_inductor.YInductorTest.test_training_through_the_backend_keeps_autograd) ... y: no hardware profile at /tmp/y_inductor_cache_6o5s7my1/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_what_is_not_lowered_runs_eagerly_and_says_why (test_inductor.YInductorTest.test_what_is_not_lowered_runs_eagerly_and_says_why) ... y: no hardware profile at /tmp/y_inductor_cache_h9rhsxxi/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+ok
+test_a_split_launch_is_exact (test_int8_mm.OnTheGpu.test_a_split_launch_is_exact) ... skipped 'needs an sm_80 or later GPU'
+test_compiled_with_no_graph_break (test_int8_mm.OnTheGpu.test_compiled_with_no_graph_break) ... skipped 'needs an sm_80 or later GPU'
+test_device_layout_refusals (test_int8_mm.OnTheGpu.test_device_layout_refusals) ... skipped 'needs an sm_80 or later GPU'
+test_exact_across_the_row_buckets (test_int8_mm.OnTheGpu.test_exact_across_the_row_buckets) ... skipped 'needs an sm_80 or later GPU'
+test_exact_at_the_licensed_k_with_full_range_products (test_int8_mm.OnTheGpu.test_exact_at_the_licensed_k_with_full_range_products) ... skipped 'needs an sm_80 or later GPU'
+test_on_the_callers_stream (test_int8_mm.OnTheGpu.test_on_the_callers_stream) ... skipped 'needs an sm_80 or later GPU'
+test_the_same_bits_as_cublaslt (test_int8_mm.OnTheGpu.test_the_same_bits_as_cublaslt) ... skipped 'needs an sm_80 or later GPU'
+test_zero_rows (test_int8_mm.OnTheGpu.test_zero_rows) ... skipped 'needs an sm_80 or later GPU'
+test_the_launch_is_read_from_the_header_and_checked_against_it (test_int8_mm.ThePtx.test_the_launch_is_read_from_the_header_and_checked_against_it) ... ok
+test_the_ptx_depends_on_the_target_and_shape_only (test_int8_mm.ThePtx.test_the_ptx_depends_on_the_target_and_shape_only) ... ok
+test_a_reload_keeps_the_registration (test_int8_mm.TheRefusals.test_a_reload_keeps_the_registration) ... ok
+test_host_operands_of_a_legal_shape (test_int8_mm.TheRefusals.test_host_operands_of_a_legal_shape) ... ok
+test_shapes_and_types (test_int8_mm.TheRefusals.test_shapes_and_types) ... ok
+test_the_registered_op_refuses_with_the_same_messages (test_int8_mm.TheRefusals.test_the_registered_op_refuses_with_the_same_messages) ... ok
+test_every_row_count_has_a_bucket_at_most_one_step_above_it (test_int8_mm.TheRowBucket.test_every_row_count_has_a_bucket_at_most_one_step_above_it) ... ok
+test_never_more_splits_than_k_tiles_and_never_zero (test_int8_mm.TheSplitPolicy.test_never_more_splits_than_k_tiles_and_never_zero) ... ok
+test_the_factor_for_the_measured_shapes (test_int8_mm.TheSplitPolicy.test_the_factor_for_the_measured_shapes) ... ok
+test_an_extern_shared_array_has_the_size_the_launch_gives (test_interpreter.DynamicSharedMemory.test_an_extern_shared_array_has_the_size_the_launch_gives) ... ok
+test_the_gpu_gives_the_same_array (test_interpreter.DynamicSharedMemory.test_the_gpu_gives_the_same_array) ... ERROR
+test_approximate_functions_are_close (test_interpreter.MatchesTheGpu.test_approximate_functions_are_close) ... ok
+test_carry_chains (test_interpreter.MatchesTheGpu.test_carry_chains) ... ERROR
+test_cp_async_reads_only_its_source_size (test_interpreter.MatchesTheGpu.test_cp_async_reads_only_its_source_size) ... skipped 'cp.async needs sm_80 or later'
+test_exact_attention_and_its_temperature_trap (test_interpreter.MatchesTheGpu.test_exact_attention_and_its_temperature_trap) ... skipped 'needs target/release/Y for --emit-attention-ptx'
+test_fma (test_interpreter.MatchesTheGpu.test_fma) ... ok
+test_integer_arithmetic (test_interpreter.MatchesTheGpu.test_integer_arithmetic) ... ok
+test_narrow_loads_extend_by_their_type (test_interpreter.MatchesTheGpu.test_narrow_loads_extend_by_their_type) ... ERROR
+test_a_warp_reduction_sums_each_warp (test_interpreter.RunsTheKernel.test_a_warp_reduction_sums_each_warp) ... ok
+test_debug_interpret_runs_source_and_refuses_a_bare_name (test_interpreter.RunsTheKernel.test_debug_interpret_runs_source_and_refuses_a_bare_name) ... ok
+test_debug_mode_launches_write_their_outputs (test_interpreter.RunsTheKernel.test_debug_mode_launches_write_their_outputs) ... ok
+test_fma_rounds_once (test_interpreter.RunsTheKernel.test_fma_rounds_once) ... ok
+test_rmsnorm_matches_float64 (test_interpreter.RunsTheKernel.test_rmsnorm_matches_float64) ... ok
+test_vector_add_is_computed_exactly (test_interpreter.RunsTheKernel.test_vector_add_is_computed_exactly) ... ok
+test_a_barrier_in_divergent_code_is_reported (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_a_barrier_in_divergent_code_is_reported) ... ok
+test_a_block_past_the_launch_bounds_is_refused (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_a_block_past_the_launch_bounds_is_refused) ... ok
+test_a_runtime_bounds_check_traps (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_a_runtime_bounds_check_traps) ... ok
+test_a_shuffle_in_divergent_code_is_reported (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_a_shuffle_in_divergent_code_is_reported) ... ok
+test_a_shuffle_whose_mask_names_absent_lanes_is_reported (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_a_shuffle_whose_mask_names_absent_lanes_is_reported) ... ok
+test_conflicting_stores_are_reported (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_conflicting_stores_are_reported) ... ok
+test_out_of_bounds_access_names_buffer_thread_and_line (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_out_of_bounds_access_names_buffer_thread_and_line) ... ok
+test_tensor_core_kernels_are_refused_not_guessed (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_tensor_core_kernels_are_refused_not_guessed) ... ok
+test_the_compiler_refuses_the_same_shuffle_written_with_a_builtin (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_the_compiler_refuses_the_same_shuffle_written_with_a_builtin) ... ok
+test_trap_is_reported (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_trap_is_reported) ... ok
+test_unmodelled_forms_are_refused (test_interpreter.StopsAtWhatTheGpuGetsWrong.test_unmodelled_forms_are_refused) ... ok
+test_every_form (test_interpreter_ops.EveryInstructionMatchesTheGpu.test_every_form) ... skipped 'needs a CUDA device of sm_80 or later'
+test_fma_f64_overflow_and_invalid_operations (test_interpreter_ops.EveryInstructionMatchesTheGpu.test_fma_f64_overflow_and_invalid_operations) ... skipped 'needs a CUDA device of sm_80 or later'
+test_the_comparison_sees_nan_payloads_and_signed_zeros (test_interpreter_ops.EveryInstructionMatchesTheGpu.test_the_comparison_sees_nan_payloads_and_signed_zeros) ... skipped 'needs a CUDA device of sm_80 or later'
+test_a_name_the_module_lacks_is_refused (test_launch.LaunchesTheNamedKernelOnTheCallersStream.test_a_name_the_module_lacks_is_refused) ... ok
+test_an_explicit_stream_is_used (test_launch.LaunchesTheNamedKernelOnTheCallersStream.test_an_explicit_stream_is_used) ... ok
+test_the_launch_follows_the_current_stream (test_launch.LaunchesTheNamedKernelOnTheCallersStream.test_the_launch_follows_the_current_stream) ... ok
+test_a_name_the_module_lacks_is_refused (test_launch.LaunchesTheNamedKernelOnTheCallersStreamThroughCtypes.test_a_name_the_module_lacks_is_refused) ... ok
+test_an_explicit_stream_is_used (test_launch.LaunchesTheNamedKernelOnTheCallersStreamThroughCtypes.test_an_explicit_stream_is_used) ... ok
+test_the_launch_follows_the_current_stream (test_launch.LaunchesTheNamedKernelOnTheCallersStreamThroughCtypes.test_the_launch_follows_the_current_stream) ... ok
+test_an_f16_tile_gemm_gets_its_dynamic_shared_memory (test_launch.LaunchesWhatThePtxNeeds.test_an_f16_tile_gemm_gets_its_dynamic_shared_memory) ... skipped 'needs an sm_89 or later GPU'
+test_one_needing_more_than_48_kb_opts_in (test_launch.LaunchesWhatThePtxNeeds.test_one_needing_more_than_48_kb_opts_in) ... skipped 'needs an sm_89 or later GPU'
+test_an_f16_tile_gemm_gets_its_dynamic_shared_memory (test_launch.LaunchesWhatThePtxNeedsThroughCtypes.test_an_f16_tile_gemm_gets_its_dynamic_shared_memory) ... skipped 'needs an sm_89 or later GPU'
+test_one_needing_more_than_48_kb_opts_in (test_launch.LaunchesWhatThePtxNeedsThroughCtypes.test_one_needing_more_than_48_kb_opts_in) ... skipped 'needs an sm_89 or later GPU'
+test_set_unset_and_false_values (test_launch.TheInterpreterSwitchIsReadEachTime.test_set_unset_and_false_values) ... ok
+test_a_launch_the_driver_refuses_raises (test_native_launch.LaunchesThroughCtypes.test_a_launch_the_driver_refuses_raises) ... ok
+test_an_unsupported_argument_launches_nothing (test_native_launch.LaunchesThroughCtypes.test_an_unsupported_argument_launches_nothing) ... ok
+test_more_parameters_than_the_stack_holds (test_native_launch.LaunchesThroughCtypes.test_more_parameters_than_the_stack_holds) ... ok
+test_a_launch_the_driver_refuses_raises (test_native_launch.LaunchesThroughTheNativePath.test_a_launch_the_driver_refuses_raises) ... ok
+test_an_unsupported_argument_launches_nothing (test_native_launch.LaunchesThroughTheNativePath.test_an_unsupported_argument_launches_nothing) ... ok
+test_more_parameters_than_the_stack_holds (test_native_launch.LaunchesThroughTheNativePath.test_more_parameters_than_the_stack_holds) ... ok
+test_function_dimensions_shared_memory_stream_and_every_slot (test_native_launch.TheDriverGetsWhatTheCallerPassed.test_function_dimensions_shared_memory_stream_and_every_slot) ... ok
+test_no_slot_is_written_out_of_bounds (test_native_launch.TheDriverGetsWhatTheCallerPassed.test_no_slot_is_written_out_of_bounds) ... ok
+test_a_compiler_that_fails_falls_back_to_ctypes (test_native_launch.TheLauncherIsChosenOncePerProcess.test_a_compiler_that_fails_falls_back_to_ctypes) ... ok
+test_a_misspelt_setting_is_refused (test_native_launch.TheLauncherIsChosenOncePerProcess.test_a_misspelt_setting_is_refused) ... ok
+test_ctypes_builds_nothing (test_native_launch.TheLauncherIsChosenOncePerProcess.test_ctypes_builds_nothing) ... ok
+test_native_is_refused_where_it_cannot_be_built (test_native_launch.TheLauncherIsChosenOncePerProcess.test_native_is_refused_where_it_cannot_be_built) ... ok
+test_the_default_builds_once_and_launches_natively (test_native_launch.TheLauncherIsChosenOncePerProcess.test_the_default_builds_once_and_launches_natively) ... ok
+test_a_changed_source_is_a_different_module (test_native_launch.TheNativeSlotsAreTheCtypesSlots.test_a_changed_source_is_a_different_module) ... ok
+test_each_argument_alone (test_native_launch.TheNativeSlotsAreTheCtypesSlots.test_each_argument_alone) ... ok
+test_every_argument_at_once_on_the_heap_and_on_the_stack (test_native_launch.TheNativeSlotsAreTheCtypesSlots.test_every_argument_at_once_on_the_heap_and_on_the_stack) ... ok
+test_the_first_bad_argument_decides_the_error (test_native_launch.TheNativeSlotsAreTheCtypesSlots.test_the_first_bad_argument_decides_the_error) ... ok
+test_a_failing_kernel_raises_rather_than_falling_back (test_ops_fail_closed.Fp8GemmTests.test_a_failing_kernel_raises_rather_than_falling_back) ... ok
+test_a_missing_kernel_raises (test_ops_fail_closed.Fp8GemmTests.test_a_missing_kernel_raises) ... ok
+test_other_dtypes_still_multiply (test_ops_fail_closed.Fp8GemmTests.test_other_dtypes_still_multiply) ... ok
+test_whatever_this_machine_does_it_is_not_cublas_in_disguise (test_ops_fail_closed.Fp8GemmTests.test_whatever_this_machine_does_it_is_not_cublas_in_disguise) ... ok
+test_it_is_refused (test_ops_fail_closed.Sparse24Tests.test_it_is_refused) ... ok
+test_every_configuration_and_score_shape (test_paged_decode_attention.PagedDecodeAttentionMatchesReference.test_every_configuration_and_score_shape) ... ok
+test_no_access_outside_the_sequence (test_paged_decode_attention.PagedDecodeAttentionReadsOnlyItsBuffers.test_no_access_outside_the_sequence) ... ok
+test_a_launch_with_another_block_size_traps (test_rmsnorm_residual.RmsnormResidual.test_a_launch_with_another_block_size_traps) ... skipped 'needs an sm_80 or later GPU'
+test_a_width_not_a_multiple_of_8_is_refused (test_rmsnorm_residual.RmsnormResidual.test_a_width_not_a_multiple_of_8_is_refused) ... skipped 'needs an sm_80 or later GPU'
+test_every_shape_is_exact_where_it_must_be_and_close_elsewhere (test_rmsnorm_residual.RmsnormResidual.test_every_shape_is_exact_where_it_must_be_and_close_elsewhere) ... skipped 'needs an sm_80 or later GPU'
+test_the_rows_are_unrolled_with_every_load_first (test_rmsnorm_residual.RmsnormResidual.test_the_rows_are_unrolled_with_every_load_first) ... skipped 'needs an sm_80 or later GPU'
+test_a_lane_loads_its_pairs_first_in_vectors (test_rope.Rope.test_a_lane_loads_its_pairs_first_in_vectors) ... skipped 'needs an sm_80 or later GPU'
+test_a_larger_grid_is_allowed_and_writes_nothing_more (test_rope.Rope.test_a_larger_grid_is_allowed_and_writes_nothing_more) ... skipped 'needs an sm_80 or later GPU'
+test_every_row_is_rotated_once_and_nothing_past_the_last (test_rope.Rope.test_every_row_is_rotated_once_and_nothing_past_the_last) ... skipped 'needs an sm_80 or later GPU'
+test_the_old_signature_and_other_widths_are_refused (test_rope.Rope.test_the_old_signature_and_other_widths_are_refused) ... skipped 'needs an sm_80 or later GPU'
+test_wrong_launches_trap (test_rope.Rope.test_wrong_launches_trap) ... skipped 'needs an sm_80 or later GPU'
+test_arange (test_triton_parity.TestTritonParity.test_arange) ... ok
+test_autotune_decorator (test_triton_parity.TestTritonParity.test_autotune_decorator) ... ok
+test_block_dot (test_triton_parity.TestTritonParity.test_block_dot) ... ok
+test_cdiv (test_triton_parity.TestTritonParity.test_cdiv) ... ok
+test_expand_dims_and_where (test_triton_parity.TestTritonParity.test_expand_dims_and_where) ... ok
+test_heuristics_decorator (test_triton_parity.TestTritonParity.test_heuristics_decorator) ... ok
+test_masked_load_store (test_triton_parity.TestTritonParity.test_masked_load_store) ... ok
+test_y_inductor_compiler (test_triton_parity.TestTritonParity.test_y_inductor_compiler) ... ok
+test_feature_2_pytorch_inductor_backend (test_triton_parity_features.TritonParityFeatures.test_feature_2_pytorch_inductor_backend) ... ok
+test_feature_3_block_primitives (test_triton_parity_features.TritonParityFeatures.test_feature_3_block_primitives) ... ok
+test_feature_5_cpu_interpreter_debugger (test_triton_parity_features.TritonParityFeatures.test_feature_5_cpu_interpreter_debugger) ... ok
+test_feature_6_quantized_and_llm_ops (test_triton_parity_features.TritonParityFeatures.test_feature_6_quantized_and_llm_ops) ... ok
+
+======================================================================
+ERROR: test_the_gpu_gives_the_same_array (test_interpreter.DynamicSharedMemory.test_the_gpu_gives_the_same_array)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/y_lang/tests/test_interpreter.py", line 218, in test_the_gpu_gives_the_same_array
+    PtxKernel(DYNAMIC_SHARED, "rot").launch((1, 1, 1), (256, 1, 1), [a.cuda(), gpu_out])
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/torch_interop.py", line 293, in launch
+    self._ensure_loaded()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/kaggle/working/Y/python/y_lang/torch_interop.py", line 236, in _ensure_loaded
+    raise RuntimeError(f"CUDA Error cuModuleLoadData failed with error code {res}")
+RuntimeError: CUDA Error cuModuleLoadData failed with error code 218
+
+======================================================================
+ERROR: test_carry_chains (test_interpreter.MatchesTheGpu.test_carry_chains)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/y_lang/tests/test_interpreter.py", line 428, in test_carry_chains
+    self.both(PtxKernel(ptx, "bn254_fr_mul_fast"), ((n + 255) // 256, 1, 1), (256, 1, 1), [limbs(), limbs(), out, n])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/tests/test_interpreter.py", line 391, in both
+    k.launch(grid, block, gpu)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/torch_interop.py", line 293, in launch
+    self._ensure_loaded()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/kaggle/working/Y/python/y_lang/torch_interop.py", line 236, in _ensure_loaded
+    raise RuntimeError(f"CUDA Error cuModuleLoadData failed with error code {res}")
+RuntimeError: CUDA Error cuModuleLoadData failed with error code 218
+
+======================================================================
+ERROR: test_narrow_loads_extend_by_their_type (test_interpreter.MatchesTheGpu.test_narrow_loads_extend_by_their_type)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/y_lang/tests/test_interpreter.py", line 520, in test_narrow_loads_extend_by_their_type
+    self.both(PtxKernel(ptx, "ldx"), (1, 1, 1), (8, 1, 1), [a, out])
+    ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/tests/test_interpreter.py", line 391, in both
+    k.launch(grid, block, gpu)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/torch_interop.py", line 293, in launch
+    self._ensure_loaded()
+    ~~~~~~~~~~~~~~~~~~~^^
+  File "/kaggle/working/Y/python/y_lang/torch_interop.py", line 236, in _ensure_loaded
+    raise RuntimeError(f"CUDA Error cuModuleLoadData failed with error code {res}")
+RuntimeError: CUDA Error cuModuleLoadData failed with error code 218
+
+----------------------------------------------------------------------
+Ran 190 tests in 94.736s
+
+FAILED (errors=3, skipped=53)
