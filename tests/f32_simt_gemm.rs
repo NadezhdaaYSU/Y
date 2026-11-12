@@ -277,75 +277,72 @@ fn as_bytes(v: &[f32]) -> Vec<u8> {
     v.iter().flat_map(|x| x.to_le_bytes()).collect()
 }
 
-#[test]
-fn each_element_is_the_in_order_fma_chain_on_every_grid() {
-    let Some(ctx) = CudaContext::new() else {
-        eprintln!("SKIP: no CUDA driver - no FP32 GEMM was executed.");
-        return;
-    };
-    let dir = pinned::pinned_scratch("f32_gemm_run", pinned::SM_PINNED);
-    // Each tile; K = 16 is one K tile (fewer than the pipeline's stages),
-    // K = 32 two (the prologue loads them all), the others run the loop past
-    // its last load.
-    let shapes: [((u32, u32, u32), &str); 33] = [
-        ((64, 64, 16), "small"),
-        ((192, 320, 112), "small"),
-        ((128, 4096, 80), "mid"),
-        ((640, 1024, 48), "mid"),
-        ((2048, 4096, 32), "large"),
-        ((2048, 4096, 112), "large"),
-        // Ragged: a single element; M, N and K all ragged with N odd; K
-        // below one K tile; N a multiple of 4 but not of the tile; and each
-        // tile with ragged M and N, odd N on the large tile.
-        ((1, 1, 1), "small"),
-        ((7, 13, 5), "small"),
-        // N = 130: even, but a B row is not 16-byte aligned.
-        ((66, 130, 64), "small"),
-        ((33, 65, 17), "small"),
-        ((129, 257, 15), "small"),
-        ((300, 1028, 51), "small"),
-        // N ragged with M whole (the column mask alone).
-        ((128, 1028, 40), "small"),
-        ((2048, 4100, 20), "large"),
-        ((1023, 1025, 75), "mid"),
-        ((1, 8193, 40), "mid"),
-        ((2047, 4100, 20), "large"),
-        ((2047, 4099, 36), "large"),
-        // Remainder tiles: rows (`rows32x128`), rows and columns on the
-        // large tile (`rows32x256`, `rem128x64`) and the small one
-        // (`rows32x64`, `rem64x32`), N odd in a remainder.
-        ((1025, 1024, 40), "mid"),
-        ((2049, 4100, 24), "large"),
-        ((65, 70, 20), "small"),
-        ((1025, 1025, 33), "mid"),
-        // Leftover rows that exactly fill their 32-row strips.
-        ((1056, 1024, 24), "mid"),
-        ((2112, 4096, 24), "large"),
-        // B rows copied at their own alignment's width (16, 8 or 4 bytes):
-        // N = 2 mod 4 on the mid and large tiles, N odd on the large one,
-        // with K past the prologue's tiles so every width's pointer is
-        // advanced in the loop; then the same with a K tail, which keeps one
-        // width, and an edge the remainder does not take.
-        ((256, 12802, 80), "mid"),
-        ((2048, 12802, 16), "large"),
-        ((2048, 12803, 64), "large"),
-        ((2048, 4098, 48), "large"),
-        ((256, 12802, 83), "mid"),
-        ((2048, 12803, 67), "large"),
-        ((2048, 4226, 32), "large"),
-        // C stored in each float's widest aligned pieces (v4, v2 + v2, or
-        // f32 + v2 + f32 by its place in a 16-byte line) on the 256-column
-        // tiles with N odd: 12803 and 4099 above are 3 mod 4, these 1 mod 4,
-        // the second with a 12-row `rows32x256` strip.
-        ((2048, 4097, 40), "large"),
-        ((2060, 4097, 24), "large"),
-    ];
-    for (si, ((m, n, k), tile)) in shapes.iter().enumerate() {
+/// (shape, tile at the pinned sm_80 profile)
+const EXACT_SHAPES: [((u32, u32, u32), &str); 33] = [
+    ((64, 64, 16), "small"),
+    ((192, 320, 112), "small"),
+    ((128, 4096, 80), "mid"),
+    ((640, 1024, 48), "mid"),
+    ((2048, 4096, 32), "large"),
+    ((2048, 4096, 112), "large"),
+    // Ragged: a single element; M, N and K all ragged with N odd; K
+    // below one K tile; N a multiple of 4 but not of the tile; and each
+    // tile with ragged M and N, odd N on the large tile.
+    ((1, 1, 1), "small"),
+    ((7, 13, 5), "small"),
+    // N = 130: even, but a B row is not 16-byte aligned.
+    ((66, 130, 64), "small"),
+    ((33, 65, 17), "small"),
+    ((129, 257, 15), "small"),
+    ((300, 1028, 51), "small"),
+    // N ragged with M whole (the column mask alone).
+    ((128, 1028, 40), "small"),
+    ((2048, 4100, 20), "large"),
+    ((1023, 1025, 75), "mid"),
+    ((1, 8193, 40), "mid"),
+    ((2047, 4100, 20), "large"),
+    ((2047, 4099, 36), "large"),
+    // Remainder tiles: rows (`rows32x128`), rows and columns on the
+    // large tile (`rows32x256`, `rem128x64`) and the small one
+    // (`rows32x64`, `rem64x32`), N odd in a remainder.
+    ((1025, 1024, 40), "mid"),
+    ((2049, 4100, 24), "large"),
+    ((65, 70, 20), "small"),
+    ((1025, 1025, 33), "mid"),
+    // Leftover rows that exactly fill their 32-row strips.
+    ((1056, 1024, 24), "mid"),
+    ((2112, 4096, 24), "large"),
+    // B rows copied at their own alignment's width (16, 8 or 4 bytes):
+    // N = 2 mod 4 on the mid and large tiles, N odd on the large one,
+    // with K past the prologue's tiles so every width's pointer is
+    // advanced in the loop; then the same with a K tail, which keeps one
+    // width, and an edge the remainder does not take.
+    ((256, 12802, 80), "mid"),
+    ((2048, 12802, 16), "large"),
+    ((2048, 12803, 64), "large"),
+    ((2048, 4098, 48), "large"),
+    ((256, 12802, 83), "mid"),
+    ((2048, 12803, 67), "large"),
+    ((2048, 4226, 32), "large"),
+    // C stored in each float's widest aligned pieces (v4, v2 + v2, or
+    // f32 + v2 + f32 by its place in a 16-byte line) on the 256-column
+    // tiles with N odd: 12803 and 4099 above are 3 mod 4, these 1 mod 4,
+    // the second with a 12-row `rows32x256` strip.
+    ((2048, 4097, 40), "large"),
+    ((2060, 4097, 24), "large"),
+];
+
+/// Every element of each EXACT_SHAPES GEMM, compiled in `dir` (whose
+/// profile names the target), equal bit for bit to the in-order fma chain on
+/// three grids. `tile_for(tile at sm_80, ptx, m, n, k)` checks the header's
+/// tile and names it for the messages.
+fn each_element_exact(ctx: &CudaContext, dir: &Path, tile_for: impl Fn(&str, &str, usize, usize, usize) -> String) {
+    for (si, ((m, n, k), tile)) in EXACT_SHAPES.iter().enumerate() {
         let (m, n, k) = (*m as usize, *n as usize, *k as usize);
         let name = format!("run{si}");
         let ptx = compile(&dir, &name, m as u32, n as u32, k as u32, "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
         let h = header(&ptx);
-        assert_eq!(h.tile, *tile, "{m}x{n}x{k}");
+        let tile = &tile_for(*tile, &ptx, m, n, k);
         let module = ctx.load_ptx(&ptx, &name).unwrap_or_else(|e| panic!("{m}x{n}x{k} did not load: {e}"));
         module.set_max_dynamic_smem(h.smem).unwrap();
         let a = operand(m * k, 11 + si as u64);
@@ -378,6 +375,127 @@ fn each_element_is_the_in_order_fma_chain_on_every_grid() {
             }
         }
     }
+}
+
+#[test]
+fn each_element_is_the_in_order_fma_chain_on_every_grid() {
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - no FP32 GEMM was executed.");
+        return;
+    };
+    let dir = pinned::pinned_scratch("f32_gemm_run", pinned::SM_PINNED);
+    each_element_exact(&ctx, &dir, |want, ptx, m, n, k| {
+        let h = header(ptx);
+        assert_eq!(h.tile, want, "{m}x{n}x{k}");
+        h.tile
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The instructions of a module, its comments left out (a header comment
+/// names what the kernel does not use).
+fn instructions(ptx: &str) -> String {
+    ptx.lines().filter(|l| !l.trim_start().starts_with("//")).collect::<Vec<_>>().join("\n")
+}
+
+/// A profile for `sm` with `sms` SMs.
+fn profile_for(tag: &str, sm: &str, sms: u32) -> std::path::PathBuf {
+    let dir = pinned::pinned_scratch(tag, sm);
+    let text = pinned::profile_text(sm).replace("SM_COUNT=66", &format!("SM_COUNT={sms}"));
+    std::fs::write(dir.join(".ysu_hw_profile"), text).unwrap();
+    dir
+}
+
+/// Below sm_80 there is no `cp.async`: each copy is a load and a shared
+/// store (`f32_simt_gemm.rs`, `sync_copies`). Same arithmetic, so the same
+/// 33 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
+/// of shared memory a block, so never the 74 KB large tile) and run here,
+/// where the driver compiles sm_75 PTX for this card.
+#[test]
+fn built_for_sm_75_each_element_is_the_same_fma_chain() {
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - no sm_75 FP32 GEMM was executed.");
+        return;
+    };
+    let dir = profile_for("f32_gemm_run_sm75", "7.5", 40);
+    each_element_exact(&ctx, &dir, |_, ptx, m, n, k| {
+        assert!(ptx.contains(".target sm_75"), "{m}x{n}x{k}: not built for sm_75");
+        assert!(!instructions(ptx).contains("cp.async"), "{m}x{n}x{k}: cp.async on sm_75");
+        let h = header(ptx);
+        assert_ne!(h.tile, "large", "{m}x{n}x{k}: the 74 KB tile on a 64 KB card");
+        assert!(h.smem <= 64 * 1024, "{m}x{n}x{k}: {} bytes of shared memory", h.smem);
+        h.tile
+    });
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A `ptxas` that still assembles sm_60..sm_72 (CUDA 13's does not):
+/// Y_PTXAS_OLD_ARCH, a repository venv's Triton, or one on the usual paths.
+fn old_arch_ptxas() -> Option<std::path::PathBuf> {
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(p) = std::env::var_os("Y_PTXAS_OLD_ARCH") {
+        candidates.push(p.into());
+    }
+    for venv in ["venv", ".venv"] {
+        if let Ok(dir) = std::fs::read_dir(pinned::repo().join(venv).join("lib")) {
+            for py in dir.flatten() {
+                candidates.push(py.path().join("site-packages/triton/backends/nvidia/bin/ptxas"));
+            }
+        }
+    }
+    candidates.extend(["ptxas".into(), "/opt/cuda/bin/ptxas".into(), "/usr/local/cuda/bin/ptxas".into()]);
+    let probe = std::env::temp_dir().join(format!("y_f32_old_ptxas_{}.ptx", std::process::id()));
+    std::fs::write(&probe, ".version 6.0\n.target sm_61\n.address_size 64\n.visible .entry p()\n{\n    ret;\n}\n").unwrap();
+    let found = candidates.into_iter().find(|t| {
+        Command::new(t).args(["-arch=sm_61", "-o", "/dev/null"]).arg(&probe).output().is_ok_and(|o| o.status.success())
+    });
+    let _ = std::fs::remove_file(&probe);
+    found
+}
+
+/// Pascal, Volta and Turing: no `cp.async`, the tile within the target's
+/// per-block shared memory (48, 96 and 64 KB), and `ptxas` for that target
+/// assembles every kernel, without spilling except at N = 1 mod 4.
+#[test]
+fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
+    let shapes = [(4096, 4096, 4096), (2049, 4100, 24), (1023, 1025, 1027), (64, 64, 16), (2048, 12803, 64),
+                  (1, 8193, 40), (2048, 4097, 40)];
+    let new = ptxas::ptxas();
+    let old = old_arch_ptxas();
+    for (sm, sms, limit) in [("7.5", 40u32, 64 * 1024u32), ("7.0", 80, 96 * 1024), ("6.1", 6, 48 * 1024)] {
+        let dir = profile_for(&format!("f32_gemm_old_{}", sm.replace('.', "")), sm, sms);
+        let arch = format!("sm_{}", sm.replace('.', ""));
+        let tool = if sm == "7.5" { new.clone() } else { old.clone() };
+        if tool.is_none() {
+            eprintln!("SKIP: no ptxas that targets {arch}; compiled only");
+        }
+        for (m, n, k) in shapes {
+            let name = format!("g{m}_{n}_{k}");
+            let ptx = compile(&dir, &name, m, n, k, "--emit-ptx").unwrap_or_else(|log| panic!("{arch} {m}x{n}x{k}: {log}"));
+            assert!(ptx.contains(&format!(".target {arch}")), "{arch} {m}x{n}x{k}");
+            assert!(!instructions(&ptx).contains("cp.async"), "{arch} {m}x{n}x{k}: cp.async");
+            assert!(ptx.contains("stages of plain loads (no cp.async below sm_80)"), "{arch} {m}x{n}x{k}: header");
+            let h = header(&ptx);
+            assert!(h.smem <= limit, "{arch} {m}x{n}x{k}: tile {} takes {} bytes, the block holds {limit}", h.tile, h.smem);
+            if let Some(tool) = &tool {
+                let path = dir.join(format!("{name}.ptx"));
+                std::fs::write(&path, &ptx).unwrap();
+                let out = Command::new(tool).args([format!("-arch={arch}").as_str(), "-v", "-o", "/dev/null"]).arg(&path).output().unwrap();
+                let log = String::from_utf8_lossy(&out.stderr);
+                assert!(out.status.success(), "{arch} {m}x{n}x{k}: ptxas failed:\n{log}");
+                // N = 1 mod 4 spills (472-2084 bytes at 255 registers on all
+                // three: ptxas hoists the narrow B copies' loads ahead of
+                // their stores); docs/known_issues.md. Every other width may not.
+                let spills = !log.contains("bytes spill") || log.contains(" 0 bytes spill stores");
+                assert!(spills || n % 4 == 1, "{arch} {m}x{n}x{k}: spills\n{log}");
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+    // The control: at sm_80 the same 4096^3 GEMM is the large tile on cp.async.
+    let dir = profile_for("f32_gemm_old_control", "8.0", 66);
+    let ptx = compile(&dir, "c4096", 4096, 4096, 4096, "--emit-ptx").unwrap();
+    assert!(instructions(&ptx).contains("cp.async") && header(&ptx).tile == "large");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

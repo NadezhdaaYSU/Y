@@ -205,9 +205,20 @@ source; each entry there now carries its status. What is still open:
 
 ### FP32 GEMM limits
 
+- **Below sm_80 the FP32 GEMM is slow at N = 1 mod 4** (2026-11-12). There is
+  no `cp.async` there, so the copies are loads into registers, and at those
+  widths `ptxas` hoists the many narrow B copies' loads ahead of their stores
+  and spills 470-2100 bytes at 255 registers (sm_61, sm_70, sm_75). Built for
+  sm_75 and run on the RTX 4070 Ti SUPER, 1023 x 1025 x 1027 ran at 0.29x
+  cuBLAS (5.2 against 17.9 TFLOPS) where 1024^3 ran at 1.21x. The bits are
+  unaffected (`tests/f32_simt_gemm.rs`); other widths assemble without spills.
+
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
-  needs sm_80 (`cp.async`); older targets are refused by
-  `check_target_features`, so the GTX 1050 Ti (sm_61) has none.
+  needed sm_80 (`cp.async`) until 2026-11-12, and older targets were
+  refused by `check_target_features`; below sm_80 it now copies with plain
+  loads (above), so Turing, Volta and Pascal (the GTX 1050 Ti, sm_61) have
+  it. Its sm_75 build is checked on this GPU; it has not yet run on an
+  sm_61 or sm_70 card.
 - Where cuBLAS splits K, the three-parameter form is behind: 0.81-0.87x at
   768^3. The workspace form (`W: GlobalMemory<U64>`, 2026-11-06) splits K
   in order and is ahead there (1.24-1.25x). Neither form is ahead on

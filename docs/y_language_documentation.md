@@ -1230,8 +1230,10 @@ for i in 0..100 {
   ([record](benchmarks/fp8_e4m3_2026-10-18/README.md)).
 * **FP32 form (since 2026-11-05)**, with three parameters `(A, B, C:
   GlobalMemory<F32>)`, A `M`x`K`, B `K`x`N`, C `M`x`N`, row-major: the GEMM
-  on CUDA cores (`src/ptx_emitter/f32_simt_gemm.rs`), sm_80 and later
-  (`cp.async`). **Every element of C is one `fma.rn.f32` chain over
+  on CUDA cores (`src/ptx_emitter/f32_simt_gemm.rs`): on sm_80 and later
+  with `cp.async`; below (Turing, Volta, Pascal, since 2026-11-12) with
+  plain loads and without the 74 KB large tile, the same bits and slower
+  (at N = 1 mod 4 much slower: `docs/known_issues.md`). **Every element of C is one `fma.rn.f32` chain over
   k = 0..K-1 in that order**, so its bits depend on its row of A and column
   of B only: not on M, the tile, or the grid. That is `f32::mul_add` folded
   in order, which the tests compare bit for bit; there is no split K,

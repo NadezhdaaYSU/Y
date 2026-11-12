@@ -52,6 +52,15 @@
 //! three-parameter form's. 768^3 0.86x -> 1.25x cuBLAS, 1280^3 0.94x ->
 //! 1.27x, 3072^3 0.97x -> 1.07x. Elsewhere `W` is unused and the kernel is
 //! the three-parameter one, SASS for SASS.
+//!
+//! **Below sm_80 (Turing, Volta, Pascal) there is no `cp.async`**: each copy
+//! is a load into a register and a shared store (`sync_copies`), the large
+//! tile is left out where its 74 KB does not fit a block
+//! (`f32_gemm_block_smem`), and registers are budgeted for the CTAs the
+//! target's shared memory admits (`f32_gemm_reg_ctas`). The arithmetic is
+//! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 33
+//! exactness shapes built for sm_75). At N = 1 mod 4 the narrow B copies'
+//! loads spill (docs/known_issues.md).
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -144,7 +153,7 @@ impl PtxEmitter {
     /// needs about two waves of its one-CTA-per-SM tiles, mostly full, the
     /// mid tile about one wave, and the small tile takes the rest. The choice changes speed
     /// only, never a bit of the answer.
-    pub(crate) fn f32_gemm_tile(m: u32, n: u32, k: u32, sms: u32) -> Result<F32GemmTile, String> {
+    pub(crate) fn f32_gemm_tile(m: u32, n: u32, k: u32, sms: u32, block_smem: u32) -> Result<F32GemmTile, String> {
         if m == 0 || n == 0 || k == 0 {
             return Err(format!("an FP32 GEMM needs M, N and K above 0; got M={}, N={}, K={}", m, n, k));
         }
@@ -167,13 +176,45 @@ impl PtxEmitter {
         // of its rows would be computed for nothing.
         let large = tiles(&F32_TILE_LARGE);
         let full_waves = large.div_ceil(sms) * sms;
-        if m >= 128 && large * 10 >= sms * 19 && large * 5 >= full_waves * 4 {
+        // ... and where its 74 KB of shared memory fits a block at all
+        // (`f32_gemm_block_smem`): not on sm_75 (64 KB) or Pascal (48 KB).
+        // Its row remainder (55 KB) is only ever taken beside it.
+        let fits = F32_TILE_LARGE.smem_bytes() <= block_smem;
+        if fits && m >= 128 && large * 10 >= sms * 19 && large * 5 >= full_waves * 4 {
             return Ok(F32_TILE_LARGE);
         }
         if tiles(&F32_TILE_MID) * 10 >= sms * 9 {
             return Ok(F32_TILE_MID);
         }
         Ok(F32_TILE_SMALL)
+    }
+
+    /// The most dynamic shared memory one block can take on SM level `sm`
+    /// (CUDA's per-block opt-in limit): 48 KB on Pascal, 96 KB on Volta, 64
+    /// KB on Turing; sm_80 and later hold every tile here, as does an
+    /// unknown level (0), which no target this emitter writes has.
+    pub(crate) fn f32_gemm_block_smem(sm: u32) -> u32 {
+        match sm {
+            60..=69 => 48 * 1024,
+            70..=74 => 96 * 1024,
+            75..=79 => 64 * 1024,
+            _ => u32::MAX,
+        }
+    }
+
+    /// The CTAs of `smem` bytes each whose registers tile `t` is budgeted
+    /// for (`.maxnreg`): `t.reg_ctas`, and below sm_80 no more than the
+    /// target's shared memory holds at once. There the copies are loads into
+    /// registers (`sync_copies`), and a budget for CTAs that cannot be
+    /// resident only spills: the mid tile at sm_75 (64 KB an SM, so one 37 KB
+    /// CTA) took 170 registers and spilled 1316 bytes.
+    fn f32_gemm_reg_ctas(&self, t: F32GemmTile, smem: u32) -> u32 {
+        let per_sm = match self.sm_level() {
+            61 | 70..=74 => 96 * 1024,
+            60..=69 | 75..=79 => 64 * 1024,
+            _ => return t.reg_ctas,
+        };
+        t.reg_ctas.min(per_sm / (smem + 1024)).max(1)
     }
 
     /// How tile `t` copies B for this N. A B row is N floats long, so with
@@ -433,7 +474,7 @@ impl PtxEmitter {
         hw_profile: &HardwareProfile,
         kernel_name: &str,
     ) -> u32 {
-        let t = match Self::f32_gemm_tile(m, n, k, hw_profile.sm_count) {
+        let t = match Self::f32_gemm_tile(m, n, k, hw_profile.sm_count, Self::f32_gemm_block_smem(self.sm_level())) {
             Ok(t) => t,
             Err(why) => {
                 self.emit_errors.push(format!("[PTX] `{}`: {}", kernel_name, why));
@@ -508,11 +549,12 @@ impl PtxEmitter {
             }
             if e.is_empty() { "none".to_string() } else { e.join("; ") }
         };
+        let copies_kind = if self.sm_level() < 80 { "plain loads (no cp.async below sm_80)" } else { "cp.async" };
         writeln!(
             &mut self.ptx_buffer,
             "    // ========================================================\n\
              \x20   // [Y F32 SIMT GEMM] M={m} N={n} K={k} | CTA {}x{}x{} | {}x{} warps of {}x{}, {}x{} outputs per thread | tile `{}`\n\
-             \x20   // {} stages of cp.async, A transposed by 4-byte copies, B by {} copies, grouped raster of {} tile rows.\n\
+             \x20   // {} stages of {copies_kind}, A transposed by 4-byte copies, B by {} copies, grouped raster of {} tile rows.\n\
              \x20   // Remainder: {rem_desc}.\n\
              \x20   // Ragged edges: {edges}.\n\
              \x20   // Each C element is one fma.rn.f32 chain over k = 0..K-1 in order: the same bits for every shape, tile and grid.\n\
@@ -525,7 +567,7 @@ impl PtxEmitter {
 
         let smem_sym = format!("smem_f32_gemm_{}", kernel_name);
         self.pending_extern_decls.push(format!(".extern .shared .align 16 .b8 {}[];", smem_sym));
-        self.tile_gemm_ctas_per_sm = Some(t.reg_ctas);
+        self.tile_gemm_ctas_per_sm = Some(self.f32_gemm_reg_ctas(t, smem));
 
         let w = |e: &mut Self, line: String| {
             e.ptx_buffer.push_str("    ");
@@ -679,11 +721,12 @@ impl PtxEmitter {
             }
             if e.is_empty() { "none".to_string() } else { e.join("; ") }
         };
+        let copies_kind = if self.sm_level() < 80 { "plain loads (no cp.async below sm_80)" } else { "cp.async" };
         writeln!(
             &mut self.ptx_buffer,
             "    // ========================================================\n\
              \x20   // [Y F32 SIMT GEMM] M={m} N={n} K={k} | CTA {}x{}x{} | {}x{} warps of {}x{}, {}x{} outputs per thread | tile `{}`\n\
-             \x20   // {} stages of cp.async, A transposed by 4-byte copies, B by {b_desc} copies, grouped raster of {} tile rows.\n\
+             \x20   // {} stages of {copies_kind}, A transposed by 4-byte copies, B by {b_desc} copies, grouped raster of {} tile rows.\n\
              \x20   // Stream-K, in order: {tiles} tiles of {kt} K tiles. Each CTA runs whole tiles grid-strided, then the last tiles (one to two waves' worth) are split evenly over the CTAs. A tile cut between two CTAs is continued, not summed: the first stores its exact f32 accumulators in C and sets W[tile]; the next loads them and carries the same fma chain on.\n\
              \x20   // Ragged edges: {edges}.\n\
              \x20   // Each C element is one fma.rn.f32 chain over k = 0..K-1 in order: the same bits for every shape, tile and grid.\n\
@@ -696,7 +739,7 @@ impl PtxEmitter {
         .unwrap();
         let smem_sym = format!("smem_f32_gemm_{}", kernel_name);
         self.pending_extern_decls.push(format!(".extern .shared .align 16 .b8 {}[];", smem_sym));
-        self.tile_gemm_ctas_per_sm = Some(t.reg_ctas);
+        self.tile_gemm_ctas_per_sm = Some(self.f32_gemm_reg_ctas(t, smem));
         let w = |e: &mut Self, line: String| {
             e.ptx_buffer.push_str("    ");
             e.ptx_buffer.push_str(&line);
@@ -1225,6 +1268,15 @@ impl PtxEmitter {
         // One copy of this thread's share of a stage. `kguard`: `klim` and
         // `klim_b` hold K minus the tile's first k (the copy of a k >= K
         // copies nothing).
+        // Below sm_80 there is no `cp.async`: each copy is a load and a
+        // shared store, zero where the copy would have copied nothing (its
+        // source size is all or none), and the commits and waits go. The
+        // copies land when issued rather than at the wait, which is never
+        // too late: the barrier after each wait, which the pipeline has
+        // anyway, keeps a stage from being read before its stores or
+        // overwritten while it is read. No arithmetic changes, so neither
+        // does a bit of C.
+        let sync_copies = self.sm_level() < 80;
         let copy = |e: &mut Self, c: u32, kguard: bool, sa: &str, sbs: &[String], ga_r: &str, gbs_r: &[String], s_off_a: u32, s_off_b: u32, g_off_a: u64, g_off_b: u64| {
             if c < a_copies {
                 let so = s_off_a + c * a_row_step * 4;
@@ -1246,7 +1298,18 @@ impl PtxEmitter {
                 } else {
                     String::new()
                 };
-                w(e, format!("cp.async.ca.shared.global [{}+{}], [{}+{}], 4{};", sa, so, ga_r, go, size));
+                if sync_copies {
+                    let r = e.alloc_reg32();
+                    if size.is_empty() {
+                        w(e, format!("ld.global.ca.b32 {}, [{}+{}];", r, ga_r, go));
+                    } else {
+                        w(e, format!("@{} ld.global.ca.b32 {}, [{}+{}];", p_g, r, ga_r, go));
+                        w(e, format!("@!{} mov.b32 {}, 0;", p_g, r));
+                    }
+                    w(e, format!("st.shared.b32 [{}+{}], {};", sa, so, r));
+                } else {
+                    w(e, format!("cp.async.ca.shared.global [{}+{}], [{}+{}], 4{};", sa, so, ga_r, go, size));
+                }
             } else {
                 let (ci, i) = b_list[(c - a_copies) as usize];
                 let cl = b_classes[ci];
@@ -1264,7 +1327,24 @@ impl PtxEmitter {
                     String::new()
                 };
                 let cache = if bytes == 16 { "cg" } else { "ca" };
-                w(e, format!("cp.async.{}.shared.global [{}+{}], [{}+{}], {}{};", cache, sb, so, gb_r, go, bytes, size));
+                if sync_copies {
+                    let regs: Vec<String> = (0..bytes / 4).map(|_| e.alloc_reg32()).collect();
+                    let (vec, list) = match regs.len() {
+                        1 => (String::new(), regs[0].clone()),
+                        n => (format!(".v{}", n), format!("{{{}}}", regs.join(", "))),
+                    };
+                    if size.is_empty() {
+                        w(e, format!("ld.global.{}{}.b32 {}, [{}+{}];", cache, vec, list, gb_r, go));
+                    } else {
+                        w(e, format!("@{} ld.global.{}{}.b32 {}, [{}+{}];", p_g, cache, vec, list, gb_r, go));
+                        for r in &regs {
+                            w(e, format!("@!{} mov.b32 {}, 0;", p_g, r));
+                        }
+                    }
+                    w(e, format!("st.shared{}.b32 [{}+{}], {};", vec, sb, so, list));
+                } else {
+                    w(e, format!("cp.async.{}.shared.global [{}+{}], [{}+{}], {}{};", cache, sb, so, gb_r, go, bytes, size));
+                }
             }
         };
         let set_klim = |e: &mut Self, from_imm: Option<i64>| {
@@ -1319,7 +1399,9 @@ impl PtxEmitter {
                     copy(self, c, kguard, &copy_a, &copy_bs, &ga, &gbs, st * stage_a, st * stage_b, (st * t.bk * 4) as u64, st as u64 * t.bk as u64 * n as u64 * 4);
                 }
             }
-            w(self, "cp.async.commit_group;".to_string());
+            if !sync_copies {
+                w(self, "cp.async.commit_group;".to_string());
+            }
         }
         // The next K tile to load is S-1 tiles in.
         w(self, format!("add.u64 {}, {}, {};", ga, ga, (s - 1) * t.bk * 4));
@@ -1380,7 +1462,9 @@ impl PtxEmitter {
         // ---- K loop over the full K tiles.
         if kt_full > 0 {
             self.ptx_buffer.push_str(&format!("{}:\n", k_top));
-            w(self, format!("cp.async.wait_group {};", s - 2));
+            if !sync_copies {
+                w(self, format!("cp.async.wait_group {};", s - 2));
+            }
             w(self, "bar.sync 0;".to_string());
             // `more`: this iteration loads K tile kt + S - 1.
             let last_load = kt_total as i64 - (s as i64 - 1);
@@ -1442,7 +1526,9 @@ impl PtxEmitter {
                         w(self, format!("add.u64 {}, {}, {};", gb, gb, t.bk as u64 * n as u64 * 4));
                     }
                     self.ptx_buffer.push_str(&format!("{}:\n", skip));
-                    w(self, "cp.async.commit_group;".to_string());
+                    if !sync_copies {
+                        w(self, "cp.async.commit_group;".to_string());
+                    }
                 }
             }
             fmas(self, t.bk);
@@ -1475,7 +1561,9 @@ impl PtxEmitter {
             _ => None,
         };
         if k_tail != 0 {
-            w(self, "cp.async.wait_group 0;".to_string());
+            if !sync_copies {
+                w(self, "cp.async.wait_group 0;".to_string());
+            }
             w(self, "bar.sync 0;".to_string());
             w(self, format!("mad.lo.u32 {}, {}, {}, {};", rd_a, rs, stage_a, frag_a));
             w(self, format!("mad.lo.u32 {}, {}, {}, {};", rd_b, rs, stage_b, frag_b));
