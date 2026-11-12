@@ -1,0 +1,12 @@
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+Tesla T4 (sm_75), torch 2.13.0+cu126, cuBLAS TF32 off
+512x512x512      tile small (plain loads): bit-exact True  (cuBLAS equals the chain on 100%)  | cuBLAS  5.23 TF  Y  3.64 TF  = 0.695x
+1024x1024x1024   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS  4.60 TF  Y  3.78 TF  = 0.822x
+2048x2048x2048   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS  4.73 TF  Y  3.69 TF  = 0.780x
+4096x4096x4096   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 100%)  | cuBLAS  4.00 TF  Y  3.83 TF  = 0.955x
+1023x1025x1027   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS  4.45 TF  Y  0.97 TF  = 0.217x
+1024x4096x4096   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 3%)  | cuBLAS  4.81 TF  Y  3.66 TF  = 0.760x
+128x4096x4096    tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 3%)  | cuBLAS  4.59 TF  Y  3.54 TF  = 0.772x
+4096x128x4096    tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 3%)  | cuBLAS  3.93 TF  Y  3.36 TF  = 0.854x
+64x8192x2048     tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 4%)  | cuBLAS  4.18 TF  Y  3.49 TF  = 0.834x
+4096x4096x1024   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 100%)  | cuBLAS  4.91 TF  Y  3.64 TF  = 0.741x

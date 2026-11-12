@@ -210,8 +210,12 @@ source; each entry there now carries its status. What is still open:
   widths `ptxas` hoists the many narrow B copies' loads ahead of their stores
   and spills 470-2100 bytes at 255 registers (sm_61, sm_70, sm_75). Built for
   sm_75 and run on the RTX 4070 Ti SUPER, 1023 x 1025 x 1027 ran at 0.29x
-  cuBLAS (5.2 against 17.9 TFLOPS) where 1024^3 ran at 1.21x. The bits are
-  unaffected (`tests/f32_simt_gemm.rs`); other widths assemble without spills.
+  cuBLAS (5.2 against 17.9 TFLOPS) where 1024^3 ran at 1.21x; on a Tesla T4
+  0.22x, against 0.70-0.96x at the other shapes measured
+  (`docs/benchmarks/f32_gemm_sm75_2026-11-12/`). The bits are unaffected
+  (`tests/f32_simt_gemm.rs`, and the T4 run); other widths assemble without
+  spills. Nor does this version load the next K tile into registers during
+  the current one's FMAs, the usual remedy for latency on these cards.
 
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
   needed sm_80 (`cp.async`) until 2026-11-12, and older targets were
