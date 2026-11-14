@@ -1,0 +1,51 @@
+/usr/local/lib/python3.13/dist-packages/cupy/_environment.py:677: UserWarning: 
+--------------------------------------------------------------------------------
+
+  CuPy may not function correctly because multiple CuPy packages are installed
+  in your environment:
+
+    cupy-cuda12x, cupy-cuda13x
+
+  Follow these steps to resolve this issue:
+
+    1. For all packages listed above, run the following command to remove all
+       existing CuPy installations:
+
+         $ pip uninstall <package_name>
+
+      If you previously installed CuPy via conda, also run the following:
+
+         $ conda uninstall cupy
+
+    2. Install the appropriate CuPy package.
+       Refer to the Installation Guide for detailed instructions.
+
+         https://docs.cupy.dev/en/stable/install.html
+
+--------------------------------------------------------------------------------
+
+  warnings.warn(f'''
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (298938 > 131072). Running this sequence through the model will result in indexing errors
+samebit window 0: GPU e7061c1c1979950f CPU e7061c1c1979950f IDENTICAL
+samebit window 1: GPU 7753ca7472af5e45 CPU 7753ca7472af5e45 IDENTICAL
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:37,  2.95it/s]Loading weights:  76%|███████▌  | 219/290 [00:00<00:00, 623.72it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 544.85it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:29,  3.21it/s]Loading weights:  76%|███████▌  | 219/290 [00:00<00:00, 664.58it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 561.49it/s]
+Y exact window 0: GPU 1af9a52c603e3a04 CPU 1af9a52c603e3a04 IDENTICAL
+Y exact window 1: GPU e3fd99f19242f86f CPU e3fd99f19242f86f IDENTICAL
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:31,  3.17it/s]Loading weights:  93%|█████████▎| 269/290 [00:00<00:00, 835.40it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 681.32it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  88%|████████▊ | 256/290 [00:00<00:00, 2551.68it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2646.22it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:38,  2.94it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 708.67it/s]
+W1112 16:43:55.238000 263 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+Y exact compiled window 0: 1af9a52c603e3a04 (eager 1af9a52c603e3a04)
+
+Tesla T4, 256-token prompt, batch 1, 11 shuffled rounds x 5 forwards
+                         min ms   median  tok/s (min)
+samebit integers         505.28   524.83          507
+Y exact, eager           208.64   212.14         1227
+PyTorch float16           37.68    38.42         6794
+PyTorch bfloat16         118.45   123.81         2161
+Y exact, compiled         46.38    50.10         5520
+
+Y exact eager vs samebit: 2.42x faster
+Y exact compiled vs samebit: 10.89x faster
+bits: samebit GPU == CPU: True;  Y GPU == CPU (and compiled == eager): True

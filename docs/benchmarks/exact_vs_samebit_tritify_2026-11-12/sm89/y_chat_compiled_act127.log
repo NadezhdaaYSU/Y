@@ -1,0 +1,12 @@
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  80%|███████▉  | 231/290 [00:00<00:00, 2260.40it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2307.95it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1112 18:53:15.188000 2750761 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  Y exact cuda compiled  tokens   7 (steps 8)  logits_hash 817e619db67c8ab0
+  Y exact cuda compiled  text: 'The capital of France is Paris.'
+  Y exact cuda compiled  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda compiled  BENCH total ms: min 26.95 median 27.25 mean 27.43 sd 0.56 (n=7)
+  Y exact cuda compiled  BENCH first token ms (batched prompt + first choice): min 4.51 median 4.55 mean 4.67 sd 0.29 (n=7)
+  Y exact cuda compiled  BENCH decode ms/token (after the first): min 3.19 median 3.23 mean 3.23 sd 0.04 (n=7)

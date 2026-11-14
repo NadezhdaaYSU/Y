@@ -1,0 +1,26 @@
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (298938 > 131072). Running this sequence through the model will result in indexing errors
+samebit window 0: GPU e7061c1c1979950f CPU e7061c1c1979950f IDENTICAL
+samebit window 1: GPU 7753ca7472af5e45 CPU 7753ca7472af5e45 IDENTICAL
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  84%|████████▍ | 243/290 [00:00<00:00, 2408.08it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2456.87it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  51%|█████     | 147/290 [00:00<00:00, 1433.64it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1763.60it/s]
+Y exact window 0: GPU 1af9a52c603e3a04 CPU 1af9a52c603e3a04 IDENTICAL
+Y exact window 1: GPU e3fd99f19242f86f CPU e3fd99f19242f86f IDENTICAL
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  92%|█████████▏| 267/290 [00:00<00:00, 2608.59it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2789.14it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 25689.54it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  70%|███████   | 203/290 [00:00<00:00, 2011.07it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2105.13it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1112 18:29:09.552000 258700 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+Y exact compiled window 0: 1af9a52c603e3a04 (eager 1af9a52c603e3a04)
+
+NVIDIA GeForce RTX 4070 Ti SUPER, 256-token prompt, batch 1, 11 shuffled rounds x 5 forwards
+                         min ms   median  tok/s (min)
+samebit integers         192.11   193.49         1333
+Y exact, eager            39.15    39.60         6539
+PyTorch float16            6.81     6.96        37599
+PyTorch bfloat16           6.91     7.01        37050
+Y exact, compiled         12.22    12.53        20947
+
+Y exact eager vs samebit: 4.91x faster
+Y exact compiled vs samebit: 15.72x faster
+bits: samebit GPU == CPU: True;  Y GPU == CPU (and compiled == eager): True

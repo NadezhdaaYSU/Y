@@ -1,0 +1,46 @@
+generate_backends · /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/b9a51335-89c6-4cae-8abe-dfd078cfbe01/scratchpad/rivals/qwen05_flat · prompt 31 tokens · eos [151645, 151643] · max 32
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+  portable           BENCH total ms: min 1995.98 median 2008.00 mean 2007.24 sd 7.37 (n=7)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 1616.39 median 1630.43 mean 1628.35 sd 6.33 (n=7)
+  portable           BENCH decode ms/token (after the first): min 53.82 median 53.96 mean 54.11 sd 0.33 (n=7)
+  portable           tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  2003 ms
+                     text: The capital of France is Paris.
+  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  portable           BENCH total ms: min 1997.75 median 2000.76 mean 2000.37 sd 2.44 (n=7)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 1618.71 median 1622.15 mean 1623.17 sd 3.88 (n=7)
+  portable           BENCH decode ms/token (after the first): min 52.87 median 53.89 mean 53.81 sd 0.44 (n=7)
+  portable           tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  2004 ms
+                     text: The capital of France is Paris.
+  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  avx2               BENCH total ms: min 1644.48 median 1645.81 mean 1650.14 sd 8.09 (n=7)
+  avx2               BENCH first token ms (prompt one position at a time + first choice): min 1331.26 median 1332.99 mean 1337.07 sd 8.21 (n=7)
+  avx2               BENCH decode ms/token (after the first): min 44.32 median 44.63 mean 44.66 sd 0.21 (n=7)
+  avx2               tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  1645 ms
+                     text: The capital of France is Paris.
+  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  avx512             BENCH total ms: min 1639.50 median 1640.33 mean 1641.33 sd 2.64 (n=7)
+  avx512             BENCH first token ms (prompt one position at a time + first choice): min 1327.45 median 1328.68 mean 1329.68 sd 2.35 (n=7)
+  avx512             BENCH decode ms/token (after the first): min 44.31 median 44.41 mean 44.49 sd 0.17 (n=7)
+  avx512             tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  1639 ms
+                     text: The capital of France is Paris.
+  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  gpu:NVIDIA GeForce RTX 4070 Ti SUPER BENCH total ms: min 851.98 median 868.34 mean 955.07 sd 243.27 (n=7)
+  gpu:NVIDIA GeForce RTX 4070 Ti SUPER BENCH first token ms (prompt one position at a time + first choice): min 679.46 median 703.39 mean 788.38 sd 246.31 (n=7)
+  gpu:NVIDIA GeForce RTX 4070 Ti SUPER BENCH decode ms/token (after the first): min 22.82 median 23.67 mean 23.72 sd 0.52 (n=7)
+  gpu:NVIDIA GeForce RTX 4070 Ti SUPER tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  874 ms
+                     text: The capital of France is Paris.
+  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  cuda:NVIDIA GeForce RTX 4070 Ti SUPER BENCH total ms: min 740.50 median 769.96 mean 854.26 sd 210.50 (n=7)
+  cuda:NVIDIA GeForce RTX 4070 Ti SUPER BENCH first token ms (prompt one position at a time + first choice): min 594.80 median 621.29 mean 702.16 sd 214.50 (n=7)
+  cuda:NVIDIA GeForce RTX 4070 Ti SUPER BENCH decode ms/token (after the first): min 20.18 median 20.78 mean 21.67 sd 1.43 (n=7)
+  cuda:NVIDIA GeForce RTX 4070 Ti SUPER tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  769 ms
+                     text: The capital of France is Paris.
+  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  portable           BENCH total ms: min 2001.42 median 2004.24 mean 2003.68 sd 1.88 (n=7)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 1623.59 median 1626.04 mean 1626.00 sd 1.74 (n=7)
+  portable           BENCH decode ms/token (after the first): min 53.71 median 53.93 mean 53.94 sd 0.14 (n=7)
+  portable           tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  2004 ms
+                     text: The capital of France is Paris.
+  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  digit-backend fallbacks to portable: 0
+VERDICT: all 7 backends identical

@@ -1,0 +1,18 @@
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+tritify's prompt ids: IDENTICAL (31 vs 31)
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  76%|███████▌  | 219/290 [00:00<00:00, 2093.61it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2227.85it/s]
+  Y exact cuda           tokens   7 (steps 8)  logits_hash 817e619db67c8ab0
+  Y exact cuda           text: 'The capital of France is Paris.'
+  Y exact cuda           GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda           BENCH total ms: min 308.22 median 309.65 mean 309.58 sd 0.89 (n=7)
+  Y exact cuda           BENCH first token ms (batched prompt + first choice): min 40.44 median 40.69 mean 40.80 sd 0.37 (n=7)
+  Y exact cuda           BENCH decode ms/token (after the first): min 38.24 median 38.39 mean 38.38 sd 0.08 (n=7)
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  59%|█████▉    | 172/290 [00:00<00:00, 1626.94it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1876.96it/s]
+  Y exact cpu            tokens   7 (steps 8)  logits_hash 817e619db67c8ab0
+  Y exact cpu            text: 'The capital of France is Paris.'
+  Y exact cpu            GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cpu            BENCH total ms: min 254.74 median 256.03 mean 256.95 sd 2.19 (n=7)
+  Y exact cpu            BENCH first token ms (batched prompt + first choice): min 61.00 median 61.41 mean 61.68 sd 0.76 (n=7)
+  Y exact cpu            BENCH decode ms/token (after the first): min 27.55 median 27.77 mean 27.88 sd 0.28 (n=7)
+VERDICT: every step's logits and the tokens identical on every device

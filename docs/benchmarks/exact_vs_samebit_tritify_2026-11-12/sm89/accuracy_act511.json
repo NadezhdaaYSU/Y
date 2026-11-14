@@ -1,0 +1,109 @@
+{
+ "model": "Qwen/Qwen2.5-0.5B-Instruct@7ae557604adf67be50417f59c2c2f167def9a775",
+ "data": "Salesforce/wikitext wikitext-2-raw-v1 test parquet, joined, tokenized once",
+ "windows": 40,
+ "tokens_per_window": 256,
+ "scored_tokens": 10240,
+ "eval_ids_sha256": "8f37fdcb021f2ad7f05975df900822997b3b734e6aeeafffca346c6a363309b4",
+ "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+ "torch": "2.13.0+cu130",
+ "systems": {
+  "fp32": {
+   "nll_per_token": 3.2342132364848686,
+   "ppl": 25.386390833650903,
+   "nll_sd_per_token": 3.201850148719061
+  },
+  "fp16": {
+   "nll_per_token": 3.2338481907373646,
+   "ppl": 25.377125330901688,
+   "nll_sd_per_token": 3.2014689763490076
+  },
+  "Y exact": {
+   "nll_per_token": 3.2414917803518364,
+   "ppl": 25.57184087737886,
+   "nll_sd_per_token": 3.2127757940005277
+  },
+  "samebit": {
+   "nll_per_token": 3.2351386027827083,
+   "ppl": 25.409893416724184,
+   "nll_sd_per_token": 3.1966083204817104
+  }
+ },
+ "pairs": {
+  "fp32 vs fp16": {
+   "dnll_per_token": 0.00036504574750379225,
+   "dnll_ci95": [
+    0.00012774298683816435,
+    0.0006573444556565694
+   ],
+   "dppl": 0.00926550274921567,
+   "kl_per_token": 2.8047338246842954e-05,
+   "top1_agree": 0.996875,
+   "top5_overlap": 0.9966210939513985
+  },
+  "Y exact vs fp16": {
+   "dnll_per_token": 0.007643589614471616,
+   "dnll_ci95": [
+    0.0017474222399745199,
+    0.01360929958811735
+   ],
+   "dppl": 0.19471554647717326,
+   "kl_per_token": 0.023678029560750012,
+   "top1_agree": 0.93603515625,
+   "top5_overlap": 0.9333593787479912
+  },
+  "samebit vs fp16": {
+   "dnll_per_token": 0.0012904120453430955,
+   "dnll_ci95": [
+    -0.0038136309559840763,
+    0.006491313330531673
+   ],
+   "dppl": 0.03276808582249657,
+   "kl_per_token": 0.017010555101632848,
+   "top1_agree": 0.9283203125,
+   "top5_overlap": 0.9273046917442116
+  },
+  "fp16 vs fp32": {
+   "dnll_per_token": -0.00036504574750379225,
+   "dnll_ci95": [
+    -0.0006595768215256456,
+    -0.00012204129197598197
+   ],
+   "dppl": -0.00926550274921567,
+   "kl_per_token": 2.806397976001616e-05,
+   "top1_agree": 0.996875,
+   "top5_overlap": 0.9966210939513985
+  },
+  "Y exact vs fp32": {
+   "dnll_per_token": 0.007278543866967824,
+   "dnll_ci95": [
+    0.0014447025000370295,
+    0.013247977637003123
+   ],
+   "dppl": 0.1854500437279576,
+   "kl_per_token": 0.024017077077134897,
+   "top1_agree": 0.9349609375,
+   "top5_overlap": 0.9333593787479912
+  },
+  "samebit vs fp32": {
+   "dnll_per_token": 0.0009253662978393029,
+   "dnll_ci95": [
+    -0.004100818274415999,
+    0.0060623504176715
+   ],
+   "dppl": 0.023502583073280903,
+   "kl_per_token": 0.017134994799337333,
+   "top1_agree": 0.928125,
+   "top5_overlap": 0.9272656292450847
+  },
+  "Y exact vs samebit": {
+   "dnll_per_token": 0.006353177569128521,
+   "dnll_ci95": [
+    -0.0011434935193695983,
+    0.01357763550970011
+   ],
+   "windows_Y_lower_nll": 17,
+   "top1_agree": 0.915625
+  }
+ }
+}

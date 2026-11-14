@@ -1,0 +1,63 @@
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (298938 > 131072). Running this sequence through the model will result in indexing errors
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  91%|█████████ | 263/290 [00:00<00:00, 2629.20it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2769.18it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 4295.12it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  96%|█████████▌| 279/290 [00:00<00:00, 2769.05it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2868.46it/s]
+window  0: fp32 17.593  fp16 17.566  Y exact 17.623  samebit 17.507
+window  1: fp32 18.875  fp16 18.871  Y exact 19.402  samebit 18.899
+window  2: fp32 20.896  fp16 20.891  Y exact 21.316  samebit 21.021
+window  3: fp32 23.190  fp16 23.186  Y exact 23.578  samebit 23.192
+window  4: fp32 25.533  fp16 25.529  Y exact 25.737  samebit 25.433
+window  5: fp32 24.695  fp16 24.688  Y exact 24.905  samebit 24.519
+window  6: fp32 25.604  fp16 25.597  Y exact 25.740  samebit 25.409
+window  7: fp32 24.457  fp16 24.451  Y exact 24.568  samebit 24.334
+window  8: fp32 23.801  fp16 23.795  Y exact 23.929  samebit 23.745
+window  9: fp32 23.609  fp16 23.603  Y exact 23.683  samebit 23.632
+window 10: fp32 23.654  fp16 23.649  Y exact 23.787  samebit 23.690
+window 11: fp32 23.583  fp16 23.577  Y exact 23.720  samebit 23.657
+window 12: fp32 23.901  fp16 23.896  Y exact 24.034  samebit 23.922
+window 13: fp32 23.905  fp16 23.899  Y exact 23.997  samebit 23.967
+window 14: fp32 23.789  fp16 23.784  Y exact 23.843  samebit 23.828
+window 15: fp32 24.264  fp16 24.259  Y exact 24.353  samebit 24.337
+window 16: fp32 25.075  fp16 25.070  Y exact 25.144  samebit 25.135
+window 17: fp32 25.784  fp16 25.778  Y exact 25.878  samebit 25.849
+window 18: fp32 25.931  fp16 25.924  Y exact 26.039  samebit 26.003
+window 19: fp32 26.273  fp16 26.265  Y exact 26.395  samebit 26.342
+window 20: fp32 26.005  fp16 25.997  Y exact 26.094  samebit 26.073
+window 21: fp32 25.927  fp16 25.920  Y exact 26.001  samebit 25.990
+window 22: fp32 25.606  fp16 25.599  Y exact 25.694  samebit 25.639
+window 23: fp32 25.650  fp16 25.644  Y exact 25.724  samebit 25.686
+window 24: fp32 26.004  fp16 25.997  Y exact 26.093  samebit 26.039
+window 25: fp32 26.345  fp16 26.339  Y exact 26.430  samebit 26.368
+window 26: fp32 26.801  fp16 26.796  Y exact 26.910  samebit 26.821
+window 27: fp32 26.401  fp16 26.396  Y exact 26.533  samebit 26.410
+window 28: fp32 26.618  fp16 26.614  Y exact 26.760  samebit 26.641
+window 29: fp32 26.441  fp16 26.436  Y exact 26.613  samebit 26.449
+window 30: fp32 26.554  fp16 26.548  Y exact 26.699  samebit 26.554
+window 31: fp32 26.783  fp16 26.777  Y exact 26.933  samebit 26.780
+window 32: fp32 25.785  fp16 25.778  Y exact 25.908  samebit 25.799
+window 33: fp32 24.863  fp16 24.856  Y exact 24.994  samebit 24.893
+window 34: fp32 24.956  fp16 24.950  Y exact 25.086  samebit 24.980
+window 35: fp32 25.092  fp16 25.086  Y exact 25.230  samebit 25.117
+window 36: fp32 25.537  fp16 25.530  Y exact 25.688  samebit 25.555
+window 37: fp32 25.452  fp16 25.446  Y exact 25.625  samebit 25.493
+window 38: fp32 25.489  fp16 25.480  Y exact 25.662  samebit 25.507
+window 39: fp32 25.386  fp16 25.377  Y exact 25.572  samebit 25.410
+
+40 windows x 256 = 10240 scored tokens, ids sha256 8f37fdcb021f2ad7
+            NLL/token      PPL
+fp32          3.23421   25.386
+fp16          3.23385   25.377
+Y exact       3.24149   25.572
+samebit       3.23514   25.410
+
+against fp16:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp32      +0.00037 [+0.00013, +0.00066]   +0.009  0.00003  0.9969  0.9966
+  Y exact   +0.00764 [+0.00175, +0.01361]   +0.195  0.02368  0.9360  0.9334
+  samebit   +0.00129 [-0.00381, +0.00649]   +0.033  0.01701  0.9283  0.9273
+
+against fp32:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp16      -0.00037 [-0.00066, -0.00012]   -0.009  0.00003  0.9969  0.9966
+  Y exact   +0.00728 [+0.00144, +0.01325]   +0.185  0.02402  0.9350  0.9334
+  samebit   +0.00093 [-0.00410, +0.00606]   +0.024  0.01713  0.9281  0.9273
+
+Y exact - samebit: dNLL/token +0.00635 [95% CI -0.00114, +0.01358], Y lower on 17/40 windows, same top-1 on 0.9156

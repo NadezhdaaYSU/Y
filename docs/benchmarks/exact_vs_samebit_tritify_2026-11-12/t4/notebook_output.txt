@@ -1,0 +1,353 @@
+index, name, compute_cap, driver_version
+0, Tesla T4, 7.5, 580.178.04
+1, Tesla T4, 7.5, 580.178.04
+CPU(s):                                  4
+Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz
+Flags:                                   fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc rep_good nopl xtopology nonstop_tsc cpuid tsc_known_freq pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch pti ssbd ibrs ibpb stibp 
+               total        used        free      shared  buff/cache   available
+Mem:              31           1          25           0           4          30
+[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+easyocr 1.7.2 requires torchvision>=0.5, which is not installed.
+fastai 2.8.12 requires torchvision>=0.11, which is not installed.
+timm 1.0.30 requires torchvision, which is not installed.
+libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.
+libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.[0m[31m
+[0m['accuracy_same_tokens.py', 'chat_request_y2.py', 'prefill_vs_samebit.py', 'tritify_bench.patch']
+samebit c6f3530 2026-10-29 17:42:42 +0000
+model fingerprint aba0455663f2b5ac
+saved
+convert 93 s (local fingerprint aba0455663f2b5ac)
+accuracy_act127: exit 0, 1.3 min
+window 34: fp32 24.956  fp16 24.953  Y exact 26.059  samebit 24.980
+window 35: fp32 25.092  fp16 25.089  Y exact 26.178  samebit 25.117
+window 36: fp32 25.537  fp16 25.533  Y exact 26.686  samebit 25.555
+window 37: fp32 25.452  fp16 25.448  Y exact 26.630  samebit 25.493
+window 38: fp32 25.489  fp16 25.483  Y exact 26.673  samebit 25.507
+window 39: fp32 25.386  fp16 25.380  Y exact 26.564  samebit 25.410
+
+40 windows x 256 = 10240 scored tokens, ids sha256 8f37fdcb021f2ad7
+            NLL/token      PPL
+fp32          3.23421   25.386
+fp16          3.23396   25.380
+Y exact       3.27957   26.564
+samebit       3.23514   25.410
+
+against fp16:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp32      +0.00025 [+0.00004, +0.00048]   +0.006  0.00002  0.9967  0.9968
+  Y exact   +0.04560 [+0.03644, +0.05440]   +1.184  0.05966  0.8700  0.8730
+  samebit   +0.00117 [-0.00396, +0.00639]   +0.030  0.01705  0.9276  0.9271
+
+against fp32:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp16      -0.00025 [-0.00048, -0.00004]   -0.006  0.00002  0.9967  0.9968
+  Y exact   +0.04535 [+0.03652, +0.05441]   +1.178  0.05991  0.8695  0.8729
+  samebit   +0.00093 [-0.00410, +0.00606]   +0.024  0.01714  0.9281  0.9273
+
+Y exact - samebit: dNLL/token +0.04443 [95% CI +0.03399, +0.05469], Y lower on 4/40 windows, same top-1 on 0.8583
+prefill_act127: exit 0, 9.8 min
+
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (298938 > 131072). Running this sequence through the model will result in indexing errors
+samebit window 0: GPU e7061c1c1979950f CPU e7061c1c1979950f IDENTICAL
+samebit window 1: GPU 7753ca7472af5e45 CPU 7753ca7472af5e45 IDENTICAL
+
+
+Y exact window 0: GPU 1af9a52c603e3a04 CPU 1af9a52c603e3a04 IDENTICAL
+Y exact window 1: GPU e3fd99f19242f86f CPU e3fd99f19242f86f IDENTICAL
+
+
+
+W1112 16:43:55.238000 263 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+Y exact compiled window 0: 1af9a52c603e3a04 (eager 1af9a52c603e3a04)
+
+Tesla T4, 256-token prompt, batch 1, 11 shuffled rounds x 5 forwards
+                         min ms   median  tok/s (min)
+samebit integers         505.28   524.83          507
+Y exact, eager           208.64   212.14         1227
+PyTorch float16           37.68    38.42         6794
+PyTorch bfloat16         118.45   123.81         2161
+Y exact, compiled         46.38    50.10         5520
+
+Y exact eager vs samebit: 2.42x faster
+Y exact compiled vs samebit: 10.89x faster
+bits: samebit GPU == CPU: True;  Y GPU == CPU (and compiled == eager): True
+y_chat_eager_act127: exit 0, 2.0 min
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+  Y exact cuda           tokens   7 (steps 8)  logits_hash 817e619db67c8ab0
+  Y exact cuda           text: 'The capital of France is Paris.'
+  Y exact cuda           GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda           BENCH total ms: min 1317.72 median 1323.98 mean 1330.81 sd 21.83 (n=7)
+  Y exact cuda           BENCH first token ms (batched prompt + first choice): min 169.35 median 171.95 mean 174.31 sd 6.97 (n=7)
+  Y exact cuda           BENCH decode ms/token (after the first): min 163.43 median 164.66 mean 165.15 sd 2.24 (n=7)
+
+  Y exact cpu            tokens   7 (steps 8)  logits_hash 817e619db67c8ab0
+  Y exact cpu            text: 'The capital of France is Paris.'
+  Y exact cpu            GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cpu            BENCH total ms: min 10186.04 median 10212.42 mean 10208.75 sd 12.45 (n=7)
+  Y exact cpu            BENCH first token ms (batched prompt + first choice): min 7149.96 median 7165.80 mean 7171.68 sd 19.29 (n=7)
+  Y exact cpu            BENCH decode ms/token (after the first): min 430.27 median 433.54 mean 433.83 sd 2.72 (n=7)
+VERDICT: every step's logits and the tokens identical on every device
+y_chat_compiled_act127: exit 0, 16.1 min
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+W1112 16:52:29.056000 472 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  Y exact cuda compiled  tokens   7 (steps 8)  logits_hash 817e619db67c8ab0
+  Y exact cuda compiled  text: 'The capital of France is Paris.'
+  Y exact cuda compiled  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda compiled  BENCH total ms: min 124.86 median 126.03 mean 131.40 sd 11.93 (n=7)
+  Y exact cuda compiled  BENCH first token ms (batched prompt + first choice): min 18.04 median 18.37 mean 19.56 sd 2.17 (n=7)
+  Y exact cuda compiled  BENCH decode ms/token (after the first): min 15.15 median 15.37 mean 15.91 sd 1.45 (n=7)
+y_128_eager_act127: exit 0, 10.4 min
+prompt 31 tokens, max 128, eos off
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+  Y exact cuda           tokens 128 (steps 128)  logits_hash 3587dd7d1f6429a2
+  Y exact cuda           text: 'The capital of France is Paris.<|im_end|>\n<|endoftext|>Human: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of India?<|im_end|>\n<|im_start|>user: How do I find the capital of India?<|im_end|>\n<|im_start|>user: Is there any website or app that can help me find the capital of India?<|im_end|>\n<|im_start|>assistant: The capital of India is New Delhi. You can use Google Maps to find it, as well as other websites and apps like "India Map" or "MapMyCountry."<|im_end|>\n<|endoftext|>Human: What is the capital of Nepal?<|im_end|>\n<|im_start|>user: What is the capital of'
+  Y exact cuda           GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 2585, 653, 358, 1477, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 2160, 1052, 894, 3910, 476, 906, 429, 646, 1492, 752, 1477, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6747, 374, 1532, 21996, 13, 1446, 646, 990, 5085, 27408, 311, 1477, 432, 11, 438, 1632, 438, 1008, 13037, 323, 10500, 1075, 330, 33548, 5027, 1, 476, 330, 2227, 5050, 16408, 1189, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 48964, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315]
+  Y exact cuda           BENCH total ms: min 21652.15 median 21880.30 mean 21809.23 sd 123.29 (n=5)
+  Y exact cuda           BENCH first token ms (batched prompt + first choice): min 172.35 median 175.22 mean 175.93 sd 2.91 (n=5)
+  Y exact cuda           BENCH decode ms/token (after the first): min 169.11 median 170.88 mean 170.34 sd 0.95 (n=5)
+
+  Y exact cpu            tokens 128 (steps 128)  logits_hash 3587dd7d1f6429a2
+  Y exact cpu            text: 'The capital of France is Paris.<|im_end|>\n<|endoftext|>Human: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of India?<|im_end|>\n<|im_start|>user: How do I find the capital of India?<|im_end|>\n<|im_start|>user: Is there any website or app that can help me find the capital of India?<|im_end|>\n<|im_start|>assistant: The capital of India is New Delhi. You can use Google Maps to find it, as well as other websites and apps like "India Map" or "MapMyCountry."<|im_end|>\n<|endoftext|>Human: What is the capital of Nepal?<|im_end|>\n<|im_start|>user: What is the capital of'
+  Y exact cpu            GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 2585, 653, 358, 1477, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 2160, 1052, 894, 3910, 476, 906, 429, 646, 1492, 752, 1477, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6747, 374, 1532, 21996, 13, 1446, 646, 990, 5085, 27408, 311, 1477, 432, 11, 438, 1632, 438, 1008, 13037, 323, 10500, 1075, 330, 33548, 5027, 1, 476, 330, 2227, 5050, 16408, 1189, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 48964, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315]
+  Y exact cpu            BENCH total ms: min 63235.84 median 64524.94 mean 64106.30 sd 800.32 (n=5)
+  Y exact cpu            BENCH first token ms (batched prompt + first choice): min 7138.10 median 7250.04 mean 7222.97 sd 60.90 (n=5)
+  Y exact cpu            BENCH decode ms/token (after the first): min 441.48 median 450.98 mean 447.90 sd 5.84 (n=5)
+VERDICT: every step's logits and the tokens identical on every device
+y_128_compiled_act127: exit 0, 10.9 min
+prompt 31 tokens, max 128, eos off
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+W1112 17:18:58.761000 784 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  Y exact cuda compiled  tokens 128 (steps 128)  logits_hash 3587dd7d1f6429a2
+  Y exact cuda compiled  text: 'The capital of France is Paris.<|im_end|>\n<|endoftext|>Human: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of India?<|im_end|>\n<|im_start|>user: How do I find the capital of India?<|im_end|>\n<|im_start|>user: Is there any website or app that can help me find the capital of India?<|im_end|>\n<|im_start|>assistant: The capital of India is New Delhi. You can use Google Maps to find it, as well as other websites and apps like "India Map" or "MapMyCountry."<|im_end|>\n<|endoftext|>Human: What is the capital of Nepal?<|im_end|>\n<|im_start|>user: What is the capital of'
+  Y exact cuda compiled  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 2585, 653, 358, 1477, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 2160, 1052, 894, 3910, 476, 906, 429, 646, 1492, 752, 1477, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6747, 374, 1532, 21996, 13, 1446, 646, 990, 5085, 27408, 311, 1477, 432, 11, 438, 1632, 438, 1008, 13037, 323, 10500, 1075, 330, 33548, 5027, 1, 476, 330, 2227, 5050, 16408, 1189, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 48964, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315]
+  Y exact cuda compiled  BENCH total ms: min 1958.45 median 2178.56 mean 2138.42 sd 156.84 (n=5)
+  Y exact cuda compiled  BENCH first token ms (batched prompt + first choice): min 18.16 median 19.35 mean 19.22 sd 0.99 (n=5)
+  Y exact cuda compiled  BENCH decode ms/token (after the first): min 15.28 median 17.00 mean 16.68 sd 1.23 (n=5)
+accuracy_act511: exit 0, 1.3 min
+window 34: fp32 24.956  fp16 24.953  Y exact 25.086  samebit 24.980
+window 35: fp32 25.092  fp16 25.089  Y exact 25.230  samebit 25.117
+window 36: fp32 25.537  fp16 25.533  Y exact 25.688  samebit 25.555
+window 37: fp32 25.452  fp16 25.448  Y exact 25.625  samebit 25.493
+window 38: fp32 25.489  fp16 25.483  Y exact 25.662  samebit 25.507
+window 39: fp32 25.386  fp16 25.380  Y exact 25.572  samebit 25.410
+
+40 windows x 256 = 10240 scored tokens, ids sha256 8f37fdcb021f2ad7
+            NLL/token      PPL
+fp32          3.23421   25.386
+fp16          3.23396   25.380
+Y exact       3.24149   25.572
+samebit       3.23514   25.410
+
+against fp16:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp32      +0.00025 [+0.00004, +0.00048]   +0.006  0.00002  0.9967  0.9968
+  Y exact   +0.00753 [+0.00159, +0.01351]   +0.192  0.02377  0.9354  0.9331
+  samebit   +0.00117 [-0.00396, +0.00639]   +0.030  0.01705  0.9276  0.9271
+
+against fp32:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp16      -0.00025 [-0.00048, -0.00004]   -0.006  0.00002  0.9967  0.9968
+  Y exact   +0.00728 [+0.00144, +0.01325]   +0.185  0.02402  0.9350  0.9334
+  samebit   +0.00093 [-0.00410, +0.00606]   +0.024  0.01714  0.9281  0.9273
+
+Y exact - samebit: dNLL/token +0.00635 [95% CI -0.00114, +0.01358], Y lower on 17/40 windows, same top-1 on 0.9156
+prefill_act511: exit 0, 12.7 min
+
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (298938 > 131072). Running this sequence through the model will result in indexing errors
+samebit window 0: GPU e7061c1c1979950f CPU e7061c1c1979950f IDENTICAL
+samebit window 1: GPU 7753ca7472af5e45 CPU 7753ca7472af5e45 IDENTICAL
+
+
+Y exact window 0: GPU 8d0143455ec91c07 CPU 8d0143455ec91c07 IDENTICAL
+Y exact window 1: GPU a67ba66344f60ca6 CPU a67ba66344f60ca6 IDENTICAL
+
+
+
+W1112 17:37:21.485000 1013 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+Y exact compiled window 0: 8d0143455ec91c07 (eager 8d0143455ec91c07)
+
+Tesla T4, 256-token prompt, batch 1, 11 shuffled rounds x 5 forwards
+                         min ms   median  tok/s (min)
+samebit integers         504.99   523.74          507
+Y exact, eager           239.62   243.55         1068
+PyTorch float16           38.72    39.66         6612
+PyTorch bfloat16         118.99   124.01         2152
+Y exact, compiled         67.93    72.75         3769
+
+Y exact eager vs samebit: 2.11x faster
+Y exact compiled vs samebit: 7.43x faster
+bits: samebit GPU == CPU: True;  Y GPU == CPU (and compiled == eager): True
+y_chat_eager_act511: exit 0, 3.4 min
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+  Y exact cuda           tokens   7 (steps 8)  logits_hash 92efa93ea9f61c1a
+  Y exact cuda           text: 'The capital of France is Paris.'
+  Y exact cuda           GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda           BENCH total ms: min 1478.29 median 1488.47 mean 1492.35 sd 13.10 (n=7)
+  Y exact cuda           BENCH first token ms (batched prompt + first choice): min 188.37 median 191.99 mean 191.79 sd 2.31 (n=7)
+  Y exact cuda           BENCH decode ms/token (after the first): min 184.05 median 185.30 mean 185.73 sd 1.69 (n=7)
+
+  Y exact cpu            tokens   7 (steps 8)  logits_hash 92efa93ea9f61c1a
+  Y exact cpu            text: 'The capital of France is Paris.'
+  Y exact cpu            GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cpu            BENCH total ms: min 19402.56 median 19416.05 mean 19478.48 sd 98.37 (n=7)
+  Y exact cpu            BENCH first token ms (batched prompt + first choice): min 13989.58 median 14045.24 mean 14046.45 sd 50.99 (n=7)
+  Y exact cpu            BENCH decode ms/token (after the first): min 767.17 median 773.33 mean 775.97 sd 7.57 (n=7)
+VERDICT: every step's logits and the tokens identical on every device
+y_chat_compiled_act511: exit 0, 16.9 min
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+W1112 17:47:31.248000 1187 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  Y exact cuda compiled  tokens   7 (steps 8)  logits_hash 92efa93ea9f61c1a
+  Y exact cuda compiled  text: 'The capital of France is Paris.'
+  Y exact cuda compiled  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda compiled  BENCH total ms: min 217.65 median 221.15 mean 220.37 sd 1.78 (n=7)
+  Y exact cuda compiled  BENCH first token ms (batched prompt + first choice): min 29.22 median 29.63 mean 30.57 sd 2.46 (n=7)
+  Y exact cuda compiled  BENCH decode ms/token (after the first): min 26.58 median 27.08 mean 27.05 sd 0.33 (n=7)
+y_128_eager_act511: exit 0, 16.4 min
+prompt 31 tokens, max 128, eos off
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+  Y exact cuda           tokens 128 (steps 128)  logits_hash 46331748029c5a57
+  Y exact cuda           text: 'The capital of France is Paris.<|im_end|>\n<|endoftext|>Human: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of China?<|im_end|>\n<|im_start|>assistant: The capital of India is New Delhi, while the capital of China is Beijing.<|im_end|>\n<|endoftext|>Human: What is the capital of Japan?<|im_end|>\n<|im_start|>user: What is the capital of Japan?<|im_end|>\n<|im_start|>assistant: The capital of Japan is Tokyo.<|im_end|>\n<|endoftext|>Human: What is the capital of Australia?<|im_end|>\n<|im_start|>user: What is the capital of Australia?<|im_end|>\n<|im_start|>assistant'
+  Y exact cuda           GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 5616, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6747, 374, 1532, 21996, 11, 1393, 279, 6722, 315, 5616, 374, 26549, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6323, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6323, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6323, 374, 26194, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 8330, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 8330, 30, 151645, 198, 151644, 77091]
+  Y exact cuda           BENCH total ms: min 23612.90 median 23750.52 mean 23748.82 sd 95.44 (n=5)
+  Y exact cuda           BENCH first token ms (batched prompt + first choice): min 187.87 median 190.06 mean 190.27 sd 1.88 (n=5)
+  Y exact cuda           BENCH decode ms/token (after the first): min 184.45 median 185.51 mean 185.50 sd 0.75 (n=5)
+
+  Y exact cpu            tokens 128 (steps 128)  logits_hash 46331748029c5a57
+  Y exact cpu            text: 'The capital of France is Paris.<|im_end|>\n<|endoftext|>Human: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of China?<|im_end|>\n<|im_start|>assistant: The capital of India is New Delhi, while the capital of China is Beijing.<|im_end|>\n<|endoftext|>Human: What is the capital of Japan?<|im_end|>\n<|im_start|>user: What is the capital of Japan?<|im_end|>\n<|im_start|>assistant: The capital of Japan is Tokyo.<|im_end|>\n<|endoftext|>Human: What is the capital of Australia?<|im_end|>\n<|im_start|>user: What is the capital of Australia?<|im_end|>\n<|im_start|>assistant'
+  Y exact cpu            GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 5616, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6747, 374, 1532, 21996, 11, 1393, 279, 6722, 315, 5616, 374, 26549, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6323, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6323, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6323, 374, 26194, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 8330, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 8330, 30, 151645, 198, 151644, 77091]
+  Y exact cpu            BENCH total ms: min 114850.26 median 115163.04 mean 115592.20 sd 903.54 (n=5)
+  Y exact cpu            BENCH first token ms (batched prompt + first choice): min 14052.51 median 14240.28 mean 14221.04 sd 147.91 (n=5)
+  Y exact cpu            BENCH decode ms/token (after the first): min 793.39 median 794.67 mean 798.20 sd 6.04 (n=5)
+VERDICT: every step's logits and the tokens identical on every device
+y_128_compiled_act511: exit 0, 11.8 min
+prompt 31 tokens, max 128, eos off
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+
+W1112 18:20:56.621000 1449 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  Y exact cuda compiled  tokens 128 (steps 128)  logits_hash 46331748029c5a57
+  Y exact cuda compiled  text: 'The capital of France is Paris.<|im_end|>\n<|endoftext|>Human: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of India?<|im_end|>\n<|im_start|>user: What is the capital of China?<|im_end|>\n<|im_start|>assistant: The capital of India is New Delhi, while the capital of China is Beijing.<|im_end|>\n<|endoftext|>Human: What is the capital of Japan?<|im_end|>\n<|im_start|>user: What is the capital of Japan?<|im_end|>\n<|im_start|>assistant: The capital of Japan is Tokyo.<|im_end|>\n<|endoftext|>Human: What is the capital of Australia?<|im_end|>\n<|im_start|>user: What is the capital of Australia?<|im_end|>\n<|im_start|>assistant'
+  Y exact cuda compiled  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6747, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 5616, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6747, 374, 1532, 21996, 11, 1393, 279, 6722, 315, 5616, 374, 26549, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 6323, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 6323, 30, 151645, 198, 151644, 77091, 25, 576, 6722, 315, 6323, 374, 26194, 13, 151645, 198, 151643, 33975, 25, 3555, 374, 279, 6722, 315, 8330, 30, 151645, 198, 151644, 872, 25, 3555, 374, 279, 6722, 315, 8330, 30, 151645, 198, 151644, 77091]
+  Y exact cuda compiled  BENCH total ms: min 3479.11 median 3828.22 mean 3772.12 sd 276.33 (n=5)
+  Y exact cuda compiled  BENCH first token ms (batched prompt + first choice): min 29.91 median 31.88 mean 32.27 sd 1.94 (n=5)
+  Y exact cuda compiled  BENCH decode ms/token (after the first): min 27.16 median 29.86 mean 29.44 sd 2.17 (n=5)
+
+  [1m[92m1.90.0-x86_64-unknown-linux-gnu installed[0m - rustc 1.90.0 (1159e78c4 2025-09-14)
+
+[0m[1m
+Rust is installed now. Great!
+[0m
+To get started you may need to restart your current shell.
+This would reload your [0m[1mPATH[0m environment variable to include
+Cargo's bin directory ($HOME/.cargo/bin).
+
+To configure your current shell, you need to source the
+corresponding [0m[1menv[0m file under $HOME/.cargo.
+
+Consider running the right command for your shell (note the leading DOT):
+. "$HOME/.cargo/env" # For sh/ash/dash/pdksh/bash
+cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+CC_x86_64-unknown-linux-gnu = None
+cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+CC_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=HOST_CC
+HOST_CC = None
+cargo:rerun-if-env-changed=CC
+CC = None
+cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+cargo:rerun-if-env-changed=CPATH
+cargo:rerun-if-env-changed=C_INCLUDE_PATH
+cargo:rerun-if-env-changed=CPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJC_INCLUDE_PATH
+cargo:rerun-if-env-changed=OBJCPLUS_INCLUDE_PATH
+cargo:rerun-if-env-changed=COMPILER_PATH
+cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH
+cargo:rerun-if-env-changed=GCC_EXEC_PREFIX
+cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+CRATE_CC_NO_DEFAULTS = None
+cargo:rerun-if-env-changed=CFLAGS
+CFLAGS = None
+cargo:rerun-if-env-changed=HOST_CFLAGS
+HOST_CFLAGS = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+CFLAGS_x86_64_unknown_linux_gnu = None
+cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+CFLAGS_x86_64-unknown-linux-gnu = None
+tritify db52e0c 2026-11-11 08:26:42 +0100
+ .../kt-convert/examples/generate_backends.rs       | 49 [32m+++++++++++++++++++[m[31m---[m
+ 1 file changed, 44 insertions(+), 5 deletions(-)
+build exit 0, 2.2 min
+2-runtime/kt-gpu)
+   Compiling tokenizers v0.22.2
+   Compiling kt-model-vision v0.1.0 (/kaggle/working/rivals/tritify/crates/03-models/kt-model-vision)
+   Compiling kt-model-moe v0.1.0 (/kaggle/working/rivals/tritify/crates/03-models/kt-model-moe)
+   Compiling kt-model-decoder v0.1.0 (/kaggle/working/rivals/tritify/crates/03-models/kt-model-decoder)
+   Compiling kt-runtime v0.1.0 (/kaggle/working/rivals/tritify/crates/02-runtime/kt-runtime)
+   Compiling kt-convert v0.1.0 (/kaggle/working/rivals/tritify/crates/04-ingest/kt-convert)
+    Finished `release` profile [optimized] target(s) in 2m 09s
+
+tritify_chat: exit 0, 9.7 min
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+  portable           BENCH total ms: min 6928.05 median 6975.20 mean 7022.41 sd 123.18 (n=7)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 5596.03 median 5633.65 mean 5665.45 sd 78.59 (n=7)
+  portable           BENCH decode ms/token (after the first): min 189.37 median 191.77 mean 193.90 sd 6.87 (n=7)
+  portable           tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  7010 ms
+  portable           BENCH total ms: min 6948.93 median 6991.15 mean 6990.56 sd 24.61 (n=7)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 5595.08 median 5645.46 mean 5636.83 sd 31.91 (n=7)
+  portable           BENCH decode ms/token (after the first): min 190.29 median 192.33 mean 192.79 sd 2.75 (n=7)
+  portable           tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  6991 ms
+  avx2               BENCH total ms: min 5442.03 median 5523.49 mean 5512.51 sd 36.90 (n=7)
+  avx2               BENCH first token ms (prompt one position at a time + first choice): min 4390.52 median 4461.39 mean 4448.10 sd 29.99 (n=7)
+  avx2               BENCH decode ms/token (after the first): min 149.82 median 152.25 mean 152.16 sd 1.27 (n=7)
+  avx2               tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  5523 ms
+  avx512             BENCH total ms: min 5355.16 median 5384.87 mean 5380.30 sd 20.81 (n=7)
+  avx512             BENCH first token ms (prompt one position at a time + first choice): min 4308.74 median 4332.45 mean 4330.29 sd 13.66 (n=7)
+  avx512             BENCH decode ms/token (after the first): min 147.46 median 149.77 mean 149.91 sd 2.87 (n=7)
+  avx512             tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  5384 ms
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) BENCH total ms: min 46363.14 median 47684.40 mean 47689.48 sd 1147.59 (n=7)
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) BENCH first token ms (prompt one position at a time + first choice): min 37696.86 median 38907.77 mean 38922.96 sd 1191.21 (n=7)
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) BENCH decode ms/token (after the first): min 1231.78 median 1250.45 mean 1253.73 sd 15.05 (n=7)
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  47517 ms
+  portable           BENCH total ms: min 7073.38 median 7417.09 mean 7362.13 sd 153.65 (n=7)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 5703.89 median 5953.48 mean 5951.37 sd 131.59 (n=7)
+  portable           BENCH decode ms/token (after the first): min 194.40 median 200.52 mean 200.08 sd 4.93 (n=7)
+  portable           tokens   7 Stop  logits_hash d0f296c46277f1d078562135fe80847feb8497e33cc05be13fee1466d73e5c65  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  7552 ms
+VERDICT: all 6 backends identical
+tritify_128: exit 0, 29.2 min
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+  portable           BENCH total ms: min 31964.68 median 33417.52 mean 33188.95 sd 711.14 (n=5)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 5587.37 median 5777.07 mean 5786.20 sd 169.54 (n=5)
+  portable           BENCH decode ms/token (after the first): min 207.70 median 216.50 mean 215.77 sd 5.17 (n=5)
+  portable           tokens 128 Length  logits_hash a87885793e71ade3716312d59fdff67e3bcd37c850132dab75fc3dd9ada7117c  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  31964 ms
+  portable           BENCH total ms: min 31681.33 median 31855.03 mean 31902.48 sd 189.72 (n=5)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 5521.75 median 5566.96 mean 5613.92 sd 121.14 (n=5)
+  portable           BENCH decode ms/token (after the first): min 205.70 median 207.35 mean 207.00 sd 0.82 (n=5)
+  portable           tokens 128 Length  logits_hash a87885793e71ade3716312d59fdff67e3bcd37c850132dab75fc3dd9ada7117c  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  31855 ms
+  avx2               BENCH total ms: min 25523.23 median 25606.37 mean 25647.47 sd 141.66 (n=5)
+  avx2               BENCH first token ms (prompt one position at a time + first choice): min 4344.86 median 4365.23 mean 4371.10 sd 35.76 (n=5)
+  avx2               BENCH decode ms/token (after the first): min 166.60 median 167.23 mean 167.53 sd 0.92 (n=5)
+  avx2               tokens 128 Length  logits_hash a87885793e71ade3716312d59fdff67e3bcd37c850132dab75fc3dd9ada7117c  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  25523 ms
+  avx512             BENCH total ms: min 25377.74 median 25513.53 mean 25507.63 sd 77.52 (n=5)
+  avx512             BENCH first token ms (prompt one position at a time + first choice): min 4247.28 median 4276.36 mean 4279.04 sd 24.76 (n=5)
+  avx512             BENCH decode ms/token (after the first): min 166.38 median 167.29 mean 167.15 sd 0.44 (n=5)
+  avx512             tokens 128 Length  logits_hash a87885793e71ade3716312d59fdff67e3bcd37c850132dab75fc3dd9ada7117c  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  25377 ms
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) BENCH total ms: min 196644.20 median 199003.92 mean 198245.03 sd 1352.74 (n=5)
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) BENCH first token ms (prompt one position at a time + first choice): min 37694.26 median 37809.46 mean 38733.38 sd 1564.23 (n=5)
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) BENCH decode ms/token (after the first): min 1241.55 median 1253.62 mean 1256.00 sd 11.67 (n=5)
+  gpu:llvmpipe (LLVM 20.1.2, 256 bits) tokens 128 Length  logits_hash a87885793e71ade3716312d59fdff67e3bcd37c850132dab75fc3dd9ada7117c  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  196904 m
+  portable           BENCH total ms: min 31982.99 median 32275.53 mean 32269.12 sd 188.07 (n=5)
+  portable           BENCH first token ms (prompt one position at a time + first choice): min 5594.19 median 5626.54 mean 5629.80 sd 26.87 (n=5)
+  portable           BENCH decode ms/token (after the first): min 207.69 median 209.58 mean 209.74 sd 1.43 (n=5)
+  portable           tokens 128 Length  logits_hash a87885793e71ade3716312d59fdff67e3bcd37c850132dab75fc3dd9ada7117c  embedding 98166930a8af7026667db5d4ada8d3aae05527f4a25949c8dc27bbb26346558d  32361 ms
+VERDICT: all 6 backends identical

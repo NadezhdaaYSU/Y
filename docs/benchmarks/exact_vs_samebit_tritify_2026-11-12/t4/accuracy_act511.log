@@ -1,0 +1,90 @@
+/usr/local/lib/python3.13/dist-packages/cupy/_environment.py:677: UserWarning: 
+--------------------------------------------------------------------------------
+
+  CuPy may not function correctly because multiple CuPy packages are installed
+  in your environment:
+
+    cupy-cuda12x, cupy-cuda13x
+
+  Follow these steps to resolve this issue:
+
+    1. For all packages listed above, run the following command to remove all
+       existing CuPy installations:
+
+         $ pip uninstall <package_name>
+
+      If you previously installed CuPy via conda, also run the following:
+
+         $ conda uninstall cupy
+
+    2. Install the appropriate CuPy package.
+       Refer to the Installation Guide for detailed instructions.
+
+         https://docs.cupy.dev/en/stable/install.html
+
+--------------------------------------------------------------------------------
+
+  warnings.warn(f'''
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (298938 > 131072). Running this sequence through the model will result in indexing errors
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<02:00,  2.41it/s]Loading weights:  92%|█████████▏| 267/290 [00:00<00:00, 657.08it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 532.17it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:47,  2.69it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 758.53it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:   0%|          | 1/290 [00:00<01:58,  2.44it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 688.02it/s]
+window  0: fp32 17.593  fp16 17.583  Y exact 17.623  samebit 17.507
+window  1: fp32 18.875  fp16 18.880  Y exact 19.402  samebit 18.899
+window  2: fp32 20.896  fp16 20.900  Y exact 21.316  samebit 21.021
+window  3: fp32 23.190  fp16 23.196  Y exact 23.578  samebit 23.192
+window  4: fp32 25.533  fp16 25.543  Y exact 25.737  samebit 25.433
+window  5: fp32 24.695  fp16 24.703  Y exact 24.905  samebit 24.519
+window  6: fp32 25.604  fp16 25.605  Y exact 25.740  samebit 25.409
+window  7: fp32 24.457  fp16 24.458  Y exact 24.568  samebit 24.334
+window  8: fp32 23.801  fp16 23.802  Y exact 23.929  samebit 23.745
+window  9: fp32 23.609  fp16 23.610  Y exact 23.683  samebit 23.632
+window 10: fp32 23.654  fp16 23.655  Y exact 23.787  samebit 23.690
+window 11: fp32 23.583  fp16 23.583  Y exact 23.720  samebit 23.657
+window 12: fp32 23.901  fp16 23.902  Y exact 24.034  samebit 23.922
+window 13: fp32 23.905  fp16 23.906  Y exact 23.997  samebit 23.967
+window 14: fp32 23.789  fp16 23.790  Y exact 23.843  samebit 23.828
+window 15: fp32 24.264  fp16 24.265  Y exact 24.353  samebit 24.337
+window 16: fp32 25.075  fp16 25.074  Y exact 25.144  samebit 25.135
+window 17: fp32 25.784  fp16 25.784  Y exact 25.878  samebit 25.849
+window 18: fp32 25.931  fp16 25.930  Y exact 26.039  samebit 26.003
+window 19: fp32 26.273  fp16 26.271  Y exact 26.395  samebit 26.342
+window 20: fp32 26.005  fp16 26.003  Y exact 26.094  samebit 26.073
+window 21: fp32 25.927  fp16 25.926  Y exact 26.001  samebit 25.990
+window 22: fp32 25.606  fp16 25.605  Y exact 25.694  samebit 25.639
+window 23: fp32 25.650  fp16 25.649  Y exact 25.724  samebit 25.686
+window 24: fp32 26.004  fp16 26.002  Y exact 26.093  samebit 26.039
+window 25: fp32 26.345  fp16 26.343  Y exact 26.430  samebit 26.368
+window 26: fp32 26.801  fp16 26.799  Y exact 26.910  samebit 26.821
+window 27: fp32 26.401  fp16 26.399  Y exact 26.533  samebit 26.410
+window 28: fp32 26.618  fp16 26.616  Y exact 26.760  samebit 26.641
+window 29: fp32 26.441  fp16 26.439  Y exact 26.613  samebit 26.449
+window 30: fp32 26.554  fp16 26.551  Y exact 26.699  samebit 26.554
+window 31: fp32 26.783  fp16 26.780  Y exact 26.933  samebit 26.780
+window 32: fp32 25.785  fp16 25.781  Y exact 25.908  samebit 25.799
+window 33: fp32 24.863  fp16 24.859  Y exact 24.994  samebit 24.893
+window 34: fp32 24.956  fp16 24.953  Y exact 25.086  samebit 24.980
+window 35: fp32 25.092  fp16 25.089  Y exact 25.230  samebit 25.117
+window 36: fp32 25.537  fp16 25.533  Y exact 25.688  samebit 25.555
+window 37: fp32 25.452  fp16 25.448  Y exact 25.625  samebit 25.493
+window 38: fp32 25.489  fp16 25.483  Y exact 25.662  samebit 25.507
+window 39: fp32 25.386  fp16 25.380  Y exact 25.572  samebit 25.410
+
+40 windows x 256 = 10240 scored tokens, ids sha256 8f37fdcb021f2ad7
+            NLL/token      PPL
+fp32          3.23421   25.386
+fp16          3.23396   25.380
+Y exact       3.24149   25.572
+samebit       3.23514   25.410
+
+against fp16:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp32      +0.00025 [+0.00004, +0.00048]   +0.006  0.00002  0.9967  0.9968
+  Y exact   +0.00753 [+0.00159, +0.01351]   +0.192  0.02377  0.9354  0.9331
+  samebit   +0.00117 [-0.00396, +0.00639]   +0.030  0.01705  0.9276  0.9271
+
+against fp32:  dNLL/token [95% CI over windows]   dPPL     KL/token   top-1   top-5
+  fp16      -0.00025 [-0.00048, -0.00004]   -0.006  0.00002  0.9967  0.9968
+  Y exact   +0.00728 [+0.00144, +0.01325]   +0.185  0.02402  0.9350  0.9334
+  samebit   +0.00093 [-0.00410, +0.00606]   +0.024  0.01714  0.9281  0.9273
+
+Y exact - samebit: dNLL/token +0.00635 [95% CI -0.00114, +0.01358], Y lower on 17/40 windows, same top-1 on 0.9156

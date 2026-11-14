@@ -1,0 +1,74 @@
+diff --git a/crates/04-ingest/kt-convert/examples/generate_backends.rs b/crates/04-ingest/kt-convert/examples/generate_backends.rs
+index f093af0..8ebeb09 100644
+--- a/crates/04-ingest/kt-convert/examples/generate_backends.rs
++++ b/crates/04-ingest/kt-convert/examples/generate_backends.rs
+@@ -42,6 +42,7 @@ fn main() {
+     let emb_in: Vec<usize> =
+         tok.encode("Exact integers, the same bits everywhere.", false).unwrap().iter().map(|&t| t as usize).collect();
+     println!("generate_backends · {} · prompt {} tokens · eos {:?} · max {max_new}", a[1], prompt.len(), tok.eos_ids());
++    println!("PROMPT_IDS {:?}", prompt);
+ 
+     let host = kt_runtime::detect();
+     // (backend, planted): every genuine backend must agree with the first; a planted one must not
+@@ -70,18 +71,56 @@ fn main() {
+     for (b, planted) in backends {
+         let name = b.name();
+         install_backend(b);
+-        let t = Instant::now();
+-        let g = generate_greedy(&model, &prompt, max_new, tok.eos_ids(), |_| {});
+-        let ms = t.elapsed().as_millis();
++        // LOCAL BENCH PATCH (Y comparison, 2026-11-12). KT_BENCH_REPEAT=n runs the request n times; KT_NO_EOS=1
++        // ignores EOS so exactly max_new tokens are generated. Each run times the first token (the prompt, fed one
++        // position at a time, plus the first choice) and the rest (one decode step each) apart, from the
++        // `on_token` callback; the reported `ms` is the last run's total.
++        let repeat: usize = std::env::var("KT_BENCH_REPEAT").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
++        let no_eos = std::env::var("KT_NO_EOS").is_ok_and(|v| v == "1");
++        let stop: Vec<u32> = if no_eos { Vec::new() } else { tok.eos_ids().to_vec() };
++        let (mut totals, mut firsts, mut per_tok) = (Vec::new(), Vec::new(), Vec::new());
++        let mut g = None;
++        for _ in 0..repeat.max(1) {
++            let mut stamps: Vec<f64> = Vec::new();
++            let t = Instant::now();
++            let out = generate_greedy(&model, &prompt, max_new, &stop, |_| stamps.push(t.elapsed().as_secs_f64() * 1e3));
++            let total = t.elapsed().as_secs_f64() * 1e3;
++            totals.push(total);
++            if let Some(&first) = stamps.first() {
++                firsts.push(first);
++                if stamps.len() > 1 {
++                    per_tok.push((stamps[stamps.len() - 1] - first) / (stamps.len() - 1) as f64);
++                }
++            }
++            g = Some(out);
++        }
++        let g = g.unwrap();
++        let ms = totals.last().copied().unwrap_or(0.0) as u128;
++        let stats = |v: &Vec<f64>| -> String {
++            if v.is_empty() {
++                return "-".into();
++            }
++            let mut s = v.clone();
++            s.sort_by(|a, b| a.partial_cmp(b).unwrap());
++            let n = s.len() as f64;
++            let mean = s.iter().sum::<f64>() / n;
++            let sd = (s.iter().map(|x| (x - mean) * (x - mean)).sum::<f64>() / (n - 1.0).max(1.0)).sqrt();
++            let med = if s.len() % 2 == 1 { s[s.len() / 2] } else { (s[s.len() / 2 - 1] + s[s.len() / 2]) / 2.0 };
++            format!("min {:.2} median {:.2} mean {:.2} sd {:.2} (n={})", s[0], med, mean, sd, s.len())
++        };
++        println!("  {name:<18} BENCH total ms: {}", stats(&totals));
++        println!("  {name:<18} BENCH first token ms (prompt one position at a time + first choice): {}", stats(&firsts));
++        println!("  {name:<18} BENCH decode ms/token (after the first): {}", stats(&per_tok));
+         let e = hash_int(&embed_mean(&model, &emb_in));
+         let text = tok.decode(&g.tokens).unwrap().replace('\n', "\\n");
+         println!(
+-            "  {name:<18} tokens {:>3} {:?}  logits_hash {}  embedding {}  {ms} ms\n  {:<18} text: {text}",
++            "  {name:<18} tokens {:>3} {:?}  logits_hash {}  embedding {}  {ms} ms\n  {:<18} text: {text}\n  GEN_IDS {:?}",
+             g.tokens.len(),
+             g.finish,
+             g.logits_hash,
+             e,
+-            ""
++            "",
++            g.tokens
+         );
+         let result = (g.tokens.clone(), g.logits_hash.clone(), e);
+         let reference = first.get_or_insert_with(|| result.clone());
