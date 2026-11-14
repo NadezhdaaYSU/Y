@@ -1,9 +1,10 @@
 # Exact decode: what the Coq proofs cover, and where the gaps are
 
 Inventory of `proofs/*.v` against one decode step of the exact inference path
-in `python/y_lang/exact/`. Written 2026-11-14 at commit `a7043ad`, before the
-capstone proof (`proofs/ExactDecodeStep.v`) existed. It lists what each file
-proves, which stage of a decode step that covers, and what nothing covers.
+in `python/y_lang/exact/`. Written 2026-11-14 at commit `a7043ad`, before any
+proof of a whole decode step was started. It lists what each file proves,
+which stage of a decode step that covers, and what nothing covers. The files
+added since are at the end, with what is still open.
 
 The theorem statements quoted here are copied from the proof files.
 `python/tests/test_proof_inventory.py` fails if a quoted statement is no longer
@@ -728,3 +729,122 @@ Theorem low_correct : forall s e, bools e s -> agrees e s.
 
 Also proved: `output_is_the_returned_value`.
 
+## Added after this inventory (2026-11-15)
+
+Three files, the first part of the capstone work. They close gaps 3, 5 and 9,
+and the sum half of gaps 2 and 4. The decode-step theorem itself (gap 1), the
+instantiation at real models (gap 6), the executable check (gap 10) and the
+written trust boundary (gap 7) are **not done yet**: see "Still open" below.
+
+### `proofs/ExactReduce.v`
+
+Any order and any association of a sum of integers, in int32, int64, float32
+or float64, gives the mathematical sum while the absolute values of the terms
+sum to at most the carrier's cap. This is the statement that covers kernels
+whose schedule is not Y's (Triton, cuBLASLt, oneDNN, `torch.sum`). Max and
+argmax are modelled by their specifications.
+
+- On the decode path: yes, every sum (stages 1, 2, 5, 8, 10), as a statement
+  about carriers, not about any kernel's code.
+- Theorems and corollaries: 15. Quoted below: 4.
+
+```coq
+Theorem any_schedule_gives_the_sum : forall B add terms t,
+  exact_within B add ->
+  covers t (length terms) ->
+  abs_sum terms <= B ->
+  teval add terms t = zsum terms.
+```
+
+```coq
+Theorem every_carrier_is_exact_within_its_cap : forall c,
+  exact_within (cap c) (cadd c).
+```
+
+```coq
+Theorem past_the_cap_two_schedules_disagree :
+  covers left_first 3 /\ covers right_first 3
+  /\ abs_sum spike = cap F32 + 2
+  /\ teval (cadd F32) spike left_first = 2 ^ 24
+  /\ teval (cadd F32) spike right_first = 2 ^ 24 + 2
+  /\ zsum spike = 2 ^ 24 + 2.
+```
+
+```coq
+Theorem first_argmax_unique : forall d l i1 i2,
+    is_first_argmax d l i1 -> is_first_argmax d l i2 -> i1 = i2.
+```
+
+### `proofs/ExactDecodeConstants.v`
+
+Generated from `python/y_lang/exact/` by `tools/exact_decode_constants.py`:
+the constants each bound reads, and samples of what the Python width
+functions and the integer `exp2` return.
+`python/tests/test_exact_decode_constants.py` compares it with the code byte
+for byte.
+
+- On the decode path: it is the path's constants.
+- Theorems and corollaries: 2. Quoted below: 1.
+
+```coq
+Theorem the_exp_table_has_64_entries_from_one : length EXP_TABLE = 64%nat
+  /\ nth 0 EXP_TABLE 0 = 2 ^ 30.
+```
+
+### `proofs/ExactDecodeWidths.v`
+
+`act_levels_for`, `k_levels_for`, `digit_width`, `split_digits`, the integer
+`exp2` and the norm's bit fields, transcribed, with the bound each reduction
+needs proved for every input, and checked against the generated samples.
+
+- On the decode path: yes, the widths of stages 1, 2, 5, 7 and 10.
+- Theorems and corollaries: 14. Quoted below: 4.
+
+```coq
+Theorem the_derived_activation_width_fits_the_accumulator : forall k requested,
+  0 < k -> 0 <= requested ->
+  k * 127 * 127 < C.ACC_BUDGET ->
+  let a := act_levels_for k C.W_LEVELS requested in
+  127 <= a <= Z.max 127 (Z.min C.DIGIT_MAX requested)
+  /\ (a + 1) mod 128 = 0
+  /\ (127 < a -> k * (a + 128) * 127 < C.ACC_BUDGET).
+```
+
+```coq
+Theorem the_derived_key_width_fits_float32 : forall d q,
+  0 < d -> 0 < q ->
+  d * q * 127 <= C.SCORE_BUDGET ->
+  let kl := k_levels_for d q in
+  127 <= kl <= Z.max 127 C.K_LEVELS /\ d * q * kl <= C.SCORE_BUDGET.
+```
+
+```coq
+Theorem the_integer_exp_is_a_q28_weight : forall t,
+  0 <= exp2_neg_q16_16 t <= 2 ^ 28.
+```
+
+```coq
+Theorem the_width_functions_return_what_the_python_returns :
+  forallb (triple_ok (fun k r => act_levels_for k C.W_LEVELS r)) C.ACT_LEVELS_SAMPLES = true
+  /\ forallb (triple_ok k_levels_for) C.K_LEVELS_SAMPLES = true
+  /\ forallb (triple_ok digit_width) C.DIGIT_WIDTH_SAMPLES = true
+  /\ forallb (fun s => let '(q, h, l) := s in (split_hi q =? h) && (split_lo q =? l))
+             C.SPLIT_SAMPLES = true
+  /\ forallb (fun s => exp2_neg_q16_16 (fst s) =? snd s) C.EXP2_SAMPLES = true.
+```
+
+## Still open
+
+- **The decode-step theorem.** No file yet states that a layer or a decode
+  step gives the same result under two executions. The pieces above are what
+  it composes: `ExactReduce.v` for each sum, `ExactDecodeWidths.v` for each
+  bound, the kernel files for Y's own kernels.
+- The digit-split `p.V` and the two-digit linear layer as machines (the
+  per-term bound is proved; the recombination is not).
+- Instantiation at Qwen2.5 0.5B, 1.5B, 3B and 7B, at activation levels 127
+  and 511.
+- The executable check of these definitions against the real path on
+  Qwen2.5-0.5B activations, on this CPU and on a Tesla T4.
+- Negative controls run as tests (a mutated bound, a planted float sum, a
+  wrong index). The Coq refutations exist; the mutation harness does not.
+- The written trust boundary and the report.

@@ -1050,6 +1050,57 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "Print Assumptions past_8192_values_big_can_reach_2_53",
             ][..],
         ),
+        (
+            // Any order and any association of a sum, in int32, int64,
+            // float32 or float64, gives the integer sum while the absolute
+            // values sum to at most the carrier's cap: the fact that covers
+            // the kernels of the exact decode path that are not Y's. The
+            // refutations are the cap being load-bearing: one unit past 2^24
+            // two float32 associations of the same three terms disagree.
+            "ExactReduce.v",
+            &[
+                "Print Assumptions any_schedule_gives_the_sum",
+                "Print Assumptions no_partial_leaves_the_range",
+                "Print Assumptions every_carrier_is_exact_within_its_cap",
+                "Print Assumptions past_the_cap_two_schedules_disagree",
+                "Print Assumptions float32_addition_rounds_past_its_cap",
+                "Print Assumptions any_schedule_gives_the_dot_product",
+                "Print Assumptions dot_is_the_kernel_proofs_sum",
+                "Print Assumptions any_max_tree_is_a_max",
+                "Print Assumptions max_key_unique",
+                "Print Assumptions first_argmax_unique",
+            ][..],
+        ),
+        (
+            // Generated from python/y_lang/exact by
+            // tools/exact_decode_constants.py; the byte comparison is
+            // python/tests/test_exact_decode_constants.py.
+            "ExactDecodeConstants.v",
+            &[
+                "Print Assumptions the_exp_table_has_64_entries_from_one",
+                "Print Assumptions the_samples_are_not_empty",
+            ][..],
+        ),
+        (
+            // The widths the exact path derives satisfy the bounds its
+            // reductions need, for every shape; and these transcriptions
+            // return what the Python returned on every generated sample.
+            // The refutations: without the `- 128` a width that wraps is
+            // admitted, and past DIGIT_MAX the high digit leaves int8.
+            "ExactDecodeWidths.v",
+            &[
+                "Print Assumptions the_derived_activation_width_fits_the_accumulator",
+                "Print Assumptions dropping_the_128_admits_a_width_that_wraps",
+                "Print Assumptions the_derived_key_width_fits_float32",
+                "Print Assumptions one_more_key_level_leaves_float32",
+                "Print Assumptions the_digit_width_fits_float32",
+                "Print Assumptions the_split_terms_fit_the_accumulator",
+                "Print Assumptions a_width_past_the_digit_ceiling_wraps_the_high_digit",
+                "Print Assumptions the_integer_exp_is_a_q28_weight",
+                "Print Assumptions the_norm_limbs_are_in_range",
+                "Print Assumptions the_width_functions_return_what_the_python_returns",
+            ][..],
+        ),
     ]
 }
 
