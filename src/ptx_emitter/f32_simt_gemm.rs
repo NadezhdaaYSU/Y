@@ -59,8 +59,11 @@
 //! (`f32_gemm_block_smem`), and registers are budgeted for the CTAs the
 //! target's shared memory admits (`f32_gemm_reg_ctas`). The arithmetic is
 //! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 33
-//! exactness shapes built for sm_75). At N = 1 mod 4 the narrow B copies'
-//! loads spill (docs/known_issues.md).
+//! exactness shapes built for sm_75). There a guarded copy is a predicated
+//! load and a zero fill, and guards on the K loop's copies spilled, so the K
+//! loop takes none: the short K tile comes first and a ragged last tile row
+//! slides back to end at row M-1 (`short_first`, `slide_m` in
+//! `emit_f32_gemm_tile_set`; python/tests/test_f32_gemm_below_sm80.py).
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -538,6 +541,9 @@ impl PtxEmitter {
         };
         let edges = {
             let mut e = Vec::new();
+            // Below sm_80 (`emit_f32_gemm_tile_set`'s `short_first` and
+            // `slide_m`) the K loop's copies take no guards.
+            let plain = self.sm_level() < 80;
             if m % t.bm != 0 {
                 e.push(format!("rows past M={m} are not read or stored"));
             }
@@ -545,7 +551,11 @@ impl PtxEmitter {
                 e.push(format!("N % 4 != 0: C stored {} bytes at a time", if n % 2 == 0 { 8 } else { 4 }));
             }
             if k_tail != 0 {
-                e.push(format!("the last K tile runs its {k_tail} valid steps"));
+                if plain && k >= t.bk {
+                    e.push(format!("the first K tile runs its {k_tail} steps, so no copy reaches past K"));
+                } else {
+                    e.push(format!("the last K tile runs its {k_tail} valid steps"));
+                }
             }
             if e.is_empty() { "none".to_string() } else { e.join("; ") }
         };
@@ -982,7 +992,8 @@ impl PtxEmitter {
         // aligned shape's kernel is the code measured in the module doc:
         // - M: an A copy of a row past M copies nothing (`cp.async`'s
         //   source size 0; it reads nothing and zero-fills), and C's rows
-        //   past M are not stored;
+        //   past M are not stored; below sm_80 the last tile row slides back
+        //   instead (`slide_m` below);
         // - N: the B columns a thread copies are clamped to the last valid
         //   ones once per tile (they feed only C columns past N, which are not
         //   stored); with N % 4 != 0 a B row is not 16-byte aligned, so B is
@@ -992,7 +1003,8 @@ impl PtxEmitter {
         // - K: the copies of k >= K copy nothing, and the last K tile runs
         //   only its K % BK valid steps, so every element is still the
         //   in-order chain over k < K (zero products would turn a -0.0 sum
-        //   into +0.0).
+        //   into +0.0); below sm_80 the short tile is the first instead
+        //   (`short_first` below).
         let rag_m = nrows % t.bm != 0;
         let rag_n = ncols % t.bn != 0;
         let vec_n = n % 4 == 0;
@@ -1006,9 +1018,34 @@ impl PtxEmitter {
         let b_list: Vec<(usize, u32)> = b_classes.iter().enumerate().flat_map(|(ci, c)| (0..c.per_thread).map(move |i| (ci, i))).collect();
         let b_copies = b_list.len() as u32;
         let copies = a_copies + b_copies;
-        // The copies are spread over the k steps before the commit at
-        // k = BK - 2, one per step where they fit.
-        let per_step = copies.div_ceil(t.bk - 1);
+        // Below sm_80 a guarded copy is a predicated load and a zero fill, and
+        // guards on the K loop's copies spilled: 255 registers and 280-688
+        // bytes (1024 x 1024 x 1027, 1023 x 1025 x 1027), where the same loop
+        // unguarded is 128 registers and no spill; on a Tesla T4 1023 x 1025 x
+        // 1027 ran at 0.22x cuBLAS. So there, with one segment, the loop's
+        // copies take no guards:
+        // - K % BK != 0 (and K >= BK): the FIRST K tile is the short one. It
+        //   runs steps 0..K%BK of a whole tile read from k = 0, and the tiles
+        //   after it start at k = K%BK, so the last ends at K and no copy reaches
+        //   past it. The steps still run k = 0..K-1 in order.
+        // - M ragged, with at least BM rows up to this set's end: the last
+        //   tile row is slid back to end at the set's last row (into the set
+        //   before, for a remainder set), so every A copy is a row < M, and
+        //   it stores only its own rows. Each element is still its own chain,
+        //   whichever CTA runs it. Not on the 256-column tiles' odd-N stores,
+        //   which need a tile's first row a multiple of 4.
+        let sync_copies = self.sm_level() < 80;
+        let short_first = sync_copies && seg.is_none() && k_tail != 0 && kt_full >= 1;
+        let slide_m = sync_copies && seg.is_none() && rag_m && row_origin + nrows >= t.bm && !(n % 2 == 1 && !rag_n && t.bn == 256);
+        let guard_m = rag_m && !slide_m;
+        // The first k of the K tile in stage-load order `st` (segment-relative).
+        let koff = |st: u32| -> u32 {
+            match (short_first, st) {
+                (true, 0) => 0,
+                (true, _) => k_tail + (st - 1) * t.bk,
+                (false, _) => st * t.bk,
+            }
+        };
         assert!(
             lm * ln == 32 && t.tm % 4 == 0 && t.tn % 4 == 0 && nt % t.bk == 0 && b_classes.iter().all(|c| nt % c.cpr == 0),
             "F32 GEMM tile {:?} is malformed",
@@ -1119,11 +1156,21 @@ impl PtxEmitter {
 
         // Per-tile global bases of this thread's copies.
         let a_row_step = nt / t.bk; // rows of A between copy c and c+1
-        w(self, format!("mad.lo.u32 {}, {}, {}, {};", tmp, by, t.bm, row_a));
-        if row_origin != 0 {
-            w(self, format!("add.u32 {}, {}, {};", tmp, tmp, row_origin));
+        if slide_m {
+            // The last tile row starts at row_origin + nrows - BM.
+            w(self, format!("mul.lo.u32 {}, {}, {};", tmp, by, t.bm));
+            if row_origin != 0 {
+                w(self, format!("add.u32 {}, {}, {};", tmp, tmp, row_origin));
+            }
+            w(self, format!("min.u32 {}, {}, {};", tmp, tmp, row_origin + nrows - t.bm));
+            w(self, format!("add.u32 {}, {}, {};", tmp, tmp, row_a));
+        } else {
+            w(self, format!("mad.lo.u32 {}, {}, {}, {};", tmp, by, t.bm, row_a));
+            if row_origin != 0 {
+                w(self, format!("add.u32 {}, {}, {};", tmp, tmp, row_origin));
+            }
         }
-        if rag_m {
+        if guard_m {
             // c_lim = clamp(ceil((M - row) / step), 0, copies)
             w(self, format!("sub.s32 {}, {}, {};", c_lim, m, tmp));
             w(self, format!("max.s32 {}, {}, 0;", c_lim, c_lim));
@@ -1276,18 +1323,17 @@ impl PtxEmitter {
         // anyway, keeps a stage from being read before its stores or
         // overwritten while it is read. No arithmetic changes, so neither
         // does a bit of C.
-        let sync_copies = self.sm_level() < 80;
         let copy = |e: &mut Self, c: u32, kguard: bool, sa: &str, sbs: &[String], ga_r: &str, gbs_r: &[String], s_off_a: u32, s_off_b: u32, g_off_a: u64, g_off_b: u64| {
             if c < a_copies {
                 let so = s_off_a + c * a_row_step * 4;
                 let go = g_off_a + (c * a_row_step) as u64 * k as u64 * 4;
-                let size = if rag_m || kguard {
-                    if rag_m {
+                let size = if guard_m || kguard {
+                    if guard_m {
                         w(e, format!("setp.gt.u32 {}, {}, {};", p_g, c_lim, c));
                     }
                     if kguard {
                         w(e, format!("setp.lt.s32 {}, {}, {};", p_k, col_a, klim));
-                        if rag_m {
+                        if guard_m {
                             w(e, format!("and.pred {}, {}, {};", p_g, p_g, p_k));
                         } else {
                             w(e, format!("mov.pred {}, {};", p_g, p_k));
@@ -1390,13 +1436,14 @@ impl PtxEmitter {
                 }
                 self.ptx_buffer.push_str(&format!("{}:\n", skip));
             } else if st < kt_total {
-                // Only the last K tile can reach past K.
-                let kguard = k_tail != 0 && st == kt_total - 1;
+                // Only the last K tile can reach past K - unless the short
+                // tile is the first, when none does.
+                let kguard = k_tail != 0 && !short_first && st == kt_total - 1;
                 if kguard {
                     set_klim(self, Some(k as i64 - (st * t.bk) as i64));
                 }
                 for c in 0..copies {
-                    copy(self, c, kguard, &copy_a, &copy_bs, &ga, &gbs, st * stage_a, st * stage_b, (st * t.bk * 4) as u64, st as u64 * t.bk as u64 * n as u64 * 4);
+                    copy(self, c, kguard, &copy_a, &copy_bs, &ga, &gbs, st * stage_a, st * stage_b, (koff(st) * 4) as u64, koff(st) as u64 * n as u64 * 4);
                 }
             }
             if !sync_copies {
@@ -1404,9 +1451,9 @@ impl PtxEmitter {
             }
         }
         // The next K tile to load is S-1 tiles in.
-        w(self, format!("add.u64 {}, {}, {};", ga, ga, (s - 1) * t.bk * 4));
+        w(self, format!("add.u64 {}, {}, {};", ga, ga, koff(s - 1) * 4));
         for gb in &gbs {
-            w(self, format!("add.u64 {}, {}, {};", gb, gb, (s - 1) as u64 * t.bk as u64 * n as u64 * 4));
+            w(self, format!("add.u64 {}, {}, {};", gb, gb, koff(s - 1) as u64 * n as u64 * 4));
         }
         w(self, format!("mov.u32 {}, 0;", kt));
         w(self, format!("mov.u32 {}, 0;", rs));
@@ -1459,9 +1506,13 @@ impl PtxEmitter {
             }
             _ => None,
         };
-        // ---- K loop over the full K tiles.
-        if kt_full > 0 {
-            self.ptx_buffer.push_str(&format!("{}:\n", k_top));
+        // ---- K loop over the full K tiles; with `short_first`, before it one
+        // pass over the short first tile, which runs its K % BK steps only.
+        let passes: &[(bool, u32)] = if short_first { &[(true, k_tail), (false, t.bk)] } else { &[(false, t.bk)] };
+        for &(once, steps) in passes.iter().filter(|_| kt_full > 0) {
+            if !once {
+                self.ptx_buffer.push_str(&format!("{}:\n", k_top));
+            }
             if !sync_copies {
                 w(self, format!("cp.async.wait_group {};", s - 2));
             }
@@ -1481,7 +1532,7 @@ impl PtxEmitter {
             for ci in 0..b_classes.len() {
                 w(self, format!("mad.lo.u32 {}, {}, {}, {};", wr_bs[ci], ws, stage_b, copy_bs[ci]));
             }
-            if k_tail != 0 {
+            if k_tail != 0 && !short_first {
                 if let Some((ka, _)) = seg {
                     // klim = K - (first k of the tile being loaded), that tile
                     // being ka + kt + S - 1.
@@ -1507,18 +1558,23 @@ impl PtxEmitter {
             // copies with an unconditional advance, 0.97x; both branched,
             // 1.01-1.02x, equal to NVVM's. It is the predicated 64-bit adds
             // that ptxas schedules badly.
-            for kk in 0..t.bk {
+            //
+            // The copies are spread over the k steps up to the advance, one
+            // per step where they fit; the advance is two steps before the end.
+            let advance_at = steps.max(2) - 2;
+            let per_step = copies.div_ceil(advance_at + 1);
+            for kk in 0..steps {
                 frag(self, kk as usize, kk);
                 let mine: Vec<u32> = (0..copies).filter(|c| c / per_step == kk).collect();
                 if !mine.is_empty() {
                     let skip = self.alloc_label("f32_gemm_nocopy");
                     w(self, format!("@!{} bra {};", p_more, skip));
                     for c in mine {
-                        copy(self, c, k_tail != 0, &wr_a, &wr_bs, &ga, &gbs, 0, 0, 0, 0);
+                        copy(self, c, k_tail != 0 && !short_first, &wr_a, &wr_bs, &ga, &gbs, 0, 0, 0, 0);
                     }
                     self.ptx_buffer.push_str(&format!("{}:\n", skip));
                 }
-                if kk == t.bk - 2 {
+                if kk == advance_at {
                     let skip = self.alloc_label("f32_gemm_noadvance");
                     w(self, format!("@!{} bra {};", p_more, skip));
                     w(self, format!("add.u64 {}, {}, {};", ga, ga, t.bk * 4));
@@ -1531,17 +1587,21 @@ impl PtxEmitter {
                     }
                 }
             }
-            fmas(self, t.bk);
+            fmas(self, steps);
             for reg in [&rs, &ws] {
                 w(self, format!("add.u32 {}, {}, 1;", reg, reg));
                 w(self, format!("setp.eq.u32 {}, {}, {};", p_wrap, reg, s));
                 w(self, format!("selp.u32 {}, 0, {}, {};", reg, reg, p_wrap));
             }
             w(self, format!("add.u32 {}, {}, 1;", kt, kt));
+            if once {
+                continue;
+            }
             if let Some((nfull, _, _)) = &seg_loop {
                 w(self, format!("setp.lt.u32 {}, {}, {};", p_loop, kt, nfull));
             } else {
-                w(self, format!("setp.lt.u32 {}, {}, {};", p_loop, kt, kt_full));
+                // `kt` counts K tiles, the short first one among them.
+                w(self, format!("setp.lt.u32 {}, {}, {};", p_loop, kt, if short_first { kt_total } else { kt_full }));
             }
             w(self, format!("@{} bra {};", p_loop, k_top));
         }
@@ -1560,7 +1620,7 @@ impl PtxEmitter {
             }
             _ => None,
         };
-        if k_tail != 0 {
+        if k_tail != 0 && !short_first {
             if !sync_copies {
                 w(self, "cp.async.wait_group 0;".to_string());
             }
@@ -1589,9 +1649,23 @@ impl PtxEmitter {
         let (p_row, p_col) = (self.alloc_pred(), self.alloc_pred());
         w(self, format!("mul.lo.u32 {}, {}, {};", tmp, wm_i, t.wm));
         w(self, format!("mad.lo.u32 {}, {}, 4, {};", tmp, lm_i, tmp));
-        w(self, format!("mad.lo.u32 {}, {}, {}, {};", row0, by, t.bm, tmp));
-        if row_origin != 0 {
-            w(self, format!("add.u32 {}, {}, {};", row0, row0, row_origin));
+        // `slide_m`: with b = row_origin + by * BM, the tile's rows start at
+        // min(b, row_origin + nrows - BM), and it stores rows from b on:
+        // row0 + drow >= b, that is drow >= `own` = b - row0.
+        let own = if slide_m { r(self) } else { String::new() };
+        if slide_m {
+            w(self, format!("mul.lo.u32 {}, {}, {};", own, by, t.bm));
+            if row_origin != 0 {
+                w(self, format!("add.u32 {}, {}, {};", own, own, row_origin));
+            }
+            w(self, format!("min.u32 {}, {}, {};", row0, own, row_origin + nrows - t.bm));
+            w(self, format!("add.u32 {}, {}, {};", row0, row0, tmp));
+            w(self, format!("sub.s32 {}, {}, {};", own, own, row0));
+        } else {
+            w(self, format!("mad.lo.u32 {}, {}, {}, {};", row0, by, t.bm, tmp));
+            if row_origin != 0 {
+                w(self, format!("add.u32 {}, {}, {};", row0, row0, row_origin));
+            }
         }
         w(self, format!("mul.wide.u32 {}, {}, {};", off64, row0, n * 4));
         w(self, format!("mul.lo.u32 {}, {}, {};", tmp, wn_i, t.wn));
@@ -1607,7 +1681,10 @@ impl PtxEmitter {
             for rw in 0..4 {
                 let i = (ci * 4 + rw) as usize;
                 let drow = ci * lm * 4 + rw;
-                if rag_m {
+                if slide_m {
+                    // Every row is < M; the rows before b are another tile's.
+                    w(self, format!("setp.le.s32 {}, {}, {};", p_row, own, drow));
+                } else if rag_m {
                     // row0 + drow < M
                     w(self, format!("setp.lt.s32 {}, {}, {};", p_row, row0, m as i64 - drow as i64));
                 }

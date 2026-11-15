@@ -1233,7 +1233,7 @@ for i in 0..100 {
   on CUDA cores (`src/ptx_emitter/f32_simt_gemm.rs`): on sm_80 and later
   with `cp.async`; below (Turing, Volta, Pascal, since 2026-11-12) with
   plain loads and without the 74 KB large tile, the same bits and slower
-  (at N = 1 mod 4 much slower: `docs/known_issues.md`). **Every element of C is one `fma.rn.f32` chain over
+  (`docs/known_issues.md`). **Every element of C is one `fma.rn.f32` chain over
   k = 0..K-1 in that order**, so its bits depend on its row of A and column
   of B only: not on M, the tile, or the grid. That is `f32::mul_add` folded
   in order, which the tests compare bit for bit; there is no split K,
@@ -1241,7 +1241,11 @@ for i in 0..100 {
   the same day; N and K below 2^22): rows past M and k past K are copies
   of size 0, columns past N are clamped on read, and none of them is
   stored; the last, partial K tile runs only its valid steps, so a ragged
-  K keeps the in-order chain, -0.0 included. With N % 4 != 0 a B row is
+  K keeps the in-order chain, -0.0 included. Below sm_80, where a guarded
+  copy is a predicated load that spilled registers, the K loop takes no
+  guards: the partial K tile is the first (k = 0..K%16-1, then whole tiles
+  ending at K), and a ragged last row of tiles slides back to end at row
+  M-1, storing only the rows the row of tiles before it does not. With N % 4 != 0 a B row is
   not 16-byte aligned throughout; since every K tile starts at a multiple
   of 16 rows, each row's alignment is known at compile time, and with K a
   multiple of 16 and no ragged column edge each row is copied at its own

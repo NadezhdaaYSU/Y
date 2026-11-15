@@ -455,11 +455,23 @@ fn old_arch_ptxas() -> Option<std::path::PathBuf> {
 
 /// Pascal, Volta and Turing: no `cp.async`, the tile within the target's
 /// per-block shared memory (48, 96 and 64 KB), and `ptxas` for that target
-/// assembles every kernel, without spilling except at N = 1 mod 4.
+/// assembles every kernel without spilling.
+///
+/// Until 2026-11-15 a K tail or a ragged M guarded every copy of the K loop,
+/// and below sm_80 a guarded copy (a predicated load and a zero fill) spilled
+/// 280-688 bytes at 255 registers; on a Tesla T4 1023 x 1025 x 1027 ran at
+/// 0.22x cuBLAS. That was put down to N = 1 mod 4, because every such shape
+/// here also had a K tail; so one shape per edge: N odd alone (1024 x 1025 x
+/// 1024, which never spilled), K alone (1024 x 1024 x 1027) and M alone
+/// (1023 x 1024 x 1024), and row remainder sets (67 x 37 x 1035, 400 x 2049 x
+/// 1025). Not at two or three K tiles, where `ptxas` unrolls the K loop: a
+/// remainder set there still spills 4-52 bytes (400 x 2049 x 40, 67 x 37 x
+/// 35; 740-796 and 48-52 before), docs/known_issues.md.
 #[test]
 fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
     let shapes = [(4096, 4096, 4096), (2049, 4100, 24), (1023, 1025, 1027), (64, 64, 16), (2048, 12803, 64),
-                  (1, 8193, 40), (2048, 4097, 40)];
+                  (1, 8193, 40), (2048, 4097, 40), (1024, 1025, 1024), (1024, 1024, 1027), (1023, 1024, 1024),
+                  (67, 37, 1035), (400, 2049, 1025)];
     let new = ptxas::ptxas();
     let old = old_arch_ptxas();
     for (sm, sms, limit) in [("7.5", 40u32, 64 * 1024u32), ("7.0", 80, 96 * 1024), ("6.1", 6, 48 * 1024)] {
@@ -483,11 +495,8 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
                 let out = Command::new(tool).args([format!("-arch={arch}").as_str(), "-v", "-o", "/dev/null"]).arg(&path).output().unwrap();
                 let log = String::from_utf8_lossy(&out.stderr);
                 assert!(out.status.success(), "{arch} {m}x{n}x{k}: ptxas failed:\n{log}");
-                // N = 1 mod 4 spills (472-2084 bytes at 255 registers on all
-                // three: ptxas hoists the narrow B copies' loads ahead of
-                // their stores); docs/known_issues.md. Every other width may not.
-                let spills = !log.contains("bytes spill") || log.contains(" 0 bytes spill stores");
-                assert!(spills || n % 4 == 1, "{arch} {m}x{n}x{k}: spills\n{log}");
+                let spills = log.lines().filter(|l| l.contains("bytes spill")).any(|l| !l.contains(" 0 bytes spill stores, 0 bytes spill loads"));
+                assert!(!spills, "{arch} {m}x{n}x{k}: spills\n{log}");
             }
         }
         let _ = std::fs::remove_dir_all(&dir);

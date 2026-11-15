@@ -42,7 +42,16 @@ under load, so absolute TFLOPS move; the ratio is the number to read.
 
 0.70-0.96x where N is a multiple of 4. At N = 1 mod 4 the many narrow B
 copies' loads spill (ptxas hoists them ahead of their stores): 0.22x, and
-`docs/known_issues.md` records it. The plain loads also hide less latency
+`docs/known_issues.md` records it.
+
+**Correction (2026-11-15):** the cause was not N. 1023 x 1025 x 1027 also has
+a K tail and a ragged M, and for either one the K loop guarded every copy,
+which below sm_80 is a predicated load and a zero fill. That is what spilled.
+N odd alone (1024 x 1025 x 1024) is 125 registers and no spill; K alone (1024
+x 1024 x 1027) spilled 424 bytes. The loop's copies take no guards now
+(`docs/known_issues.md`); the table above is the code before that change.
+
+The plain loads also hide less latency
 than `cp.async`; the usual remedy on these cards (CUTLASS's sm_70 SIMT
 kernels) is to load the next K tile into registers during the current one's
 FMAs, which this version does not do.

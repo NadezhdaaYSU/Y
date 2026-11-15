@@ -205,17 +205,35 @@ source; each entry there now carries its status. What is still open:
 
 ### FP32 GEMM limits
 
-- **Below sm_80 the FP32 GEMM is slow at N = 1 mod 4** (2026-11-12). There is
-  no `cp.async` there, so the copies are loads into registers, and at those
-  widths `ptxas` hoists the many narrow B copies' loads ahead of their stores
-  and spills 470-2100 bytes at 255 registers (sm_61, sm_70, sm_75). Built for
-  sm_75 and run on the RTX 4070 Ti SUPER, 1023 x 1025 x 1027 ran at 0.29x
-  cuBLAS (5.2 against 17.9 TFLOPS) where 1024^3 ran at 1.21x; on a Tesla T4
-  0.22x, against 0.70-0.96x at the other shapes measured
-  (`docs/benchmarks/f32_gemm_sm75_2026-11-12/`). The bits are unaffected
-  (`tests/f32_simt_gemm.rs`, and the T4 run); other widths assemble without
-  spills. Nor does this version load the next K tile into registers during
-  the current one's FMAs, the usual remedy for latency on these cards.
+- **Below sm_80 the FP32 GEMM spilled at a K tail or a ragged M**
+  (2026-11-12; fixed in the code 2026-11-15, the T4's speed not yet
+  re-measured). There is no `cp.async` there, so a copy is a load into a
+  register and a shared store, and a guarded copy (k past K, a row past M)
+  is a predicated load and a zero fill. The K loop guarded every copy
+  whenever the shape had a K tail or a ragged M, though one iteration at
+  most loads the partial K tile, and that spilled 280-2084 bytes at 255
+  registers on sm_61, sm_70 and sm_75. Built for sm_75 and run on the RTX
+  4070 Ti SUPER, 1023 x 1025 x 1027 ran at 0.29x cuBLAS (5.2 against 17.9
+  TFLOPS) where 1024^3 ran at 1.21x; on a Tesla T4 0.22x, against
+  0.70-0.96x at the other shapes measured
+  (`docs/benchmarks/f32_gemm_sm75_2026-11-12/`). The bits were unaffected.
+  This entry first blamed N = 1 mod 4 (the narrow B copies): every N = 1
+  mod 4 shape measured or tested also had a K tail, and N odd alone (1024
+  x 1025 x 1024) never spilled.
+  Below sm_80 the K loop's copies now take no guards: the short K tile is
+  the first, and a ragged last row of tiles slides back to end at row M-1
+  (`short_first`, `slide_m` in `src/ptx_emitter/f32_simt_gemm.rs`). 1023 x
+  1025 x 1027 is 128 registers without a spill on sm_75 (141 on sm_70, 127
+  on sm_61), and the sm_80 and sm_89 kernels are unchanged byte for byte.
+  `python/tests/test_f32_gemm_below_sm80.py` runs the sm_75 kernels in the
+  CPU interpreter against an in-order fma oracle, and five planted errors
+  in the change were each caught by it. Still open:
+  - the T4's speed after the change;
+  - at two or three K tiles (K 33-47), where `ptxas` unrolls the K loop, a
+    remainder set still spills 4-52 bytes (400 x 2049 x 40 and 67 x 37 x
+    35; 740-796 and 48-52 before);
+  - this version does not load the next K tile into registers during the
+    current one's FMAs, the usual remedy for latency on these cards.
 
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
   needed sm_80 (`cp.async`) until 2026-11-12, and older targets were
