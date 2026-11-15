@@ -549,7 +549,15 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         ((128, 1024, 1024), "small"),    // 32 small, 64 thin
         ((32, 1024, 4096), "thin32x32"), // 16 small or 32x64, 32 of 32x32
         ((32, 1000, 4096), "small"),     // 32x32 needs N a multiple of 32,
-        ((16, 1024, 4096), "small"),     // and M: no ragged rows in it
+        ((48, 1024, 4096), "thin32x64"), // and M
+        // Up to 16 rows: a tile no taller than M.
+        ((8, 4096, 4096), "skinny8x256"),
+        ((1, 30522, 768), "skinny8x256"),  // N even: 8-byte B copies
+        ((1, 50257, 768), "skinny16x128"), // N odd: 4-byte copies, 128 threads
+        ((16, 4096, 4096), "skinny16x128"),
+        ((17, 4096, 4096), "mid"),
+        ((1, 1024, 1024), "small"),      // 4 of 8 x 256: under 40% of the SMs
+        ((2, 4096, 11008), "skinny8x256"), // 16 of them: 40%
     ];
     for (i, ((m, n, k), want)) in cases.iter().enumerate() {
         let ptx = compile(&dir, &format!("t{i}"), *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{m}x{n}x{k}: {log}"));
@@ -576,6 +584,8 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         // A K tail or a ragged M would guard a split's copies below sm_80.
         ((1000, 1000, 1000), None),
         ((768, 768, 770), None),
+        // The 8- and 16-row tiles are not split.
+        ((8, 11008, 4096), None),
     ];
     for (i, ((m, n, k), want)) in w_cases.iter().enumerate() {
         let name = format!("w{i}");
@@ -583,8 +593,9 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         let got = sk_header(&ptx).map(|h| h.tile);
         assert_eq!(got.as_deref(), *want, "{m}x{n}x{k} with W at sm_75 on 40 SMs: the tile split, if any");
         if want.is_none() {
-            assert_eq!(header(&ptx).tile, "mid", "{m}x{n}x{k} with W: the one-wave tile");
-            let guarded = m % 64 != 0 || k % 16 != 0;
+            let one_wave = if *m <= 16 { "skinny8x256" } else { "mid" };
+            assert_eq!(header(&ptx).tile, one_wave, "{m}x{n}x{k} with W: the tile");
+            let guarded = *m > 16 && (m % 64 != 0 || k % 16 != 0);
             assert_eq!(ptx.contains("a split's copies would be guarded"), guarded, "{m}x{n}x{k} with W: the reason W is unused");
         }
     }

@@ -73,8 +73,9 @@
 //! from 60% of a wave where the small one would double up on an SM (with
 //! `W`, up to 1.3 small tiles an SM, the small tile split in order instead).
 //! Where even the small tile leaves SMs idle, 32-row tiles (32 x 64, 32 x
-//! 32) give more CTAs (`f32_gemm_turing_thin`). Below sm_80 `W` splits only
-//! where M and K are whole tiles: a segment's copies would be guarded.
+//! 32) give more CTAs (`f32_gemm_turing_thin`), and up to 16 rows run on 8-
+//! and 16-row tiles. Below sm_80 `W` splits only where M and K are whole
+//! tiles: a segment's copies would be guarded.
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -169,6 +170,14 @@ pub(crate) const F32_TILE_THIN: F32GemmTile =
 /// where it has none (`f32_gemm_turing_thin`).
 pub(crate) const F32_TILE_THIN32: F32GemmTile =
     F32GemmTile { name: "thin32x32", bm: 32, bn: 32, bk: 16, wm: 32, wn: 16, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
+/// One to 8 rows on Turing (`f32_gemm_tile`): 4 warps of 8x64, 4x4 per
+/// thread. Its 4-byte B copies (N odd) do not divide over 128 threads, so
+/// it needs N even.
+pub(crate) const F32_TILE_SKINNY8: F32GemmTile =
+    F32GemmTile { name: "skinny8x256", bm: 8, bn: 256, bk: 16, wm: 8, wn: 64, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
+/// Up to 16 rows on Turing: 4 warps of 16x32, 4x4 per thread.
+pub(crate) const F32_TILE_SKINNY16: F32GemmTile =
+    F32GemmTile { name: "skinny16x128", bm: 16, bn: 128, bk: 16, wm: 16, wn: 32, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
 impl PtxEmitter {
     /// The tile for an `m x n x k` FP32 GEMM on `sms` SMs, or why there is none.
     ///
@@ -224,6 +233,26 @@ impl PtxEmitter {
             && large * 10 >= sms * 19 && large * 5 > full_waves * 4
         {
             return Ok(large2);
+        }
+        // On Turing, up to 16 rows, a tile no taller than M: the 32-row tile
+        // the rows went to computed up to 31 rows for nothing, and these
+        // GEMMs stream B (one row: 140 GB/s against cuBLAS's 253). On a Tesla
+        // T4, medians of 45 paired rounds against cuBLAS, the 32-row tile /
+        // 16 x 128 / 8 x 256, all bit-exact: 1 x 50256 x 768 0.58x / 0.74x /
+        // 0.95x, 1 x 30520 x 768 0.65x / 0.84x / 1.07x, 8 x 4096 x 4096 0.93x
+        // / 1.16x / 1.48x, 8 x 11008 x 4096 0.86x / 1.10x / 1.30x, 16 x 4096 x
+        // 4096 0.76x / 1.12x / 1.03x; at 24 and 32 rows the 32-row tile is
+        // ahead (0.84x / 0.73x, 0.92x / 0.73x). Only where they make 40% of
+        // an SM count's CTAs: with 4-7 (1 x 1024 x 1024, 8 x 896 x 896, 11 x
+        // 777 x 4097) they lost to the 14-16 small tiles they replaced (0.22x
+        // -> 0.16x, 0.37x -> 0.35x, 0.27x -> 0.24x); with 16 to 393 they won
+        // at all 12 shapes (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/
+        // t4_skinny/, t4_skinny_rule/).
+        if block_smem == 64 * 1024 && m <= 16 {
+            let t = if m <= 8 && n % 2 == 0 { F32_TILE_SKINNY8 } else { F32_TILE_SKINNY16 };
+            if tiles(&t) * 5 >= sms * 2 {
+                return Ok(t);
+            }
         }
         if tiles(&F32_TILE_MID) * 10 >= sms * 9 {
             return Ok(F32_TILE_MID);
@@ -459,9 +488,10 @@ impl PtxEmitter {
         // copy B at each row's own width (`f32_gemm_b_classes`, which an
         // edge rules out): 1024 x 30522 x 768 0.86x -> 0.97x cuBLAS,
         // 1024 x 50257 x 768 0.83x -> 0.85x.
-        // The thin tiles (`f32_gemm_turing_thin`) are themselves the few-tile
-        // case: their ragged edges stay in whole tiles.
-        if t.bm == 32 {
+        // The thin and skinny tiles (`f32_gemm_turing_thin`, `f32_gemm_tile`)
+        // are themselves the few-tile or few-row case: their ragged edges
+        // stay in whole tiles.
+        if t.bm <= 32 {
             return None;
         }
         let unlocks_widths = n % 4 != 0 && n >= 16 && (n % 2 == 0 || t.bn == 256);
@@ -478,7 +508,7 @@ impl PtxEmitter {
     /// the 64-row tiles, two on the large tile): 1025 x 1024 x 1024 took
     /// 99 us split and 138 us whole.
     pub(crate) fn f32_gemm_row_remainder(t: F32GemmTile, m: u32) -> Option<F32GemmTile> {
-        if t.bm == 32 || m % t.bm == 0 || m % t.bm > t.bm / 2 || m.div_ceil(t.bm) > 50 {
+        if t.bm <= 32 || m % t.bm == 0 || m % t.bm > t.bm / 2 || m.div_ceil(t.bm) > 50 {
             return None;
         }
         Some(match t.bn {
@@ -544,6 +574,10 @@ impl PtxEmitter {
     /// let B's rows take their own widths (`f32_gemm_b_classes`) and C its
     /// pieces, so it is not.
     pub(crate) fn f32_gemm_streamk_plan(t: F32GemmTile, m: u32, n: u32, k: u32, sms: u32, smem_per_sm: u32) -> Option<u32> {
+        // The 8- and 16-row tiles are not split: not measured.
+        if t.bm < 32 {
+            return None;
+        }
         let odd_narrow = n % 2 == 1 && t.bn < 256;
         if (n % 4 != 0 && !odd_narrow) || m == 0 || k == 0 {
             return None;

@@ -252,8 +252,11 @@ source; each entry there now carries its status. What is still open:
     128 x 512 x 2048 0.44x -> 0.54x, 160 x 256 x 4096 0.35x -> 0.53x. Still
     behind: the shapes one wave of small tiles covers (512 x 256 x 512
     0.83x), the few-tile shapes with a long K, where cuBLAS splits K and an
-    in-order chain cannot (0.35-0.70x), and one to 32 rows, which stream B
-    at 137-142 GB/s against cuBLAS's 159-253 (1 x 50257 x 768 0.55x). Below
+    in-order chain cannot (0.35-0.70x), and few-column GEMV-like shapes
+    (1 x 1024 x 1024 0.22x, 8 x 896 x 896 0.37x). Up to 16 rows now run on
+    8- and 16-row tiles instead of 32-row strips: 1 x 30522 x 768 0.60x ->
+    1.01x, 8 x 4096 x 4096 0.93x -> 1.48x, 1 x 50257 x 768 0.46x -> 0.59x,
+    16 x 50257 x 768 0.70x -> 0.93x. Below
     sm_80 `W` now splits K only where M and K are whole tiles (at 1000^3 a
     split's guarded copies ran at 0.84x against 1.02x unsplit). K tiles of 32 instead of 16 were slower
     on the T4 at every shape tried, though faster on the RTX 4070 Ti SUPER

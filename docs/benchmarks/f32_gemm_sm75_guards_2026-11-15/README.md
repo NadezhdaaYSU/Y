@@ -450,3 +450,54 @@ there (the T4's DRAM is rated 320); cuBLAS at 253 GB/s for one row, 171
 for 8 and 159 for 32. Y runs them on 32-row tiles of the mid tile's width,
 so a one-row GEMM computes 31 rows for nothing and its loads are those of
 a 32-row tile; the one row is the next gap to close.
+
+## One to 16 rows: tiles no taller than M
+
+Those rows went to the 32-row strips of the mid tile's width, so a one-row
+GEMM computed 31 rows for nothing; and they stream B, at 137-142 GB/s
+against cuBLAS's 159-253. Two shorter tiles, 8 x 256 (4 warps of 8 x 64)
+and 16 x 128 (4 warps of 16 x 32), both 4 x 4 outputs a thread, built with
+a scratch switch (version 11, `t4_skinny/`, all 33 bit-exact):
+
+| shape | 32-row tile | 16 x 128 | 8 x 256 |
+|---|---|---|---|
+| 1 x 4096 x 4096 | 0.634x [0.63-0.64] | 0.782x [0.77-0.79] | 0.802x [0.80-0.82] |
+| 1 x 30520 x 768 | 0.654x [0.65-0.67] | 0.837x [0.83-0.86] | 1.066x [1.05-1.07] |
+| 1 x 50256 x 768 | 0.584x [0.58-0.59] | 0.735x [0.73-0.75] | 0.948x [0.94-0.96] |
+| 4 x 4096 x 4096 | 0.540x [0.51-0.55] | 0.666x [0.62-0.67] | 0.694x [0.69-0.70] |
+| 8 x 4096 x 4096 | 0.929x [0.85-0.95] | 1.155x [1.07-1.17] | 1.482x [1.33-1.51] |
+| 8 x 4864 x 896 | 0.640x [0.55-0.67] | 0.823x [0.79-0.84] | 1.018x [0.87-1.04] |
+| 8 x 11008 x 4096 | 0.864x [0.85-0.88] | 1.100x [1.08-1.12] | 1.304x [1.29-1.32] |
+| 16 x 896 x 4864 | 0.303x [0.26-0.31] | 0.346x [0.29-0.35] | 0.308x [0.27-0.31] |
+| 16 x 4096 x 4096 | 0.760x [0.75-0.78] | 1.123x [1.07-1.15] | 1.028x [1.01-1.06] |
+| 24 x 4096 x 4096 | 0.837x [0.83-0.85] | 0.730x [0.71-0.75] | 0.684x [0.67-0.69] |
+| 32 x 4096 x 4096 | 0.923x [0.90-0.93] | 0.734x [0.71-0.75] | 0.634x [0.62-0.64] |
+
+So on Turing up to 8 rows take 8 x 256 and up to 16 rows 16 x 128. The 8 x
+256 tile's 4-byte B copies (N odd) do not divide over its 128 threads, so
+at N odd it is 16 x 128 too. Neither takes remainder sets, and `W` does
+not split them (not measured). Version 12 (`t4_skinny_rule/`, all 24
+bit-exact) set that rule against the commit before it at shapes it was not
+read off:
+
+| shape | short-tile CTAs | before | short tile |
+|---|---|---|---|
+| 1 x 30522 x 768 (N = 2 mod 4: 8-byte copies) | 120 | 0.597x [0.58-0.65] | 1.007x [0.94-1.08] |
+| 1 x 50257 x 768 (N odd: 16 x 128) | 393 | 0.462x [0.46-0.48] | 0.590x [0.58-0.63] |
+| 16 x 50257 x 768 | 393 | 0.698x [0.69-0.71] | 0.933x [0.93-0.94] |
+| 12 x 3072 x 768 | 24 | 0.559x [0.52-0.58] | 0.703x [0.65-0.73] |
+| 2 x 4096 x 11008 | 16 | 0.542x [0.52-0.55] | 0.704x [0.67-0.71] |
+| 1 x 4864 x 896 | 19 | 0.620x [0.59-0.65] | 0.726x [0.71-0.76] |
+| 7 x 4098 x 1027 | 17 | 0.623x [0.53-0.65] | 0.707x [0.59-0.76] |
+| 11 x 777 x 4097 | 7 | 0.266x [0.22-0.27] | 0.242x [0.22-0.25] |
+| 8 x 896 x 896 | 4 | 0.368x [0.37-0.37] | 0.348x [0.34-0.35] |
+| 4 x 896 x 4864 | 4 | 0.291x [0.25-0.30] | 0.216x [0.20-0.22] |
+| 1 x 1024 x 1024 | 4 | 0.224x [0.22-0.24] | 0.163x [0.15-0.17] |
+| 1 x 896 x 4864 | 4 | 0.274x [0.26-0.28] | 0.204x [0.20-0.21] |
+
+With 4-7 CTAs the short tiles lose to the 14-16 small tiles they replace;
+with 16 or more they won everywhere. So they are taken where they make at
+least 40% of the SMs' count in CTAs (16 on a T4), and the rest keep the
+tile they had. Those few-column GEMMs (896 to 1024 outputs a row, K up to
+4864) stay far behind: 896 in-order chains are all the parallelism there
+is, and cuBLAS splits K.
