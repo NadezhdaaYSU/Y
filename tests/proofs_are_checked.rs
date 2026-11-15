@@ -1101,6 +1101,27 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "Print Assumptions the_width_functions_return_what_the_python_returns",
             ][..],
         ),
+        (
+            // The capstone: one decode step of the exact path, every valid
+            // execution, the same next token and cache rows. The entries
+            // after it are what make it describe the code: the carriers the
+            // code uses meet every bound, the shapes of Qwen2.5 0.5B-7B are
+            // accepted, and the premises are satisfiable. The refutation is
+            // the planted float sum: a float32 softmax denominator is not
+            // exact at T = 2, and the code never uses one.
+            "ExactDecodeStep.v",
+            &[
+                "Print Assumptions every_valid_execution_takes_the_same_decode_step",
+                "Print Assumptions the_reference_machine_is_valid",
+                "Print Assumptions the_digits_recombine",
+                "Print Assumptions schedules_in_fitting_carriers_are_valid",
+                "Print Assumptions the_code's_carriers_meet_every_need",
+                "Print Assumptions code_executions_agree",
+                "Print Assumptions qwen25_shapes_are_accepted",
+                "Print Assumptions the_premises_are_satisfiable_at_qwen25_0_5b",
+                "Print Assumptions a_float32_denominator_is_not_exact",
+            ][..],
+        ),
     ]
 }
 

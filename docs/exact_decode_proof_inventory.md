@@ -731,10 +731,10 @@ Also proved: `output_is_the_returned_value`.
 
 ## Added after this inventory (2026-11-15)
 
-Three files, the first part of the capstone work. They close gaps 3, 5 and 9,
-and the sum half of gaps 2 and 4. The decode-step theorem itself (gap 1), the
-instantiation at real models (gap 6), the executable check (gap 10) and the
-written trust boundary (gap 7) are **not done yet**: see "Still open" below.
+Four files. `ExactReduce.v`, `ExactDecodeConstants.v` and `ExactDecodeWidths.v`
+close gaps 3, 5 and 9 and the sum half of gaps 2 and 4; `ExactDecodeStep.v`
+closes gap 1 (the decode step) and gap 6 (Qwen2.5 0.5B to 7B at widths 127
+and 511). What is still open is listed at the end.
 
 ### `proofs/ExactReduce.v`
 
@@ -833,18 +833,48 @@ Theorem the_width_functions_return_what_the_python_returns :
   /\ forallb (fun s => exp2_neg_q16_16 (fst s) =? snd s) C.EXP2_SAMPLES = true.
 ```
 
+### `proofs/ExactDecodeStep.v`
+
+The capstone. A model of one decode step of the exact path (both norms, q/k/v,
+RoPE, attention over the cache, o_proj, the MLP, the residuals, the final
+norm, the LM head, the argmax), parameterised by a MACHINE: how every sum,
+max and argmax is computed, site by site. Any two valid machines give the same
+next token and cache rows. The trusted float operations are Section variables.
+
+- On the decode path: all of it, at the level of the dataflow and the
+  reductions; see `docs/exact_decode_theorem.md` for what is assumed.
+- Theorems and corollaries: 18. Quoted below: 4.
+
+```coq
+Theorem every_valid_execution_takes_the_same_decode_step :
+  forall dm T M1 M2 mw caches tok pos,
+    step_premises dm T mw caches tok ->
+    valid dm T M1 -> valid dm T M2 ->
+    step M1 dm mw caches tok pos = step M2 dm mw caches tok pos.
+```
+
+```coq
+Theorem the_code's_carriers_meet_every_need : forall dm T d st c,
+  code_shape_ok dm T -> code_uses dm T d st c -> need_st dm T d st <= ER.cap c.
+```
+
+```coq
+Theorem qwen25_shapes_are_accepted : forall mk req T,
+  In mk [qwen25_0_5b; qwen25_1_5b; qwen25_3b; qwen25_7b] -> In req [127; 511] -> 1 <= T <= 32768 ->
+  code_shape_ok (mk req) T.
+```
+
+```coq
+Theorem a_float32_denominator_is_not_exact :
+  ~ exact_sum (2 * 2 ^ 28) (sched_sum ER.F32 ltree).
+```
+
 ## Still open
 
-- **The decode-step theorem.** No file yet states that a layer or a decode
-  step gives the same result under two executions. The pieces above are what
-  it composes: `ExactReduce.v` for each sum, `ExactDecodeWidths.v` for each
-  bound, the kernel files for Y's own kernels.
-- The digit-split `p.V` and the two-digit linear layer as machines (the
-  per-term bound is proved; the recombination is not).
-- Instantiation at Qwen2.5 0.5B, 1.5B, 3B and 7B, at activation levels 127
-  and 511.
-- The executable check of these definitions against the real path on
-  Qwen2.5-0.5B activations, on this CPU and on a Tesla T4.
+- The executable check of the model against the real path on Qwen2.5-0.5B
+  activations, on this CPU and on a Tesla T4.
 - Negative controls run as tests (a mutated bound, a planted float sum, a
-  wrong index). The Coq refutations exist; the mutation harness does not.
+  wrong index).
 - The written trust boundary and the report.
+- Not modelled at all: ragged batches (left padding), rows with an infinity
+  or a NaN, Triton's interleaved two-digit kernel, the prefill as one pass.
