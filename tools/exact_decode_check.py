@@ -202,14 +202,12 @@ def norm_ref(normmod, x):
     return (y.to(torch.float32) * normmod.weight).to(x.dtype)
 
 
-def attention_ref(q, k_all, v_all, sc, d):
-    """`exact_attention_core` for one query position. q [nh, d], k_all/v_all
-    [nkv, T, d], all float32 after RoPE. Returns [nh * d] float32."""
-    nh, nkv, T = q.shape[0], k_all.shape[0], k_all.shape[1]
+def attention_ref(q, kq, vq, sc, d):
+    """`exact_attention_core` for one query position. q [nh, d] float32 after
+    RoPE; kq / vq the quantised K and V rows of each KV group, as lists of
+    (integer list, float32 scale). Returns [nh * d] float32."""
+    nh, nkv, T = q.shape[0], len(kq), len(kq[0])
     rep = nh // nkv
-    kl = k_levels_for(d, C["Q_LEVELS"])
-    kq = [[quant_ref(k_all[g, t], kl) for t in range(T)] for g in range(nkv)]
-    vq = [[quant_ref(v_all[g, t], C["V_LEVELS"]) for t in range(T)] for g in range(nkv)]
     outs = []
     for h in range(nh):
         g = h // rep
@@ -238,6 +236,20 @@ def attention_ref(q, k_all, v_all, sc, d):
     return torch.cat(outs)
 
 
+def prev_rows(cache_rows, g, d, lv, side):
+    """The cached rows of KV group g, quantised: float32 rows are quantised
+    here; packed int8 rows (`Y_EXACT_KV_PACK`) were quantised by the code
+    when they arrived and are read back with its unpacker (a byte layout, no
+    arithmetic). For a decode step's own new row the check compares the
+    packed bytes against this file's quantisation."""
+    rows = cache_rows[g]
+    if rows.dtype == torch.float32:
+        return [quant_ref(rows[t], lv) for t in range(rows.shape[0])]
+    from y_lang.exact import kv as exact_kv
+    ints, scales = (exact_kv.unpack_k if side == "k" else exact_kv.unpack_v)(rows.contiguous(), d)
+    return [([int(v) for v in ints[t].tolist()], scales[t, 0]) for t in range(rows.shape[0])]
+
+
 def layer_ref(layer, x, k_prev, v_prev, cos, sin, cfg, a_of):
     """One decoder layer for one position: x [H] float32, k_prev/v_prev
     [nkv, T-1, d]. Returns (out [H], k_new [nkv, d], v_new [nkv, d])."""
@@ -252,9 +264,12 @@ def layer_ref(layer, x, k_prev, v_prev, cos, sin, cfg, a_of):
     v = qkv[(nh + nkv) * d:].reshape(nkv, d)
     q, k = qwen2.apply_rotary_pos_emb(q, k, cos, sin)
     q, k = q.reshape(nh, d), k.reshape(nkv, d)
-    k_all = torch.cat([k_prev, k[:, None, :]], dim=1)
-    v_all = torch.cat([v_prev, v[:, None, :]], dim=1)
-    attn = attention_ref(q, k_all, v_all, att.scaling, d)
+    kl = k_levels_for(d, C["Q_LEVELS"])
+    kq_new = [quant_ref(k[g], kl) for g in range(nkv)]
+    vq_new = [quant_ref(v[g], C["V_LEVELS"]) for g in range(nkv)]
+    kq = [prev_rows(k_prev, g, d, kl, "k") + [kq_new[g]] for g in range(nkv)]
+    vq = [prev_rows(v_prev, g, d, C["V_LEVELS"], "v") + [vq_new[g]] for g in range(nkv)]
+    attn = attention_ref(q, kq, vq, att.scaling, d)
     o = linear_ref(att.o_proj, attn, a_of(att.o_proj.in_features))
     x2 = x + o
     h2 = norm_ref(layer.post_attention_layernorm, x2)
@@ -273,8 +288,11 @@ def bits_equal(a, b):
     a, b = a.detach().cpu().contiguous(), b.detach().cpu().contiguous()
     if a.shape != b.shape or a.dtype != b.dtype:
         return False, f"shape/dtype {tuple(a.shape)} {a.dtype} vs {tuple(b.shape)} {b.dtype}"
-    ia = a.view(torch.int32 if a.element_size() == 4 else torch.int64)
-    ib = b.view(torch.int32 if b.element_size() == 4 else torch.int64)
+    if a.dtype.is_floating_point:
+        ia = a.view(torch.int32 if a.element_size() == 4 else torch.int64)
+        ib = b.view(torch.int32 if b.element_size() == 4 else torch.int64)
+    else:
+        ia, ib = a, b
     diff = int((ia != ib).sum())
     return diff == 0, f"{diff} of {a.numel()} values differ"
 
@@ -455,9 +473,27 @@ def main():
                 k_prev, v_prev = prev[i]
                 y, k_new, v_new = layer_ref(ref.model.layers[i], x_in.detach().cpu().reshape(-1),
                                             k_prev[0], v_prev[0], cos, sin, cfg, a_of)
-                for what, a, b in (("layer output", x_out.reshape(-1), y),
-                                   ("new K row", cache.layers[i].keys[0, :, -1], k_new),
-                                   ("new V row", cache.layers[i].values[0, :, -1], v_new)):
+                ck, cvv = cache.layers[i].keys[0, :, -1], cache.layers[i].values[0, :, -1]
+                rows = [("layer output", x_out.reshape(-1), y)]
+                if ck.dtype == torch.float32:
+                    rows += [("new K row", ck, k_new), ("new V row", cvv, v_new)]
+                else:
+                    # Packed cache: the code's bytes for the new row, read back,
+                    # against this file's quantisation of the new float row.
+                    from y_lang.exact import kv as exact_kv
+                    d = cfg.hidden_size // cfg.num_attention_heads
+                    kl = k_levels_for(d, C["Q_LEVELS"])
+                    kint, ksc = exact_kv.unpack_k(ck.detach().cpu()[:, None].contiguous(), d)
+                    vint, vsc = exact_kv.unpack_v(cvv.detach().cpu()[:, None].contiguous(), d)
+                    kr = [quant_ref(k_new[g], kl) for g in range(k_new.shape[0])]
+                    vr = [quant_ref(v_new[g], C["V_LEVELS"]) for g in range(v_new.shape[0])]
+                    rows += [("new K row, packed integers", kint[:, 0].to(torch.int64),
+                              torch.tensor([r[0] for r in kr], dtype=torch.int64)),
+                             ("new K row, packed scales", ksc[:, 0, 0], torch.stack([r[1] for r in kr])),
+                             ("new V row, packed integers", vint[:, 0].to(torch.int64),
+                              torch.tensor([r[0] for r in vr], dtype=torch.int64)),
+                             ("new V row, packed scales", vsc[:, 0, 0], torch.stack([r[1] for r in vr]))]
+                for what, a, b in rows:
                     ok, why = bits_equal(a, b)
                     report["checks"].append({"step": step, "layer": i, "what": what, "ok": ok, "detail": why})
             n_in, n_out = cap["norm"]
