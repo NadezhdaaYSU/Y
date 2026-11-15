@@ -235,9 +235,12 @@ source; each entry there now carries its status. What is still open:
   the FMAs (except on the large tile, Volta's, at the register cap without
   it). That took the shapes with few tiles from 0.57-0.63x to 0.87-1.05x on
   the same card, the rest 1.00-1.09x, and the 4-52-byte spills left at two
-  or three K tiles. Still open:
-  - the T4's speed after both changes;
-  - neither is measured on Volta or Pascal (ptxas only).
+  or three K tiles. On a Tesla T4 the guarded shapes went from 0.94-1.18 to
+  3.21-3.99 TFLOPS (1023 x 1025 x 1027 0.25x -> 0.86x cuBLAS, 4096 x 4096 x
+  4100 0.34x -> 1.05x). Still open:
+  - the T4's speed at aligned shapes after the prefetch: that run's minimum
+    per side was within the card's clock swings (rerun pending);
+  - neither change is measured on Volta or Pascal (ptxas only).
 
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
   needed sm_80 (`cp.async`) until 2026-11-12, and older targets were

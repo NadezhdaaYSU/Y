@@ -119,5 +119,26 @@ of tiles, not latency.
 
 ## Speed on a Tesla T4
 
-Pending: the Kaggle job `y-f32-t4` (version 2) times both libraries in one
-session on these shapes and three more.
+Kaggle job `y-f32-t4` version 3 (`t4_v3/`): Tesla T4, driver 580.178.04,
+torch 2.13.0+cu126. sm_75 PTX built here with a 40-SM profile: `before` (the
+compiler before `5885bf6`), `head` (`834f1b4`: no guards, loads first) and
+`stages2` (an experiment: `head` with 2 stages instead of 3, so two mid-tile
+CTAs fit an SM). Each was loaded with cupy, every element checked against an
+`fmaf` chain on the card (all 39 bit-exact), and timed against cuBLAS (TF32
+off), 11 rounds in shuffled order, the minimum per side.
+
+| shape | cuBLAS TF | before | head |
+|---|---|---|---|
+| 1023 x 1025 x 1027 | 3.72 | 0.94 TF, 0.25x | 3.21 TF, 0.86x |
+| 1024 x 1024 x 1027 | 4.76 | 1.06 TF, 0.22x | 3.99 TF, 0.84x |
+| 2047 x 2049 x 2051 | 4.83 | 0.98 TF, 0.20x | 3.39 TF, 0.70x |
+| 4096 x 4096 x 4100 | 3.46 | 1.18 TF, 0.34x | 3.63 TF, 1.05x |
+
+That is 3.4-3.8 times the speed at the shapes the guards hit, far outside
+the noise. The rest of that run is not: the T4 is a 70 W card that clocks
+down under load, and the minimum per side took whichever sample caught it at
+boost. cuBLAS read 3.5-6.0 TF across the shapes, and one `stages2` sample
+7.25 TF (89% of the card's peak). So it does not settle `head` against
+`before` at aligned shapes, or `stages2` against `head`; the raw figures are
+in `t4_v3/`. Version 4 times `head` and `stages2` again: 3 sweeps of 15
+rounds, the median of the per-round ratios, and the clock and power logged.

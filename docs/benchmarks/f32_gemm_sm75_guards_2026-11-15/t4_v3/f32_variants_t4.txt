@@ -1,0 +1,14 @@
+Tesla T4 (7, 5) 2.13.0+cu126
+64x8192x2048     cuBLAS  5.44 TF | before 0.533x | head 0.609x | stages2 0.622x
+128x4096x4096    cuBLAS  6.05 TF | before 0.539x | head 0.593x | stages2 0.601x
+512x512x512      cuBLAS  5.31 TF | before 0.532x | head 0.688x | stages2 0.600x
+1023x1025x1027   cuBLAS  3.72 TF | before 0.253x | head 0.863x | stages2 0.931x
+1024x1024x1024   cuBLAS  3.91 TF | before 0.968x | head 0.904x | stages2 0.932x
+1024x1024x1027   cuBLAS  4.76 TF | before 0.223x | head 0.839x | stages2 1.082x
+1024x4096x4096   cuBLAS  4.41 TF | before 0.813x | head 1.273x | stages2 0.877x
+2047x2049x2051   cuBLAS  4.83 TF | before 0.203x | head 0.702x | stages2 0.803x
+2048x2048x2048   cuBLAS  4.24 TF | before 0.941x | head 0.906x | stages2 0.904x
+4096x128x4096    cuBLAS  3.53 TF | before 0.758x | head 1.241x | stages2 0.883x
+4096x4096x1024   cuBLAS  4.25 TF | before 0.781x | head 0.917x | stages2 1.707x
+4096x4096x4096   cuBLAS  3.66 TF | before 0.935x | head 1.003x | stages2 1.188x
+4096x4096x4100   cuBLAS  3.46 TF | before 0.342x | head 1.050x | stages2 1.264x
