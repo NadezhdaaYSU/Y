@@ -140,5 +140,45 @@ down under load, and the minimum per side took whichever sample caught it at
 boost. cuBLAS read 3.5-6.0 TF across the shapes, and one `stages2` sample
 7.25 TF (89% of the card's peak). So it does not settle `head` against
 `before` at aligned shapes, or `stages2` against `head`; the raw figures are
-in `t4_v3/`. Version 4 times `head` and `stages2` again: 3 sweeps of 15
-rounds, the median of the per-round ratios, and the clock and power logged.
+in `t4_v3/`.
+
+Version 4 (`t4_v4/`) timed `head` and `stages2` again: 3 sweeps of 15 rounds
+in shuffled order, each sample about 0.1 s of launches, the median of the 45
+per-round ratios (cuBLAS time / Y time) with their quartiles, and the SM
+clock and power logged (the card ran at 1365-1545 MHz, 36-66 W). All 26
+bit-exact. Medians run lower than version 3's minima for both sides
+(cuBLAS 2.4-3.8 TF against 3.5-6.0).
+
+| shape | cuBLAS TF | head | stages2 | stages2 tile |
+|---|---|---|---|---|
+| 64 x 8192 x 2048 | 2.64 | 1.009x [0.952-1.065] | 1.018x [0.959-1.066] | mid |
+| 128 x 4096 x 4096 | 2.97 | 0.966x [0.939-1.045] | 1.041x [0.957-1.088] | mid |
+| 512^3 | 3.82 | 0.680x [0.666-0.694] | 0.687x [0.675-0.696] | small |
+| 1023 x 1025 x 1027 | 2.54 | 0.913x [0.883-0.942] | 1.036x [0.946-1.069] | mid |
+| 1024^3 | 2.95 | 0.986x [0.939-1.048] | 1.018x [0.954-1.069] | mid |
+| 1024 x 1024 x 1027 | 2.88 | 1.028x [0.954-1.052] | 1.002x [0.961-1.074] | mid |
+| 1024 x 4096 x 4096 | 3.39 | 1.030x [0.942-1.086] | 1.016x [0.991-1.050] | large |
+| 2047 x 2049 x 2051 | 2.86 | 0.964x [0.897-1.005] | 0.923x [0.886-0.986] | large |
+| 2048^3 | 3.26 | 1.060x [0.959-1.091] | 1.016x [0.980-1.076] | large |
+| 4096 x 128 x 4096 | 2.38 | 1.023x [1.000-1.083] | 1.085x [0.996-1.094] | mid |
+| 4096 x 4096 x 1024 | 3.10 | 1.109x [0.990-1.119] | 1.232x [1.136-1.296] | large |
+| 4096^3 | 3.33 | 1.031x [0.945-1.053] | 1.188x [1.125-1.226] | large |
+| 4096 x 4096 x 4100 | 3.13 | 1.076x [0.976-1.091] | 1.234x [1.134-1.276] | large |
+
+`head` (one 3-stage mid CTA an SM) is at 0.91-1.11x cuBLAS on every shape
+but 512^3 (the small tile, 0.68x). `stages2` set every tile to 2 stages,
+which did two things: the mid tile fit two CTAs an SM, and the large tile
+(128 x 256, 74 KB at 3 stages) shrank to 49.7 KB and fit a T4 at all, and
+the tile rule then chose it at seven shapes. So the column mixes them:
+
+- the mid tile at 2 stages: 1023 x 1025 x 1027 0.91x -> 1.04x (quartiles
+  apart), 4096 x 128 x 4096 1.02x -> 1.09x, 128 x 4096 x 4096 0.97x ->
+  1.04x, 1024 x 1024 x 1027 1.03x -> 1.00x, the others within each other's
+  quartiles. That is now the default on Turing, where three stages leave
+  one CTA an SM and two leave two (`f32_gemm_turing_stages`);
+- the large tile at 2 stages: 1.19-1.23x at the shapes with about 13 waves
+  of its tiles (4096^3, 4096 x 4096 x 1024, 4096 x 4096 x 4100), no better
+  or worse at about 3 waves (2048^3 1.06x -> 1.02x, 2047 x 2049 x 2051
+  0.96x -> 0.92x, where it spilled 76 bytes at 255 registers). Not taken:
+  where it pays needs measuring, and it has no prefetch (`prefetch`
+  excludes it for Volta's register cap).

@@ -489,6 +489,11 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
             assert!(ptx.contains("stages of plain loads (no cp.async below sm_80)"), "{arch} {m}x{n}x{k}: header");
             let h = header(&ptx);
             assert!(h.smem <= limit, "{arch} {m}x{n}x{k}: tile {} takes {} bytes, the block holds {limit}", h.tile, h.smem);
+            // Turing's 64 KB holds one 3-stage mid tile and two 2-stage ones,
+            // so there the mid tile runs 2 stages; elsewhere 3
+            // (`f32_gemm_turing_stages`).
+            let stages = if sm == "7.5" && h.tile == "mid" { 2 } else { 3 };
+            assert!(ptx.contains(&format!("{stages} stages of plain loads")), "{arch} {m}x{n}x{k}: tile {} not {stages} stages", h.tile);
             if let Some(tool) = &tool {
                 let path = dir.join(format!("{name}.ptx"));
                 std::fs::write(&path, &ptx).unwrap();

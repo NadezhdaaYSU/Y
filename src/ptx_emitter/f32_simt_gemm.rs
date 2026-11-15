@@ -66,7 +66,8 @@
 //! `emit_f32_gemm_tile_set`; python/tests/test_f32_gemm_below_sm80.py). And a
 //! plain load's store waits for it, so the loop issues the next tile's loads
 //! first and their shared stores after the FMAs (`prefetch`; not on the
-//! large tile, at the register cap without it).
+//! large tile, at the register cap without it). On Turing the mid tile runs
+//! two stages, so two CTAs share an SM (`f32_gemm_turing_stages`).
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -215,12 +216,52 @@ impl PtxEmitter {
     /// resident only spills: the mid tile at sm_75 (64 KB an SM, so one 37 KB
     /// CTA) took 170 registers and spilled 1316 bytes.
     fn f32_gemm_reg_ctas(&self, t: F32GemmTile, smem: u32) -> u32 {
-        let per_sm = match self.sm_level() {
-            61 | 70..=74 => 96 * 1024,
-            60..=69 | 75..=79 => 64 * 1024,
-            _ => return t.reg_ctas,
+        match Self::f32_gemm_smem_per_sm(self.sm_level()) {
+            Some(per_sm) => t.reg_ctas.min(per_sm / (smem + 1024)).max(1),
+            None => t.reg_ctas,
+        }
+    }
+
+    /// Shared memory an SM holds below sm_80 (None from sm_80 on, where the
+    /// register budget is the tile's own).
+    fn f32_gemm_smem_per_sm(sm: u32) -> Option<u32> {
+        match sm {
+            61 | 70..=74 => Some(96 * 1024),
+            60..=69 | 75..=79 => Some(64 * 1024),
+            _ => None,
+        }
+    }
+
+    /// On Turing, two stages instead of three where three leave room for one
+    /// CTA an SM and two for two: a T4's 64 KB holds one 3-stage mid tile
+    /// (37.6 KB with its block's 1 KB) and two 2-stage ones. With the loads
+    /// held in registers across the FMAs (`prefetch`), two stages are enough
+    /// to keep the next tile's copies in flight, and the second CTA's warps
+    /// hide what one CTA's four cannot. On a Tesla T4, mid tile, medians of
+    /// 45 paired rounds against cuBLAS (quartiles in brackets): 1023 x 1025 x
+    /// 1027 0.91x [0.88-0.94] -> 1.04x [0.95-1.07], 4096 x 128 x 4096 1.02x ->
+    /// 1.09x, 128 x 4096 x 4096 0.97x -> 1.04x, 1024 x 1024 x 1027 1.03x ->
+    /// 1.00x, the rest within each other's quartiles
+    /// (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/). Not on Pascal or
+    /// Volta, where three stages already fit two CTAs and a third would
+    /// budget 170 registers, which spills; nor where unmeasured. Every set of
+    /// one kernel shares its shared memory, so all take the same stages.
+    fn f32_gemm_turing_stages(&self, t: F32GemmTile, rows: Option<F32GemmTile>, rem: Option<F32GemmTile>) -> (F32GemmTile, Option<F32GemmTile>, Option<F32GemmTile>) {
+        let sm = self.sm_level();
+        if !(75..=79).contains(&sm) {
+            return (t, rows, rem);
+        }
+        let per_sm = Self::f32_gemm_smem_per_sm(sm).expect("Turing holds 64 KB an SM");
+        let with = |c: F32GemmTile, stages: u32| F32GemmTile { stages, ..c };
+        let ctas = |stages: u32| {
+            let smem = [Some(t), rows, rem].iter().flatten().map(|c| with(*c, stages).smem_bytes()).max().unwrap();
+            per_sm / (smem + 1024)
         };
-        t.reg_ctas.min(per_sm / (smem + 1024)).max(1)
+        if ctas(3) == 1 && ctas(2) >= 2 {
+            (with(t, 2), rows.map(|r| with(r, 2)), rem.map(|r| with(r, 2)))
+        } else {
+            (t, rows, rem)
+        }
     }
 
     /// How tile `t` copies B for this N. A B row is N floats long, so with
@@ -506,6 +547,7 @@ impl PtxEmitter {
         // change; the whole tiles lose their column masks.
         let rem = Self::f32_gemm_remainder(t, n);
         let rows = Self::f32_gemm_row_remainder(t, m);
+        let (t, rows, rem) = self.f32_gemm_turing_stages(t, rows, rem);
         let n_main = if rem.is_some() { n / t.bn * t.bn } else { n };
         let m_main = if rows.is_some() { m / t.bm * t.bm } else { m };
         let nt = t.threads();

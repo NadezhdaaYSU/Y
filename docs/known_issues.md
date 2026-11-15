@@ -238,8 +238,11 @@ source; each entry there now carries its status. What is still open:
   or three K tiles. On a Tesla T4 the guarded shapes went from 0.94-1.18 to
   3.21-3.99 TFLOPS (1023 x 1025 x 1027 0.25x -> 0.86x cuBLAS, 4096 x 4096 x
   4100 0.34x -> 1.05x). Still open:
-  - the T4's speed at aligned shapes after the prefetch: that run's minimum
-    per side was within the card's clock swings (rerun pending);
+  - at aligned shapes the T4 is at 0.91-1.11x cuBLAS, the mid tile at two
+    stages since (one CTA an SM at three): medians of 45 paired rounds. The
+    small tile is at 0.68x (512^3). A 2-stage large tile fits a T4 and ran
+    1.19-1.23x at 4096^3-sized shapes, 0.92-1.02x at 2048^3-sized ones; it
+    is not taken there yet;
   - neither change is measured on Volta or Pascal (ptxas only).
 
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
