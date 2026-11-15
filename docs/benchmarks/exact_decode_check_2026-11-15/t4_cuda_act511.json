@@ -3938,10 +3938,1188 @@
    "what": "stress lm_head",
    "ok": true,
    "detail": "0 of 151936 values differ; peak |sum| 18243722 (1.09 x 2^24)"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "12095 vs 12095"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "13 vs 13"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "1084 vs 1084"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "374 vs 374"
+  },
+  {
+   "ragged": true,
+   "step": 4,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 4,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "279 vs 279"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 0,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 0,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 1,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 1,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 2,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 2,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 3,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 3,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 4,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 4,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 5,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 5,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 6,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 6,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 7,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 7,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 8,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 8,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 9,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 9,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 10,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 10,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 11,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 11,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 12,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 12,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 13,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 13,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 14,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 14,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 15,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 15,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 16,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 16,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 17,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 17,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 18,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 18,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 19,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 19,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 20,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 20,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 21,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 21,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 22,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 22,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 23,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 23,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
   }
  ],
  "env": {
   "Y_EXACT_ACT_LEVELS": "511"
+ },
+ "ragged": {
+  "padding_rows": 9,
+  "batch_len": 14
  },
  "tokens": [
   12095,
@@ -3951,6 +5129,6 @@
   279
  ],
  "text": " Paris. It is the",
- "seconds": 32.1,
- "summary": "663 of 663 compared tensors bit-identical"
+ "seconds": 33.9,
+ "summary": "817 of 817 compared tensors bit-identical"
 }

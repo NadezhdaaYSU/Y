@@ -150,12 +150,12 @@ France is", all 24 layers, 4 decode steps:
 |---|---|---|---|
 | AMD Ryzen 9 9950X (CPU path), with the ragged stage | 127 | 575 | 575 |
 | AMD Ryzen 9 9950X (CPU path), with the ragged stage | 511 | 575 | 575 |
-| Tesla T4, driver 580.178.04, torch 2.13.0+cu126 (GPU path vs the model on the Kaggle CPU) | 127 | 663 | 663 |
-| Tesla T4, same | 511 | 663 | 663 |
-| Kaggle Intel Xeon @ 2.00GHz (CPU path), Python 3.13 | 127 | 421 | 421 |
-| Tesla T4, `Y_EXACT_V_INT8=1` (`p.V` on Y's `exact_pv`, one int64 sum) | 127 | 663 | 663 |
+| Tesla T4, driver 580.178.04, torch 2.13.0+cu126 (GPU path vs the model on the Kaggle CPU), with the ragged stage | 127 | 817 | 817 |
+| Tesla T4, same | 511 | 817 | 817 |
+| Kaggle Intel Xeon @ 2.00GHz (CPU path), Python 3.13, with the ragged stage | 127 | 575 | 575 |
+| Tesla T4, `Y_EXACT_V_INT8=1` (`p.V` on Y's `exact_pv`, one int64 sum), with the ragged stage | 127 | 817 | 817 |
 
-On the T4 the 663 add 242 checks that the int8 weights and scales built on
+On the T4 the 817 add 242 checks that the int8 weights and scales built on
 the GPU equal those built on the CPU. The first `V_INT8` attempt did not
 run: the job had no Z3, so Y refused to compile `exact_pv` ("could not verify
 invariant ... the SMT solver could not be run"), the compiler failing closed.
@@ -166,8 +166,10 @@ The ragged stage (`--ragged`) decodes the batch ["The capital of France
 is", a 14-token prompt], so the first row carries 9 padding keys. It
 compares that row with the prompt decoded alone: the logits and token at
 every step, each layer's decode output, and the K and V cache rows, 154
-tensors over 24 layers and 4 steps, all bit-identical and finite. The T4
-rows above predate the ragged stage; a T4 run with it is in progress.
+tensors over 24 layers and 4 steps, all bit-identical and finite, on every
+row of the table. With `Y_EXACT_KV_PACK=1` the cache holds packed int8 rows;
+the check reads them back with the code's unpacker and compares each new
+row's packed integers and scales with its own quantisation (CPU: 70 of 70).
 
 Each run decodes " Paris. It is the". Of the 421 non-ragged checks, 121 are the stress stage
 (five linear layers in each of 24 layers, and the LM head). Its peak column
