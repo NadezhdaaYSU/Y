@@ -150,7 +150,6 @@ NOTEBOOK.md     the dated research notebook (the former README)
   [the decode-step theorem](docs/exact_decode_theorem.md)
 - [The process: taking a kernel from fast to verified](docs/verified_kernel_process.md)
 - [Adaptive GPU JIT](docs/adaptive_jit.md), [CPU JIT](docs/cpu_jit.md)
-- [CLAUDE.md](CLAUDE.md): working rules for changing the compiler
 
 ## Licence
 
