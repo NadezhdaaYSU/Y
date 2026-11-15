@@ -134,7 +134,16 @@ France is", all 24 layers, 4 decode steps:
 |---|---|---|---|
 | AMD Ryzen 9 9950X (CPU path) | 127 | 421 | 421 |
 | AMD Ryzen 9 9950X (CPU path) | 511 | 421 | 421 |
-| Tesla T4 (GPU path vs the model on the CPU) | 127, 511, `V_INT8` | pending | pending |
+| Tesla T4, driver 580.178.04, torch 2.13.0+cu126 (GPU path vs the model on the Kaggle CPU) | 127 | 663 | 663 |
+| Tesla T4, same | 511 | 663 | 663 |
+| Kaggle Intel Xeon @ 2.00GHz (CPU path), Python 3.13 | 127 | 421 | 421 |
+| Tesla T4, `Y_EXACT_V_INT8=1` (`p.V` on Y's `exact_pv`) | 127 | not run | - |
+
+On the T4 the 663 add 242 checks that the int8 weights and scales built on
+the GPU equal those built on the CPU. The `V_INT8` run did not happen: the
+job did not install Z3, so Y refused to compile `exact_pv` ("could not verify
+invariant ... the SMT solver could not be run"), which is the compiler
+failing closed, not a mismatch (log in the results folder).
 
 Each run decodes " Paris. It is the". Of the 421, 121 are the stress stage
 (five linear layers in each of 24 layers, and the LM head). Its peak column
