@@ -1,0 +1,141 @@
+{
+ "control": {
+  "coq": {
+   "broke": false,
+   "detail": "the chain compiles",
+   "seconds": 16.7
+  },
+  "exec": {
+   "broke": false,
+   "detail": "40 of 40 compared tensors bit-identical | tokens [12095, 13, 1084] ' Paris. It'",
+   "seconds": 4.5
+  }
+ },
+ "mutations": [
+  {
+   "name": "float32 denominator",
+   "plants": "a float accumulation planted in a reduction: the softmax denominator summed in float32",
+   "must_break": [
+    "exec"
+   ],
+   "also_run": [],
+   "results": {
+    "exec": {
+     "broke": true,
+     "detail": "2 mismatches; 38 of 40 compared tensors bit-identical | tokens [12095, 13, 1084] ' Paris. It'",
+     "seconds": 4.5
+    }
+   },
+   "caught": true
+  },
+  {
+   "name": "float32 denominator in the proof",
+   "plants": "the same float sum allowed by the proof's carrier table",
+   "must_break": [
+    "coq"
+   ],
+   "also_run": [],
+   "results": {
+    "coq": {
+     "broke": true,
+     "detail": "ExactDecodeStep.v: Error: Tactic failure:  Cannot find witness.",
+     "seconds": 14.3
+    }
+   },
+   "caught": true
+  },
+  {
+   "name": "float32 linear accumulation",
+   "plants": "a float accumulation planted in every linear layer: the int8 GEMM run as a float32 matmul",
+   "must_break": [
+    "exec"
+   ],
+   "also_run": [],
+   "results": {
+    "exec": {
+     "broke": true,
+     "detail": "3 mismatches; 37 of 40 compared tensors bit-identical | tokens [12095, 13, 1084] ' Paris. It'",
+     "seconds": 5.0
+    }
+   },
+   "caught": true
+  },
+  {
+   "name": "wrong index",
+   "plants": "a wrong index: each query head reads the K scales of head h mod n_kv instead of h // rep",
+   "must_break": [
+    "exec"
+   ],
+   "also_run": [],
+   "results": {
+    "exec": {
+     "broke": true,
+     "detail": "6 mismatches; 34 of 40 compared tensors bit-identical | tokens [12095, 11, 279] ' Paris, the'",
+     "seconds": 4.5
+    }
+   },
+   "caught": true
+  },
+  {
+   "name": "digit ceiling widened",
+   "plants": "a bound widened past overflow: two int8 digits declared to hold 32767",
+   "must_break": [
+    "coq"
+   ],
+   "also_run": [
+    "exec"
+   ],
+   "results": {
+    "coq": {
+     "broke": true,
+     "detail": "ExactDecodeWidths.v: Error:",
+     "seconds": 11.7
+    },
+    "exec": {
+     "broke": false,
+     "detail": "40 of 40 compared tensors bit-identical | tokens [12095, 13, 1084] ' Paris. It'",
+     "seconds": 4.5
+    }
+   },
+   "caught": true
+  },
+  {
+   "name": "score budget widened",
+   "plants": "a bound widened past overflow: the float32 score budget at 2^26 with K at 4095 levels",
+   "must_break": [
+    "coq",
+    "exec"
+   ],
+   "also_run": [],
+   "results": {
+    "coq": {
+     "broke": true,
+     "detail": "ExactDecodeWidths.v: Error:",
+     "seconds": 11.7
+    },
+    "exec": {
+     "broke": true,
+     "detail": "AssertionError: head_dim 64 with Q at 127 and K at 4095 levels puts the score sum past 2^24; fp32 would start rounding and the reduction would stop being order-independent. Max K width here is 2064; `k_levels_for` should already have capped to it, so reaching this means head_dim is too large for exa",
+     "seconds": 3.6
+    }
+   },
+   "caught": true
+  },
+  {
+   "name": "accumulator margin dropped",
+   "plants": "the `- 128` dropped from act_levels_for, the bound on the interleaved digit sums",
+   "must_break": [
+    "coq"
+   ],
+   "also_run": [],
+   "results": {
+    "coq": {
+     "broke": true,
+     "detail": "ExactDecodeWidths.v: Error: Unable to unify \"true\" with \"false\".",
+     "seconds": 12.5
+    }
+   },
+   "caught": true
+  }
+ ]
+}

@@ -871,10 +871,10 @@ Theorem a_float32_denominator_is_not_exact :
 
 ## Still open
 
-- The executable check of the model against the real path on Qwen2.5-0.5B
-  activations, on this CPU and on a Tesla T4.
-- Negative controls run as tests (a mutated bound, a planted float sum, a
-  wrong index).
-- The written trust boundary and the report.
-- Not modelled at all: ragged batches (left padding), rows with an infinity
-  or a NaN, Triton's interleaved two-digit kernel, the prefill as one pass.
+- Not modelled: ragged batches (left padding), rows with an infinity or a
+  NaN, Triton's interleaved two-digit kernel, the prefill as one pass.
+- The executable check does not run Y's decode-attention kernel
+  (`Y_EXACT_ATTN=y`), which needs the packed cache.
+
+The trust boundary, the executable check's results and the negative
+controls are in [`docs/exact_decode_theorem.md`](exact_decode_theorem.md).
