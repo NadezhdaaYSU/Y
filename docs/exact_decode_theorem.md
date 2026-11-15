@@ -137,13 +137,14 @@ France is", all 24 layers, 4 decode steps:
 | Tesla T4, driver 580.178.04, torch 2.13.0+cu126 (GPU path vs the model on the Kaggle CPU) | 127 | 663 | 663 |
 | Tesla T4, same | 511 | 663 | 663 |
 | Kaggle Intel Xeon @ 2.00GHz (CPU path), Python 3.13 | 127 | 421 | 421 |
-| Tesla T4, `Y_EXACT_V_INT8=1` (`p.V` on Y's `exact_pv`) | 127 | not run | - |
+| Tesla T4, `Y_EXACT_V_INT8=1` (`p.V` on Y's `exact_pv`, one int64 sum) | 127 | 663 | 663 |
 
 On the T4 the 663 add 242 checks that the int8 weights and scales built on
-the GPU equal those built on the CPU. The `V_INT8` run did not happen: the
-job did not install Z3, so Y refused to compile `exact_pv` ("could not verify
-invariant ... the SMT solver could not be run"), which is the compiler
-failing closed, not a mismatch (log in the results folder).
+the GPU equal those built on the CPU. The first `V_INT8` attempt did not
+run: the job had no Z3, so Y refused to compile `exact_pv` ("could not verify
+invariant ... the SMT solver could not be run"), the compiler failing closed.
+With `z3-solver` installed, a second run of all four configurations gave the
+same counts as the first.
 
 Each run decodes " Paris. It is the". Of the 421, 121 are the stress stage
 (five linear layers in each of 24 layers, and the LM head). Its peak column
