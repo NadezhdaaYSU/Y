@@ -73,6 +73,50 @@ The first seven are the same kernel before and after; they moved by
 0.94-1.02x, which is the noise here. Every row was bit-exact against the
 `fmaf` chain in every run.
 
+## Then: the next tile's loads first, their stores after the FMAs
+
+A plain load's shared store waits for the load. With the copies spread over
+the k steps, ptxas (after if-converting the copy branches) left 30-80
+instructions between each `LDG` and its `STS`, where a global load takes
+hundreds of cycles. Now, below sm_80, every load of the next tile issues at
+the top of the iteration (with the pointer advance) and the 12 stores come
+after the FMAs. In the sm_75 SASS for 1024^3 the loop starts with 12 `LDG`
+and ends with `STS x12`. This costs 18-40 registers (1024^3: 128 -> 146; no
+spill on sm_75, sm_70 or sm_61). The large tile keeps the old order: on
+sm_70 it is at the register cap without the prefetch, and 2048 x 4097 x 40
+spilled 176 bytes with it. The 4-52-byte spills left at two or three K
+tiles are gone.
+
+The same procedure as above, the libraries at `5885bf6` (fix) and with the
+prefetch, raw output in `rtx4070tis_prefetch/`:
+
+| shape | fix (round 1, 2) | prefetch (round 1, 2) |
+|---|---|---|
+| 512^3 | 1.036x, 1.068x | 1.089x, 1.082x |
+| 1024^3 | 1.222x, 1.183x | 1.236x, 1.219x |
+| 2048^3 | 0.891x, 0.904x | 0.895x, 0.947x |
+| 4096^3 | 0.844x, 0.846x | 0.838x, 0.865x |
+| 1024 x 4096 x 4096 | 0.854x, 0.873x | 0.872x, 0.896x |
+| 4096 x 4096 x 1024 | 0.849x, 0.825x | 0.835x, 0.902x |
+| **128 x 4096 x 4096** | 0.633x, 0.612x | 1.048x, 0.982x |
+| **4096 x 128 x 4096** | 0.588x, 0.573x | 0.875x, 0.925x |
+| **64 x 8192 x 2048** | 0.634x, 0.633x | 1.036x, 1.028x |
+| 1023 x 1025 x 1027 | 0.943x, 0.959x | 0.959x, 0.882x |
+| 1024 x 1024 x 1027 | 1.172x, 1.168x | 1.235x, 1.161x |
+| 2047 x 2049 x 2051 | 1.079x, 1.066x | 1.021x, 1.054x |
+| 4096 x 4096 x 4100 | 0.898x, 0.908x | 0.971x, 0.956x |
+| 400 x 2049 x 1025 | 1.193x, 1.215x | 1.310x, 1.323x |
+| 100 x 1024 x 1027 | 0.536x, 0.536x | 0.559x, 0.558x |
+
+It helps most where few tiles share the card, so few warps share an SM to
+hide the latency (the three in bold). A T4 runs the mid tile at one CTA (4
+warps) per SM at every shape, so that is the case there throughout; it is
+not measured there yet. Every row bit-exact in every run; memcheck and
+racecheck clean on 10 shapes (sm_75 build, this card).
+
+`100 x 1024 x 1027` (32 tiles for 66 SMs) stays at 0.54-0.56x: it is short
+of tiles, not latency.
+
 ## Speed on a Tesla T4
 
 Pending: the Kaggle job `y-f32-t4` (version 2) times both libraries in one

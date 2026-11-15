@@ -63,7 +63,10 @@
 //! load and a zero fill, and guards on the K loop's copies spilled, so the K
 //! loop takes none: the short K tile comes first and a ragged last tile row
 //! slides back to end at row M-1 (`short_first`, `slide_m` in
-//! `emit_f32_gemm_tile_set`; python/tests/test_f32_gemm_below_sm80.py).
+//! `emit_f32_gemm_tile_set`; python/tests/test_f32_gemm_below_sm80.py). And a
+//! plain load's store waits for it, so the loop issues the next tile's loads
+//! first and their shared stores after the FMAs (`prefetch`; not on the
+//! large tile, at the register cap without it).
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -1038,6 +1041,10 @@ impl PtxEmitter {
         let short_first = sync_copies && seg.is_none() && k_tail != 0 && kt_full >= 1;
         let slide_m = sync_copies && seg.is_none() && rag_m && row_origin + nrows >= t.bm && !(n % 2 == 1 && !rag_n && t.bn == 256);
         let guard_m = rag_m && !slide_m;
+        // Holding a whole tile's loads across the FMAs costs about 24
+        // registers; the large tile (128 accumulators a thread, Volta only
+        // below sm_80) is at the cap without them, and spilled with them.
+        let prefetch = sync_copies && seg.is_none() && t.tm * t.tn < 128;
         // The first k of the K tile in stage-load order `st` (segment-relative).
         let koff = |st: u32| -> u32 {
             match (short_first, st) {
@@ -1323,7 +1330,13 @@ impl PtxEmitter {
         // anyway, keeps a stage from being read before its stores or
         // overwritten while it is read. No arithmetic changes, so neither
         // does a bit of C.
-        let copy = |e: &mut Self, c: u32, kguard: bool, sa: &str, sbs: &[String], ga_r: &str, gbs_r: &[String], s_off_a: u32, s_off_b: u32, g_off_a: u64, g_off_b: u64| {
+        // `stores`: with plain loads, collect each copy's shared store there
+        // instead of writing it after its load (`prefetch` below).
+        let copy = |e: &mut Self, c: u32, kguard: bool, sa: &str, sbs: &[String], ga_r: &str, gbs_r: &[String], s_off_a: u32, s_off_b: u32, g_off_a: u64, g_off_b: u64, mut stores: Option<&mut Vec<String>>| {
+            let mut store = |e: &mut Self, line: String| match stores {
+                Some(ref mut v) => v.push(line),
+                None => w(e, line),
+            };
             if c < a_copies {
                 let so = s_off_a + c * a_row_step * 4;
                 let go = g_off_a + (c * a_row_step) as u64 * k as u64 * 4;
@@ -1352,7 +1365,7 @@ impl PtxEmitter {
                         w(e, format!("@{} ld.global.ca.b32 {}, [{}+{}];", p_g, r, ga_r, go));
                         w(e, format!("@!{} mov.b32 {}, 0;", p_g, r));
                     }
-                    w(e, format!("st.shared.b32 [{}+{}], {};", sa, so, r));
+                    store(e, format!("st.shared.b32 [{}+{}], {};", sa, so, r));
                 } else {
                     w(e, format!("cp.async.ca.shared.global [{}+{}], [{}+{}], 4{};", sa, so, ga_r, go, size));
                 }
@@ -1387,7 +1400,7 @@ impl PtxEmitter {
                             w(e, format!("@!{} mov.b32 {}, 0;", p_g, r));
                         }
                     }
-                    w(e, format!("st.shared{}.b32 [{}+{}], {};", vec, sb, so, list));
+                    store(e, format!("st.shared{}.b32 [{}+{}], {};", vec, sb, so, list));
                 } else {
                     w(e, format!("cp.async.{}.shared.global [{}+{}], [{}+{}], {}{};", cache, sb, so, gb_r, go, bytes, size));
                 }
@@ -1432,7 +1445,7 @@ impl PtxEmitter {
                     }
                 }
                 for c in 0..copies {
-                    copy(self, c, k_tail != 0, &copy_a, &copy_bs, &ga, &gbs, st * stage_a, st * stage_b, (st * t.bk * 4) as u64, st as u64 * t.bk as u64 * n as u64 * 4);
+                    copy(self, c, k_tail != 0, &copy_a, &copy_bs, &ga, &gbs, st * stage_a, st * stage_b, (st * t.bk * 4) as u64, st as u64 * t.bk as u64 * n as u64 * 4, None);
                 }
                 self.ptx_buffer.push_str(&format!("{}:\n", skip));
             } else if st < kt_total {
@@ -1443,7 +1456,7 @@ impl PtxEmitter {
                     set_klim(self, Some(k as i64 - (st * t.bk) as i64));
                 }
                 for c in 0..copies {
-                    copy(self, c, kguard, &copy_a, &copy_bs, &ga, &gbs, st * stage_a, st * stage_b, (koff(st) * 4) as u64, koff(st) as u64 * n as u64 * 4);
+                    copy(self, c, kguard, &copy_a, &copy_bs, &ga, &gbs, st * stage_a, st * stage_b, (koff(st) * 4) as u64, koff(st) as u64 * n as u64 * 4, None);
                 }
             }
             if !sync_copies {
@@ -1561,8 +1574,15 @@ impl PtxEmitter {
             //
             // The copies are spread over the k steps up to the advance, one
             // per step where they fit; the advance is two steps before the end.
-            let advance_at = steps.max(2) - 2;
-            let per_step = copies.div_ceil(advance_at + 1);
+            //
+            // Below sm_80 (`prefetch`) every load of the next tile goes first,
+            // with the advance, and its shared stores after the FMAs: a plain
+            // load's store waits for it, and spread over the k steps ptxas
+            // left 30-80 instructions between the two, where a global load
+            // takes hundreds of cycles.
+            let advance_at = if prefetch { 0 } else { steps.max(2) - 2 };
+            let per_step = if prefetch { copies } else { copies.div_ceil(advance_at + 1) };
+            let mut stores: Vec<String> = Vec::new();
             for kk in 0..steps {
                 frag(self, kk as usize, kk);
                 let mine: Vec<u32> = (0..copies).filter(|c| c / per_step == kk).collect();
@@ -1570,11 +1590,19 @@ impl PtxEmitter {
                     let skip = self.alloc_label("f32_gemm_nocopy");
                     w(self, format!("@!{} bra {};", p_more, skip));
                     for c in mine {
-                        copy(self, c, k_tail != 0 && !short_first, &wr_a, &wr_bs, &ga, &gbs, 0, 0, 0, 0);
+                        let sink = if prefetch { Some(&mut stores) } else { None };
+                        copy(self, c, k_tail != 0 && !short_first, &wr_a, &wr_bs, &ga, &gbs, 0, 0, 0, 0, sink);
+                    }
+                    if prefetch {
+                        // The advance joins the loads' block.
+                        w(self, format!("add.u64 {}, {}, {};", ga, ga, t.bk * 4));
+                        for gb in &gbs {
+                            w(self, format!("add.u64 {}, {}, {};", gb, gb, t.bk as u64 * n as u64 * 4));
+                        }
                     }
                     self.ptx_buffer.push_str(&format!("{}:\n", skip));
                 }
-                if kk == advance_at {
+                if kk == advance_at && !prefetch {
                     let skip = self.alloc_label("f32_gemm_noadvance");
                     w(self, format!("@!{} bra {};", p_more, skip));
                     w(self, format!("add.u64 {}, {}, {};", ga, ga, t.bk * 4));
@@ -1588,6 +1616,14 @@ impl PtxEmitter {
                 }
             }
             fmas(self, steps);
+            if prefetch {
+                let skip = self.alloc_label("f32_gemm_nostore");
+                w(self, format!("@!{} bra {};", p_more, skip));
+                for line in stores.drain(..) {
+                    w(self, line);
+                }
+                self.ptx_buffer.push_str(&format!("{}:\n", skip));
+            }
             for reg in [&rs, &ws] {
                 w(self, format!("add.u32 {}, {}, 1;", reg, reg));
                 w(self, format!("setp.eq.u32 {}, {}, {};", p_wrap, reg, s));

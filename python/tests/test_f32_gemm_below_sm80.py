@@ -15,7 +15,8 @@ tests check that:
   outside A, B or C, which is what the guards were for;
 * the oracle can tell the order apart: the same chain in another order gives
   other bits for these inputs;
-* the K loops of those shapes contain no guarded global load.
+* the K loops of those shapes contain no guarded global load, and issue
+  every load of the next tile before the FMAs and every shared store after.
 
 The GPU runs of the same kernels are in tests/f32_simt_gemm.rs
 (`built_for_sm_75_each_element_is_the_same_fma_chain`).
@@ -137,6 +138,22 @@ class F32GemmBelowSm80(unittest.TestCase):
                     self.assertTrue(re.search(r"\bld\.global", body), "a K loop with no copies")
                     guarded = re.findall(r"@!?%p\d+ ld\.global.*", body)
                     self.assertEqual(guarded, [], f"{m}x{n}x{k}: guarded loads in the K loop")
+
+    def test_the_k_loops_load_first_and_store_last(self):
+        """A plain load's shared store waits for the load, so every load of
+        the next tile comes before the first FMA and every store after the
+        last (`prefetch`); spread over the k steps, ptxas left 30-80
+        instructions between the two."""
+        for m, n, k in [(1024, 1024, 1024), (1023, 1025, 1027), (400, 2049, 1025)]:
+            with self.subTest(shape=(m, n, k)):
+                for body in k_loops(self.ptx(m, n, k)):
+                    lines = body.splitlines()
+                    fma = [i for i, l in enumerate(lines) if "fma.rn.f32" in l]
+                    ldg = [i for i, l in enumerate(lines) if re.search(r"\bld\.global", l)]
+                    sts = [i for i, l in enumerate(lines) if re.search(r"\bst\.shared", l)]
+                    self.assertTrue(fma and ldg and sts)
+                    self.assertLess(max(ldg), min(fma), f"{m}x{n}x{k}: a load after an FMA")
+                    self.assertGreater(min(sts), max(fma), f"{m}x{n}x{k}: a store before an FMA")
 
 
 if __name__ == "__main__":

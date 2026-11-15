@@ -464,14 +464,14 @@ fn old_arch_ptxas() -> Option<std::path::PathBuf> {
 /// here also had a K tail; so one shape per edge: N odd alone (1024 x 1025 x
 /// 1024, which never spilled), K alone (1024 x 1024 x 1027) and M alone
 /// (1023 x 1024 x 1024), and row remainder sets (67 x 37 x 1035, 400 x 2049 x
-/// 1025). Not at two or three K tiles, where `ptxas` unrolls the K loop: a
-/// remainder set there still spills 4-52 bytes (400 x 2049 x 40, 67 x 37 x
-/// 35; 740-796 and 48-52 before), docs/known_issues.md.
+/// 1025, and at two or three K tiles, where `ptxas` unrolls the K loop, 67 x
+/// 37 x 35 and 400 x 2049 x 40: those spilled 4-52 bytes until the loop's
+/// loads went first and its stores last).
 #[test]
 fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
     let shapes = [(4096, 4096, 4096), (2049, 4100, 24), (1023, 1025, 1027), (64, 64, 16), (2048, 12803, 64),
                   (1, 8193, 40), (2048, 4097, 40), (1024, 1025, 1024), (1024, 1024, 1027), (1023, 1024, 1024),
-                  (67, 37, 1035), (400, 2049, 1025)];
+                  (67, 37, 1035), (400, 2049, 1025), (67, 37, 35), (400, 2049, 40)];
     let new = ptxas::ptxas();
     let old = old_arch_ptxas();
     for (sm, sms, limit) in [("7.5", 40u32, 64 * 1024u32), ("7.0", 80, 96 * 1024), ("6.1", 6, 48 * 1024)] {

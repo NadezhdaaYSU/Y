@@ -230,13 +230,14 @@ source; each entry there now carries its status. What is still open:
   in the change were each caught by it. The sm_75 build on the RTX 4070 Ti
   SUPER now runs 1023 x 1025 x 1027 at 0.84-0.95x cuBLAS (0.28-0.29x before)
   and 1024 x 1024 x 1027 at 1.19-1.20x (0.35x)
-  (`docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/`). Still open:
-  - the T4's speed after the change;
-  - at two or three K tiles (K 33-47), where `ptxas` unrolls the K loop, a
-    remainder set still spills 4-52 bytes (400 x 2049 x 40 and 67 x 37 x
-    35; 740-796 and 48-52 before);
-  - this version does not load the next K tile into registers during the
-    current one's FMAs, the usual remedy for latency on these cards.
+  (`docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/`). Since then the K
+  loop also issues the next tile's loads first and their shared stores after
+  the FMAs (except on the large tile, Volta's, at the register cap without
+  it). That took the shapes with few tiles from 0.57-0.63x to 0.87-1.05x on
+  the same card, the rest 1.00-1.09x, and the 4-52-byte spills left at two
+  or three K tiles. Still open:
+  - the T4's speed after both changes;
+  - neither is measured on Volta or Pascal (ptxas only).
 
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
   needed sm_80 (`cp.async`) until 2026-11-12, and older targets were
