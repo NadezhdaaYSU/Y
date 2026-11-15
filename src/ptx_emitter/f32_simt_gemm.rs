@@ -1106,8 +1106,10 @@ impl PtxEmitter {
         let guard_m = rag_m && !slide_m;
         // Holding a whole tile's loads across the FMAs costs about 24
         // registers; the large tile (128 accumulators a thread, Volta only
-        // below sm_80) is at the cap without them, and spilled with them.
-        let prefetch = sync_copies && seg.is_none() && t.tm * t.tn < 128;
+        // below sm_80) is at the cap without them, and spilled with them. A
+        // segment of the workspace form takes it too: its loop loads and
+        // stores under the same `more` as the three-parameter form's.
+        let prefetch = sync_copies && t.tm * t.tn < 128;
         // The first k of the K tile in stage-load order `st` (segment-relative).
         let koff = |st: u32| -> u32 {
             match (short_first, st) {

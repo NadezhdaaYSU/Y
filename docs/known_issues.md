@@ -240,7 +240,9 @@ source; each entry there now carries its status. What is still open:
   4100 0.34x -> 1.05x). Still open:
   - at aligned shapes the T4 is at 0.91-1.11x cuBLAS, the mid tile at two
     stages since (one CTA an SM at three): medians of 45 paired rounds. The
-    small tile is at 0.68x (512^3). The large tile, which fits a T4 at 2
+    small tile is at 0.68x (512^3: 64 tiles for 40 SMs; smaller tiles were
+    slower), and the workspace form, which splits K in order, at 0.78x
+    (0.82x at 384 x 512 x 1024). The large tile, which fits a T4 at 2
     stages, is taken there where its waves are more than 80% full: 1.04-1.20x
     (2560^3 to 8192 x 8192 x 512), only at N a multiple of 4 and M of 128;
   - neither change is measured on Volta or Pascal (ptxas only).

@@ -911,6 +911,58 @@ fn the_workspace_form_is_the_in_order_fma_chain_on_every_grid() {
     }
 }
 
+/// The workspace form built for sm_75 (a Tesla T4: 40 SMs, 64 KB an SM),
+/// where each copy is a load and a shared store and a segment's loop loads
+/// the next tile first and stores it after the FMAs (`prefetch`): stream-K at
+/// every one of these shapes on 40 SMs, two with a K tail, run here (the
+/// driver compiles sm_75 PTX for this card) on the grids the sm_80 test
+/// uses. On a T4 this form took 512^3 from 0.69x cuBLAS to 0.78x and
+/// 384 x 512 x 1024 from 0.59x to 0.82x
+/// (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_w/).
+#[test]
+fn built_for_sm_75_the_workspace_form_is_the_in_order_fma_chain() {
+    let Some(ctx) = CudaContext::new() else {
+        eprintln!("SKIP: no CUDA driver - no sm_75 stream-K GEMM was executed.");
+        return;
+    };
+    let cases: [(u32, u32, u32); 5] = [(512, 512, 512), (384, 512, 1024), (768, 768, 768), (768, 768, 770), (700, 768, 1027)];
+    for (si, &(m, n, k)) in cases.iter().enumerate() {
+        let dir = pinned::pinned_scratch(&format!("f32_gemm_sk75_run{si}"), "7.5");
+        let text = pinned::profile_text("7.5").replace("SM_COUNT=66", "SM_COUNT=40") + "MAX_SMEM_PER_SM_BYTES=65536\n";
+        std::fs::write(dir.join(".ysu_hw_profile"), text).unwrap();
+        let name = format!("sk75_{si}");
+        let ptx = compile_text(&dir, &name, &source_w(&name, m, n, k), "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
+        assert!(ptx.contains(".target sm_75") && !instructions(&ptx).contains("cp.async"), "{m}x{n}x{k}: not the sm_75 plain-load build");
+        let h = sk_header(&ptx).unwrap_or_else(|| panic!("{m}x{n}x{k} on 40 SMs at sm_75: no stream-K"));
+        let (m, n, k) = (m as usize, n as usize, k as usize);
+        let module = ctx.load_ptx(&ptx, &name).unwrap_or_else(|e| panic!("{m}x{n}x{k} did not load: {e}"));
+        module.set_max_dynamic_smem(h.smem).unwrap();
+        let a = operand(m * k, 911 + si as u64);
+        let b = operand(k * n, 977 + si as u64);
+        let (da, db, dc) = (ctx.alloc(m * k * 4).unwrap(), ctx.alloc(k * n * 4).unwrap(), ctx.alloc(m * n * 4).unwrap());
+        let dw = ctx.alloc(h.w_words * 8).unwrap();
+        ctx.memcpy_htod_at(&da, 0, &as_bytes(&a)).unwrap();
+        ctx.memcpy_htod_at(&db, 0, &as_bytes(&b)).unwrap();
+        ctx.memset_u8(&dw, 0xa5).unwrap();
+        let want: Vec<Vec<f32>> = (0..m).map(|i| (0..n).map(|j| oracle(&a, &b, n, k, i, j)).collect()).collect();
+        for grid in [h.p, h.p, 1, 2, 3, h.p + 5, 3 * h.tiles + 1] {
+            ctx.memset_u8(&dc, 0xff).unwrap();
+            ctx.launch(&module, (grid, 1, 1), (h.block, 1, 1), h.smem, &[da.device_ptr(), db.device_ptr(), dc.device_ptr(), dw.device_ptr()]).unwrap();
+            ctx.synchronize().unwrap_or_else(|e| panic!("{m}x{n}x{k} grid {grid}: {e}"));
+            let mut raw = vec![0u8; m * n * 4];
+            ctx.memcpy_dtoh_at(&mut raw, &dc, 0).unwrap();
+            for i in 0..m {
+                for j in 0..n {
+                    let g = f32::from_le_bytes(raw[(i * n + j) * 4..(i * n + j) * 4 + 4].try_into().unwrap());
+                    let w = want[i][j];
+                    assert!(g.to_bits() == w.to_bits(), "{m}x{n}x{k} (sm_75 stream-K) grid {grid}: C[{i}][{j}] = {g:e}, the in-order fma chain gives {w:e}");
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 /// The stream-K shapes compute-sanitizer runs: each tile, a K tail, one and
 /// two K tiles, ragged edges - and a K tail with many K tiles on the mid and
 /// large tiles, where a continuation loads the partial last tile in the

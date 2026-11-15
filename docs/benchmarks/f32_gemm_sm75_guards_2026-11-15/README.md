@@ -205,3 +205,33 @@ prefetch, and only where measured: N a multiple of 4 and M of 128. With a
 ragged M and an odd N it spilled 76 bytes at 255 registers. Its bits:
 the interpreter check on 4 shapes (one with a column remainder set at 2
 stages), and memcheck and racecheck on 3 (sm_75 build, RTX 4070 Ti SUPER).
+
+## 512^3 and the other shapes on the small tile
+
+512^3 is 64 small tiles (64 x 64) for 40 SMs: 24 SMs run two, 16 one, so
+at best 80% of the card's CTA slots work. Version 6 (`t4_small/`) tried the
+small tile at 2 stages and the 32 x 64 and 64 x 32 tiles (128 tiles, 4 x 4
+outputs a thread) as the main tile, at 3 and 4 stages: the smaller tiles
+lost on every shape (512^3: 0.68x -> 0.54-0.57x), 2 stages changed nothing.
+A thread computing 4 x 4 instead of 4 x 8 outputs loads more from shared
+memory for each FMA, and that cost more than the balance gained.
+
+What balances it without losing the in-order chain is splitting K in order:
+the workspace form (`W: GlobalMemory<U64>`), whose stream-K schedule runs
+40 CTAs and lets a CTA continue a tile from the exact accumulators another
+left in C. Its segments now load the next K tile first and store it after
+the FMAs too (`prefetch`; before, they spread the copies). Job
+`y-f32-t4-w` version 2 (`t4_w/`), medians of 45 paired rounds against
+cuBLAS, all bit-exact:
+
+| shape | three-parameter | `W`, before | `W`, with the prefetch |
+|---|---|---|---|
+| 512^3 | 0.689x [0.68-0.70] | 0.753x [0.75-0.76] | 0.779x [0.76-0.78] |
+| 384 x 512 x 1024 | 0.591x [0.56-0.64] | 0.662x [0.64-0.70] | 0.823x [0.77-0.85] |
+| 256 x 1024 x 1024 | 0.661x [0.65-0.69] | 0.644x [0.61-0.68] | 0.757x [0.70-0.77] |
+| 512 x 512 x 2048 | 0.684x [0.66-0.70] | 0.673x [0.65-0.68] | 0.769x [0.72-0.78] |
+| 512 x 256 x 512 | 0.839x | 0.839x (`W` unused) | 0.839x |
+| 256 x 512 x 4096 | 0.674x | 0.675x (`W` unused) | 0.673x |
+
+The three-parameter form cannot do this (it has nowhere to say how far a
+tile got), so at 512^3 it stays at 0.69x on a T4.
