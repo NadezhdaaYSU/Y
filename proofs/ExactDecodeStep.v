@@ -65,12 +65,10 @@
     ** What is NOT modelled.
 
     - Rows holding an infinity or a NaN (the norm then takes a float path).
-    - Ragged batches: left padding adds masked keys, which the model does not
-      have. Equal-length batches of any size are machines.
+    - Ragged batches as such: a left-padded row is covered by
+      [left_padding_changes_nothing], under the run-level conditions
+      [run_pad_ok], which hold when the logits and scales are finite.
     - The prefill, except as one decode step per prompt token.
-    - Triton's two-digit kernel, which accumulates `128 * hi` and `lo` in
-      one interleaved int32 sum; the separate form (`torch._int_mm`, Y's
-      GEMM, float64) is modelled.
     - That a kernel's sums ARE some association of the site's terms: for
       Y's kernels the per-kernel proofs show it; for others it is assumed.
 
@@ -417,6 +415,8 @@ Record machine : Type := {
   m_dot : site -> list (Z * Z) -> Z;
   m_sum : site -> list Z -> Z;
   m_comb : site -> Z -> Z -> Z;        (* `128 * hi_acc + lo_acc` *)
+  m_dot2 : site -> list (Z * Z) -> list (Z * Z) -> Z;   (* `128 * (hi . w) + lo . w` in one accumulator *)
+  m_hilo : site -> bool;               (* the two-digit product interleaved (Triton) or as two sums *)
   m_imax : site -> list Z -> Z;
   m_fmax : site -> list R -> R;
   m_argmax : list R -> nat;
@@ -430,6 +430,11 @@ Definition exact_dot (B : Z) (f : list (Z * Z) -> Z) : Prop :=
   forall l, ER.abs_sum (prods l) <= B -> f l = pdot l.
 Definition exact_sum (B : Z) (f : list Z -> Z) : Prop :=
   forall l, ER.abs_sum l <= B -> f l = ER.zsum l.
+(** The interleaved two-digit product: one accumulator over the hi
+    products scaled by 128 and the lo products. *)
+Definition exact_dot2 (B : Z) (f : list (Z * Z) -> list (Z * Z) -> Z) : Prop :=
+  forall h l, ER.abs_sum (map (Z.mul 128) (prods h) ++ prods l) <= B -> f h l = 128 * pdot h + pdot l.
+
 Definition exact_comb (B : Z) (f : Z -> Z -> Z) : Prop :=
   forall h l, Z.abs (128 * h) + Z.abs l <= B -> f h l = 128 * h + l.
 
@@ -447,6 +452,7 @@ Record valid (dm : dims) (T : Z) (M : machine) : Prop := {
   v_dot : forall s, exact_dot (need dm T M s) (m_dot M s);
   v_sum : forall s, exact_sum (need dm T M s) (m_sum M s);
   v_comb : forall s, exact_comb (need dm T M s) (m_comb M s);
+  v_dot2 : forall s, exact_dot2 (need dm T M s) (m_dot2 M s);
   v_digits : forall p, 0 <= m_digits M p
 }.
 
@@ -522,6 +528,8 @@ Definition Mref : machine := {|
   m_dot := fun _ l => pdot l;
   m_sum := fun _ l => ER.zsum l;
   m_comb := fun _ h l => 128 * h + l;
+  m_dot2 := fun _ h l => 128 * pdot h + pdot l;
+  m_hilo := fun _ => false;
   m_imax := fun _ l => zmax l;
   m_fmax := fun _ l => fmaxr l;
   m_argmax := argmax_ref;
@@ -536,6 +544,7 @@ Proof.
   - apply argmax_ref_ok.
   - intros s l _. reflexivity.
   - intros s l _. reflexivity.
+  - intros s h l _. reflexivity.
   - intros s h l _. reflexivity.
   - intros. lia.
 Qed.
@@ -623,6 +632,8 @@ Record lin_w : Type := { w8 : list (list Z); wsc : list R; wb : list (option R) 
 Definition lin_acc (M : machine) (dm : dims) (w : lin) (path : list nat) (x8 : list Z) (n : nat)
   (row : list Z) : Z :=
   if a_of dm w <=? 127 then m_dot M (Lin w Plain, n :: path) (combine x8 row)
+  else if m_hilo M (Lin w Comb, n :: path)
+  then m_dot2 M (Lin w Comb, n :: path) (combine (map W.split_hi x8) row) (combine (map W.split_lo x8) row)
   else m_comb M (Lin w Comb, n :: path)
          (m_dot M (Lin w Hi, n :: path) (combine (map W.split_hi x8) row))
          (m_dot M (Lin w Lo, n :: path) (combine (map W.split_lo x8) row)).
@@ -666,6 +677,23 @@ Proof.
   rewrite E. lia.
 Qed.
 
+Lemma split_abs_sum : forall a x8 row, 0 <= a -> (a + 1) mod 128 = 0 ->
+  Forall (fun x => Z.abs x <= a) x8 -> Forall (fun y => Z.abs y <= 127) row ->
+  ER.abs_sum (map (Z.mul 128) (prods (combine (map W.split_hi x8) row)) ++ prods (combine (map W.split_lo x8) row))
+  <= Z.of_nat (length (combine x8 row)) * ((a + 128) * 127).
+Proof.
+  intros a x8. induction x8 as [|x x8 IH]; intros [|y row] Ha Hm Hx Hy;
+    cbn [combine map prods length]; try (cbn; lia).
+  inversion Hx as [|? ? Hx0 Hx']; inversion Hy as [|? ? Hy0 Hy']; subst.
+  specialize (IH row Ha Hm Hx' Hy').
+  pose proof (W.the_split_terms_fit_the_accumulator a 127 x y Ha Hm Hx0 Hy0) as T1.
+  unfold prods, ER.abs_sum in *. cbn [map fst snd app ER.zsum] in *.
+  rewrite !map_app, !ER.zsum_app in *. cbn [map ER.zsum] in *.
+  rewrite Nat2Z.inj_succ.
+  assert (E : Z.abs (128 * (W.split_hi x * y)) = Z.abs (128 * W.split_hi x * y)) by (f_equal; ring).
+  rewrite E. lia.
+Qed.
+
 Lemma lin_acc_value : forall dm T M w path x8 n row, valid dm T M -> 0 <= dReq dm ->
   Forall (fun x => Z.abs x <= a_of dm w) x8 ->
   Z.of_nat (length row) <= K_of dm w -> Forall (fun y => Z.abs y <= 127) row ->
@@ -675,6 +703,11 @@ Proof.
   destruct (a_of_props dm w Hr) as [[Ha1 Ha2] Hm]. unfold C.DIGIT_MAX in Ha2.
   pose proof (combine_len_r _ _ x8 row) as Lc.
   unfold lin_acc. destruct (Z.leb_spec (a_of dm w) 127) as [Hp|Hs].
+  2: destruct (m_hilo M (Lin w Comb, n :: path)) eqn:Hilo.
+  2:{ rewrite (v_dot2 _ _ _ HM (Lin w Comb, n :: path)).
+      - apply split_dot.
+      - unfold need. cbn [fst need_st].
+        pose proof (split_abs_sum (a_of dm w) x8 row ltac:(lia) Hm Hx Hrow). nia. }
   - apply (v_dot _ _ _ HM). unfold need. cbn [fst need_st].
     assert (Hx' : Forall (fun x => Z.abs x <= 127) x8)
       by (eapply Forall_impl; [|exact Hx]; intros x H; cbn in H; lia).
@@ -1241,6 +1274,15 @@ Definition sched_sum (c : ER.carrier) (t : nat -> ER.tree) (l : list Z) : Z :=
 
 Definition sched_comb (c : ER.carrier) (h l : Z) : Z := ER.cadd c (ER.cmul c false 128 h) l.
 
+(** The interleaved form by a scaled schedule [t nh nl] over the nh hi
+    products and nl lo products, each formed in the carrier: Triton's
+    `acc += dot(hi) * 128; acc += dot(lo)` per K block is one. *)
+Definition hilo_mu (nh : nat) (i : nat) : Z := if (i <? nh)%nat then 128 else 1.
+
+Definition sched_dot2 (c : ER.carrier) (t : nat -> nat -> ER.stree) (h l : list (Z * Z)) : Z :=
+  ER.steval (ER.cadd c) (ER.cscale c) (map (fun xy => ER.cmul c false (fst xy) (snd xy)) (h ++ l))
+    (t (length h) (length l)).
+
 Theorem sched_dot_exact : forall c fused t B,
   B <= ER.cap c -> (forall n, ER.covers (t n) n) -> exact_dot B (sched_dot c fused t).
 Proof.
@@ -1277,29 +1319,90 @@ Proof.
   apply ER.every_carrier_is_exact_within_its_cap. lia.
 Qed.
 
+Lemma in_abs_sum : forall z l, In z l -> Z.abs z <= ER.abs_sum l.
+Proof.
+  intros z l H. induction l as [|x l IH]; [destruct H|].
+  unfold ER.abs_sum in *. cbn [map ER.zsum]. pose proof (ER.abs_sum_nonneg l). unfold ER.abs_sum in H0.
+  destruct H as [->|H]; [lia|]. specialize (IH H). lia.
+Qed.
+
+Lemma zsum_map_128 : forall l, ER.zsum (map (Z.mul 128) l) = 128 * ER.zsum l.
+Proof. induction l as [|x l IH]; cbn [map ER.zsum]; [ring|]. rewrite IH. ring. Qed.
+
+Lemma map_shift_seq : forall (f : nat -> Z) n k j,
+  map (fun i => f (i - k)%nat) (seq (k + j) n) = map f (seq j n).
+Proof.
+  intros f n. induction n as [|n IH]; intros k j; [reflexivity|].
+  cbn [seq map]. f_equal; [f_equal; lia|]. replace (S (k + j)) with (k + S j)%nat by lia. apply IH.
+Qed.
+
+Lemma weighted_hilo : forall ph pl,
+  ER.weighted (hilo_mu (length ph)) (ph ++ pl) = map (Z.mul 128) ph ++ pl.
+Proof.
+  intros ph pl. unfold ER.weighted. rewrite length_app, seq_app, map_app. f_equal.
+  - rewrite <- (ER.map_nth_seq ph) at 2. rewrite map_map. apply map_ext_in. intros i Hi.
+    apply in_seq in Hi. unfold hilo_mu. destruct (Nat.ltb_spec i (length ph)); [|lia].
+    rewrite app_nth1 by lia. reflexivity.
+  - rewrite <- (ER.map_nth_seq pl) at 2.
+    rewrite <- (map_shift_seq (fun i => nth i pl 0) (length pl) (length ph) 0).
+    rewrite Nat.add_0_r. apply map_ext_in. intros i Hi. apply in_seq in Hi.
+    unfold hilo_mu. destruct (Nat.ltb_spec i (length ph)); [lia|].
+    rewrite app_nth2 by lia. ring.
+Qed.
+
+Theorem sched_dot2_exact : forall c t B,
+  B <= ER.cap c -> (forall nh nl, ER.scovers (t nh nl) (hilo_mu nh) (nh + nl)) ->
+  exact_dot2 B (sched_dot2 c t).
+Proof.
+  intros c t B Hc Ht h l Hb. unfold sched_dot2.
+  assert (Em : map (fun xy => ER.cmul c false (fst xy) (snd xy)) (h ++ l) = prods h ++ prods l).
+  { rewrite map_app. unfold prods. f_equal; apply map_ext_in; intros [x y] Hin; cbn [fst snd];
+      apply ER.cmul_exact.
+    - assert (In (128 * (x * y)) (map (Z.mul 128) (prods h) ++ prods l)).
+      { apply in_or_app. left. apply in_map. unfold prods. apply (in_map (fun xy => fst xy * snd xy) h (x, y) Hin). }
+      pose proof (in_abs_sum _ _ H). rewrite Z.abs_mul in H0. lia.
+    - assert (In (x * y) (map (Z.mul 128) (prods h) ++ prods l)).
+      { apply in_or_app. right. unfold prods. apply (in_map (fun xy => fst xy * snd xy) l (x, y) Hin). }
+      pose proof (in_abs_sum _ _ H). lia. }
+  rewrite Em.
+  replace (length h) with (length (prods h)) by (unfold prods; apply length_map).
+  replace (length l) with (length (prods l)) by (unfold prods; apply length_map).
+  rewrite (ER.any_scaled_schedule_gives_the_weighted_sum (ER.cap c) _ _ (hilo_mu (length (prods h)))).
+  - rewrite weighted_hilo, ER.zsum_app, zsum_map_128. reflexivity.
+  - apply ER.every_carrier_is_exact_within_its_cap.
+  - apply ER.every_carrier_scales_exactly_within_its_cap.
+  - rewrite length_app. apply Ht.
+  - rewrite weighted_hilo. lia.
+Qed.
+
 (** A machine from a carrier, a product mode and a schedule at every site. *)
 Definition sched_machine (car : site -> ER.carrier) (fused : site -> bool) (t : site -> nat -> ER.tree)
+  (st : site -> nat -> nat -> ER.stree) (hilo : site -> bool)
   (imx : site -> list Z -> Z) (fmx' : site -> list R -> R) (amx : list R -> nat) (digits : list nat -> Z)
   : machine := {|
   m_dot := fun s => sched_dot (car s) (fused s) (t s);
   m_sum := fun s => sched_sum (car s) (t s);
   m_comb := fun s => sched_comb (car s);
+  m_dot2 := fun s => sched_dot2 (car s) (st s);
+  m_hilo := hilo;
   m_imax := imx; m_fmax := fmx'; m_argmax := amx; m_digits := digits
 |}.
 
 Theorem schedules_in_fitting_carriers_are_valid :
-  forall dm T car fused t imx fmx' amx digits,
+  forall dm T car fused t st hilo imx fmx' amx digits,
     (forall s, need_st dm T (digits (snd s)) (fst s) <= ER.cap (car s)) ->
     (forall s n, ER.covers (t s n) n) ->
+    (forall s nh nl, ER.scovers (st s nh nl) (hilo_mu nh) (nh + nl)) ->
     (forall s, imax_ok (imx s)) -> (forall s, fmax_ok (fmx' s)) -> argmax_ok amx ->
     (forall p, 0 <= digits p) ->
-    valid dm T (sched_machine car fused t imx fmx' amx digits).
+    valid dm T (sched_machine car fused t st hilo imx fmx' amx digits).
 Proof.
-  intros dm T car fused t imx fmx' amx digits Hfit Ht Hi Hf Ha Hd.
+  intros dm T car fused t st hilo imx fmx' amx digits Hfit Ht Hst Hi Hf Ha Hd.
   constructor; cbn; try assumption.
   - intros s. apply sched_dot_exact; [apply Hfit | apply Ht].
   - intros s. apply sched_sum_exact; [apply Hfit | apply Ht].
   - intros s. apply sched_comb_exact. apply Hfit.
+  - intros s. apply sched_dot2_exact; [apply Hfit | apply Hst].
 Qed.
 
 (** Any comparison-based max, by any tree, meets the max specifications. *)
@@ -1317,20 +1420,22 @@ Qed.
 (** Any two executions that put every sum in a carrier the code uses there,
     with any schedules and any maxima, decode the same step. *)
 Corollary code_executions_agree :
-  forall dm T mw caches bl tok pos car1 car2 fu1 fu2 t1 t2 im1 im2 fm1 fm2 am1 am2 dg1 dg2,
+  forall dm T mw caches bl tok pos car1 car2 fu1 fu2 t1 t2 st1 st2 hl1 hl2 im1 im2 fm1 fm2 am1 am2 dg1 dg2,
   code_shape_ok dm T -> step_premises dm T mw caches tok ->
   (forall s, code_uses dm T (dg1 (snd s)) (fst s) (car1 s)) ->
   (forall s, code_uses dm T (dg2 (snd s)) (fst s) (car2 s)) ->
   (forall s n, ER.covers (t1 s n) n) -> (forall s n, ER.covers (t2 s n) n) ->
+  (forall s nh nl, ER.scovers (st1 s nh nl) (hilo_mu nh) (nh + nl)) ->
+  (forall s nh nl, ER.scovers (st2 s nh nl) (hilo_mu nh) (nh + nl)) ->
   (forall s, imax_ok (im1 s)) -> (forall s, imax_ok (im2 s)) ->
   (forall s, fmax_ok (fm1 s)) -> (forall s, fmax_ok (fm2 s)) ->
   argmax_ok am1 -> argmax_ok am2 ->
   (forall p, 0 <= dg1 p) -> (forall p, 0 <= dg2 p) ->
-  step (sched_machine car1 fu1 t1 im1 fm1 am1 dg1) dm mw caches bl tok pos
-  = step (sched_machine car2 fu2 t2 im2 fm2 am2 dg2) dm mw caches bl tok pos.
+  step (sched_machine car1 fu1 t1 st1 hl1 im1 fm1 am1 dg1) dm mw caches bl tok pos
+  = step (sched_machine car2 fu2 t2 st2 hl2 im2 fm2 am2 dg2) dm mw caches bl tok pos.
 Proof.
-  intros dm T mw caches bl tok pos car1 car2 fu1 fu2 t1 t2 im1 im2 fm1 fm2 am1 am2 dg1 dg2
-    Hs Hp Hu1 Hu2 Ht1 Ht2 Hi1 Hi2 Hf1 Hf2 Ha1 Ha2 Hd1 Hd2.
+  intros dm T mw caches bl tok pos car1 car2 fu1 fu2 t1 t2 st1 st2 hl1 hl2 im1 im2 fm1 fm2 am1 am2 dg1 dg2
+    Hs Hp Hu1 Hu2 Ht1 Ht2 Hst1 Hst2 Hi1 Hi2 Hf1 Hf2 Ha1 Ha2 Hd1 Hd2.
   apply (every_valid_execution_takes_the_same_decode_step dm T); [exact Hp| |];
     apply schedules_in_fitting_carriers_are_valid; try assumption;
     intros s; apply the_code's_carriers_meet_every_need; auto.
@@ -1730,6 +1835,7 @@ Print Assumptions every_valid_execution_takes_the_reference_step.
 Print Assumptions the_reference_machine_is_valid.
 Print Assumptions the_digits_recombine.
 Print Assumptions sched_dot_exact.
+Print Assumptions sched_dot2_exact.
 Print Assumptions schedules_in_fitting_carriers_are_valid.
 Print Assumptions max_trees_are_valid_maxima.
 Print Assumptions the_code's_carriers_meet_every_need.

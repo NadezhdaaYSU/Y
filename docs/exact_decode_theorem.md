@@ -48,6 +48,7 @@ in `Print Assumptions ... Closed under the global context`: no axiom, no
 | `ExactDecodeWidths.the_derived_activation_width_fits_the_accumulator`, `the_derived_key_width_fits_float32`, `the_digit_width_fits_float32` | The widths the code derives from the shapes satisfy the bounds, for every shape. |
 | `ExactDecodeWidths.the_width_functions_return_what_the_python_returns` | The Coq width functions and integer `exp2` return what the Python returns, on 674 generated samples at and around every ceiling. |
 | `the_digits_recombine` | The base-2^d digit split of `p.V` recombines to the weight exactly. |
+| `sched_dot2_exact`, `ExactReduce.any_scaled_schedule_gives_the_weighted_sum` | A wide-activation linear layer computed as ONE sum that scales partial sums by 128 mid-reduction (Triton's interleaved two-digit kernel: `acc += dot(hi) * 128; acc += dot(lo)` per K block) gives `128 · (hi · w) + lo · w`, for any such schedule, while the weighted absolute values fit the carrier's cap. |
 
 The bounds per site (`need_st`) are these, with K the layer's contraction
 length, a its activation width, D the head dimension, kl the K width and T
@@ -56,7 +57,7 @@ the number of keys:
 | Site | Bound | Carriers the code uses |
 |---|---|---|
 | linear layer, one digit | K · 127 · 127 | int32; float32 when K · 127² < 2^24; float64 |
-| linear layer, two digits (a > 127) | K · 128 · 127, K · 127 · 127, combine K · (a + 128) · 127 | int32, float64 |
+| linear layer, two digits (a > 127) | K · 128 · 127, K · 127 · 127, combine K · (a + 128) · 127 | int32, float64; interleaved in one int32 sum (Triton) under the combine bound |
 | attention score | D · 127 · kl | float32 (`matmul`), int32 (Y's `dp2a` kernel) |
 | norm limb sums | H · 2^40 | int64 |
 | softmax denominator | T · 2^28 | int64 |
@@ -119,10 +120,11 @@ Hardware and compiler assumptions behind every row:
   (`--prefill`: every prompt token at the chosen layers, its output and its
   new K and V rows, bit for bit; CPU 45 of 45, packed cache 75 of 75), not
   proved.
-- **Triton's two-digit kernel** (`w8a8_matmul_hilo`), which accumulates
-  `128 · hi` and `lo` in one interleaved int32 sum. The separate form
-  (`torch._int_mm`, Y's GEMM, float64) is modelled. The per-term bound
-  that kernel needs is proved (`the_split_terms_fit_the_accumulator`).
+- **Triton's two-digit kernel run** (`w8a8_matmul_hilo`), which accumulates
+  `128 · hi` and `lo` in one interleaved int32 sum, is modelled since
+  2026-11-15 (`m_hilo`, `m_dot2`; `sched_dot2_exact` shows an int32 or
+  float64 schedule of that form is valid). The executable check has not run
+  it: it needs Triton's int8 GEMM, sm_80 or later, and the T4 is sm_75.
 - **Y's decode-attention kernel** (`Y_EXACT_ATTN=y`) is a machine of the
   model, but the executable check below does not run it (it needs the packed
   cache).
@@ -243,8 +245,10 @@ Must qualify, or say "checked" or "measured":
   hardware listed.
 - Ragged batches: **proved conditional** on `attend_pad_ok` at every
   attention call, and **checked** bit for bit on a real ragged batch.
-- The prefill as one pass, rows with inf or NaN, Triton's interleaved
-  two-digit kernel: **not proved**.
+- Triton's interleaved two-digit kernel: **proved** in the model (any
+  schedule that scales partial sums mid-reduction, inside int32), **not
+  checked** against the code: no run of it has gone through the check.
+- The prefill as one pass, rows with inf or NaN: **not proved**.
 
 Must not say: that the implementation is verified; that Y's GPU kernels are
 proved in general (only those with their own proofs, listed in the

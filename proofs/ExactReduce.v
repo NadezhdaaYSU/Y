@@ -609,6 +609,134 @@ Theorem integer_max_is_unique : forall l r1 r2,
   is_max_of Z (fun z => z) l r1 -> is_max_of Z (fun z => z) l r2 -> r1 = r2.
 Proof. intros l r1 r2 H1 H2. exact (max_key_unique Z (fun z => z) l r1 r2 H1 H2). Qed.
 
+
+(* ------------------------------------------------------------------ *)
+(** ** Scaled schedules: a partial sum multiplied mid-tree             *)
+(* ------------------------------------------------------------------ *)
+
+(** Triton's two-digit GEMM (`_w8a8_gemm_hilo`) accumulates, per K block,
+    `acc += dot(hi) * 128; acc += dot(lo)` in one int32: a partial sum is
+    multiplied by 128 and then added. A [stree] adds that node. Its leaves
+    carry the product of the scales above them ([sleaves]); covering means
+    each term index appears once, with the multiplier [mu] gives it. *)
+
+Inductive stree : Type :=
+| SLeaf (i : nat)
+| SZero
+| SNode (l r : stree)
+| SScale (k : Z) (t : stree).
+
+Fixpoint sleaves (t : stree) : list (nat * Z) :=
+  match t with
+  | SLeaf i => [(i, 1)]
+  | SZero => []
+  | SNode l r => sleaves l ++ sleaves r
+  | SScale k t => map (fun p => (fst p, k * snd p)) (sleaves t)
+  end.
+
+Definition scovers (t : stree) (mu : nat -> Z) (n : nat) : Prop :=
+  Permutation (sleaves t) (map (fun i => (i, mu i)) (seq 0 n)).
+
+(** The machine: additions in [add], a scale in [mul]. *)
+Fixpoint steval (add mul : Z -> Z -> Z) (terms : list Z) (t : stree) : Z :=
+  match t with
+  | SLeaf i => nth i terms 0
+  | SZero => 0
+  | SNode l r => add (steval add mul terms l) (steval add mul terms r)
+  | SScale k t => mul k (steval add mul terms t)
+  end.
+
+Definition exact_mul_within (B : Z) (mul : Z -> Z -> Z) : Prop :=
+  forall k v, Z.abs (k * v) <= B -> mul k v = k * v.
+
+Definition wterms (terms : list Z) (ps : list (nat * Z)) : list Z :=
+  map (fun p => snd p * nth (fst p) terms 0) ps.
+
+Lemma wterms_app : forall terms a b, wterms terms (a ++ b) = wterms terms a ++ wterms terms b.
+Proof. intros. unfold wterms. apply map_app. Qed.
+
+Lemma zsum_map_scale : forall (ps : list (nat * Z)) (terms : list Z) k,
+  zsum (wterms terms (map (fun p => (fst p, k * snd p)) ps)) = k * zsum (wterms terms ps).
+Proof.
+  intros ps terms k. unfold wterms. rewrite map_map. cbn [fst snd].
+  induction ps as [|p ps IH]; cbn [map zsum]; [ring|]. rewrite IH. ring.
+Qed.
+
+Lemma abs_sum_map_scale : forall (ps : list (nat * Z)) (terms : list Z) k,
+  abs_sum (wterms terms (map (fun p => (fst p, k * snd p)) ps)) = Z.abs k * abs_sum (wterms terms ps).
+Proof.
+  intros ps terms k. unfold abs_sum, wterms. rewrite !map_map. cbn [fst snd].
+  induction ps as [|p ps IH]; cbn [map zsum]; [ring|]. rewrite IH, !Z.abs_mul. ring.
+Qed.
+
+Lemma steval_sleaves : forall B add mul terms t,
+  exact_within B add -> exact_mul_within B mul ->
+  abs_sum (wterms terms (sleaves t)) <= B ->
+  steval add mul terms t = zsum (wterms terms (sleaves t)).
+Proof.
+  intros B add mul terms t Hadd Hmul. induction t as [i| |l IHl r IHr|k t IH]; intros Hb.
+  - unfold wterms. cbn [sleaves steval map zsum fst snd]. ring.
+  - reflexivity.
+  - cbn [sleaves steval] in *. rewrite wterms_app, abs_sum_app in Hb.
+    pose proof (abs_sum_nonneg (wterms terms (sleaves l))).
+    pose proof (abs_sum_nonneg (wterms terms (sleaves r))).
+    rewrite IHl, IHr by lia. rewrite wterms_app, zsum_app. apply Hadd.
+    pose proof (zsum_le_abs_sum (wterms terms (sleaves l))).
+    pose proof (zsum_le_abs_sum (wterms terms (sleaves r))). lia.
+  - cbn [sleaves steval] in *. rewrite zsum_map_scale. rewrite abs_sum_map_scale in Hb.
+    pose proof (abs_sum_nonneg (wterms terms (sleaves t))) as H0.
+    destruct (Z.eq_dec k 0) as [Hk|Hk].
+    + (* a zero scale: the product is 0 whatever the inner value *)
+      subst k. rewrite Hmul by (rewrite Z.mul_0_l; cbn; nia). ring.
+    + assert (Hin : abs_sum (wterms terms (sleaves t)) <= B) by nia.
+      rewrite (IH Hin). apply Hmul. rewrite Z.abs_mul.
+      pose proof (zsum_le_abs_sum (wterms terms (sleaves t))).
+      pose proof (Z.abs_nonneg k). nia.
+Qed.
+
+Definition weighted (mu : nat -> Z) (terms : list Z) : list Z :=
+  map (fun i => mu i * nth i terms 0) (seq 0 (length terms)).
+
+Lemma sleaves_weighted : forall t mu terms,
+  scovers t mu (length terms) -> Permutation (wterms terms (sleaves t)) (weighted mu terms).
+Proof.
+  intros t mu terms H. unfold wterms, weighted.
+  pose proof (Permutation_map (fun p => snd p * nth (fst p) terms 0) H) as P.
+  rewrite map_map in P. exact P.
+Qed.
+
+(** Every scaled schedule in a carrier whose additions and scalings are exact
+    within B gives the weighted sum, while the absolute values of the
+    weighted terms sum to at most B. *)
+Theorem any_scaled_schedule_gives_the_weighted_sum : forall B add mul mu terms t,
+  exact_within B add -> exact_mul_within B mul ->
+  scovers t mu (length terms) ->
+  abs_sum (weighted mu terms) <= B ->
+  steval add mul terms t = zsum (weighted mu terms).
+Proof.
+  intros B add mul mu terms t Hadd Hmul Hc Hb.
+  pose proof (sleaves_weighted t mu terms Hc) as P.
+  rewrite (steval_sleaves B add mul terms t Hadd Hmul) by (rewrite (abs_sum_perm _ _ P); exact Hb).
+  apply zsum_perm, P.
+Qed.
+
+(** A scaling in a carrier: the product formed, then rounded or wrapped. *)
+Definition cscale (c : carrier) (k v : Z) : Z := cadd c (k * v) 0.
+
+Theorem every_carrier_scales_exactly_within_its_cap : forall c,
+  exact_mul_within (cap c) (cscale c).
+Proof.
+  intros c k v H. unfold cscale.
+  rewrite (every_carrier_is_exact_within_its_cap c) by (rewrite Z.add_0_r; exact H). ring.
+Qed.
+
+(** The kernel's shape at two terms, `acc = dot(hi) * 128 + dot(lo)`: the
+    premise is satisfiable, and in int32 it gives the weighted sum. *)
+Example a_scaled_schedule :
+  scovers (SNode (SScale 128 (SLeaf 0)) (SLeaf 1)) (fun i => if (i =? 0)%nat then 128 else 1) 2
+  /\ steval (cadd I32) (cscale I32) [3; 5] (SNode (SScale 128 (SLeaf 0)) (SLeaf 1)) = 128 * 3 + 5.
+Proof. split; [unfold scovers; cbn; apply Permutation_refl | vm_compute; reflexivity]. Qed.
+
 Print Assumptions any_schedule_gives_the_sum.
 Print Assumptions any_two_schedules_agree.
 Print Assumptions no_partial_leaves_the_range.
@@ -624,3 +752,6 @@ Print Assumptions any_max_tree_is_a_max.
 Print Assumptions first_argmax_unique.
 Print Assumptions the_scan_is_a_first_argmax.
 Print Assumptions integer_max_is_unique.
+Print Assumptions any_scaled_schedule_gives_the_weighted_sum.
+Print Assumptions every_carrier_scales_exactly_within_its_cap.
+Print Assumptions a_scaled_schedule.

@@ -880,12 +880,13 @@ Theorem left_padding_changes_nothing : forall dm T M mw ls P R0 tok pos,
 
 ## Still open
 
-- Not modelled: rows with an infinity or a NaN, Triton's interleaved
-  two-digit kernel, the prefill as one pass. Ragged batches are covered by
-  `left_padding_changes_nothing`, under run-level conditions that hold for
-  finite values.
-- The executable check does not run Y's decode-attention kernel
-  (`Y_EXACT_ATTN=y`), which needs the packed cache.
+- Not modelled: rows with an infinity or a NaN, the prefill as one pass.
+  Ragged batches are covered by `left_padding_changes_nothing`, under
+  run-level conditions that hold for finite values. Triton's interleaved
+  two-digit kernel is covered by `sched_dot2_exact` (since 2026-11-15).
+- The executable check has not run Triton's interleaved kernel (it needs
+  sm_80 or later), nor Y's decode-attention kernel (`Y_EXACT_ATTN=y`),
+  which needs the packed cache.
 
 The trust boundary, the executable check's results and the negative
 controls are in [`docs/exact_decode_theorem.md`](exact_decode_theorem.md).

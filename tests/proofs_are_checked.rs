@@ -1069,6 +1069,11 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "Print Assumptions any_max_tree_is_a_max",
                 "Print Assumptions max_key_unique",
                 "Print Assumptions first_argmax_unique",
+                // A schedule that scales a partial sum mid-reduction (the
+                // two-digit int8 GEMM's 128 * (hi . w) + lo . w) still gives
+                // the weighted sum, inside the carrier's cap.
+                "Print Assumptions any_scaled_schedule_gives_the_weighted_sum",
+                "Print Assumptions every_carrier_scales_exactly_within_its_cap",
             ][..],
         ),
         (
@@ -1114,6 +1119,9 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "Print Assumptions every_valid_execution_takes_the_same_decode_step",
                 "Print Assumptions the_reference_machine_is_valid",
                 "Print Assumptions the_digits_recombine",
+                // Triton's interleaved two-digit kernel: one scaled schedule
+                // over both digits, exact within the linear layer's bound.
+                "Print Assumptions sched_dot2_exact",
                 "Print Assumptions schedules_in_fitting_carriers_are_valid",
                 "Print Assumptions the_code's_carriers_meet_every_need",
                 "Print Assumptions code_executions_agree",
