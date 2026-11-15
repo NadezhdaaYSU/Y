@@ -126,8 +126,8 @@ Hardware and compiler assumptions behind every row:
   float64 schedule of that form is valid). The executable check has not run
   it: it needs Triton's int8 GEMM, sm_80 or later, and the T4 is sm_75.
 - **Y's decode-attention kernel** (`Y_EXACT_ATTN=y`) is a machine of the
-  model, but the executable check below does not run it (it needs the packed
-  cache).
+  model, and the executable check has run it on the T4 with the packed cache
+  (the every-switch row below), not on any other GPU.
 - **That the model is the code.** The model is a transcription. What ties
   it to the code is the executable check and the generated constants, next.
 
@@ -160,13 +160,21 @@ France is", all 24 layers, 4 decode steps:
 | Tesla T4, same | 511 | 817 | 817 |
 | Kaggle Intel Xeon @ 2.00GHz (CPU path), Python 3.13, with the ragged stage | 127 | 575 | 575 |
 | Tesla T4, `Y_EXACT_V_INT8=1` (`p.V` on Y's `exact_pv`, one int64 sum), with the ragged stage | 127 | 817 | 817 |
+| Tesla T4, every switch: `Y_EXACT_ATTN=y` (Y's decode-attention kernel), `Y_EXACT_V_INT8=1`, `Y_EXACT_KV_PACK=1` (the packed cache), `Y_EXACT_NORM=triton`, with the ragged stage | 127 | 1009 | 1009 |
 
 On the T4 the 817 add 242 checks that the int8 weights and scales built on
 the GPU equal those built on the CPU. The first `V_INT8` attempt did not
 run: the job had no Z3, so Y refused to compile `exact_pv` ("could not verify
 invariant ... the SMT solver could not be run"), the compiler failing closed.
 With `z3-solver` installed, a second run of all four configurations gave the
-same counts as the first.
+same counts as the first, and a third (with the every-switch row) again.
+
+In the every-switch row each new K and V row is compared as packed integers
+and scales, 192 checks more than the float rows they replace. Y's attention
+and `exact_pv` kernels refuse rather than fall back, so a run that finished
+ran them. The Triton norm falls back to the formula (the same bits) when
+Triton cannot be imported, and that run did not record which ran; the
+check's report has recorded the kernels that ran (`backends`) since.
 
 The ragged stage (`--ragged`) decodes the batch ["The capital of France
 is", a 14-token prompt], so the first row carries 9 padding keys. It

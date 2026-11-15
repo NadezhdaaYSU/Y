@@ -885,8 +885,8 @@ Theorem left_padding_changes_nothing : forall dm T M mw ls P R0 tok pos,
   run-level conditions that hold for finite values. Triton's interleaved
   two-digit kernel is covered by `sched_dot2_exact` (since 2026-11-15).
 - The executable check has not run Triton's interleaved kernel (it needs
-  sm_80 or later), nor Y's decode-attention kernel (`Y_EXACT_ATTN=y`),
-  which needs the packed cache.
+  sm_80 or later). It has run Y's decode-attention kernel
+  (`Y_EXACT_ATTN=y`) on a Tesla T4 only.
 
 The trust boundary, the executable check's results and the negative
 controls are in [`docs/exact_decode_theorem.md`](exact_decode_theorem.md).

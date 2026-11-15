@@ -476,8 +476,11 @@ def main():
         rb = dict(ref.named_buffers())
         for name, b in real.named_buffers():
             if name.endswith(("w8t", "sw")):
-                ok, why = bits_equal(b, rb[name]) if b.dtype != torch.int8 else (
-                    torch.equal(b.cpu(), rb[name]), "int8 differ")
+                if b.dtype == torch.int8:
+                    ok = torch.equal(b.cpu(), rb[name])
+                    why = "int8 equal" if ok else "int8 differ"
+                else:
+                    ok, why = bits_equal(b, rb[name])
                 report["checks"].append({"what": f"weights {name}", "ok": ok, "detail": why})
 
     ids = tok(args.prompt, return_tensors="pt").input_ids.to(args.device)
@@ -576,6 +579,15 @@ def main():
     if args.ragged:
         ragged_check(real, tok, args, report)
 
+    # Which kernels ran, not only which switches were set. Y's kernels are
+    # built on first use and refuse rather than fall back; the Triton norm
+    # falls back to the formula when Triton cannot be imported.
+    from y_lang.exact import attention as exact_attention, kv as exact_kv
+    report["backends"] = {"norm_triton_op": exact_model._NORM_OP is not None,
+                          "y_attention_kernel_built": bool(exact_attention._Y_ATTN),
+                          "y_exact_pv_kernel_built": bool(exact_attention._Y_PV),
+                          "kv_packed": exact_kv.PACK, "v_int8": exact_kv.V_INT8}
+    print("backends", report["backends"])
     report["tokens"] = tokens
     report["text"] = tok.decode(tokens)
     report["seconds"] = round(time.time() - t0, 1)

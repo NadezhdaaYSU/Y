@@ -1,0 +1,6481 @@
+{
+ "device": "cuda",
+ "model": "Qwen/Qwen2.5-0.5B-Instruct",
+ "revision": "7ae557604adf67be50417f59c2c2f167def9a775",
+ "act_levels_requested": 127,
+ "layers": [
+  0,
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  12,
+  13,
+  14,
+  15,
+  16,
+  17,
+  18,
+  19,
+  20,
+  21,
+  22,
+  23
+ ],
+ "steps": 4,
+ "torch": "2.13.0+cu126",
+ "python": "3.13.16",
+ "machine": "x86_64",
+ "cpu": "x86_64",
+ "gpu": "Tesla T4",
+ "checks": [
+  {
+   "what": "weights model.layers.0.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.0.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.0.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.0.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.0.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.0.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.0.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.0.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.0.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.0.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.1.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.1.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.1.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.1.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.1.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.1.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.1.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.1.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.1.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.1.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.2.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.2.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.2.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.2.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.2.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.2.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.2.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.2.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.2.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.2.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.3.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.3.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.3.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.3.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.3.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.3.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.3.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.3.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.3.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.3.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.4.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.4.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.4.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.4.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.4.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.4.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.4.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.4.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.4.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.4.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.5.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.5.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.5.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.5.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.5.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.5.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.5.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.5.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.5.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.5.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.6.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.6.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.6.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.6.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.6.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.6.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.6.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.6.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.6.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.6.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.7.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.7.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.7.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.7.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.7.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.7.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.7.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.7.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.7.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.7.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.8.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.8.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.8.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.8.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.8.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.8.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.8.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.8.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.8.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.8.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.9.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.9.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.9.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.9.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.9.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.9.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.9.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.9.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.9.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.9.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.10.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.10.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.10.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.10.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.10.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.10.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.10.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.10.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.10.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.10.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.11.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.11.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.11.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.11.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.11.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.11.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.11.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.11.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.11.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.11.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.12.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.12.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.12.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.12.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.12.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.12.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.12.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.12.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.12.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.12.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.13.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.13.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.13.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.13.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.13.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.13.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.13.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.13.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.13.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.13.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.14.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.14.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.14.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.14.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.14.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.14.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.14.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.14.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.14.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.14.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.15.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.15.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.15.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.15.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.15.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.15.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.15.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.15.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.15.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.15.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.16.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.16.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.16.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.16.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.16.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.16.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.16.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.16.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.16.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.16.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.17.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.17.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.17.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.17.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.17.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.17.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.17.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.17.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.17.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.17.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.18.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.18.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.18.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.18.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.18.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.18.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.18.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.18.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.18.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.18.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.19.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.19.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.19.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.19.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.19.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.19.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.19.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.19.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.19.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.19.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.20.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.20.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.20.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.20.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.20.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.20.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.20.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.20.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.20.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.20.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.21.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.21.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.21.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.21.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.21.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.21.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.21.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.21.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.21.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.21.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.22.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.22.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.22.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.22.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.22.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.22.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.22.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.22.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.22.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.22.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.23.self_attn.o_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.23.self_attn.o_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights model.layers.23.self_attn.qkv_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.23.self_attn.qkv_proj.sw",
+   "ok": true,
+   "detail": "0 of 1152 values differ"
+  },
+  {
+   "what": "weights model.layers.23.mlp.gate_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.23.mlp.gate_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.23.mlp.up_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.23.mlp.up_proj.sw",
+   "ok": true,
+   "detail": "0 of 4864 values differ"
+  },
+  {
+   "what": "weights model.layers.23.mlp.down_proj.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights model.layers.23.mlp.down_proj.sw",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "what": "weights lm_head.w8t",
+   "ok": true,
+   "detail": "int8 differ"
+  },
+  {
+   "what": "weights lm_head.sw",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 0,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 0,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 0,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 0,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 0,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 1,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 1,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 1,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 1,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 1,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 2,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 2,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 2,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 2,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 2,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 3,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 3,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 3,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 3,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 3,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 4,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 4,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 4,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 4,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 4,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 5,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 5,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 5,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 5,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 5,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 6,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 6,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 6,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 6,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 6,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 7,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 7,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 7,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 7,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 7,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 8,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 8,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 8,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 8,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 8,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 9,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 9,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 9,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 9,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 9,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 10,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 10,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 10,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 10,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 10,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 11,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 11,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 11,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 11,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 11,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 12,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 12,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 12,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 12,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 12,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 13,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 13,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 13,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 13,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 13,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 14,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 14,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 14,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 14,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 14,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 15,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 15,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 15,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 15,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 15,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 16,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 16,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 16,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 16,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 16,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 17,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 17,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 17,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 17,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 17,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 18,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 18,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 18,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 18,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 18,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 19,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 19,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 19,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 19,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 19,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 20,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 20,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 20,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 20,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 20,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 21,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 21,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 21,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 21,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 21,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 22,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 22,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 22,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 22,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 22,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 23,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 23,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 23,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 23,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 0,
+   "layer": 23,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 0,
+   "what": "final norm",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 0,
+   "what": "logits",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "step": 0,
+   "what": "token",
+   "ok": true,
+   "detail": "real 13 model 13"
+  },
+  {
+   "step": 1,
+   "layer": 0,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 0,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 0,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 0,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 0,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 1,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 1,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 1,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 1,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 1,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 2,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 2,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 2,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 2,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 2,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 3,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 3,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 3,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 3,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 3,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 4,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 4,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 4,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 4,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 4,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 5,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 5,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 5,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 5,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 5,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 6,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 6,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 6,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 6,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 6,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 7,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 7,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 7,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 7,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 7,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 8,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 8,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 8,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 8,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 8,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 9,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 9,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 9,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 9,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 9,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 10,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 10,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 10,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 10,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 10,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 11,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 11,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 11,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 11,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 11,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 12,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 12,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 12,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 12,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 12,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 13,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 13,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 13,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 13,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 13,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 14,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 14,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 14,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 14,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 14,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 15,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 15,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 15,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 15,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 15,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 16,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 16,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 16,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 16,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 16,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 17,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 17,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 17,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 17,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 17,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 18,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 18,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 18,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 18,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 18,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 19,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 19,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 19,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 19,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 19,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 20,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 20,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 20,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 20,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 20,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 21,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 21,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 21,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 21,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 21,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 22,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 22,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 22,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 22,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 22,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 23,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 23,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 23,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 23,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 1,
+   "layer": 23,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 1,
+   "what": "final norm",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 1,
+   "what": "logits",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "step": 1,
+   "what": "token",
+   "ok": true,
+   "detail": "real 1084 model 1084"
+  },
+  {
+   "step": 2,
+   "layer": 0,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 0,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 0,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 0,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 0,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 1,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 1,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 1,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 1,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 1,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 2,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 2,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 2,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 2,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 2,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 3,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 3,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 3,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 3,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 3,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 4,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 4,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 4,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 4,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 4,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 5,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 5,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 5,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 5,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 5,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 6,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 6,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 6,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 6,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 6,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 7,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 7,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 7,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 7,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 7,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 8,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 8,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 8,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 8,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 8,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 9,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 9,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 9,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 9,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 9,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 10,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 10,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 10,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 10,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 10,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 11,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 11,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 11,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 11,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 11,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 12,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 12,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 12,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 12,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 12,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 13,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 13,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 13,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 13,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 13,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 14,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 14,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 14,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 14,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 14,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 15,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 15,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 15,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 15,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 15,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 16,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 16,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 16,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 16,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 16,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 17,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 17,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 17,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 17,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 17,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 18,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 18,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 18,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 18,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 18,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 19,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 19,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 19,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 19,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 19,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 20,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 20,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 20,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 20,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 20,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 21,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 21,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 21,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 21,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 21,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 22,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 22,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 22,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 22,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 22,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 23,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 23,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 23,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 23,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 2,
+   "layer": 23,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 2,
+   "what": "final norm",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 2,
+   "what": "logits",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "step": 2,
+   "what": "token",
+   "ok": true,
+   "detail": "real 374 model 374"
+  },
+  {
+   "step": 3,
+   "layer": 0,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 0,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 0,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 0,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 0,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 1,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 1,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 1,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 1,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 1,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 2,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 2,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 2,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 2,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 2,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 3,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 3,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 3,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 3,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 3,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 4,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 4,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 4,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 4,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 4,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 5,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 5,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 5,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 5,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 5,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 6,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 6,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 6,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 6,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 6,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 7,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 7,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 7,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 7,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 7,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 8,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 8,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 8,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 8,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 8,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 9,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 9,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 9,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 9,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 9,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 10,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 10,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 10,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 10,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 10,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 11,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 11,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 11,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 11,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 11,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 12,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 12,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 12,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 12,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 12,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 13,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 13,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 13,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 13,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 13,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 14,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 14,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 14,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 14,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 14,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 15,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 15,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 15,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 15,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 15,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 16,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 16,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 16,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 16,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 16,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 17,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 17,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 17,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 17,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 17,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 18,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 18,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 18,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 18,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 18,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 19,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 19,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 19,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 19,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 19,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 20,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 20,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 20,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 20,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 20,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 21,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 21,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 21,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 21,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 21,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 22,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 22,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 22,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 22,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 22,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 23,
+   "what": "layer output",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 23,
+   "what": "new K row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 23,
+   "what": "new K row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 23,
+   "what": "new V row, packed integers",
+   "ok": true,
+   "detail": "0 of 128 values differ"
+  },
+  {
+   "step": 3,
+   "layer": 23,
+   "what": "new V row, packed scales",
+   "ok": true,
+   "detail": "0 of 2 values differ"
+  },
+  {
+   "step": 3,
+   "what": "final norm",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "step": 3,
+   "what": "logits",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "step": 3,
+   "what": "token",
+   "ok": true,
+   "detail": "real 279 model 279"
+  },
+  {
+   "what": "stress layers.0.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3465068 (0.21 x 2^24)"
+  },
+  {
+   "what": "stress layers.0.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4485386 (0.27 x 2^24)"
+  },
+  {
+   "what": "stress layers.0.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4325112 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.0.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4453890 (0.27 x 2^24)"
+  },
+  {
+   "what": "stress layers.0.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18993866 (1.13 x 2^24)"
+  },
+  {
+   "what": "stress layers.1.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 4293489 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.1.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4225163 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.1.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4294505 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.1.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4281932 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.1.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 19465163 (1.16 x 2^24)"
+  },
+  {
+   "what": "stress layers.2.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3882390 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.2.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3982720 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.2.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4540885 (0.27 x 2^24)"
+  },
+  {
+   "what": "stress layers.2.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4345940 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.2.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 19619214 (1.17 x 2^24)"
+  },
+  {
+   "what": "stress layers.3.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3772916 (0.22 x 2^24)"
+  },
+  {
+   "what": "stress layers.3.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4221099 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.3.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4323588 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.3.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4342384 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.3.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 19620357 (1.17 x 2^24)"
+  },
+  {
+   "what": "stress layers.4.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3995039 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.4.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4070223 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.4.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4286250 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.4.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4326890 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.4.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18425287 (1.10 x 2^24)"
+  },
+  {
+   "what": "stress layers.5.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 4183126 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.5.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4220210 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.5.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4444111 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.5.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4237863 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.5.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 19099911 (1.14 x 2^24)"
+  },
+  {
+   "what": "stress layers.6.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3776472 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.6.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4287901 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.6.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4389882 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.6.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4329176 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.6.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 19008217 (1.13 x 2^24)"
+  },
+  {
+   "what": "stress layers.7.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3870198 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.7.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4117213 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.7.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4377182 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.7.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4317365 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.7.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18233390 (1.09 x 2^24)"
+  },
+  {
+   "what": "stress layers.8.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3895090 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.8.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4108196 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.8.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4538472 (0.27 x 2^24)"
+  },
+  {
+   "what": "stress layers.8.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4168394 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.8.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18396585 (1.10 x 2^24)"
+  },
+  {
+   "what": "stress layers.9.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3810381 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.9.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4183507 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.9.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4213987 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.9.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4221226 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.9.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18053050 (1.08 x 2^24)"
+  },
+  {
+   "what": "stress layers.10.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3718306 (0.22 x 2^24)"
+  },
+  {
+   "what": "stress layers.10.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4303014 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.10.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4408678 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.10.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4247769 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.10.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18484723 (1.10 x 2^24)"
+  },
+  {
+   "what": "stress layers.11.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3705606 (0.22 x 2^24)"
+  },
+  {
+   "what": "stress layers.11.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3835019 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.11.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4315968 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.11.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4247896 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.11.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18796889 (1.12 x 2^24)"
+  },
+  {
+   "what": "stress layers.12.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3854704 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.12.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4226687 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.12.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4339590 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.12.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4221607 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.12.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 17455007 (1.04 x 2^24)"
+  },
+  {
+   "what": "stress layers.13.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3985514 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.13.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3995420 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.13.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4250182 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.13.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4287012 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.13.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 17097883 (1.02 x 2^24)"
+  },
+  {
+   "what": "stress layers.14.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 4014978 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.14.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3864483 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.14.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4194937 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.14.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4177665 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.14.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 17845024 (1.06 x 2^24)"
+  },
+  {
+   "what": "stress layers.15.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 4057396 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.15.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4250309 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.15.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4322318 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.15.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4205605 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.15.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18502376 (1.10 x 2^24)"
+  },
+  {
+   "what": "stress layers.16.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3527806 (0.21 x 2^24)"
+  },
+  {
+   "what": "stress layers.16.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3924046 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.16.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4379595 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.16.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4316222 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.16.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18168112 (1.08 x 2^24)"
+  },
+  {
+   "what": "stress layers.17.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3842639 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.17.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4067810 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.17.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4195064 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.17.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4570730 (0.27 x 2^24)"
+  },
+  {
+   "what": "stress layers.17.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18994120 (1.13 x 2^24)"
+  },
+  {
+   "what": "stress layers.18.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3826129 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.18.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4102989 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.18.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4298696 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.18.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4353687 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.18.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18969609 (1.13 x 2^24)"
+  },
+  {
+   "what": "stress layers.19.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3995039 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.19.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 4111752 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.19.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4212336 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.19.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4198112 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.19.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18327751 (1.09 x 2^24)"
+  },
+  {
+   "what": "stress layers.20.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3953891 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.20.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3933571 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.20.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4169410 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.20.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4276725 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.20.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18454624 (1.10 x 2^24)"
+  },
+  {
+   "what": "stress layers.21.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3983863 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.21.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3952748 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.21.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4201287 (0.25 x 2^24)"
+  },
+  {
+   "what": "stress layers.21.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4312793 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.21.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18998438 (1.13 x 2^24)"
+  },
+  {
+   "what": "stress layers.22.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 4013581 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.22.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3927602 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.22.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4379849 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.22.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4365752 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.22.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 19279362 (1.15 x 2^24)"
+  },
+  {
+   "what": "stress layers.23.self_attn.o_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 3781425 (0.23 x 2^24)"
+  },
+  {
+   "what": "stress layers.23.self_attn.qkv_proj",
+   "ok": true,
+   "detail": "0 of 1152 values differ; peak |sum| 3971798 (0.24 x 2^24)"
+  },
+  {
+   "what": "stress layers.23.mlp.gate_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4507357 (0.27 x 2^24)"
+  },
+  {
+   "what": "stress layers.23.mlp.up_proj",
+   "ok": true,
+   "detail": "0 of 4864 values differ; peak |sum| 4308729 (0.26 x 2^24)"
+  },
+  {
+   "what": "stress layers.23.mlp.down_proj",
+   "ok": true,
+   "detail": "0 of 896 values differ; peak |sum| 18888456 (1.13 x 2^24)"
+  },
+  {
+   "what": "stress lm_head",
+   "ok": true,
+   "detail": "0 of 151936 values differ; peak |sum| 4534154 (0.27 x 2^24)"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "12095 vs 12095"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "13 vs 13"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "1084 vs 1084"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "374 vs 374"
+  },
+  {
+   "ragged": true,
+   "step": 4,
+   "what": "logits, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 151936 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 4,
+   "what": "token, padded row vs alone",
+   "ok": true,
+   "detail": "279 vs 279"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 0,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 0,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 0,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 1,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 1,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 1,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 2,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 2,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 2,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 3,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 3,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 3,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 4,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 4,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 4,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 5,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 5,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 5,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 6,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 6,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 6,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 7,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 7,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 7,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 8,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 8,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 8,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 9,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 9,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 9,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 10,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 10,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 10,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 11,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 11,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 11,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 12,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 12,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 12,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 13,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 13,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 13,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 14,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 14,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 14,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 15,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 15,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 15,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 16,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 16,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 16,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 17,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 17,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 17,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 18,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 18,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 18,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 19,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 19,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 19,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 20,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 20,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 20,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 21,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 21,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 21,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 22,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 22,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 22,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 0,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 1,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 2,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "step": 3,
+   "layer": 23,
+   "what": "layer output, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 896 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 23,
+   "what": "K cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 2592 values differ"
+  },
+  {
+   "ragged": true,
+   "layer": 23,
+   "what": "V cache rows, padded row vs alone",
+   "ok": true,
+   "detail": "0 of 1440 values differ"
+  }
+ ],
+ "env": {
+  "Y_EXACT_V_INT8": "1",
+  "Y_EXACT_NORM": "triton",
+  "Y_EXACT_ATTN": "y",
+  "Y_EXACT_KV_PACK": "1"
+ },
+ "ragged": {
+  "padding_rows": 9,
+  "batch_len": 14
+ },
+ "tokens": [
+  12095,
+  13,
+  1084,
+  374,
+  279
+ ],
+ "text": " Paris. It is the",
+ "seconds": 24.6,
+ "summary": "1009 of 1009 compared tensors bit-identical"
+}
