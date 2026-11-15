@@ -68,8 +68,10 @@
 //! first and their shared stores after the FMAs (`prefetch`; not on the
 //! large tile, at the register cap without it, and on a T4 no faster with
 //! it). On Turing the mid tile runs two stages, so two CTAs share an SM
-//! (`f32_gemm_turing_stages`), and the large tile, which fits there at two
-//! stages, is taken where its waves are more than 80% full.
+//! (`f32_gemm_turing_stages`), the large tile, which fits there at two
+//! stages, is taken where its waves are more than 80% full, and the mid tile
+//! from 60% of a wave where the small one would double up on an SM (with
+//! `W`, up to 1.3 small tiles an SM, the small tile split in order instead).
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -160,8 +162,9 @@ impl PtxEmitter {
     ///
     /// The rule was read off measurements (the module doc): the large tile
     /// needs about two waves of its one-CTA-per-SM tiles, mostly full, the
-    /// mid tile about one wave, and the small tile takes the rest. The choice changes speed
-    /// only, never a bit of the answer.
+    /// mid tile about one wave (on Turing 60% of one, where the small tile
+    /// would not fit one wave), and the small tile takes the rest. The choice
+    /// changes speed only, never a bit of the answer.
     pub(crate) fn f32_gemm_tile(m: u32, n: u32, k: u32, sms: u32, block_smem: u32) -> Result<F32GemmTile, String> {
         if m == 0 || n == 0 || k == 0 {
             return Err(format!("an FP32 GEMM needs M, N and K above 0; got M={}, N={}, K={}", m, n, k));
@@ -213,7 +216,55 @@ impl PtxEmitter {
         if tiles(&F32_TILE_MID) * 10 >= sms * 9 {
             return Ok(F32_TILE_MID);
         }
+        if Self::f32_gemm_turing_mid(m, n, sms, block_smem) {
+            return Ok(F32_TILE_MID);
+        }
         Ok(F32_TILE_SMALL)
+    }
+
+    /// On Turing (64 KB a block), the mid tile (two stages,
+    /// `f32_gemm_turing_stages`) below 90% of a wave of it: where its tiles
+    /// fill 60% of the SMs and the small tile would put two CTAs on some SM.
+    /// On a Tesla T4 one wave of mid tiles beats the small ones doubled up
+    /// (90% was read off an RTX 4070 Ti SUPER, whose mid tile is slower
+    /// against its small one). Medians of 45 paired rounds against cuBLAS,
+    /// small / mid, all bit-exact: 512^3 (32 mid tiles on 40 SMs) 0.68x /
+    /// 0.92x, 1024 x 256 x 1024 (32) 0.68x / 0.94x, 2048 x 128 x 512 (32)
+    /// 0.74x / 0.97x, 448 x 512 x 512 (28) 0.86x / 1.00x, 384 x 640 x 512
+    /// (30) 0.78x / 0.92x, 384 x 512 x 1024 (24) 0.61x / 0.70x. Where one
+    /// small tile an SM covers C it is not: 512 x 256 x 512 (32 small tiles)
+    /// 0.83x / 0.61x, 2048 x 64 x 512 (the mid tile half empty) 1.11x /
+    /// 0.90x (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_mid/,
+    /// t4_rule/).
+    fn f32_gemm_turing_mid(m: u32, n: u32, sms: u64, block_smem: u32) -> bool {
+        let tiles = |t: &F32GemmTile| m.div_ceil(t.bm) as u64 * n.div_ceil(t.bn) as u64;
+        block_smem == 64 * 1024 && tiles(&F32_TILE_MID) * 10 >= sms * 6 && tiles(&F32_TILE_SMALL) > sms
+    }
+
+    /// With the workspace `W`, where `f32_gemm_turing_mid` took the mid
+    /// tile: whether the small tile split in order over the SMs is the
+    /// faster. It is up to 1.3 small tiles an SM, and where the mid tile's
+    /// launch, its remainder tiles counted, takes more than one CTA an SM.
+    /// On a Tesla T4, medians of 45 paired rounds against cuBLAS, the small
+    /// tile split / the mid tile, all bit-exact: 384 x 512 x 1024 (48 small
+    /// tiles on 40 SMs) 0.74x / 0.67x, 448 x 448 x 768 (49) 0.94x / 0.86x,
+    /// 320 x 640 x 1024 (50) 0.80x / 0.73x, 832 x 256 x 1024 (52) 0.77x /
+    /// 0.77x, 576 x 384 x 1024 (54) 0.79x / 0.78x, 448 x 512 x 512 (56)
+    /// 0.94x / 1.00x, 384 x 640 x 512 (60) 0.84x / 0.92x, 512^3 (64) 0.79x /
+    /// 0.92x; and 448 x 576 x 512 (63, but 28 mid tiles and 14 of the
+    /// remainder's) 0.88x / 0.80x (docs/benchmarks/
+    /// f32_gemm_sm75_guards_2026-11-15/t4_wband/).
+    fn f32_gemm_turing_split_small(m: u32, n: u32, sms: u64) -> bool {
+        let small = m.div_ceil(F32_TILE_SMALL.bm) as u64 * n.div_ceil(F32_TILE_SMALL.bn) as u64;
+        let t = F32_TILE_MID;
+        let rem = Self::f32_gemm_remainder(t, n);
+        let rows = Self::f32_gemm_row_remainder(t, m);
+        let n_main = if rem.is_some() { n / t.bn * t.bn } else { n };
+        let m_main = if rows.is_some() { m / t.bm * t.bm } else { m };
+        let mid_ctas = m_main.div_ceil(t.bm) as u64 * n_main.div_ceil(t.bn) as u64
+            + rows.map_or(0, |r| ((m - m_main).div_ceil(r.bm) * n_main.div_ceil(r.bn)) as u64)
+            + rem.map_or(0, |r| (m.div_ceil(r.bm) * (n - n_main).div_ceil(r.bn)) as u64);
+        small * 10 <= sms * 13 || mid_ctas > sms
     }
 
     /// The most dynamic shared memory one block can take on SM level `sm`
@@ -550,8 +601,19 @@ impl PtxEmitter {
             }
         };
         if let Some(wp) = w_ptr {
+            let sms = if hw_profile.sm_count == 0 { 66 } else { hw_profile.sm_count };
+            // On Turing below 90% of a wave of mid tiles, `W` can do better
+            // than the mid tile: the small tile split in order over the SMs
+            // (`f32_gemm_turing_split_small`), where its plan takes the split.
+            let mid_by_turing_rule = t == F32_TILE_MID
+                && Self::f32_gemm_turing_mid(m, n, sms as u64, Self::f32_gemm_block_smem(self.sm_level()))
+                && (m.div_ceil(t.bm) as u64 * n.div_ceil(t.bn) as u64) * 10 < sms as u64 * 9;
+            if mid_by_turing_rule && Self::f32_gemm_turing_split_small(m, n, sms as u64) {
+                if let Some(p) = Self::f32_gemm_streamk_plan(F32_TILE_SMALL, m, n, k, hw_profile.sm_count, hw_profile.max_smem_per_sm_bytes) {
+                    return self.emit_f32_gemm_streamk_kernel(F32_TILE_SMALL, m, n, k, p, p / sms, a_ptr, b_ptr, c_ptr, wp, kernel_name);
+                }
+            }
             if let Some(p) = Self::f32_gemm_streamk_plan(t, m, n, k, hw_profile.sm_count, hw_profile.max_smem_per_sm_bytes) {
-                let sms = if hw_profile.sm_count == 0 { 66 } else { hw_profile.sm_count };
                 return self.emit_f32_gemm_streamk_kernel(t, m, n, k, p, p / sms, a_ptr, b_ptr, c_ptr, wp, kernel_name);
             }
         }

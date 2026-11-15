@@ -235,3 +235,124 @@ cuBLAS, all bit-exact:
 
 The three-parameter form cannot do this (it has nowhere to say how far a
 tile got), so at 512^3 it stays at 0.69x on a T4.
+
+## The mid tile where the small one doubles up on an SM
+
+That was the wrong comparison. Version 7 (`t4_mid/`) set the mid tile (64 x
+128, two stages on Turing) against the small one at the same shapes, and
+two 2-warp 8 x 8 small tiles (64 x 64, 2 and 3 stages). All 24 bit-exact.
+
+| shape | mid tiles / 40 SMs | small | mid | small, 2 warps (2 / 3 stages) |
+|---|---|---|---|---|
+| 512^3 | 32 | 0.678x [0.61-0.75] | 0.930x [0.85-1.01] | 0.484x / 0.479x |
+| 512 x 512 x 2048 | 32 | 0.728x [0.70-0.75] | 0.955x [0.92-0.98] | 0.572x / 0.575x |
+| 256 x 1024 x 1024 | 32 | 0.645x [0.60-0.69] | 0.871x [0.82-0.96] | 0.489x / 0.505x |
+| 384 x 512 x 1024 | 24 | 0.609x [0.53-0.68] | 0.706x [0.62-0.74] | 0.391x / 0.392x |
+| 512 x 256 x 512 | 16 | 0.827x [0.80-0.87] | 0.609x [0.60-0.63] | 0.518x / 0.520x |
+| 256 x 512 x 4096 | 16 | 0.706x [0.69-0.72] | 0.600x [0.57-0.62] | 0.487x / 0.488x |
+
+So 32 mid tiles on 40 SMs beat 64 small ones, which put two CTAs on 24
+SMs. If a second small CTA adds on a T4 what it adds on the RTX 4070 Ti
+SUPER (8%; not measured here), 512^3 says a mid tile takes about 1.35
+times a small tile's time there, for twice the outputs; on the 4070 Ti it
+takes 1.65 times, and the tile rule, read off that card, took the mid tile
+from 90% of a wave of it (36 tiles on 40 SMs). The 2-warp tiles leave
+half of an SM's schedulers idle.
+
+Version 8 (`t4_rule/`) placed the bound: the small tile against the mid,
+built with a scratch switch that forced the mid tile (the committed build
+of each shape is byte for byte one of the two). All 26 bit-exact.
+
+| shape | mid tiles | small tiles | small | mid |
+|---|---|---|---|---|
+| 512^3 | 32 | 64 | 0.683x [0.68-0.70] | 0.924x [0.89-0.94] |
+| 500^3 | 32 | 64 | 0.666x [0.66-0.68] | 0.911x [0.88-0.92] |
+| 1024 x 256 x 1024 | 32 | 64 | 0.681x [0.65-0.73] | 0.943x [0.82-0.97] |
+| 1024 x 256 x 256 | 32 | 64 | 0.721x [0.72-0.73] | 0.952x [0.94-0.96] |
+| 2048 x 128 x 512 | 32 | 64 | 0.735x [0.70-0.75] | 0.968x [0.91-1.04] |
+| 512 x 480 x 1000 | 32 | 64 | 0.659x [0.63-0.71] | 0.842x [0.75-0.89] |
+| 256 x 1024 x 1024 | 32 | 64 | 0.659x [0.63-0.68] | 0.790x [0.76-0.91] |
+| 448 x 576 x 512 | 35 | 63 | 0.756x [0.74-0.79] | 0.794x [0.77-0.82] |
+| 384 x 640 x 512 | 30 | 60 | 0.781x [0.77-0.78] | 0.918x [0.91-0.92] |
+| 448 x 512 x 512 | 28 | 56 | 0.858x [0.85-0.86] | 0.999x [0.99-1.01] |
+| 384 x 512 x 1024 | 24 | 48 | 0.609x [0.55-0.63] | 0.697x [0.62-0.74] |
+| 512 x 256 x 512 | 16 | 32 | 0.834x [0.82-0.85] | 0.605x [0.60-0.61] |
+| 2048 x 64 x 512 | 32 | 32 | 1.108x [1.08-1.14] | 0.897x [0.89-0.91] |
+
+The mid tile wins wherever the small tile would put two CTAs on some SM,
+down to 24 mid tiles (60% of a wave; at 384 x 512 x 1024 the quartiles
+overlap, in both versions, with the medians 14-16% apart). Where 40 SMs
+take every small tile at once it loses (512 x 256 x 512, and 2048 x 64 x
+512, where its 128 columns are half empty). So on Turing the mid tile is
+now taken from 60% of a wave where the small tile would exceed one; 24 to
+35 mid tiles was the small tile before. Between 50% and 60% (21-23 mid
+tiles, 41-47 small) it was not measured and stays the small tile. The
+rule is in `f32_gemm_tile`; the tile choice changes no bit of C.
+
+With `W` the comparison is a third way: the small tile split in order over
+the 40 SMs, which the workspace form did before (`t4_w/`: 384 x 512 x 1024
+at 0.82x), against the mid tile in one wave, `W` unused. Version 3 of
+`y-f32-t4-w` (`t4_wband/`) timed the two at the shapes the rule above gives
+the mid tile, from 48 small tiles to 64. All 18 bit-exact.
+
+| shape | small tiles | mid tiles (CTAs) | small, split | mid |
+|---|---|---|---|---|
+| 384 x 512 x 1024 | 48 | 24 | 0.738x [0.68-0.79] | 0.673x [0.66-0.69] |
+| 448 x 448 x 768 | 49 | 28 (35) | 0.938x [0.81-1.01] | 0.856x [0.77-0.90] |
+| 320 x 640 x 1024 | 50 | 25 | 0.796x [0.74-0.86] | 0.727x [0.71-0.75] |
+| 832 x 256 x 1024 | 52 | 26 | 0.769x [0.71-0.85] | 0.769x [0.76-0.80] |
+| 576 x 384 x 1024 | 54 | 27 | 0.789x [0.74-0.82] | 0.780x [0.76-0.81] |
+| 448 x 512 x 512 | 56 | 28 | 0.943x [0.93-0.95] | 1.000x [0.99-1.01] |
+| 384 x 640 x 512 | 60 | 30 | 0.841x [0.84-0.85] | 0.917x [0.91-0.92] |
+| 448 x 576 x 512 | 63 | 35 (42) | 0.879x [0.84-0.91] | 0.800x [0.79-0.83] |
+| 512^3 | 64 | 32 | 0.790x [0.79-0.79] | 0.918x [0.90-0.93] |
+
+The split wins to about 1.3 small tiles an SM (52 on 40), the two tie at
+52-54, and the mid tile wins above. 448 x 576 x 512 is the exception: its
+last 64 columns go to 14 remainder tiles beside 28 mid ones, 42 CTAs, so
+the mid launch is no longer one wave. (Its whole-tile count, 35, is what
+the rule above reads; at 448 x 448 x 768 the remainder makes 35 CTAs, still
+one wave.) So with `W`, where the rule above takes the mid tile below 90%
+of a wave, the small tile is split instead up to 1.3 small tiles an SM, or
+where the mid launch with its remainder tiles exceeds one CTA an SM
+(`f32_gemm_turing_split_small`). That picks the faster of the two at all
+nine shapes but the ties.
+
+Where that leaves the two forms on a T4 (the medians above):
+
+| shape | before (`600c1a5`), three parameters / `W` | now, three parameters / `W` |
+|---|---|---|
+| 512^3 | 0.68x / 0.78x | 0.92x / 0.92x |
+| 448 x 512 x 512 | 0.86x / 0.94x | 1.00x / 1.00x |
+| 384 x 640 x 512 | 0.78x / 0.84x | 0.92x / 0.92x |
+| 384 x 512 x 1024 | 0.61x / 0.74-0.82x | 0.70x / 0.74-0.82x |
+| 448 x 576 x 512 | 0.76x / 0.88x | 0.79x / 0.88x |
+
+## Not taken: K tiles of 32 on the small tile
+
+Profiled on the RTX 4070 Ti SUPER (`ncu`; the T4 on Kaggle refuses access
+to its performance counters), the sm_75 small tile at 512 x 256 x 512 spent
+a third of its warp samples with its shared stores waiting on the global
+loads issued at the top of the same K tile (long scoreboard, 34%). A K tile
+of 32 instead of 16 doubles the FMAs between the two; there it ran 6-9%
+faster (one `ncu` duration each, 4 shapes), bit-exact in the CPU
+interpreter. On the T4 (job `y-f32-t4-b`, `t4_bk32/`, all 30 bit-exact) it
+was slower at every shape, at two stages and at three:
+
+| shape | small tiles | BK 16 | BK 32, 2 stages | BK 32, 3 stages |
+|---|---|---|---|---|
+| 512 x 256 x 512 | 32 | 0.835x [0.83-0.84] | 0.750x [0.74-0.76] | 0.753x |
+| 448 x 512 x 512 | 56 | 0.866x [0.83-0.90] | 0.679x [0.66-0.71] | 0.694x |
+| 384 x 640 x 512 | 60 | 0.778x [0.75-0.80] | 0.613x [0.60-0.63] | 0.612x |
+| 256 x 512 x 4096 | 32 | 0.678x [0.63-0.68] | 0.643x [0.61-0.66] | 0.649x |
+| 2048 x 64 x 512 | 32 | 1.116x [1.07-1.19] | 0.974x [0.96-1.02] | 0.962x |
+| 1024 x 128 x 2048 | 32 | 0.967x [0.95-0.99] | 0.875x [0.84-0.95] | 0.903x |
+| 128 x 512 x 2048 | 16 | 0.450x [0.37-0.46] | 0.361x [0.33-0.38] | 0.362x |
+
+The 4070 Ti issues an FMA a clock per scheduler, the T4 one every two, so
+the same wait is twice as large a share of the time there; and BK 32 puts
+each warp's transposed stores of A four to a bank instead of two. Which of
+these decides it on the T4 is not measured. The 16-tile shapes (128 x 512 x
+2048 at 0.45x, 256 x 256 x 8192 at 0.54x) leave 24 SMs idle, and an
+in-order chain cannot split K to fill them without `W`, whose plan needs a
+tile an SM.

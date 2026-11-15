@@ -513,6 +513,70 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// On Turing the mid tile (two stages) is taken from 60% of a wave of it
+/// where the small tile would put two CTAs on some SM: on a Tesla T4 one
+/// wave of mid tiles beats the small ones doubled up (512^3, 32 mid tiles on
+/// 40 SMs: 0.68x cuBLAS on the small tile, 0.92x on the mid;
+/// `f32_gemm_tile`). Where one small tile an SM covers C, or the mid tile
+/// would be half empty, the small tile stays. Sm_70 (Volta) on the same
+/// SM count, and this machine's sm_89, keep the old rule.
+#[test]
+fn on_turing_the_mid_tile_runs_where_the_small_tile_would_double_up() {
+    let dir = profile_for("f32_gemm_turing_rule", "7.5", 40);
+    // A T4's shared memory an SM, which the stream-K plan reads.
+    let profile = dir.join(".ysu_hw_profile");
+    std::fs::write(&profile, std::fs::read_to_string(&profile).unwrap() + "MAX_SMEM_PER_SM_BYTES=65536\n").unwrap();
+    let cases = [
+        // (shape, mid tiles, small tiles) -> tile
+        ((512, 512, 512), "mid"),     // 32, 64
+        ((500, 500, 500), "mid"),     // 32, 64, ragged
+        ((2048, 128, 512), "mid"),    // 32, 64
+        ((448, 512, 512), "mid"),     // 28, 56
+        ((384, 512, 1024), "mid"),    // 24, 48: 60%
+        ((448, 384, 512), "small"),   // 21, 42: under 60%
+        ((512, 256, 512), "small"),   // 16, 32: one small tile an SM
+        ((2048, 64, 512), "small"),   // 32, 32: the mid tile half empty
+        ((256, 512, 4096), "small"),  // 16, 32
+        ((768, 768, 768), "mid"),     // 72: the rule before
+    ];
+    for (i, ((m, n, k), want)) in cases.iter().enumerate() {
+        let ptx = compile(&dir, &format!("t{i}"), *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{m}x{n}x{k}: {log}"));
+        let h = header(&ptx);
+        assert_eq!(h.tile, *want, "{m}x{n}x{k} at sm_75 on 40 SMs");
+        let stages = if h.tile == "mid" { 2 } else { 3 };
+        assert!(ptx.contains(&format!("{stages} stages of plain loads")), "{m}x{n}x{k}: tile {} not at {stages} stages", h.tile);
+    }
+    // With `W`, below 90% of a wave of mid tiles: the small tile split in
+    // order where it has up to 1.3 tiles an SM, or where the mid tile's
+    // launch, remainder tiles counted, exceeds one CTA an SM
+    // (`f32_gemm_turing_split_small`); else the mid tile, `W` unused.
+    let w_cases = [
+        ((384, 512, 1024), Some("small")), // 48 small tiles
+        ((832, 256, 1024), Some("small")), // 52
+        ((576, 384, 1024), None),          // 54
+        ((448, 512, 512), None),           // 56
+        ((512, 512, 512), None),           // 64
+        ((448, 576, 512), Some("small")),  // 63, but 28 + 14 mid CTAs
+        ((768, 768, 768), Some("mid")),    // 72 mid tiles: the rule before
+    ];
+    for (i, ((m, n, k), want)) in w_cases.iter().enumerate() {
+        let name = format!("w{i}");
+        let ptx = compile_text(&dir, &name, &source_w(&name, *m, *n, *k), "--emit-ptx").unwrap_or_else(|log| panic!("{m}x{n}x{k}: {log}"));
+        let got = sk_header(&ptx).map(|h| h.tile);
+        assert_eq!(got.as_deref(), *want, "{m}x{n}x{k} with W at sm_75 on 40 SMs: the tile split, if any");
+        if want.is_none() {
+            assert_eq!(header(&ptx).tile, "mid", "{m}x{n}x{k} with W: the one-wave tile");
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    for (sm, sms) in [("7.0", 40u32), ("8.9", 66)] {
+        let dir = profile_for(&format!("f32_gemm_turing_rule_ctl{}", sm.replace('.', "")), sm, sms);
+        let ptx = compile(&dir, "c512", 512, 512, 512, "--emit-ptx").unwrap_or_else(|log| panic!("sm {sm}: {log}"));
+        assert_eq!(header(&ptx).tile, "small", "512^3 at sm {sm} on {sms} SMs");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
 /// Child: launch the 4096^3 kernel (block 256) with the block in
 /// `Y_F32_GEMM_CHILD_BLOCK` and print what the device said.
 #[test]
@@ -916,16 +980,19 @@ fn the_workspace_form_is_the_in_order_fma_chain_on_every_grid() {
 /// the next tile first and stores it after the FMAs (`prefetch`): stream-K at
 /// every one of these shapes on 40 SMs, two with a K tail, run here (the
 /// driver compiles sm_75 PTX for this card) on the grids the sm_80 test
-/// uses. On a T4 this form took 512^3 from 0.69x cuBLAS to 0.78x and
-/// 384 x 512 x 1024 from 0.59x to 0.82x
-/// (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_w/).
+/// uses: the small tile split over 40 CTAs (448 x 384 x 512, 42 tiles, 704
+/// x 256 x 1024, 44, and 448 x 576 x 512, taken over the mid tile with `W`)
+/// and the mid tile (768^3 and the K tails). On a T4
+/// this form took 384 x 512 x 1024 from 0.59x cuBLAS to 0.82x on the small
+/// tile (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_w/); 512^3 is
+/// now the mid tile, one wave (0.92x), where `W` is not used.
 #[test]
 fn built_for_sm_75_the_workspace_form_is_the_in_order_fma_chain() {
     let Some(ctx) = CudaContext::new() else {
         eprintln!("SKIP: no CUDA driver - no sm_75 stream-K GEMM was executed.");
         return;
     };
-    let cases: [(u32, u32, u32); 5] = [(512, 512, 512), (384, 512, 1024), (768, 768, 768), (768, 768, 770), (700, 768, 1027)];
+    let cases: [(u32, u32, u32); 6] = [(448, 384, 512), (704, 256, 1024), (448, 576, 512), (768, 768, 768), (768, 768, 770), (700, 768, 1027)];
     for (si, &(m, n, k)) in cases.iter().enumerate() {
         let dir = pinned::pinned_scratch(&format!("f32_gemm_sk75_run{si}"), "7.5");
         let text = pinned::profile_text("7.5").replace("SM_COUNT=66", "SM_COUNT=40") + "MAX_SMEM_PER_SM_BYTES=65536\n";
@@ -934,6 +1001,7 @@ fn built_for_sm_75_the_workspace_form_is_the_in_order_fma_chain() {
         let ptx = compile_text(&dir, &name, &source_w(&name, m, n, k), "--emit-ptx").unwrap_or_else(|log| panic!("{log}"));
         assert!(ptx.contains(".target sm_75") && !instructions(&ptx).contains("cp.async"), "{m}x{n}x{k}: not the sm_75 plain-load build");
         let h = sk_header(&ptx).unwrap_or_else(|| panic!("{m}x{n}x{k} on 40 SMs at sm_75: no stream-K"));
+        assert_eq!(h.tile, if si < 3 { "small" } else { "mid" }, "{m}x{n}x{k} at sm_75 on 40 SMs");
         let (m, n, k) = (m as usize, n as usize, k as usize);
         let module = ctx.load_ptx(&ptx, &name).unwrap_or_else(|e| panic!("{m}x{n}x{k} did not load: {e}"));
         module.set_max_dynamic_smem(h.smem).unwrap();

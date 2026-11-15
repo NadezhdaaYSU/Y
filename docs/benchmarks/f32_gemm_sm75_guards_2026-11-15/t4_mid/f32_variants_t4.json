@@ -1,0 +1,296 @@
+[
+ {
+  "shape": "256x512x4096",
+  "reps": 372,
+  "gpu": [
+   "585 MHz, 29.69 W, 65\n300 MHz, 10.15 W, 48",
+   "1515 MHz, 67.69 W, 71\n300 MHz, 10.06 W, 48",
+   "1545 MHz, 43.30 W, 78\n300 MHz, 11.25 W, 47",
+   "1230 MHz, 63.81 W, 80\n300 MHz, 10.06 W, 47",
+   "1485 MHz, 66.06 W, 75\n300 MHz, 10.55 W, 43",
+   "1470 MHz, 67.49 W, 75\n300 MHz, 10.25 W, 41"
+  ],
+  "cublas_tflops_median": 3.821070345735613,
+  "default": {
+   "tile": "small",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.690736056857653,
+   "ratio_median": 0.7061187988899886,
+   "ratio_q25": 0.691234416680944,
+   "ratio_q75": 0.7235930578736494
+  },
+  "mid2": {
+   "tile": "mid",
+   "smem": 25088,
+   "exact": true,
+   "tflops_median": 2.297766004934938,
+   "ratio_median": 0.5996705493996766,
+   "ratio_q25": 0.565464112057825,
+   "ratio_q75": 0.6163290843280894
+  },
+  "s2w2": {
+   "tile": "small2w",
+   "smem": 16896,
+   "exact": true,
+   "tflops_median": 1.8886302664757684,
+   "ratio_median": 0.4870092711439277,
+   "ratio_q25": 0.47691036530768566,
+   "ratio_q75": 0.5008861158999927
+  },
+  "s2w3": {
+   "tile": "small2w",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 1.8864316708355213,
+   "ratio_median": 0.4883318541511726,
+   "ratio_q25": 0.46803858146413396,
+   "ratio_q75": 0.5010782210021806
+  }
+ },
+ {
+  "shape": "256x1024x1024",
+  "reps": 400,
+  "gpu": [
+   "1560 MHz, 41.35 W, 71\n300 MHz, 10.85 W, 48",
+   "1365 MHz, 41.35 W, 72\n300 MHz, 10.15 W, 48",
+   "1545 MHz, 40.29 W, 80\n300 MHz, 10.06 W, 47",
+   "1440 MHz, 67.06 W, 80\n300 MHz, 9.86 W, 46",
+   "1575 MHz, 42.73 W, 75\n300 MHz, 10.25 W, 41",
+   "1245 MHz, 69.65 W, 75\n300 MHz, 9.86 W, 41"
+  ],
+  "cublas_tflops_median": 4.116893557807436,
+  "default": {
+   "tile": "small",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.6427803498493714,
+   "ratio_median": 0.6449622498995059,
+   "ratio_q25": 0.5953752937907822,
+   "ratio_q75": 0.6870199551876639
+  },
+  "mid2": {
+   "tile": "mid",
+   "smem": 25088,
+   "exact": true,
+   "tflops_median": 3.607225687404582,
+   "ratio_median": 0.8713743591012775,
+   "ratio_q25": 0.820763280479574,
+   "ratio_q75": 0.9593255917846814
+  },
+  "s2w2": {
+   "tile": "small2w",
+   "smem": 16896,
+   "exact": true,
+   "tflops_median": 2.0598121394873354,
+   "ratio_median": 0.48859956612584543,
+   "ratio_q25": 0.4672593054392374,
+   "ratio_q75": 0.5418584105167044
+  },
+  "s2w3": {
+   "tile": "small2w",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.0210664590801843,
+   "ratio_median": 0.5048039137857359,
+   "ratio_q25": 0.45782857792582177,
+   "ratio_q75": 0.5360873599739153
+  }
+ },
+ {
+  "shape": "384x512x1024",
+  "reps": 400,
+  "gpu": [
+   "1530 MHz, 41.35 W, 72\n300 MHz, 11.25 W, 48",
+   "1425 MHz, 39.51 W, 74\n300 MHz, 10.15 W, 48",
+   "1560 MHz, 43.30 W, 79\n300 MHz, 11.74 W, 46",
+   "1290 MHz, 67.75 W, 78\n300 MHz, 11.64 W, 45",
+   "1545 MHz, 40.49 W, 75\n300 MHz, 9.86 W, 41",
+   "1380 MHz, 40.00 W, 75\n300 MHz, 9.76 W, 41"
+  ],
+  "cublas_tflops_median": 4.125571830328741,
+  "default": {
+   "tile": "small",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.671136977870353,
+   "ratio_median": 0.609048412611912,
+   "ratio_q25": 0.5307258646494171,
+   "ratio_q75": 0.6810866546381303
+  },
+  "mid2": {
+   "tile": "mid",
+   "smem": 25088,
+   "exact": true,
+   "tflops_median": 2.987805662113669,
+   "ratio_median": 0.7059376036619687,
+   "ratio_q25": 0.6244444086214437,
+   "ratio_q75": 0.7359725404827504
+  },
+  "s2w2": {
+   "tile": "small2w",
+   "smem": 16896,
+   "exact": true,
+   "tflops_median": 1.6996165914474373,
+   "ratio_median": 0.3905368320420547,
+   "ratio_q25": 0.36465834482074405,
+   "ratio_q75": 0.4380559812945739
+  },
+  "s2w3": {
+   "tile": "small2w",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 1.6855243880672548,
+   "ratio_median": 0.3921876224262396,
+   "ratio_q25": 0.3619284073915613,
+   "ratio_q75": 0.4329621223551619
+  }
+ },
+ {
+  "shape": "512x256x512",
+  "reps": 400,
+  "gpu": [
+   "1545 MHz, 39.51 W, 74\n300 MHz, 11.44 W, 48",
+   "1515 MHz, 65.44 W, 75\n300 MHz, 9.86 W, 48",
+   "1515 MHz, 67.75 W, 78\n300 MHz, 11.64 W, 45",
+   "1485 MHz, 64.20 W, 78\n300 MHz, 9.76 W, 44",
+   "1530 MHz, 40.00 W, 75\n300 MHz, 10.15 W, 41",
+   "1485 MHz, 69.90 W, 75\n300 MHz, 9.56 W, 41"
+  ],
+  "cublas_tflops_median": 3.650013819553935,
+  "default": {
+   "tile": "small",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 3.02468206003841,
+   "ratio_median": 0.8268042615178206,
+   "ratio_q25": 0.7999498462679081,
+   "ratio_q75": 0.8665494904853888
+  },
+  "mid2": {
+   "tile": "mid",
+   "smem": 25088,
+   "exact": true,
+   "tflops_median": 2.2136830255004036,
+   "ratio_median": 0.6087613723424445,
+   "ratio_q25": 0.6000680170076842,
+   "ratio_q75": 0.6278798022784319
+  },
+  "s2w2": {
+   "tile": "small2w",
+   "smem": 16896,
+   "exact": true,
+   "tflops_median": 1.885069875075098,
+   "ratio_median": 0.5181498609627213,
+   "ratio_q25": 0.4998020073055182,
+   "ratio_q75": 0.5393814016106376
+  },
+  "s2w3": {
+   "tile": "small2w",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 1.8972462322877737,
+   "ratio_median": 0.5202854439383308,
+   "ratio_q25": 0.5129952237571681,
+   "ratio_q75": 0.5287652556177578
+  }
+ },
+ {
+  "shape": "512x512x512",
+  "reps": 400,
+  "gpu": [
+   "1575 MHz, 41.26 W, 74\n300 MHz, 10.95 W, 48",
+   "1335 MHz, 65.14 W, 75\n300 MHz, 10.06 W, 48",
+   "1560 MHz, 43.89 W, 78\n300 MHz, 9.76 W, 45",
+   "1455 MHz, 70.78 W, 77\n300 MHz, 10.95 W, 44",
+   "1575 MHz, 43.33 W, 75\n300 MHz, 10.06 W, 41",
+   "1350 MHz, 64.46 W, 76\n300 MHz, 9.76 W, 40"
+  ],
+  "cublas_tflops_median": 4.121092664098029,
+  "default": {
+   "tile": "small",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.7870633584104465,
+   "ratio_median": 0.6782660751250648,
+   "ratio_q25": 0.609880745688741,
+   "ratio_q75": 0.7450572812570698
+  },
+  "mid2": {
+   "tile": "mid",
+   "smem": 25088,
+   "exact": true,
+   "tflops_median": 4.067420808631155,
+   "ratio_median": 0.9297661275399957,
+   "ratio_q25": 0.8520740214021855,
+   "ratio_q75": 1.013661551428499
+  },
+  "s2w2": {
+   "tile": "small2w",
+   "smem": 16896,
+   "exact": true,
+   "tflops_median": 2.0309431904477293,
+   "ratio_median": 0.48410713828875496,
+   "ratio_q25": 0.44614505512585534,
+   "ratio_q75": 0.5370595652216463
+  },
+  "s2w3": {
+   "tile": "small2w",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.0084921940532645,
+   "ratio_median": 0.47928927031001906,
+   "ratio_q25": 0.441509079664868,
+   "ratio_q75": 0.5280663764401079
+  }
+ },
+ {
+  "shape": "512x512x2048",
+  "reps": 372,
+  "gpu": [
+   "1545 MHz, 65.14 W, 75\n300 MHz, 10.85 W, 48",
+   "1290 MHz, 65.83 W, 78\n300 MHz, 10.25 W, 47",
+   "1575 MHz, 41.95 W, 77\n300 MHz, 10.95 W, 44",
+   "1215 MHz, 66.06 W, 75\n300 MHz, 9.66 W, 43",
+   "1560 MHz, 40.10 W, 75\n300 MHz, 10.95 W, 40",
+   "1260 MHz, 67.00 W, 76\n300 MHz, 9.96 W, 40"
+  ],
+  "cublas_tflops_median": 3.6098461304580436,
+  "default": {
+   "tile": "small",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.650804626760323,
+   "ratio_median": 0.7284147916041384,
+   "ratio_q25": 0.7000067934226655,
+   "ratio_q75": 0.7512411002220606
+  },
+  "mid2": {
+   "tile": "mid",
+   "smem": 25088,
+   "exact": true,
+   "tflops_median": 3.492937124690174,
+   "ratio_median": 0.9550258247222618,
+   "ratio_q25": 0.915432839550845,
+   "ratio_q75": 0.9774664030759155
+  },
+  "s2w2": {
+   "tile": "small2w",
+   "smem": 16896,
+   "exact": true,
+   "tflops_median": 2.0698142654300056,
+   "ratio_median": 0.5724490060844067,
+   "ratio_q25": 0.5556908477944086,
+   "ratio_q75": 0.5865079309220703
+  },
+  "s2w3": {
+   "tile": "small2w",
+   "smem": 25344,
+   "exact": true,
+   "tflops_median": 2.077494372309978,
+   "ratio_median": 0.5749202125844362,
+   "ratio_q25": 0.5588933337720093,
+   "ratio_q75": 0.5979711081304828
+  }
+ }
+]
