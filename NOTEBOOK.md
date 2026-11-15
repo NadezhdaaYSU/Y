@@ -1,0 +1,4160 @@
+# Y research notebook
+
+*This file was the README until 2026-11-15. It is the dated record of
+results, failures and corrections, kept as written; [README.md](README.md)
+is the summary for new readers. Numbers here carry their date and conditions
+and are not updated in place.*
+
+Y
+-----  A Systems Language and Compiler for GPU/CPU Hardware-Aware Code Generation
+
+Y is a compiler and systems language for writing hardware-aware code across CPU
+(x86-64 / AVX-512) and GPU (NVIDIA PTX) targets, with a zero-knowledge circuit
+backend that emits R1CS and interoperates with the existing circom/snarkjs
+toolchain.
+
+The project is under active, single-developer development. It is a research
+compiler, not a production toolchain.
+
+## At a glance
+
+Measured on one RTX 4070 Ti SUPER (sm_89) and a Zen 5 CPU. Above 1 means Y is
+faster. Each linked section gives the conditions, how the outputs were checked
+and where the raw data is.
+
+| | result | section |
+|---|---|---|
+| Reproducible LLM decoding | The same tokens on a CPU and a GPU: exact changed 0 of 5 cases, stock bf16 5 of 5 (Qwen2.5 0.5B and 7B). The same tokens in 16 batch compositions, where stock changed 16 of 16. | [Deterministic inference](#deterministic-inference) |
+| FP32 GEMM vs cuBLAS (TF32 off) | 0.96–1.20x at 512³–8192³ (powers of two), every output bit-identical to an in-order `fmaf` reference | [FP32 GEMM](#fp32-gemm-vs-cublas) |
+| int8 GEMM vs cuBLASLt | 1.03x at 4096³; a Coq proof that the kernel stores every exact dot product | [int8 GEMM](#the-int8-gemm-matches-cublaslt) |
+| FP16 GEMM vs cuBLAS | 0.99–1.50x at 256³–16384³, and at least as accurate at every shape measured | [FP16 GEMM](#square-fp16-gemm-vs-cublas) |
+| BF16 GEMM vs cuBLAS | 0.93–1.51x over 30 shapes | [BF16](#bf16-matches-cublas-2026-11-07) |
+| BN254 NTT vs icicle | 0.56 against 0.608 ms at N = 2^20; 2.47 against 2.834 ms at 2^22 | [BN254 kernels](#bn254-field-kernels-ntt-and-msm) |
+| circom 2.x front end | compiles circomlib 31/31 and circom-ecdsa 17/17 | [circom front end](#circom-front-end) |
+
+Where Y loses is measured too, for example FP32 at 768³ without the
+workspace (0.81–0.87x) and MSM, still 2.8–4.8x behind icicle:
+[Where the GPU backend loses](#where-the-gpu-backend-loses).
+
+**Start here:** [Building](#building) ·
+[the Python package](python/README.md) ·
+[the language manual](docs/y_language_documentation.md) ·
+[bit-identical decode](docs/bit_identical_decode.md) ·
+[known issues](docs/known_issues.md)
+
+## Recent work
+
+An opt-in [adaptive GPU JIT runtime](docs/adaptive_jit.md) now caches compiled
+FP16 GEMMs and tunes repeatedly used shapes. Rust, C, and Python APIs provide
+warmup preparation and defers tuning to explicit maintenance calls by default. Optional
+disk persistence reuses successful decisions across runs; ordinary compiler
+behavior is unchanged.
+Try `cargo run --release --example adaptive_gemm` on an NVIDIA sm_80+ GPU.
+
+Y's FP16 tensor-core GEMM (f16 in, f32 out) is now at least as accurate as
+cuBLAS at every shape measured, in relative Frobenius and maximum normalized
+error: the same bits where both chain K in the tensor core, and lower error
+where cuBLAS used to win (8192³, 512 x 512 x K ≥ 4096, 64 x 4096 x 4096), at
+0.96–1.02x its previous speed; split-K kernels became 1.02–1.06x faster too.
+A kernel named `<name>_splitk` now chooses its own split (opt-in), by a rule
+or, under `--autotune`, by measurement: at 256 x 256 x 16384 it runs 1.8–2.2x
+an unsplit kernel tuned for the shape, level with cuBLAS (0.94–1.02x), and
+below cuBLAS's error in every case measured. At 512 x 512 the gap that
+prompted it was mostly the unsplit kernel's untuned tile: on a measured tile
+the unsplit kernel runs 1.02–1.06x cuBLAS at K = 16384, and a split adds
+0–5%.
+See [Accuracy against cuBLAS](#accuracy-against-cublas).
+
+An in-process [general-purpose CPU JIT](docs/cpu_jit.md) compiles ordinary Y
+host functions through LLVM ORC on Linux x86-64. Run
+`cargo run --release --bin Y -- examples/cpu_jit.ysu --jit` or embed it from
+Rust/C. A [reproducible C# comparison](benchmarks/cpu_jit/README.md) checks
+integer branching, recursion, floating-point arithmetic, and indexed memory.
+Checked dynamic calls, a Python `CPUJit` wrapper, and a bounded process-local
+compilation cache now make embedding easier. The expanded comparison also
+checks unsigned bit mixing, F64 dot reduction, short-circuit side effects, and
+binary search. Unsigned rotate recognition and explicit measured branch
+profiles now guide native optimization; Rust, C, and Python callers can train
+and recompile while retaining their original session.
+Proven local String/Vec queries, capacity-checked appends and bulk copies, and
+byte conversions now lower directly to native reads, writes, and integer
+operations. Profile use keeps measured work branches while conservatively
+omitting natural-loop control weights by default. Dynamic-size vector appends
+use an exact source-width guard; compact checked-call adapters share the native
+function body.
+
+Scalar helper analysis keeps local String/Vec paths enabled across proved
+arithmetic helpers. Rust, C and Python expose compilation phase timings and
+separate optimization/materialization breakdowns, with optional object-event
+children and object metadata. Rust can override machine-code optimization
+through `codegen_opt_level`; its default inherits the unchanged IR level.
+Per-pass LLVM verification defaults on;
+Rust callers can explicitly disable it while retaining mandatory module checks
+before and after optimization pipelines. Deterministic full-result differential
+tests cover sixteen IR O0/O3, custom-transform, verification and inherited/O2
+machine-code configurations against independent bounded oracles.
+
+## CPU JIT training-tier results (2026-10-08)
+
+The [training-tier comparison](docs/cpu_jit_benchmarks_training_tier.md) uses
+temporary training IR O1 while final profiled IR/native optimization stays O3.
+Median preparation falls 2.83% for full inputs (826.790→803.418 ms) and 6.60%
+for cold inputs (330.061→308.283 ms), improving all nine warm and five cold
+pairs. Instrumented compilation falls about 20%; full-size training execution
+stays near 499 ms. Rust callers select `training_opt_level: Some(1)` explicitly;
+default training still inherits the requested IR level. Verification and
+atomic instrumentation remain enabled.
+
+Final saved IR and exact profiles match; eight native medians regress
+0.001–0.184%, and cold final compilation's separate medians become slower.
+Those observations remain in the report. This improves measured preparation;
+it does not establish a native execution improvement. Measured training is
+about 62.15% of full preparation; final O3 optimization remains the largest
+compilation phase. The gate passed 325 Rust and 18 Python tests after rebuilding
+`liby`. Independent audits passed 139,423 accounting/provenance checks and
+19,493 scalar checks; all raw evidence, frozen sources/binaries and historical
+results are retained. PGO, representation, GC and compilation scopes still
+differ from the fixed .NET 8 baseline.
+
+## CPU JIT materialization results (2026-10-08)
+
+The [ORC codegen comparison](docs/cpu_jit_benchmarks_codegen.md) changes only
+machine-code optimization O3→O2, keeping IR O3 and per-pass verification fixed.
+Nine process triples and five cold triples show no dependable preparation win:
+cold medians rise 1.90% (425.218→433.309 ms), while warm preparation loses
+five of nine pairs despite a 0.41% decrease in separate medians. Seven native
+workload medians regress, including float recurrence (+7.03%) and helper Vec
+(+5.59%). **The inherited O3 default remains unchanged.**
+
+New Rust/C/Python materialization snapshots place 99.83% of cold profiled
+materialization before object handoff. The post-object interval takes about
+0.17 ms; these observations include ORC overhead and are not exclusive backend
+or linker timers. Default IR optimization remains the largest compilation
+phase (55.11%, versus 42.12% materialization). Investigate that pipeline and
+native emission before object handoff next. The gate passed 322 Rust and 18
+Python tests against rebuilt `liby`; independent audits passed 137,416
+accounting/provenance checks and 19,493 scalar output checks. The report retains
+all losses, raw pairs, frozen sources/binaries, and PGO, representation, GC and
+source-versus-IL compilation limits. Historical evidence remains unchanged.
+
+## CPU JIT compilation verification (2026-10-08)
+
+The [verification-policy comparison](docs/cpu_jit_benchmarks_verification.md)
+changes only per-pass LLVM diagnosis, retaining mandatory module checks before
+and after optimization pipelines. The explicit Rust option reduces median
+cold preparation from 419.106 to 329.331 ms (21.42%) and full-size preparation
+from 862.352 to 769.482 ms (10.77%), improving all five cold and nine warm
+pairs. **Per-pass verification remains enabled by default**, including C/Python
+compilation. These are measured policy costs, not exclusive verifier timings.
+
+The default O3 pipeline accounts for most of the saving. In the opt-in arm,
+eager ORC generation/linking/lookup becomes the largest compilation phase:
+51.76% of cold profiled total by median per-sample share. Cold materialization,
+explicit verification and eight native workload medians regress; every sample
+and loss is retained. Both arms have identical saved IR and profiles.
+The final gate passed 319 Rust and 17 Python tests against rebuilt `liby`;
+independent audits passed 129,945 accounting/provenance checks and 19,493 output
+checks. The report preserves sources, binaries, raw records and comparison
+limits. Historical results follow.
+
+## CPU JIT helper results (2026-10-07)
+
+The [fifteen-workload helper comparison](docs/cpu_jit_benchmarks_helper_effects.md)
+uses nine repeated process triples and five cold triples on the same LLVM
+23.1.1/.NET 8.0.31 baseline. Only scalar helper-effect analysis changes between
+the two Y settings; both collect measured profiles. Complete helper workloads
+now retain the local String/Vec paths already available to their direct forms:
+
+| Helper workload | Previous Y ms/call | Next Y ms/call | C# ms/call | Previous / next Y | C# / next Y |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| String allocation/append/scan/free | 4.691276 | 0.036576 | 0.264349 | 128.26x | 7.23x |
+| Vec allocation/append/scan/free | 4.751707 | 0.061095 | 0.092458 | 77.78x | 1.51x |
+
+Both helper workloads improve in all nine previous/next pairs. Ratios divide
+per-engine medians. Small-input cold preparation rises 12.03%, from 306.054 to
+342.875 ms; nine existing workload medians regress by 0.02–0.99%. The report
+retains every sample and loss, paired ratios, independent audits and frozen
+sources. These full-size results supersede the earlier smoke. Y's measured PGO,
+byte String/Vec representation and explicit frees differ from C#'s fixed
+non-PGO configuration, UTF-16 StringBuilder, managed lists and GC. They do not
+establish a general language ranking or an inherent benefit from adding helpers.
+
+Compilation phases identify the next bottleneck: next Y's cold profiled compile
+spends median per-sample shares of 55.51% in LLVM optimization (including
+VerifyEach) and 41.82% in eager ORC generation/linking/lookup. Frontend work is
+about 1.41 ms of the 221.637 ms compile. The final gate passed 318 Rust tests and
+all 16 Python CPU JIT tests against a rebuilt library. Historical results follow.
+
+## CPU JIT benchmark results (2026-10-06)
+
+The [thirteen-workload copy comparison](docs/cpu_jit_benchmarks_runtime_copies.md)
+uses LLVM 23.1.1 and .NET 8.0.31 on one Ryzen 9 9950X core. Nine repeats use
+separate processes with rotating execution orders, twelve warmups and
+thirty-two timed calls per workload. Both Y variants use the same compiler and
+training policy; only dynamic/bulk copy lowering changes. These three added
+workloads show:
+
+| Workload | Previous Y ms/call | Next Y ms/call | C# ms/call | Previous Y / next Y | C# / next Y | Y wins vs C# |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Dynamic byte Vec | 0.35829 | 0.06336 | 0.09230 | 5.65x | 1.46x | 6/9 |
+| Dynamic I64 Vec | 0.32825 | 0.04001 | 0.11243 | 8.20x | 2.81x | 9/9 |
+| Bulk String append | 0.04666 | 0.02910 | 0.26557 | 1.60x | 9.13x | 9/9 |
+
+Ratios divide median times. The byte-vector C# / Y ratio ranges from 0.60 to
+2.55 across paired samples, so its median advantage is inconsistent. All nine
+previous/next Y pairs improve for each of these three workloads. The full
+report includes the ten other workloads, their near-parity results and losses,
+raw samples, validated outputs and source/binary hashes.
+
+These measurements describe the tested implementations and settings. Y uses
+native byte storage and measured branch profiles; C# uses UTF-16 `StringBuilder`
+and managed lists with tiering and PGO disabled. C# I64-vector batches include
+GC; Y includes explicit frees. Deferred C# reclamation outside a batch is
+excluded. Container layouts, growth policies and allocators also differ. These
+results cannot establish a general language ranking or attribute the String
+advantage entirely to code generation. Profile training and recompilation are
+excluded from steady-state timers and reported separately.
+
+The [adapter comparison](docs/cpu_jit_benchmarks_adapters.md) changes only
+checked-call adapter inlining. Median total preparation with small cold inputs
+falls from 346.905 to 292.234 ms (15.8%); tiny checked calls stay near parity.
+Several native numeric timings are 11–22% slower in that run; the report retains
+those samples and explains why their cause remains uncertain. Copy lowering
+instead increases small-input cold preparation by 2.6%. Y preparation starts
+from source, while C# preparation starts from prebuilt IL. Follow the
+[benchmark guide](benchmarks/cpu_jit/README.md) to reproduce each comparison.
+
+---
+
+## How to read the numbers in this file
+
+Every benchmark here was run on one machine — AMD Ryzen 9 9950X, NVIDIA RTX 4070
+Ti SUPER (Ada Lovelace, sm_89), 48 GB DDR5-6000 — and **none of it has been
+independently reproduced on other hardware.** Where a result is a tie, it says
+tie. Where Y loses, the loss is in the table rather than in a footnote.
+
+Two conventions worth stating up front, because both were learned the hard way
+here:
+
+- **A ratio between 0.9 and 1.1 is a tie**, not a win. This box's run-to-run
+  spread is ±7–8% on 16-thread CPU GEMM and a few percent on GPU kernels, so
+  anything inside that band is reported as parity. The CPU figure is *measured*,
+  not assumed: running two behaviourally identical binaries against each other
+  as if they were an A/B gives 0.92–1.07, and that is the instrument's floor.
+  The CPU JIT comparison reports its own paired ranges, some much wider than
+  this CPU GEMM spread.
+- **The GPU clock idles at ~210 MHz and needs ~3 s of load to reach ~2670 MHz.**
+  Timing one implementation fully and then the other gives the second one a
+  hotter clock — a systematic bias, not noise. GPU comparisons here ramp the
+  clock first and then A/B-interleave.
+
+Provenance is given per section. A number with a date attached was measured on
+that date and has not been re-run since.
+
+---
+
+## What is real, and what is not
+
+This section exists because an earlier version of this README claimed things the
+repository's own investigation documents contradict.
+
+**Real, measured, and reproducible from this repo:**
+
+- R1CS / zero-knowledge circuit compilation, including a circom front end that
+  compiles unmodified circomlib.
+- FP16 tensor-core GEMM and fused GEMM+bias+ReLU on NVIDIA PTX.
+- Fused RMSNorm+residual and RoPE kernels.
+- A multi-threaded AVX-512 CPU GEMM, partitioned over a 2-D thread grid, with a
+  copy-free path for shapes too small to amortise packing.
+- `@safe` blocks with Z3-discharged loop invariants, `@ZeroDrift` exact
+  accumulation, and linear tracking of async memory tokens.
+- BN254 field arithmetic, NTT and MSM as compiler-emitted PTX, checked on the
+  device against arkworks. The NTT is **ahead of icicle** at both sizes measured;
+  the MSM is still behind it.
+- A deterministic-inference path whose output does not depend on batch
+  composition — 0/16 against a stock bf16 control that changes on 16/16 — at
+  +0.12% perplexity.
+- A C-callable shared library: the crate builds as `cdylib` as well as `rlib`
+  (`src/c_api.rs`), so the compiler can be embedded rather than shelled out to.
+- **Machine-checked proofs**: 25 Rocq files, 550 theorems and lemmas under
+  372 `Print Assumptions`, no axioms and nothing admitted, all run by
+  `cargo test`. (These read 24 / 520 / 349 until 2026-11-06. They were
+  already 25 / 527 / 356 before that day's int8 proofs, counted with the
+  convention in cabb52d.) They cover the ZK backend's control-flow lowering; the exact
+  AVX-512 GEMM's schedule end to end, from the source dot product to the
+  threaded, tiled, row- or K-split kernel; and seven GPU files, which now
+  include the int8 tensor-core GEMM's schedule *and* the value it computes, and
+  the one GPU kernel whose PTX-to-SASS translation is *also* validated. A
+  compilation that substitutes the CPU kernel **emits its own certificate**
+  beside the `.ll`, and so does `--emit-attention-ptx`.
+  What the verified kernel *costs* is measured separately and is
+  [in its own section](#what-the-verified-kernel-costs) — it is not free.
+- **Translation validation against `ptxas`**: **eighteen standing rows — fifteen
+  validated, three refuted** — including one across a loop, one using shared
+  memory and a barrier, one storing sub-word values after a load that can read
+  them back, one whose u32 `div`/`rem` `ptxas` lowers through the float unit, and
+  **a shipped GEMM**. Each is proved to store exactly what its PTX
+  stores, by symbolically executing the PTX and the SASS `ptxas` emitted from it
+  and discharging 457 obligations in z3. It is a by-hand research tool
+  (`tools/ptxas_tval/`), not a CI gate, and it covers one compilation of one
+  kernel at a time. **The three refutations are what the other fifteen are
+  worth** — a validator that always said VALIDATED would report every row
+  identically. **A further 25 rows pin the validator's own memory and effect
+  model**: ten are wrong translations built by hand from `ptxas` output that it
+  VALIDATED until those rows existed — a load that could read back a store,
+  reordered stores that may overlap, an `EXIT` or early `ret` it could not see, a
+  store before a loop it never compared — and are now refused or refuted by name.
+  A global load reads through the stores before it, so `ptxas`'s *correct*
+  read-back validates while its wrong twins are refuted with a counterexample.
+  **And a nest validator** (`nestval.py`) takes the first kernel with nested
+  loops through: `y_cpu_matmul` at `-O1` — three loops, a store in the middle one
+  — validates with positive proof obligations, and each of its seven wrong twins, plus a loop that
+  forgets the previous iteration's store, is refuted at the obligation its
+  mutation breaks.
+  **The u32 division is validated without being assumed**: `ptxas` computes it
+  as a float reciprocal estimate, a Newton step and two corrections. The estimate
+  is modelled as a fresh value carrying one fact measured exhaustively on the
+  device over all 2³²−1 divisors, and the rest is executed as the SASS spells it.
+  The tail was `unknown` over bitvectors at up to 1200 s and proves in under a
+  second once translated exactly into integer arithmetic. `ptx_integer_ops`
+  validates at 65 obligations; a twin missing one correction is refuted, and one
+  that differs only at division by zero validates, because the PTX ISA leaves
+  that result unspecified.
+  [Details](docs/ptxas_translation_validation.md).
+- **One direct library dependency.** `sha2` checks the identity of validated
+  `exact_pv` cubins before loading. The compiler ships its own BN254 field
+  arithmetic and JSON reader. The arkworks crates are `[dev-dependencies]`
+  and provide an *independent oracle* in tests — the `Y` binary does not link them.
+
+**Not real, and previously presented as if it were:**
+
+- **The "Dual-Accelerator RT + Tensor Core Co-Processor" is a scheduling
+  simulation, not a capability.** The dependency graph, the slot assignment and
+  the cost model are real code with real tests — but the per-node cycle costs
+  are hardcoded constants, not measurements, and there is no public PTX
+  instruction for BVH/ray-tracing hardware, so `rt_core_emitter.rs` cannot
+  invoke an RT Core by construction. Disassembling the compiled SASS shows the
+  whole kernel reduces to nine instructions: write a constant to shared memory
+  twice, pack it to FP16, exit. **Zero RT instructions, zero `HMMA`, zero global
+  memory traffic.** The "1.66x / 39.8% latency saved" figures this README used
+  to headline were produced by comparing that against a CUDA busy-loop tuned to
+  cost about what the RT trace was estimated to cost. Full write-up, including
+  how it was confirmed on hardware:
+  [investigation_rt_tensor_coprocessor_findings.md](investigation_rt_tensor_coprocessor_findings.md).
+  The scheduler is kept as a design artifact; do not read its output as a
+  measurement.
+- **There are not five working backends.** LLVM IR (the default) and NVIDIA PTX
+  are the two real ones. The C transpiler was removed — `--emit-c` says so and
+  exits. `--emit-native` writes a runnable x86-64 ELF but covers only a
+  **straight-line subset over `I32` and `bool`**: `let` with an initializer,
+  `return`, calls of up to six arguments to the program's own functions, and the
+  sixteen integer binary operators. It has no branches, so
+  `if`/`while`/`for`/assignment, floats, strings, indexing and field access are
+  refused by name with a line number, as is every other declared type (64-bit,
+  unsigned — its arithmetic is signed — and sub-word, which it never wraps) and
+  every call to a built-in or GPU intrinsic. Before that it emitted an ELF for
+  all of them and computed the wrong answer under a success banner: `9 / 2`
+  returned **9**; `print_int(5)` became a call to the next instruction and
+  segfaulted; `return 7; return 9;` exited 9, because `return` did not end the
+  function; and a program's own `fn write` was replaced by a syscall stub.
+  The default LLVM backend had a gap of the same kind until September 2026: a
+  local array was given no storage, so its writes went through a null pointer
+  (`v[0] = 4; v[2] = 6; return v[0] + v[2];` exited 0) and passing one to a
+  function emitted IR clang rejects. Arrays of scalars now have storage and are
+  passed by value; arrays of arrays, structs or strings are refused by name.
+  And until October 2026 it indexed every POINTER in 8-byte slots whatever the
+  element was: a kernel taking `GlobalMemory<I32>`, called from host code with
+  an `[I32; 4]`, wrote 16 bytes past the array (a wrong answer, and SIGILL under
+  `-g`), `a[1]` through `a: &mut [I16; 4]` wrote past an 8-byte array, and
+  `"hello"[1]` returned 5, the string's length field. An element is indexed at
+  its own width now, and one whose width the backend cannot see
+  (`GlobalMemory<bool>`, a `Q` format, a `String`) is refused by name.
+- **Leo did not compile the ZK benchmark circuits.** Earlier tables reported
+  timings for Leo at 100k and 1M constraints. Leo 4.2.0 refuses both: the
+  compiled program exceeds its 512,000-byte limit (`leo build` on
+  `leo/dot_product` errors at 14,322,372 bytes). Those rows have been removed
+  rather than corrected.
+- **The PTX backend compiled integers as floats.** *(Fixed since; kept here
+  because this README asserted the opposite for a while.)* A kernel declaring
+  `GlobalMemory<U32>` with `let s: U32 = a + b;` compiled clean, assembled clean
+  under `ptxas -arch=sm_89`, reported success, and emitted `ld.global.f32` /
+  `add.f32` / `st.global.f32` — silently rounding every value above 2^24. There
+  is a real integer datapath now (typed loads and strides, signed-vs-unsigned
+  arithmetic, `mul.wide.u32`, carry-flag chains, 128-bit vector loads), gated by
+  `tests/ptx_integer_datapath.rs`, which runs 16 operations over 4,096
+  full-range `u32` pairs on the device. That is what unblocked the BN254 kernels
+  below. **`GlobalMemory<U8/U16/I8/I16>` is supported**, with byte-accurate
+  strides and signed or unsigned loads. Arithmetic promotes these values to
+  32 bits; stores truncate to the buffer width. Sub-word local declarations,
+  `SharedMemory` and `L2Memory` elements remain refused.
+- **There is no AMD/ROCm backend.** `src/rocm_emitter.rs` was 173 lines
+  compiled into the library and called by **nothing** — no CLI flag, no test,
+  no caller anywhere in the tree — and has been deleted, along with
+  `auto_vectorize.rs`, which was dead in the same way. The header of this file
+  says "CPU (x86-64 / AVX-512) and GPU (NVIDIA PTX)" and that is the complete
+  list.
+- **`ypm`, the package manager, IS built — this entry used to say the
+  opposite.** `src/ypm.rs` is declared by no `mod`, which is what the previous
+  version of this paragraph checked, but it is a `[[bin]]` target in
+  `Cargo.toml`: `cargo build --release` produces a working `target/release/ypm`
+  and `ypm new / init / build / run / test / clean` all do something.
+  **`mod` is not the same question as "compiled"**, and
+  `tests/source_surface.rs` now asks both. What IS wrong is the documentation:
+  `docs/y_language_documentation.md` §19 spelled every invocation `Y ypm ...`,
+  which runs the compiler and reports `Failed to read file`, and documented
+  `add` and `install`, which answer `Unknown command`. Corrected there; the
+  registry side really is unimplemented.
+- **Hopper TMA / WGMMA support never existed.** Sixteen of nineteen `emit_*`
+  methods in that family produced PTX that `ptxas` rejects at their own target
+  architecture. They were deleted rather than fixed. `mma.sync` — the path the
+  working GEMM kernels use — was never affected.
+- **Three memory-hierarchy directives did nothing, or the wrong thing.** *(Fixed
+  since; kept here because the manual documented all three.)* `@cache_policy`:
+  on the PTX backend `L2_PERSIST` emitted `.lu` — on a global load, the ISA's
+  evict-*first* — and `L2_EVICT_FIRST` emitted a qualifier `ptxas` rejects on
+  every card; on the LLVM, CPU, native, ZK and co-processor backends every
+  policy compiled and did nothing. It lowers to `createpolicy` +
+  `ld.global.L2::cache_hint` (or `ld.global.cs`) on PTX now and is refused by
+  name everywhere else. `@gpu_uncached` stored with `movnti`, which x86 may make
+  visible before an earlier store — the status-flag-after-data use the manual
+  recommended it for — and is `volatile` only now. `@prefetch_stride` emitted
+  nothing on any backend and is refused.
+- **The PTX backend read and wrote kernel values it did not understand.**
+  *(Fixed since.)* `F64` and `F16` values compiled as `f32`, so an `F64` store
+  wrote four bytes into an eight-byte slot. Reading `A[i]` as a value produced
+  the element's *address*: the manual's own `stream_vector_add` example
+  computed `float(&A[i]) + float(&B[i])`. A built-in given an extra argument
+  dropped it, so `store(Out, 0, 7)` stored the index. And a barrier-hoisting
+  pass moved memory accesses across `bar.sync`; with the writers delayed, the
+  reads saw unwritten data in 200 of 200 launches on the card. `F64` is real
+  now, `F16` is a buffer element type (an `F16` value is refused), and each fix
+  is gated.
+- **The language manual's worked examples mostly did not compile.** Eighteen of
+  the 21 complete examples in its chapter 10 fail — on syntax the parser has
+  never accepted, or on the `@safe` checks — and one of the eighteen said so.
+  Each now states its first diagnostic, and `tests/manual_examples.rs` fails if
+  an example breaks without a note or a note outlives the failure. Three
+  reference sections described syntax that does not exist: `as` casts (Y has
+  no cast), `@unsafe { }` blocks (`@unsafe` annotates a function), and
+  `@bounds(0 <= i < n)` (the syntax is `@bounds(min, max)`).
+
+---
+
+## What is verified, and what is not
+
+"Verified" means three different things in this repository, and the difference
+matters more than any single row below:
+
+- **Proved** — a Rocq theorem (24 files, no axioms, nothing admitted, run by
+  `cargo test`) or a Z3 query, about a *model* of the emitted code, tied to the
+  real code by a test or, for the exact GEMM and the attention schedule, by
+  rendering both from one description and requiring byte-identity.
+- **Validated** — one `ptxas` translation of one kernel file checked by z3: the
+  SASS stores exactly what the PTX stores, for that compilation, at that
+  architecture and optimisation level.
+- **Tested** — differentials, corpus sweeps and mutation tables. Strong evidence,
+  and not a proof.
+
+`ydb`'s `verify` reports all three for one line of your own program - see
+[`verify`: what covers a line](#verify-what-covers-a-line).
+
+| kernel | proved | validated through `ptxas` | trusted or open |
+|---|---|---|---|
+| **CPU exact GEMM** (`vpdpwssd`) | **End to end**: the threaded, tiled, row- or K-split kernel holds the source dot products. The operand licence is checked exhaustively over int16, and a compilation emits its own certificate. | not applicable | `vpdpwssd`'s semantics (pinned on hardware, not proved); the ordering `pthread_join` imposes (ThreadSanitizer, dynamic); everything below the LLVM IR |
+| **Exact int8 attention** | Launch schedule byte-identical to the proof; exact at every launch geometry and every order the atomics land; a proved softmax error bound. Certificate emitted. The kernel traps on a `KFix` outside `1..2^31`. | **no** | `ptxas` is trusted; the int8 `V` quantisation is not modelled |
+| **int8 tensor-core GEMM** | Schedule (block-size trap, grid stride, grouped tiles, striped split K) *and* the value through the swizzled shared stages and `ldmatrix`: exact in int32, with the emitter refusing `K > 131,040` | **no** — `cp.async` in the K loop, opcode gaps | the proof-to-code tie is transcription plus a gate, not extraction; `mma.sync`, `ldmatrix` and `cp.async` semantics are trusted. Speed: 0.91–1.77x cuBLASLt (1.03x at 4096³) |
+| **`exact_pv`** | Conditional source-dot-product model; index and accumulator ceilings | **yes, at `-O1`**; checked execution loads the SHA-256-bound cubin directly | Checked Rust/Python launches enforce positive dimensions, ceilings, exact geometry, buffer and device contracts on `sm_89`; model-to-PTX transcription remains trusted; general `-O2`/`-O3` unroll is not matched |
+| **`y_cpu_matmul`** (three nested loops) | nothing | **yes, at `-O1`**, by the nest validator | the first multi-loop kernel validated; at `-O3` it has a SASS opcode gap and `-O2` up unroll |
+| **f16 / fp8 tensor-core GEMMs** | the warp tile partition only (an illegal tile is refused) | no | **the value carries no proof: 923 of the 925 `mma.sync` this repository emits are floating point** |
+
+**The translation validator** has validated eight committed kernels —
+`bn254_permute`, `bn254_sub_vec`, `ptx_carry_chain`, `ptx_subword_ops`, `exact_pv`
+(`-O1`), `naive_gemm_f32` (`-O1`), `smem_roundtrip` and `y_cpu_matmul` (`-O1`, a
+three-loop nest) — plus probe fixtures, and refutes the rows that are wrong on
+purpose. It is itself trusted: the executors are Python, z3 is trusted, one
+multiplier identity is assumed, and its float and memory facts are refereed on
+one card rather than proved. What it cannot reach today: more than one loop at
+the same level (every `SEQUENTIAL` and `MIXED` kernel), a store before a child
+loop in the same iteration, float conversions, and `-O2`/`-O3` unrolling — which
+leaves most of the corpus outside it. Supported accesses now check widths and
+natural alignment, including dead vector lanes; this is not a general proof of
+memory safety. Straight-line `-O2`/`-O3` translations can validate. Loop validators
+check entry guards, full load traces and strict instruction parsing, and refuse
+uncomposed header or cross-thread effects. See the
+[current source audit](docs/verification/deep_audit_2026-10-03.md).
+
+**Outside the kernels.** The ZK backend's control-flow lowering is proved in Rocq
+over a model of the emitter, and its range, bit-decomposition, comparison and
+division gadgets are proved sound with Z3; Groth16 proofs are compared element
+for element with arkworks. `@invariant` is discharged by Z3 and refuses what it
+cannot model; a `@bounds` range it cannot prove is checked when the program runs. The rest — the general LLVM backend, `--emit-native`,
+`--emit-cpu`, the type checker, the ZK optimisation passes — is tested, not
+verified.
+
+**The floor under all of it**: Rocq's kernel, z3, clang and LLVM, `ptxas` for
+every translation not validated, the CUDA driver, the ISA's semantics and the
+silicon. The emitted certificates list these as `NOT CHECKED` rather than
+implying otherwise.
+
+---
+
+## Zero-Knowledge Backend (R1CS → Groth16)
+
+This is the most complete part of the project.
+
+**Not in a default build.** Without `--features zk` the binary prints `The ZK
+Circuit Backend is not compiled into this binary` and **exits 1**.
+
+```bash
+cargo build --release --features zk
+Y circuit.ysu   --target=r1cs --witness input.json   # Y's own language
+Y circuit.circom --target=r1cs -l path/to/circomlib  # circom 2.x
+```
+
+Field values, circuits and witness graphs retain their scalar-field context,
+so BN254 and BLS compilations can be interleaved without changing retained
+values or artifact headers. Mixed-field arithmetic and witness inputs are
+rejected. `Fr` remains `Copy` with allocation-free arithmetic; on 64-bit hosts
+it occupies 40 bytes (32 bytes of Montgomery limbs and an 8-byte context
+pointer). Parameters are retained once per distinct modulus for the process
+lifetime. The earlier performance measurements below have not been rerun for
+this representation.
+
+### It plugs into the existing toolchain
+
+Y emits iden3-format `.r1cs` and `.wtns`, verified end to end against snarkjs:
+
+```bash
+Y circuit.ysu --target=r1cs --witness input.json
+snarkjs groth16 setup circuit.r1cs pot_final.ptau circuit.zkey
+snarkjs groth16 prove circuit.zkey circuit.wtns proof.json public.json
+snarkjs groth16 verify verification_key.json public.json proof.json
+# snarkJS: OK!
+```
+
+Circuit inputs are matched **by name** against `fn main`'s parameters — a file
+listing values in the wrong order would otherwise produce a valid proof of the
+wrong statement.
+
+### circom front end
+
+`Y foo.circom --target=r1cs` compiles circom 2.x through the same back end.
+Everything downstream of constraint construction is shared with Y's own
+language.
+
+Its acceptance test is not "does it parse": circomlib's `Poseidon(2)`, compiled
+from unmodified circomlib source, produces circomlib's own four published
+digests **and** agrees with Y's native `poseidon_hash` on the same inputs — two
+independent paths through the compiler, one answer. Output, public-input and
+private-input counts match circom exactly on every circuit tested.
+
+Measured 2026-08-11, best of three, same circom source through both compilers:
+
+| | circom 2.2.3 | Y | |
+|---|---|---|---|
+| `Poseidon(2)` | 0.101 s | 0.023 s | **4.39x** |
+| 200-hash Poseidon chain | 0.678 s | 0.631 s | **1.07x — a tie** |
+| 1000-hash Poseidon chain | 3.249 s | 3.154 s | **1.03x — a tie** |
+
+**The first row is not a general speedup, and the shape of this table is the
+point.** A fixed ~5.5-million-allocation cost in hex-literal parsing was removed
+on 2026-08-11 (`Poseidon(2)` went 0.076 s → 0.023 s), and merely `include`-ing
+`poseidon.circom` — 24,958 lines of hex constants — used to cost 0.094 s before
+a single constraint existed. That is a constant, so it dominates a small circuit
+and vanishes into a large one. The chains are still ties because their cost is
+**per-hash lowering**, at ~135 allocations per constraint against Y's own native
+emitter's 12. Until that is fixed, expect small circom circuits to be fast and
+large ones to be a tie.
+
+**Coverage and size, measured across real circomlib** — 31 gadgets, not the 7
+vendored here. Reproduce with `python3 tools/circomlib_coverage.py`:
+
+| | |
+|---|---|
+| compiles | **Y 31/31, circom 31/31** |
+| size vs circom `--O1` (its default) | **1.341x — Y wins** (win 11 / tie 20 / **loss 0**) |
+| size vs circom `--O2` (its best) | **0.895x — Y loses** (win 0 / tie 20 / loss 10) |
+
+`Sha256` and `EdDSA` were the two that did not compile. They were one gap — a
+circom `var` holding a value that is not compile-time constant — and it is closed;
+see [the witness domain](docs/circom_frontend.md#the-witness-domain-values-the-compiler-cannot-compute).
+Both land near parity with circom's default, so they *lower* the geomean (1.352x →
+1.341x) rather than raise it.
+
+**`--O1` is circom's default and `--O2` is "full constraint simplification".**
+Every size claim in this repo is against the default — what a user gets by typing
+`circom` — and Y still **cannot reach `--O2`'s circuit sizes**: it reduces
+`Bits2Num(64)` to zero, which Y has no equivalent for. What remains of that gap is
+mostly a deliberate trade, not a missing pass: closing it costs 3.8x matrix
+density and 1.60x proving time (see `docs/circom_frontend.md`). Y sits between the
+two levels, closer on time to `--O1`:
+
+| circuit | circom `--O1` | circom `--O2` | Y |
+|---|---|---|---|
+| Poseidon x400 | 1.269 s / 206,800 | 2.875 s / 96,000 | 1.273 s / 111,208 |
+| MiMC x400 | 1.012 s / 145,600 | 1.029 s / 145,600 | **0.383 s** / 145,601 |
+| EdDSAPoseidon | 0.317 s / 8,086 | 0.826 s / 4,217 | **0.243 s** / 7,570 |
+
+Y is at circom's default speed on Poseidon and 1.3–2.6x faster elsewhere,
+because its *simplification* is cheap — not its front end. circom `--O0` lowers
+Poseidon faster than Y does with reduction off (0.415 s vs 0.879 s).
+
+(That paragraph used to end "Still refused: `Sha256` and `EdDSA`", which had
+been true and stopped being true two sections earlier in the same file. Both
+compile.)
+
+**Read the geomean, not the best row.** Where Y wins it wins large — `Poseidon(2)`
+1.81x, `SMTProcessor` 1.71x, `SMTVerifier` 1.64x, `EscalarMul` 1.53x — but on
+twenty-one of the twenty-nine it lands on circom's number, and on three it is
+worse (`Point2Bits` 1,301 vs 1,560, `Mux1` 1 vs 2). The wins share a shape: circuits written as long
+chains of `<==` linear assignments, which is exactly what
+`substitute_linear_constraints` eliminates. Circuits that are already tight have
+nothing to remove.
+
+Every size figure this repo published before 2026-08-11 was measured on Poseidon
+and quoted as a general result. It is not one.
+
+| Poseidon specifically | circom | Y | |
+|---|---|---|---|
+| `Poseidon(2)` | 517 | 286 | 1.81x fewer constraints |
+| 200-hash chain | 103,400 | 55,608 | 1.86x fewer |
+| 1000-hash chain | 517,000 | 278,008 | 1.86x fewer |
+
+Non-zero matrix terms land within 7% of circom's, so the smaller constraint
+count is not bought by densifying the matrices — which is how this optimisation
+usually goes wrong.
+
+What that is worth downstream, measured through arkworks Groth16 on a 200-hash
+chain rather than assumed:
+
+```
+unreduced  149423 constraints  149426 wires  518072 nnz   setup 0.522s   prove 0.617s
+reduced     55608 constraints   55611 wires  357425 nnz   setup 0.228s   prove 0.288s
+```
+
+**2.29x on setup, 2.14x on prove**, against 2.69x on the constraint count. The
+shortfall is structural rather than a missing optimisation: Groth16's cost splits
+between terms that scale with the wire count and terms that scale with the
+evaluation domain, which the constraint count fixes — so reducing wires moves
+some of the prover and none of the FFTs.
+
+Wires are compacted (`compact_wires`): the reduction passes abandon wires and
+neither renumbers, which left Y at 153,605 wires against circom's 103,403 on this
+circuit even while emitting 1.86x fewer constraints. Compacting takes that to
+55,611 — 1.86x fewer than circom on both axes — for ~1.6% of compile time, and
+shrinks the Groth16 proving key from **25.4 MB to 10.5 MB**.
+
+**Coverage on circuits people actually deploy, not just circomlib.** circomlib
+is a gadget library; the circuits above it are where a front end either works or
+does not:
+
+| suite | before | now |
+|---|---|---|
+| circomlib (31 gadgets) | 31/31 | 31/31 |
+| [circom-ecdsa](https://github.com/0xPARC/circom-ecdsa) (17 circuits) | **0/17** | **17/17** |
+| zk-email `RSAVerifier65537(121, 17)` | did not compile | 189,271 constraints vs circom's 190,945 (**0.991x**) |
+| zk-email `Sha256Bytes(64)` | did not compile | 32,334 vs 33,136 |
+| semaphore, rln, zk-kit, withdraw | did not compile | compile; sizes at or below circom `--O1` |
+
+**Almost every one of those was Y refusing a WITNESS-domain construct because
+the CONSTRAINT domain could not hold it** — `assert` over signals, over-quadratic
+arithmetic accumulated in a `var`, an unknown array index. None of them emits a
+constraint, so refusing them was over-strict rather than safe. The boundary is
+at the USE (`o <-- t[u]` is fine, `o <== t[u]` is not), and it was established by
+probing circom itself rather than read off the documentation.
+
+Two were not refusals at all. **circom compares `var`s as SIGNED and Y compared
+them canonically**, so `var a = 0 - 1; if (a < 1)` produced a circuit computing
+`111` under circom and `222` under Y — both valid, both provable, differing
+silently, and cross-compiler. The same bug's other face is that
+`for (var j = k-1; j >= 0; j--)` never terminates canonically, which is the shape
+`circom-ecdsa` and `zk-email/rsa` are built on. And **circom 2.1's anonymous
+components** (`Poseidon(2)([a,b])`, `(x, y) = BabyPbk()(s)`, `_` to discard) were
+genuinely missing; they are a desugaring, and the acceptance test is that
+`o <== T()(i)` emits **byte-identical** `.r1cs` to the explicit form — a property
+circom itself satisfies, checked before anything was written.
+
+**`--witness` reads circom's own `input.json`,** and the witness it produces
+agrees with circom's calculator element for element — verified further through
+`snarkjs wtns check` and a full `groth16 setup/prove/verify` on Y's artifacts.
+Three separate bugs had to be fixed for that, and only one was fail-closed: the
+public inputs were never bound, so every signal in a `{public [...]}` list was
+solved at **zero**. Y's own language has no `public` keyword, which is why
+nothing internal could see it.
+
+Detail, subset, and the constructs that are refused by name:
+[docs/circom_frontend.md](docs/circom_frontend.md).
+
+### Compile speed on Y's own language
+
+The two benchmark circuits are an unrolled polynomial (`temp = temp * y`) and an
+iterative dot product (`sum += a * b`). The harness **aborts the comparison
+unless both compilers report the same non-linear constraint count**, because
+comparing compile speed across tools that built different circuits is
+meaningless.
+
+Polynomial rows measured 2026-08-09, minimum of three
+(`tests/benchmark_zk_vs_circom.py`); the 10,000,000 row and **all three dot
+product rows** 2026-08-10 on an idle box, minimum of five below 1M. The two 1M
+figures are single runs of circom (978.6 s and 16 minutes apiece) against a
+minimum of three for Y; a control of two byte-identical Y binaries reads 1.01x,
+so the noise floor is ~3% and none of these ratios is near it:
+
+| circuit | N | Y | circom | speedup |
+|---|---|---|---|---|
+| polynomial | 10,000 | 0.008 s | 0.132 s | 16.5x |
+| polynomial | 100,000 | 0.087 s | 3.53 s | 40.5x |
+| polynomial | 1,000,000 | 0.895 s | 249.04 s | **278x** |
+| polynomial | 10,000,000 | 10.47 s | **did not finish in 1 h** | **>345x** |
+| dot product | 10,000 | 0.011 s | 0.517 s | 46x |
+| dot product | 100,000 | 0.122 s | 14.23 s | 117x |
+| dot product | 1,000,000 | 1.27 s | 978.6 s | **773x** |
+
+**Read the two circuits separately, and read the dot-product row with the
+constraint counts in front of you — the ratio is real and it is also the least
+honest number on this page.**
+
+The polynomial circuit's linear combinations are one or two terms wide, and both
+tools emit the same thing: circom reports 1,000,000 non-linear and **0 linear**
+constraints against Y's 1,000,001. Same artifact, and Y is 278x faster building
+it. That is the clean comparison.
+
+**At 10M the 10x row is a bound, not a number, because circom did not finish.**
+It was given a one-hour wall clock under `systemd-run -p MemoryMax=40G` on an
+otherwise idle box and killed at 3,612 s, still running, at 3.53 GB. Y compiles
+the same circuit in **10.47 s** (minimum of three) at 3.60 GB, writing a 1.19 GB
+`.r1cs`. So the row says `>345x`, which is what was observed; the true figure is
+larger. Circom's own scaling says how much larger — 3.50 s at 100k, 26.77 s at
+316k, 245.69 s at 1M is **O(N^1.9)**, which projects ~5.4 hours at 10M — but that
+is a projection and is not what the table reports. Y is linear across the same
+range (0.087 → 0.895 → 10.47 s), so the gap widens with size rather than
+converging. Two caveats worth stating: the harness's fairness gate could not be
+applied at 10M, since circom emitted no constraint count to compare (both
+circuits are the same template, scaled), and this is the *narrow* circuit — the
+dot product below is linear in Y too now, but there the two tools build
+different-sized artifacts, so its ratio is not comparable to this one.
+
+The dot product accumulates a dense linear combination, and **Y used to be the
+super-linear one on it** — 476 seconds at 1M, roughly O(N²·²), against circom's
+983. That was a real defect and it is fixed: `sum = sum + a * b` appends one
+freshly allocated wire to `sum` per iteration and then called
+`LinearCombination::simplify`, whose "already sorted" fast path still scans every
+term to conclude it has nothing to do. An accumulator holding `i` terms at
+iteration `i` therefore cost N²/2 term visits. Wire ids are allocated ascending,
+so appending a fresh one cannot break sortedness; deciding that from the boundary
+term is O(1). Measured on the same box, minimum of runs: **424.8 s → 1.27 s at
+1M (336x), 3.14 → 0.12 s at 100k**, and the curve is linear now. Details and the
+attribution in
+[docs/heavy_circuit_speed_test.md](docs/heavy_circuit_speed_test.md).
+
+**But 773x is not a like-for-like number, and the reason has nothing to do with
+that fix.** The two tools emit different artifacts here: circom emits 1,000,000
+non-linear **plus 3,000,000 linear** constraints, Y emits 1,000,001 total,
+because Y folds the linear operations into the combinations instead of
+allocating a signal per intermediate. So Y is building roughly a quarter of the
+constraints, and the harness's fairness gate compares *non-linear* counts only,
+which is why this pair passes it. A same-total-constraints comparison would be
+markedly less favourable. Y's R1CS is genuinely smaller and correspondingly
+cheaper to prove — 0.22 GB against circom's 0.48 GB, at 0.51 GB peak RSS against
+circom's 10.9 GB — but "773x faster" and "773x more work per second" are not the
+same claim and only the first is measured.
+
+**Quote the polynomial row, not this one, if you want one number.** The
+polynomial circuit is the strictly like-for-like comparison: same non-linear
+count, zero linear constraints on either side, same artifact.
+
+### What it looks like on circuits people actually build
+
+**Neither 278x nor 773x survives contact with a real circuit, and the honest
+range is 1.0–4.4x through the circom front end and 3.5–23x through Y's own
+language.** Both benchmark circuits are single unrolled loops a million
+iterations long, which is the shape circom is worst at; real circuits are built
+from hash and range-check gadgets. Measured 2026-08-11 on an idle box, minimum
+of five, **circom source compiled by both tools** so the front end is not a
+variable:
+
+| circuit (circom input) | Y | circom | speedup | Y cons. | circom cons. |
+|---|---|---|---|---|---|
+| `Poseidon(2)` | 0.023 s | 0.101 s | **4.39x** | 286 | 517 |
+| Merkle inclusion, depth 20 | 0.059 s | 0.151 s | **2.54x** | 5,685 | 10,400 |
+| Poseidon chain, 200 hashes | 0.631 s | 0.678 s | **1.07x** | 55,608 | 103,400 |
+| Poseidon chain, 1000 hashes | 3.154 s | 3.249 s | **1.03x** | 278,008 | 517,000 |
+
+**On Y's own `.ysu` front end the same circuits are 3.5–23x**, because
+`poseidon_hash` folds its linear layers as it builds them instead of allocating
+a signal per intermediate:
+
+| circuit (Y's own language) | Y | circom | speedup | Y cons. | circom cons. |
+|---|---|---|---|---|---|
+| `Poseidon(2)` | 0.0045 s | 0.101 s | 22.8x | 241 | 517 |
+| Merkle inclusion, depth 20 | 0.0118 s | 0.151 s | 12.8x | 4,841 | 10,400 |
+| Poseidon chain, 200 hashes | 0.169 s | 0.678 s | **4.02x** | 47,404 | 103,400 |
+| Poseidon chain, 1000 hashes | 0.942 s | 3.249 s | **3.45x** | 237,004 | 517,000 |
+
+**The ratio falls as the circuit grows (22.8x → 3.45x), and that is circom
+amortising a fixed cost, not Y degrading.** Y's own scaling was checked
+directly rather than inferred: across 125 → 2,000 hashes every phase is linear
+(emit 0.035 → 0.442 s, optimize 0.040 → 0.730 s, write 0.058 → 0.656 s, all ~2x
+per 2x) and the total is 13.7x for 16x the work — *sub*-linear, because Y's own
+fixed cost is amortising too. At the margin Y is a flat ~3.4x per hash at both
+200 and 1,000.
+
+**Quote 3.45x, not 22.8x.** Circom carries a fixed startup of roughly 0.09 s —
+mostly parsing `poseidon_constants.circom` — so on a 517-constraint circuit that
+constant *is* the measurement, and the two small rows mostly report it. At
+517,000 constraints it has amortised away and 3.45x is what remains. Note this
+is not a like-for-like circuit comparison either: Y emits **2.15–2.18x fewer
+constraints** for the same computation, and the hash is verified identical
+against circomlib's published digests, so read it as "same computation, smaller
+circuit, less time" rather than as raw compiler throughput.
+
+One thing that scaling check did turn up: **`optimize_circuit` is 33–40% of
+compile time on these circuits and removes 1.26% of the constraints**, and its
+share grows with N. That reads like a bad trade and is not one, because a
+circuit is compiled once and proved many times — measured with
+`Y_ZK_CSE=off` and arkworks Groth16 on a 100-hash chain, it costs 0.015 s of
+compile and saves 0.0035 s per proof, so it **pays for itself after 4 proofs**
+(`tests/zk_cse_cost.rs`). It is off-able for measurement, and on by default.
+
+**Read the chain rows as ties, not wins**, and read the spread down each table
+as the real shape of it: the small circuits are fast because a fixed
+~5.5-million-allocation cost in hex-literal parsing was removed (2026-08-11),
+and the chain barely moves because its cost is per-hash lowering, which is
+untouched — ~135 allocations per constraint against the native emitter's 12.
+Expect the chain row to improve when that is fixed and not before.
+
+The durable result on circom input is not speed at all — it is that Y emits
+**1.81–1.86x fewer constraints** for the same circuit (2.15–2.18x through Y's
+own language), which is worth roughly 1.4x at Groth16 proving time, not the
+1.8x the count suggests: the substitution pass deletes constraints but does not
+compact the wires they used, and Groth16 pays for wires too.
+
+**Where the 773x actually goes**, since it is still 34x larger than any row here:
+circom emits 4x the constraints on the dot product, and costs **244.6 µs per
+constraint** at that size against Y's 1.27 µs. Circom's own per-constraint cost
+is not a constant — it is 7.0 µs on the Poseidon chain and 244.6 µs at 1M, a 35x
+spread, because circom is superlinear and Y is linear. So the benchmark's *size*
+produces most of the ratio, and 4 × (244.6 / 1.27) = 771x accounts for
+essentially all of it.
+
+**Coverage, and a limit that was just removed:** until 2026-08-11 Y's circom
+front end could not compile circomlib's `bitify.circom`, because `Num2Bits`
+computes its witness with `out[i] <-- (in >> i) & 1` and Y applied its
+*constraint* value model to the `<--` right-hand side — refusing a shift that
+never becomes a constraint. That ruled out `Num2Bits`, `comparators.circom`,
+`aliascheck.circom` and everything built on them: range checks and comparisons,
+i.e. most of a real circuit. Fixed: a 200-wide `Num2Bits(64)` range check is
+13,013 constraints against circom's 13,200, and 300 `LessThan(32)` comparisons
+are 10,220 against 11,100, both from unmodified circomlib.
+
+**Memory is the binding constraint on this backend, not time.** Peak RSS,
+polynomial circuit, measured 2026-08-09:
+
+| Constraints | time | peak RSS | `.r1cs` on disk |
+|---|---|---|---|
+| 1,000,000 | 0.90 s | 0.37 GB | 0.13 GB |
+| 10,000,000 | 10.47 s | 3.60 GB | 1.19 GB |
+| 31,000,000 | 36.1 s | 11.4 GB | 3.97 GB |
+
+Cost is linear in both. **But per-constraint memory is a property of the
+circuit, not of the compiler**: this circuit's linear combinations are 1–2 terms
+wide (0.37 KB/constraint), where a Poseidon chain's are ~28 (1.42 KB/constraint).
+On a 48 GB box that is ~105M constraints of the former and ~32M of the latter.
+Quote the dense number. Circom, Noir and Leo were not run at 31M — earlier
+tables here reported estimates for them at that size as if measured, and those
+have been removed. Circom *was* run at 10M and did not finish in an hour; at the
+point it was killed it held 3.53 GB against Y's 3.60 GB peak for the completed
+job, and its memory is linear at ~2.3 KB/constraint, so finishing would have
+cost it roughly 23 GB.
+
+### Proving cost, end to end
+
+`cargo test --release --features zk --test zk_groth16_scale -- --ignored`,
+measured 2026-08-09; the 10M and 31M rows 2026-08-10. Y has no prover of its own
+and performs no trusted setup — setup and prove are arkworks, reached through
+Y's R1CS.
+
+| Constraints | emit | witness | setup | prove | verify | total | peak RSS |
+|---|---|---|---|---|---|---|---|
+| 10,000 | 0.01 s | 0.00 s | 0.04 s | 0.05 s | 0.002 s | **0.11 s** | |
+| 100,000 | 0.12 s | 0.01 s | 0.40 s | 0.36 s | 0.002 s | **0.89 s** | |
+| 1,000,000 | 1.25 s | 0.09 s | 2.83 s | 2.99 s | 0.002 s | **7.17 s** | |
+| 10,000,000 | 11.70 s | 0.92 s | 30.73 s | 39.90 s | 0.002 s | **83.25 s** | 31.8 GB |
+| 31,000,000 | 40.35 s | 2.83 s | **OOM** | — | — | — | >40 GB |
+
+arkworks is **81%** of the 1M total and **85%** of the 10M one — its share grows
+with size. The remaining headroom is in a prover Y does not have, so "Y compiles
+circuits 278x faster than circom" and "Y produces proofs faster" are different
+claims and only the first is supported.
+
+**31M constraints cannot be proved on this machine, and the row says so rather
+than estimating it.** Under `systemd-run -p MemoryMax=40G -p MemorySwapMax=0`,
+31M reaches the 40 GB cap and is OOM-killed 56 s in, still inside
+`circuit_specific_setup`. Emit and witness — the half Y owns — finish in 43 s at
+30.2 GB. (That is higher than the 11.4 GB the memory table above reports for the
+same size because this harness holds the circuit, the witness IR and the solved
+witness live at once, where `--target=r1cs` streams the constraints to disk and
+drops them. Same circuit, different question.) The wall is Groth16's proving
+key, which holds `num_variables` G1 points for each of `a`, `b_g1` and `l`, as
+many G2 points for `b_g2`, and a domain-sized `h`; at ~3 GB per million
+constraints on this circuit, 31M needs on the order of 100 GB. That is a
+property of the prover and the curve, not of Y's emitter, which is why the
+constraint-emission ceiling in the memory table above (105M on this circuit) is
+so much higher than the *proving* ceiling (~10M).
+
+### Correctness
+
+`tests/zk_groth16_end_to_end.rs` proves Y's circuits through arkworks as an
+independent oracle: an honest proof must verify, a tampered public input must be
+rejected, a perturbed witness must fail satisfiability, and Y's modulus must
+equal the true BN254 one. String-matching an emitted `.r1cs` cannot catch a
+wrong field or a mis-numbered wire; this can.
+
+- **Poseidon is circomlib's**, pinned against digests taken from circomlib's own
+  `Poseidon(2)` — 241 constraints against circom's 243 non-linear + 274 linear.
+  Only t=3 (two inputs) is supported; other arities and non-BN254 fields are
+  refused rather than approximated.
+- **Comparisons cost ~101 constraints, by necessity.** A field has no order, so
+  an ordering claim without a range proof is vacuous. `<`, `<=`, `>`, `>=`
+  range-check both operands and decompose the difference.
+- **Bitwise, shift, `/` and `%`** are supported: `&`/`|`/`^` cost 98, `<<`/`>>`
+  33 (constant shift amounts only — a variable shift is a 32-way multiplexer, so
+  it is refused rather than approximated), `/` and `%` 135. `/` is integer
+  division. Values are unsigned 32-bit; a negative operand fails its range check
+  and is unprovable rather than wrong.
+- **`@zk_target(scheme = "plonkish")` is refused.** It used to parse, print
+  `Proof Scheme: Plonkish` into the artifact header, and emit R1CS anyway.
+
+### On-chain verifier
+
+```bash
+Y --emit-verifier verification_key.json -o Verifier.sol --name MyVerifier
+```
+
+Generates a Groth16 verifier calling the BN254 precompiles at
+`0x06`/`0x07`/`0x08`, with the same
+`verifyProof(uint[2], uint[2][2], uint[2], uint[N])` signature snarkjs emits, so
+its exported calldata and existing front-ends work unchanged.
+`tests/zk_solidity_verifier.rs` compiles the contract with `solc` and executes it
+on a real EVM via `revm`. (The failure mode that matters — G2 coordinates in
+library order rather than the EVM precompile's reversed order — produces a
+contract that compiles, deploys, burns the full gas of a pairing check and
+rejects every valid proof. No string-matching test can catch that.)
+
+---
+
+## GPU: NVIDIA PTX backend
+
+Hardware: RTX 4070 Ti SUPER, 66 SMs. Theoretical dense FP16 tensor-core peak at
+the 2.61 GHz boost clock is **88.1 TFLOPS**.
+
+### Square FP16 GEMM vs cuBLAS
+
+The committed `tests/gemm_f16_<N>.ptx` — the compiler's own output, not a
+hand-written CUDA reference — against cuBLAS (`torch.mm` with a float32
+output, as Y's C is float32) and an autotuned Triton GEMM. Every column is
+checked exact first; interleaved rounds, ranked by minimum; two runs on
+2026-10-20 after the tiles were re-tuned (`docs/benchmarks/retune_2026-10-20/`),
+with Discord's GPU process running beside them (10–37% utilisation with none
+of these jobs running). 8192 and 16384 were measured again on 2026-10-25,
+when they began summing K in blocks (below), in two runs of the same harness
+(`docs/benchmarks/f16_blocked_2026-10-25/speed/readme_table/`); the chained
+kernels they replace ran at 1.025–1.029x and 1.015x cuBLAS's speed in the
+same runs.
+
+| M=N=K | 256 | 512 | 1024 | 2048 | 4096 | 8192 | 16384 |
+|---|---|---|---|---|---|---|---|
+| **Y vs cuBLAS** | 1.50x / 1.50x | 1.08x / 1.08x | 1.05x / 1.05x | 1.04x / 1.04x | 0.987x / 0.989x | 1.01x / 1.02x | 1.01x / 1.00x |
+| **Y vs Triton** | 3.62x / 3.62x | 1.46x / 1.76x | 1.13x / 1.10x | 1.05x / 1.05x | 1.02x / 1.02x | 1.12x / 1.12x | 1.10x / 1.10x |
+| **Y TFLOPS** | 12.8 / 12.8 | 49.8 / 49.5 | 78.5 / 78.4 | 87.1 / 87.2 | 88.0 / 88.0 | 87.6 / 88.5 | 91.4 / 89.3 |
+
+**Y is ahead of cuBLAS at every size but 4096, where it is 0.99x, and ahead of
+Triton at every size**, 1.02x at 4096 and 1.10–1.12x at 8192 and 16384, where
+Triton's autotuner picks a 128x256 tile on 8 warps. Triton's 512 minimum moved
+by 21% between the runs, so that ratio carries little weight. The 16384 TFLOPS
+were measured with the SM at 2760 MHz, where the peak is 93.2.
+
+Re-tuned on 2026-10-20 with the shared-memory swizzle below, after the
+autotuner (`--autotune-force`, which measures with B streamed from DRAM) and an
+L2-resident sweep disagreed at 1024 and from 4096 up: the tiles are the
+autotuner's where it won in both regimes, the sweep's 3-stage ones at 4096,
+8192 and 16384, and 1024's as it was: 2.8% faster at 256, 3.3% at 2048, 0.8% at
+4096 and 1.8% at 16384, 5–9% on the rectangular and uneven-grid kernels, every
+output the same bits as before. The earlier table, measured on a quiet GPU before the re-tune,
+is in `docs/benchmarks/smem_swizzle_2026-10-20/ab/`.
+
+On 2026-10-18 the tiles with three stages or more (256, 512, 1024 and the
+decode shapes) moved the K loop's wait and barrier to between a K-tile's last
+two 16-deep steps, so the next tile's first fragments load while the last
+step's MMAs run: 1.2–1.5% faster at 1024 and 0.7% at 256, level at 512
+(`docs/benchmarks/f16_xbar_2026-10-18/`). 2048 and up run two stages and are
+unchanged. On random inputs Y's output is the same, bit for bit, on every tile
+tried, and from 256 to 4096 it is also cuBLAS's. At 8192 it is not: on
+same-sign inputs the chain's results were on average 1.0e-4 below float64 and
+cuBLAS's 3.2e-5, and since 2026-10-25, summed in blocks, Y's are 2.5e-6 below
+(Accuracy against cuBLAS, below).
+
+On 2026-10-19 the emitter stopped asking `ptxas` to divide by constants
+(`docs/benchmarks/const_div_2026-10-19/`). `ptxas` turns a `div.u32` or
+`rem.u32` by an immediate, even 4, into a reciprocal division, and does so
+after constant propagation. So the fully unrolled 512 K loop computed its
+stage index `(k + 3) % 4` at run time every K-tile, and the 27 committed GEMM
+kernels held 8 to 57 such divisions each. They are now shifts, masks and
+multiply-high sequences, exact for every input; the 512 kernel executes 311K
+warp instructions where it executed 450K. Against the parent's kernels it is
+0.1–3.7% faster at every square size and decode shape in every run, by
+1.8–2.9% at 512 and 1.1–2.0% at M = 1. That is one run on a quiet GPU and
+two with a game running; the record says which is which.
+
+On 2026-10-20 the A and B tiles in shared memory stopped being padded
+(`docs/benchmarks/smem_swizzle_2026-10-20/`). Each row was 8 elements longer
+than its data so that `ldmatrix` had no bank conflicts, but a warp's
+`cp.async` copies into such rows read 1.5 times the L2 sectors they need: at
+512x512x1024 Y read 786,432 sectors to cuBLAS's 524,288, the minimum. The rows
+are now packed and each 16-byte chunk's index is XORed with bits of its row,
+which keeps `ldmatrix` conflict-free and makes the copies whole 128-byte
+lines, as cuBLAS's are. On a quiet GPU it is 19–21% faster at 512, 6% at 256
+and 1024, 0.6–1.3% at 2048, level at 4096 and 0.2% slower at 8192 (inside that
+size's 0.5–0.9% run-to-run spread), and 9–46% faster on the decode shapes. The
+table above was measured after it.
+
+This table read 0.84–0.94x above 256 when it was measured on 2026-08-09, by
+a harness that commit does not record. On 2026-10-17 the K loop
+stopped recomputing every `cp.async` chunk's address and bounds at each
+K-tile and loaded B with one `ldmatrix.x4.trans` per 16 columns
+(`docs/benchmarks/f16_gemm_loop_2026-10-17/`), and the tiles were measured
+again, three of them changing (`docs/benchmarks/f16_tiles_2026-10-17/`). Before the
+mainloop work it was 0.61–0.94x: `ptxas` could not unroll the `cp.async`
+staging loops because their trip count depended on `%tid.x`, costing ~22
+SASS instructions per 16-byte copy.
+
+### Accuracy against cuBLAS
+
+**In short: at every shape measured, Y's default output is at least as close
+to the exact product as cuBLAS's** in relative Frobenius error and in maximum
+error normalized by `sum |a| |b|` (below). Where K is at most 2048, at 4096³
+and at 2048 rows with K = 4096, Y chains K in the tensor core as cuBLAS does
+there, and the two give the same bits; 2048 x 4096 x 14336 did too until
+2026-11-07, and is now blocked, as every shape from K = 8192 is, at 34x
+below cuBLAS's largest error (`docs/benchmarks/f16_block_sums_2026-11-07/`).
+Elsewhere Y's relative Frobenius error
+is the smaller: 7.9–16x at 8192³, 2.5–38x at 512 x 512 x K ≥ 4096 and
+2.8–9.4x at 64 x 4096 x 4096, where cuBLAS used to be the more accurate, and
+11–79x at three more LLM layer shapes (blocked summation, since
+2026-10-25); 2.8–617x at M = 1, 8 and 32 (compensated float32 adds, since
+2026-10-24). It is not closer on every output: under heavy cancellation up
+to 27% of the outputs are farther from float64 than cuBLAS's, and at M = 1
+cuBLAS's float32 GEMV is closer on 6–21%. Above 32 rows that costs 0–4% of
+the previous speed (median 1% over 22 LLM layer shapes); split K became
+faster.
+
+Measured on nine input distributions and eleven shapes, f16 in and f32 out,
+with every output compared against float64 (`docs/benchmarks/f16_accuracy_2026-10-20/`,
+2026-10-20). That record gives each input's seed and the SHA-256 of its bytes.
+Blocked summation, the default above 32 rows from K = 4096 since 2026-10-25,
+was measured the same way on fourteen shapes, 2048³ and five LLM layer
+shapes among them (`docs/benchmarks/f16_blocked_2026-10-25/`).
+
+R is the float64 product. It is the exact sum up to float64 rounding, since
+f16 products are exact in float64; it is checked against `math.fsum` on 3,168
+outputs. C is a kernel's output, and
+
+$$S_{ij} = \sum_k |a_{ik}|\,|b_{kj}| \;\ge\; |R_{ij}| .$$
+
+Three metrics:
+
+$$\mathrm{rel}_F = \frac{\|C - R\|_F}{\|R\|_F}, \qquad
+\mathrm{max}_{\mathrm{abs}} = \max_{ij} |C_{ij} - R_{ij}|, \qquad
+\mathrm{max}_{\mathrm{norm}} = \max_{ij} \frac{|C_{ij} - R_{ij}|}{S_{ij}}$$
+
+**References near zero.** No error is divided by |R_ij|:
+
+- **The relative error isn't used.** Under cancellation, a float32 sum can be
+  off by 2^-24 S_ij with every step correctly rounded. |C_ij − R_ij| / |R_ij|
+  then mostly measures how much the sum cancels, κ_ij = S_ij / |R_ij|, rather
+  than the kernel. An output's relative error is at most κ_ij times its
+  normalized error.
+- **When S_ij is zero.** S_ij is zero only when every product is zero, and
+  then R_ij is exactly 0. Those outputs are left out of max_norm and must be
+  exactly 0. None occurred.
+
+**The distributions:**
+
+- **Mixed sign:** N(0, 1); U(−1, 1); mixed exponents ±2^(−10…10), giving
+  products from 2^-20 to 2^22; and N(0, 1) scaled by 2^-12 (up to a fifth of
+  the inputs f16 subnormals) and by 2^7. κ_F = ‖S‖_F / ‖R‖_F is 2.4–192.
+- **Same sign:** |N(0, 1)| and U(0, 1), so κ = 1.
+- **Cancellation-heavy:** rows of A near 1 against centred columns of B
+  (κ_F 1.3e3–2.0e4); and A = [U U] against B = [V; −V + 2^-10 W], whose second
+  half of K cancels the first (κ_F 1.5e4–2.3e5).
+
+The shapes are 256³, 1024³, 4096³, 8192³, M = 1, 8 and 32 with N = K = 4096,
+and 512 x 512 x K for K = 1024–65536. cuBLAS is `torch.mm(a, b,
+out_dtype=torch.float32)`.
+
+The table gives cuBLAS's error over Y's, as rel_F / max_norm: above 1, Y's
+error is the smaller. Each cell is a range over the group's distributions.
+The compensated rows are from `docs/benchmarks/f16_kahan_2026-10-20/accuracy/`
+and the blocked ones from `docs/benchmarks/f16_blocked_2026-10-25/`, on the same distributions.
+
+| shapes | Y | mixed sign | same sign | cancellation | outputs where Y's error is larger |
+|---|---|---|---|---|---|
+| 256³, 1024³, 2048³, 512 x 512 x 1024 | default (chain, K ≤ 2048) | same bits | same bits | same bits | 0 |
+| 4096³, 2048 x 4096 x 14336 | default (chain: the block sums do not fit) | same bits | same bits | same bits | 0 |
+| 8192³ | default (blocked) | 8.7–9.1 / 8.0–8.7 | 12–14 / 11–12 | 7.9–16 / 6.8–12 | 0–8.2% |
+| 512 x 512 x 4096–65536 | default (blocked) | 6.4–24 / 4.9–17 | 9.3–38 / 7.9–28 | 2.5–20 / 2.6–12 | 0–27% |
+| 64 x 4096 x 4096, 1024 x 4096 x 4096, 128 x 14336 x 4096, 512 x 4096 x 14336 | default (blocked) | 6.6–46 / 6.8–51 | 9.3–70 / 8.9–60 | 2.8–79 / 5.2–61 | 0–27% |
+| 8192³ | `Y_F16_ACCUMULATE=mma` (chain) | 0.34 / 0.31–0.38 | 0.31–0.37 / 0.32–0.37 | 0.34–0.35 / 0.32–0.36 | 80–100% |
+| 512 x 512 x 4096–65536 | `Y_F16_ACCUMULATE=mma` (chain) | 0.13–0.51 / 0.10–0.53 | 0.12–0.49 / 0.12–0.49 | 0.014–0.55 / 0.024–0.55 | 71–100% |
+| 64 x 4096 x 4096 | `Y_F16_ACCUMULATE=mma` (chain) | 0.50–0.51 / 0.43–0.69 | 0.49 / 0.49–0.50 | 0.11–0.51 / 0.20–0.56 | 73–100% |
+| M = 8, 32 | default (compensated) | 73–89 / 72–95 | 584–617 / 328–378 | 55–71 / 54–78 | 0–1.2% |
+| M = 1 | default (compensated) | 5.6–7.6 / 5.6–12 | 2.8–3.0 / 5.3–6.6 | 7.3–8.9 / 11–13 | 6.2–21% |
+| M = 8, 32 | `Y_F16_ACCUMULATE=f32` | 22–23 / 9.7–15 | 193–204 / 45–50 | 18 / 8.2–12 | 0–2.5% |
+| M = 1 | `Y_F16_ACCUMULATE=f32` | 1.7–1.9 / 0.71–2.5 | 0.93–0.95 / 0.82–0.93 | 1.9–2.9 / 1.8–2.0 | 21–48% |
+| the 8 shapes above 32 rows | `Y_F16_ACCUMULATE=f32` | 4.7–23 / 2.5–14 | 26–202 / 11–40 | 1.04–18 / 0.83–9.7 | 0–45% |
+
+**Above 32 rows and up to K = 2048, Y chains its K loop in the tensor core's
+accumulator, as cuBLAS and Triton do.** Where they chain too, the three give
+the same bits for every distribution: at every shape measured with K ≤ 2048,
+and at 4096³ and the larger LLM shapes, where cuBLAS chains as well. The
+tensor core adds into its accumulator with less than float32 rounding,
+truncating, so the chain's same-sign results land below float64 by about
+1.2e-5 per 1024 of K. Where cuBLAS does something else it is more accurate
+than the chain, on every distribution and all three metrics:
+
+- **512 x 512 x K ≥ 4096:** 2–8x more accurate, and up to 70x on the paired
+  inputs at K = 65536. At K = 16384 and 65536 cuBLAS splits K in 8 (a
+  `splitKreduce` kernel follows), and the float32 reduction bounds each
+  tensor-core chain.
+- **64 x 4096 x 4096:** 2–9x, with the kernel it runs at 512 x 512 x 4096.
+- **8192³:** about 3x more accurate.
+
+At 512 x 512 x 4096 cuBLAS runs one kernel whose bits are those of two
+chained halves of K added in float32, and at 16384 and 65536 eight chained
+splits added in order: Y's split-K kernel chained (below, with
+`Y_F16_ACCUMULATE=mma`) gives cuBLAS's bits there on all nine distributions.
+How cuBLAS orders the sum at 8192³ was not established.
+
+**From K = 4096 the sum is blocked instead** (since 2026-10-25,
+`docs/benchmarks/f16_blocked_2026-10-25/`). The mmas chain into a block sum
+of their own, which is added into the accumulator with `add.rn.f32` after
+every 256 of K and zeroed, so the truncation acts on one block's sum rather
+than on all of K.
+The block sums take one register per accumulator, and the chain is kept where
+they would not fit: 4096³ and the 128x128 tiles of the larger LLM shapes,
+whose 64 x 64 warp tiles hold 128 accumulators a thread (blocked, 844 bytes
+of spill stores). There cuBLAS chains too. From K = 8192 such a tile runs
+on twice the warps and at least 3 stages instead (since 2026-11-07,
+`docs/benchmarks/f16_block_sums_2026-11-07/`), at 0.99–1.02x the chain's
+speed. Until then the analytic model gave 8192³ and 16384³ 2x2 warps, so a
+compile without a measured tile chained there, at 3x cuBLAS's largest
+error; only the committed kernels, emitted from a re-tuned profile, were
+blocked. `Y_F16_ACCUMULATE=blocked` blocks
+every shape and `Y_F16_BLOCK_K` sets the block, a power of two. On the
+record's fourteen shapes and nine distributions, blocked everywhere:
+
+- **Lower rel_F and max_norm than cuBLAS in 117 of 126 cases,** and in the
+  other nine (256³, whose K is one block) cuBLAS's bits.
+- **Not on every output:** under cancellation 0.7–27% of the outputs are
+  farther from R than cuBLAS's, on the other inputs at most 12%.
+- **Under the paired cancellation its rel_F is at most 3.8e-4,** against
+  1.2e-3 for float32 accumulation and 8.7e-2 for the chain.
+- **On same-sign inputs float32 accumulation stays ahead** (cuBLAS's rel_F
+  26–202x its own, against 9.3–70x blocked): each block still truncates.
+- **Speed:** 0.96–1.02x the chain's (median 0.99 over 22 LLM layer shapes from
+  64 to 2048 rows, 16 of them within 2%); 0.98–1.00x at 8192³, still
+  1.005–1.02x cuBLAS's; 0.96–0.98x at 512 x 512 x 4096–65536, where it is
+  1.05–1.08x, 0.97–0.985x and 0.91–0.94x cuBLAS's. Its K loop is no longer
+  than the chain's, but `ptxas` schedules it differently and issues the next
+  K-tile's fragment loads later. The fused SwiGLU kernel asks for a register
+  limit that keeps two CTAs an SM, as the chain has, and runs at 0.97x the
+  chain (0.77x without it). Contended desktop GPU, two runs on small-integer
+  and N(0, 1) data, the minimum of 21 interleaved rounds each.
+
+**Since 2026-10-20 a GEMM of at most 32 rows starts each mma from zero and
+adds its result in float32** (`add.rn.f32`), as the FP8 GEMM does
+(`docs/benchmarks/f16_accumulate_2026-10-20/`). It is 2–5% faster at M = 1, 4
+and 8 and 0.4% slower at 32. `Y_F16_ACCUMULATE=f32` does the same for every
+shape, at 1.03–1.09x the time on the square ones and 1.02–1.06x at
+512 x 512 x 4096–65536; `=mma` keeps the chain everywhere. Since 2026-10-24
+those adds are compensated by default (below), and `=f32` keeps them plain.
+
+**Against cuBLAS, float32 accumulation has the lower rel_F in 97 of the 99
+cases and the lower max_abs and max_norm in 94.** It is not more accurate on
+every input or every output:
+
+- **M = 1:** cuBLAS runs a GEMV with float32 FMAs and no tensor cores. On
+  same-sign inputs that GEMV is 5–7% lower in rel_F and 7–18% lower in
+  max_norm, and float32 accumulation is worse on 47–48% of the outputs.
+- **Long-K cancellation:** on the paired inputs at 512 x 512 x 16384–65536,
+  cuBLAS's split K has a lower max_norm (0.83–0.87x), the two are level in
+  rel_F, and float32 accumulation is worse on 45% of the outputs.
+- **Mixed signs elsewhere:** it is worse on 1–10% of the outputs.
+
+**It is not float32 summation either.** Each mma still truncates its 16
+products, a bias of −7.0e-8 to −8.0e-8 on same-sign inputs at any K. Float32
+FMAs on the CUDA cores, the control (SGEMM on the same f16 values, TF32 off),
+have no such bias:
+
+- **Same sign:** SGEMM's rel_F is lower in 18 of 22 cases, at 0.15–0.96x.
+- **Mixed sign:** float32 accumulation is lower in 49 of 55, at 1.03–3.9x.
+
+Its error also grows with K. On |N(0, 1)| inputs rel_F goes from 1.0e-7 at
+K = 256 to 9.9e-7 at 65536; only the bias stays put.
+
+**This replaces the README's earlier "34–1290x below cuBLAS's".** That was the
+ratio of mean signed normalized errors, the bias, on |N(0, 1)| alone. It
+reproduces as 34–1300x at every shape but M = 1. There cuBLAS's bias is 24x
+smaller: +3.4e-9 against −8.0e-8.
+
+**Under heavy cancellation**, no kernel's max_norm exceeds its own maximum on
+N(0, 1). rel_F still reaches:
+
+- 1.2e-3 (about three digits) for float32 accumulation and cuBLAS's split K;
+- 5.4e-3 for cuBLAS's chain at 4096³;
+- 8.7e-2 for Y's chain at 512 x 512 x 65536 (`Y_F16_ACCUMULATE=mma`; the
+  default there is blocked, 3.5e-4).
+
+R rounded to float32 has a rel_F of at most 2.6e-8.
+
+**Since 2026-10-20 a kernel named `<name>_splitk<S>` splits K in S**
+(`docs/benchmarks/f16_splitk_2026-10-20/`): each split adds its mmas in
+float32 (above 32 rows, since 2026-10-25, in blocks: below) into an M x N
+float32 partial, and a second entry, `<name>_reduce`,
+adds the S partials in order with `add.rn.f32`, without atomics, so C's bits
+do not depend on which CTAs finish first. At 512 x 512 x K, on a contended
+GPU, against cuBLAS:
+
+- **K = 4096 and 16384: faster, and lower in rel_F, max_abs and max_norm on
+  all nine distributions.** At 4096 the unsplit float32 kernel is 1.05x
+  cuBLAS's speed and split 2 is 1.02–1.03x; at 16384 split 4 is
+  1.008–1.009x, with cuBLAS's rel_F 11x Y's on mixed signs, 164–166x on same
+  signs and 1.5–5.7x under cancellation.
+- **K = 65536: more accurate, not faster** (in float32 splits; blocked splits,
+  the default since 2026-10-25, are both: below). Split 4 in float32 runs at
+  0.98–0.99x cuBLAS's speed (cuBLAS's rel_F 22–23x, 388–404x and 1.5–12x Y's).
+  Split 4 chained is 1.01–1.04x, and half as accurate as cuBLAS.
+- **Not on every output:** under cancellation (the paired inputs), 25–36% of
+  split 4's outputs are farther from R than cuBLAS's; on mixed signs,
+  2.4–4.8%.
+- **Each mma's truncation bias stays** at −7.0e-8 to −7.8e-8 (mean_norm, same
+  sign) whatever S is, so on same-sign inputs at K = 65536 SGEMM's rel_F is
+  below split 4's (1.52e-7 against 2.62e-7); split 16's, 1.18e-7, is below
+  SGEMM's, and split 16 runs at 0.92–0.93x cuBLAS's speed.
+
+**Since 2026-10-25 a split of more than 32 rows whose K is longer than a
+block is blocked,** where its block sums fit
+(`docs/benchmarks/f16_blocked_2026-10-25/`). At 512 x 512 x 16384 and 65536
+in 4 splits it runs at 1.02–1.06x the float32
+splits' speed and 1.01–1.04x cuBLAS's, so K = 65536 is faster than cuBLAS
+too. Its rel_F and max_norm are below cuBLAS's in all 18 cases: cuBLAS's
+rel_F is 6.6–26x its own on mixed signs, 9.3–39x on same signs and 2.6–21x
+under cancellation (the float32 splits': 11–23x, 164–404x and 1.5–12x).
+Splits of at most 32 rows or one block deep stay float32.
+
+**Since 2026-10-25 a kernel named `<name>_splitk` chooses its own split**
+(opt-in, not a default; `docs/benchmarks/f16_auto_splitk_2026-10-25/`). It
+takes `_splitk<S>`'s four parameters and is launched the same way, main entry
+then `_reduce`, with S stated in its PTX header. The rule
+(`Autotuner::split_k_choice`) splits K only where the unsplit kernel leaves
+SMs without a CTA and the GEMM does at least 96 flops per byte of A, B and C,
+so not where it is bound to DRAM, and never at 32 rows or fewer. It then
+takes 2, 4 or 8 splits, each at least 4096 deep, on one of three eight-warp
+tiles: the most CTAs up to one an SM and, on a tie, the fewer splits. Where
+it does not split, the main entry is the plain kernel (the same machine code)
+writing C, and `_reduce` returns at once. A plain `@tile` GEMM keeps its
+three-argument launch; where the rule would split it, the compiler says so
+and prints the workspace the split needs.
+
+Timed on a contended GPU (`sbench.py`: the minimum of 21 interleaved rounds,
+two runs on integer and N(0, 1) inputs, the reduction included; above 1 the
+rule's kernel is faster). Two unsplit baselines: the kernel on the tile the
+profile gives it (no measurement of these shapes: 64x64x32 2x2 at 512 x 512),
+which is what an ordinary build emits, and on a tile `--autotune` measures for
+the shape (64x64x64 4x2 at 512 x 512, 16x64x64 1x2 at 256 x 256):
+
+| shape | the rule's split | over unsplit, profile's tile | over unsplit, measured tile | over cuBLAS, A and B in the L2 / from DRAM |
+| :--- | :--- | ---: | ---: | ---: |
+| 512 x 512 x 16384 | 2, on 64x128 tiles | 1.085–1.089x | 1.00–1.02x | 1.06–1.07x / 1.02–1.07x |
+| 512 x 512 x 65536 | 2, on 64x128 tiles | 1.102–1.113x | 1.03–1.05x | 0.96–1.06x (128 MB: from DRAM) |
+| 256 x 256 x 16384 | 4, on 64x64 tiles | 2.36–2.40x | 1.78–2.21x | 1.02x / 0.94x |
+
+On its measured tile the unsplit kernel runs 1.11–1.13x cuBLAS at
+512 x 512 x 4096, 1.02–1.06x at 16384 and 0.94–0.99x at 65536: the gap at
+512 x 512 that prompted the split was mostly the untuned tile.
+
+**Under `--autotune` the split is measured** instead: the unsplit kernel and
+every split of 2, 4 or 8 at least 1024 deep on the three tiles, timed together
+(B rotated through up to eight copies, so from DRAM unless eight fit in the
+L2), each split with its reduction. A split must beat
+the unsplit kernel beyond the run's own noise; the winner is kept in the
+profile (`AUTOTUNE_F16_SPLITK_AUTO_<M>x<N>x<K>_<gpu>`), which later builds
+read and `--no-autotune` ignores. It is measured only where the rule's gate
+passes. At the eight shapes where the record times every candidate it takes
+the fastest or one inside the harness's noise, but for 256 x 256 x 16384
+from DRAM (4 splits, 0.88x the 8 that are fastest there; the tuner streams B
+alone). At 256 x 384 x 32768 it takes 8 splits on 64x64 tiles, 192 CTAs, 1.3x
+the rule's 2 splits; no rule on the CTA count fits both that shape and
+512 x 512.
+
+- **More accurate than cuBLAS in all 27 cases** of the three splits (the
+  nine distributions of `docs/benchmarks/f16_accuracy_2026-10-20/`), in both
+  rel_F and max |E|/(|A||B|): cuBLAS's rel_F is 6.5–25x theirs on mixed
+  signs, 9.3–39x on same signs and 2.4–20x under cancellation. Not on every
+  output: up to 6.6% of the mixed-sign outputs, 3.5–11% of the offset ones
+  and 18–25% of the paired ones are farther from float64 than cuBLAS's.
+  Against the unsplit default they are level in rel_F (0.985–1.006x) and at
+  0.93–1.18x in max |E|/(|A||B|), the highest on paired cancellation.
+- **The other 48 shapes timed stay unsplit**: 512 x 512 x 4096, the 30 LLM
+  layer shapes, the squares 1024³–8192³, 1024 x 1024 x 16384 and decode at
+  M = 1, 8 and 32. Above 32 rows no split of them was faster beyond its
+  run's own noise, except 64 x 4096 x 4096 with its 32 MB of B held in the
+  L2 between calls (1.10–1.11x; 0.98x or less from DRAM). At K = 11008 and
+  14336, B too large for the L2, the same splits were 0.88–0.99x.
+- **Measured faster but not taken**: decode splits, 1.04–1.08x at M = 1 and
+  8 with N = 14336 from DRAM (and 1.22–1.24x at N = K = 4096 with B in the
+  L2, where the unsplit kernel's compensated sum costs the most, but
+  0.96–1.01x from DRAM). A split of at most 32 rows adds each mma in plain
+  float32, and its accuracy against cuBLAS has not been measured. At
+  256 x 256 x 16384 from DRAM, 8 splits (2048 deep, below the rule's bound)
+  were 1.01–1.04x cuBLAS; in the L2 the rule's 4 were 1.7% ahead of them.
+- **Where it does not split**, the empty `_reduce` launch costs up to about
+  4% on the shortest kernels (1024³, 32 x 4096 x 4096) and 2% at
+  512 x 512 x 4096, at long K nothing measurable; its header says `in 1
+  split`, and a host that reads it may skip the launch.
+
+**`Y_F16_ACCUMULATE=blocked_kahan` compensates the block folds** (opt-in,
+same record): each block sum is added into the accumulator as the
+compensated mode adds a tile sum, its rounding error kept apart and added in
+once after the K loop. At the rule's three splits it trades speed for
+accuracy:
+
+| | default (blocks of 256) | compensated, 256 | compensated, 64 (`Y_F16_BLOCK_K=64`) |
+| :--- | ---: | ---: | ---: |
+| paired cancellation: outputs farther from float64 than cuBLAS's | 18–25% | 11–22% | 5–11% |
+| N(0, 1): cuBLAS's rel_F over Y's | 6.8–25x | 6.9–27x | 20–81x |
+| speed at 512 x 512 | 1 | 0.91–0.96x | 0.84–0.87x |
+| speed at 256 x 256 | 1 | 0.97–1.00x | 0.87–0.98x |
+
+Blocks of 64 were measured on three of the nine distributions (N(0, 1),
+offset and paired). At 512 x 512 x 16384 even compensated blocks of 256 give
+up the split's lead over cuBLAS (0.98–1.01x its speed). What compensation
+cannot remove is the truncation inside each block's chained mmas, which only
+shorter blocks reduce.
+
+**Since 2026-10-24 a GEMM of at most 32 rows compensates its float32 adds**
+outside split K, and `Y_F16_ACCUMULATE=kahan` does so for every shape
+(`docs/benchmarks/f16_kahan_2026-10-20/`,
+`docs/benchmarks/f16_kahan_default_2026-10-24/`). Each K-tile's mma results
+are summed in a register of their own; that tile sum is added into the
+accumulator, and the add's rounding error, `(s − s') + x`, is summed in a
+third register that is added in once after the K loop (Kahan and Babuška's
+compensation, kept apart from the sum, so an infinite input still gives
+±Inf). That is four float32 operations per K-tile on top of float32
+accumulation's one per mma. What is left is each mma's own truncation. At
+M = 1, 8 and 32 (N = K = 4096), 512 x 512 x 4096 and split 4 and 16 at
+512 x 512 x 65536, on the nine distributions:
+
+- **Lower rel_F and max_norm than both cuBLAS and SGEMM in all 63 cases.**
+  At M = 1 cuBLAS's GEMV's rel_F is 5.6–7.6x Y's on mixed signs, 2.8–3.0x on
+  same signs and 7.3–8.9x under cancellation; float32 accumulation's was
+  1.7–1.9x, 0.93–0.95x and 1.8–2.9x.
+- **Same-sign rel_F is 7.6e-8 to 8.6e-8 at every shape and K** (split 16:
+  9.3e-8 to 1.0e-7), against 1.1e-7 to 2.6e-7 for float32 accumulation and
+  1.1e-7 to 2.5e-7 for SGEMM; the bias, −7.2e-8 to −7.8e-8 (mean_norm), is
+  most of it.
+- **Not on every output:** at M = 1 cuBLAS's GEMV is closer to R on 6–21% of
+  the outputs, and SGEMM on 4–34% across the shapes; float32 accumulation is
+  closer on 6–27%, where its rounding happens to offset the truncation.
+- **Decode speed** (M x 4096 x 4096, contended desktop GPU, no game): from
+  DRAM it costs nothing measurable (within 0.3% of float32 accumulation, at
+  54.8–55.4 us); with B in L2 it takes 1.19–1.20x float32 accumulation's
+  time at M = 1–8 (21.0 against 17.6 us) and 1.06x at 32, still 1.27x
+  faster than cuBLAS at M = 1, 2.4–2.6x at 4 and 8 and 1.09x at 32.
+- **At N or K = 11008 and 14336** (M = 1, 8 and 32, B from DRAM,
+  contended, `docs/benchmarks/f16_kahan_default_2026-10-24/`): 0.99–1.02x
+  float32 accumulation's time at M = 1 and 8, and at M = 32 1.00–1.01x with
+  K = 4096 but 1.02–1.03x with K = 11008 or 14336, on the analytic 32x64x32
+  tile that folds every 2 mmas. Against cuBLAS it is ahead or level at 9 of
+  the 12 shapes, up to 1.15x; it trails at 1 and 8 x 14336 x 4096 (0.96–0.97x,
+  as every mode does on that tile) and at 32 x 4096 x 14336 (0.99x, where
+  float32 accumulation is 1.01x).
+- **Not above the decode tiles:** 0.74–0.75x cuBLAS at 512 x 512 x 4096 and
+  0.72x at 512 x 512 x 65536 in 4 splits, where float32 accumulation is
+  1.04–1.05x and 0.98–0.99x. With compensation, splitting K no longer helps
+  accuracy either: split 16 at K = 65536 is a little worse than split 4.
+
+Per-mma Kahan, per-tile Kahan (with and without a guard for infinities) and
+TwoSum were measured too; the record's table compares them.
+
+### Fused GEMM + bias + ReLU vs cuDNN
+
+Precision-matched — the cuDNN baseline is fed the same FP16 operands the Y
+kernel consumes: `F.linear` in FP16 (cuBLASLt with its bias epilogue, FP16 out)
+and then `relu`. Y writes FP32, twice its bytes; against a float32-output
+`torch.addmm` + `relu`, the same bytes as Y, it is 1.92–1.94x, 1.35–1.36x,
+1.16–1.17x, 1.22x and 1.11x. Every column checked exact, interleaved rounds,
+minimum, two runs on 2026-10-20 after the re-tune, beside Discord's GPU process
+(`docs/benchmarks/retune_2026-10-20/`); on a quiet GPU before it the row read
+1.45x, 1.12x, 1.01x, 1.03x and 1.03x (`docs/benchmarks/quiet_2026-10-20/bias_relu/`),
+and `1.07x | tie | tie | tie | 1.08x` before the swizzle. (An FP32 `torch.nn.Linear`
+baseline shows 2.9–3.4x, but that conflates "the fused epilogue is good" with
+"FP16 beats FP32".)
+
+| M=N=K | 512 | 1024 | 2048 | 4096 | 8192 |
+|---|---|---|---|---|---|
+| **Y vs cuDNN FP16** | 1.47x | 1.13x | 1.05x | 1.04x | 1.04x |
+
+Epilogue fusion is where fusion pays most. The general rule this established,
+after measuring it the other way: **fusions that only remove work win; mainloop
+fusions that add accumulator pressure force a worse tile and win less.** Fused
+SwiGLU's two FP32 accumulator arrays cost 8 registers each per tile element, so a
+128x128 tile over 2x2 warps would need 256 registers/thread against ptxas's 255
+cap. It ran 128x128 on 4x4 warps; since 2026-10-20 it runs 64x64 on 4x2 warps,
+the fastest of six tiles swept, or within 0.8% of it, from 512 to 4096
+(`docs/benchmarks/swiglu_tile_2026-10-20/`). With that and swizzled shared
+memory it is 1.10–1.37x Y's own unfused path (two Y GEMMs, then SiLU times up
+in PyTorch) and 1.07–1.45x PyTorch's from 512 to 4096. The 128x128 tile took
+2.9x the time at 512, where it made 16 CTAs for 66 SMs. It read 1.00x against
+the unfused path before.
+
+### RMSNorm and RoPE vs FlashInfer
+
+Compared against FlashInfer's hand-tuned production kernels (what vLLM and
+SGLang actually use), same math and same convention — not against eager PyTorch.
+
+| kernel | rows | result |
+|---|---|---|
+| Fused Add+RMSNorm (hidden=4096) | 122 / 519 / 1038 (4 / 17 / 34 MB) | **1.42x / 1.16–1.18x / 1.14–1.15x** |
+| Fused Add+RMSNorm (hidden=4096) | 4089 (134 MB, from DRAM) | tie |
+| Fused RoPE (head_dim=64/128/256), the same work | 2 / 8 / 17 / 34 MB | **1.20–1.36x / 1.09–1.11x / 1.05–1.06x / 1.02–1.04x** |
+| Fused RoPE (head_dim=64/128/256), the same work | about 100 MB (from DRAM) | tie |
+
+The RMSNorm rows are from 2026-10-19 (`docs/benchmarks/rmsnorm_residual_2026-10-19/`,
+two runs, FlashInfer's time over Y's, every column checked against float64).
+At hidden 896–12032 Y is 1.07–1.20x FlashInfer at 17 and 34 MB and
+1.28–1.50x at 4 MB. At 16384 it is 0.99–1.05x at 17 and 34 MB, and from
+DRAM the two tie at every size. Against a Triton kernel doing the same arithmetic it is
+1.01–1.21x from 3072 to 12032 inside the L2, level at 2048, 1–2% behind
+at 896 and up to 4% behind at 16384. Until then the kernel looped over its groups, staged h
+through shared memory and ran one warp a row at hidden sizes such as 896:
+it took 1.08–1.10x Triton's time at 17–34 MB of hidden 4096, and from
+hidden 12288 up `ptxas` refused it.
+
+The RoPE rows are from 2026-10-19 too (`docs/benchmarks/rope_2026-10-19/`,
+two runs, CUDA-graph replays). FlashInfer's `apply_rope_pos_ids` rotates q
+and k, and is given the two halves of the rows Y rotates. Against a Triton
+kernel doing the same arithmetic, Y is 1.54–1.84x faster inside the L2 when
+Triton uses `tl.sin`/`tl.cos` (libdevice's precise functions), and 1.15–1.64x
+when it uses `fast_sinf`/`fast_cosf`, which lower to the `sin.approx` Y uses.
+From DRAM all three tie. Until then a CTA was one 32-thread row, at half
+occupancy and bound by how fast CTAs launch. Inside the L2 it took 1.47–2.49x
+FlashInfer's time at head_dim 128 and 2.49–4.95x at 64. The RoPE kernel now
+takes a fourth parameter, `Rows`, and puts 8 rows in a 256-thread CTA (16 at
+head_dim 64). This table said 1.85x and 1.92x faster, at 128 and 1024 rows
+of head_dim 128. Those rows timed Python launches of a 66 KB and a 528 KB
+problem, which the launch costs decide, and FlashInfer rotated q and k where
+Y rotated one tensor.
+
+### Paged decode attention vs FlashInfer
+
+head_dim 128, 32 query heads, 8 KV heads (GQA 4:1), page_size 16, against
+FlashInfer's `BatchDecodeWithPagedKVCacheWrapper` on the same shuffled page
+table and the same NHD KV layout. Ramped clocks, A/B interleaved, minimum of 7
+rounds. `python3 tests/benchmark_y_paged_decode_attention.py`; the record,
+with CUPTI device times and both runs, is
+`docs/benchmarks/paged_attention_2026-10-18/`.
+
+| case | FlashInfer | Y single-pass | Y split-K | split-K vs FI |
+|---|---|---|---|---|
+| batch 1, ctx 1024 | 8.50 µs | 9.10 µs | **7.65 µs** | **1.11x** |
+| batch 1, ctx 4096 | 13.67 µs | 28.24 µs | **11.87 µs** | **1.15x** |
+| batch 8, ctx 1024 | 23.21 µs | 38.95 µs | **20.53 µs** | **1.13x** |
+| batch 8, ctx 4096 | 190.34 µs | 191.01 µs | 194.88 µs | tie (0.98x) |
+| batch 32, ctx 1024 | 196.25 µs | 193.94 µs | 197.36 µs | tie (0.99x) |
+| batch 32, ctx 4096 | 826.08 µs | 851.97 µs | 832.63 µs | tie (0.99x) |
+
+The first of two runs on 2026-10-18. The second gave 1.11x, 1.13x and 1.13x on
+the first three rows and 1.01x, 0.95x and 1.03x on the last three, where
+FlashInfer's own time moved by up to 4% between the runs (826 and 859 µs at
+batch 32 / ctx 4096): read those three as ties. In CUPTI device time Y was
+2–5% behind FlashInfer at batch 32 / ctx 1024 in both runs. The first three
+rows are the shapes whose KV cache (4–34 MB) fits in the 48 MB L2; the last
+three read 134–537 MB.
+
+**The KV loop (2026-10-18).** Until then the loop put all 32 lanes on one
+token: 157 sm_89 SASS instructions a token, 20 of them shuffles. At batch 1 /
+ctx 4096 it executed 5.33 M warp instructions to FlashInfer's 4.28 M and took
+1.31x FlashInfer's device time; both issued about half an instruction per
+cycle per scheduler, so the time ratio was the instruction ratio. Now a
+token's row spans 16 lanes (8 f16, one 128-bit load each), so a warp works on
+two tokens at a time with 4-step butterflies. Each warp walks one contiguous
+block of tokens, so its page-table entry is reloaded once a page. The softmax
+state is rescaled only when a score passes the running max by more than 8
+(a warp-uniform `vote.any`), and the next iteration's page lookup and K/V
+loads are issued before this iteration's arithmetic. The loop is 239
+instructions for two tokens, 179 when no rescale is taken, and the kernel
+executes 0.66x the instructions it did at the same issue rate: 9.19 µs
+against 14.33 at batch 1 / ctx 4096, FlashInfer 10.98. At GQA 8:1, eight
+query heads to a CTA, a token keeps 32 lanes: 8 elements a lane needed 194
+registers.
+
+**The split-K kernel.** Before it this was 1.3–3.7x slower; the split-K
+kernel made it 0.76–1.06x. The two causes this README used to name were both
+real, and neither could be fixed alone:
+
+* **The GQA re-read.** The single-pass grid is `num_q_heads x num_seqs`, so the
+  four CTAs sharing a KV head each streamed that head's whole cache — four
+  times the necessary DRAM traffic. The split-K kernel's grid is
+  `num_kv_heads x num_seqs x splits` and one CTA carries all four query heads,
+  so a token's K and V are loaded once and feed four scores.
+* **No split-K.** With `num_q_heads x num_seqs` CTAs, batch 1 is 32 CTAs against
+  66 SMs whatever the kernel does internally. `%ctaid.z` now partitions the KV
+  sequence, so the CTA count stops depending on batch size.
+
+Merging the GQA heads *without* split-K would have made batch 1 worse, not
+better — 8 CTAs instead of 32. That is why the fix is one kernel shape rather
+than two independent changes, and why the split kernel is a second entry point
+(`..._reduce`, a max-rescale-and-sum over the per-split partial softmax states)
+rather than an option on the existing one: it needs two f32 scratch buffers and
+a device-wide barrier that does not exist inside a kernel. Both launches are
+inside the timed region above.
+
+Two things this does not claim. The split count is compile-time (16 for batch 1,
+4 for batch-many — `paged_decode_attention_split_128_32_8_16_<splits>_<warps>`)
+and its optimum depends on batch size, which is a runtime value; a single
+compiled binary shipping only the 16-split kernel measures **0.72–1.15x**
+instead of 0.98–1.15x (0.70–1.13x in the second run): at batch 8 / ctx 1024
+the 16-split kernel takes 32.33 µs where the 4-split one takes 20.53. And at
+batch 32 / ctx 4096 the kernel moves 645 GB/s of the KV bytes it is obliged to
+read, against this card's 672 GB/s DRAM ceiling: 96% of the roofline, with
+FlashInfer at 650 and 625 GB/s in the two runs.
+
+The single-pass kernel got 1.12–1.43x faster on the way, and **not** for the
+reason that sounds likely. Hoisting the V load above the QK warp reduction is
+worth 1.04–1.38x on its own: `exp` and five dependent `shfl` sat between that
+load's issue and its use, so its latency was exposed rather than overlapped.
+Restricting the cross-warp merge to warp 0 — instead of having all 32 warps
+compute an answer 31 of them discard — measured **0.83–1.10x in isolation**,
+a wash: it removes work but lengthens the live ranges around the branch, and
+`ptxas`'s register count went *up* (54 → 64 at 32 warps, 34 → 52 at 8). It is
+kept because it is what makes the multi-head epilogue affordable, not because
+it was a speedup.
+
+### FP8 (e4m3) GEMM vs `torch._scaled_mm`
+
+Float32 A and B to float32 C through the e4m3 tensor cores, every column
+checked exact first. Y quantises A, quantises and transposes B, and runs its
+`@tile` GEMM over the e4m3 bytes: three kernels, as PyTorch's column is its
+quantisation kernels and cuBLASLt's GEMM. CUDA-graph replays
+(`docs/benchmarks/head_to_head_2026-10-18/`); as in the tables above, above 1
+is Y faster:
+
+| M=N=K | 1024 | 2048 | 4096 | 8192 |
+|---|---|---|---|---|
+| **Y vs PyTorch** | 1.85x | 1.61x | 1.66x | 1.41x |
+| **Y vs Triton's fused kernel** | 1.33x | 1.17x | 1.45x | 2.11x |
+
+(This table gave Y's time over the other's until 2026-10-18 - 0.54x for
+1.85x - the opposite of the README's other tables.) The GEMM alone takes
+0.97-0.99x cuBLASLt's time up to 4096 and ties it at 8192 (0.995x and
+1.005x in two runs). The difference is the quantisation, 1.08 ms against
+torch's 4.17 at 8192. Both of Y's FP8 GEMMs add each `mma`'s result in float32. The tensor
+core's own accumulator keeps about 11 bits and truncates: chaining a K loop in
+it, as Y did until 2026-10-18 and Triton's `tl.dot` still does, left a median
+relative error of 6.6% at K = 4096 on positive inputs, against 6.5e-5 now
+(`docs/benchmarks/fp8_e4m3_2026-10-18/`).
+
+### FP32 GEMM vs cuBLAS
+
+`@tile(M, N, K) kernel g(A, B, C: GlobalMemory<F32>)` runs on CUDA cores with
+cuBLAS's own structure (a multistage `cp.async` pipeline, A transposed into
+shared memory, grouped raster order). Every element of C is one `fma.rn.f32`
+chain in k order, so its bits do not depend on M, the tile or the grid. cuBLAS
+with TF32 off, on the RTX 4070 Ti SUPER, every output bit-identical to an
+in-order `fmaf` reference (`docs/benchmarks/f32_gemm_2026-11-05/`); above 1 is
+Y faster:
+
+| shape | 8192^3 | 4096^3 | 2048^3 | 1024^3 | 512^3 | 128 x 4096 x 4096 | 768^3 |
+|---|---|---|---|---|---|---|---|
+| **Y vs cuBLAS** | 0.98x | 0.96-1.00x | 1.03-1.04x | 1.20x | 1.19-1.20x | 0.99-1.02x | 0.81-0.87x |
+
+At 768^3 and on K-heavy shapes with 256-1024 rows (0.94-0.95x), cuBLAS
+splits K. That is faster there and more accurate, but it makes the answer
+depend on the shape, which Y does not do.
+
+**With a workspace, Y splits K too, in order.** `(A, B, C:
+GlobalMemory<F32>, W: GlobalMemory<U64>)` runs as many CTAs as fit at once.
+Each runs whole tiles, then an equal share of the last tiles' K steps. A
+tile cut between two CTAs is continued, not summed: the first stores its
+exact accumulators in C and marks `W`, the next loads them and carries the
+same `fma` chain on, so the bits are the same as without `W`. Where one
+tile per CTA already fills the GPU, `W` goes unused and the kernel is the
+same one (identical SASS). Same card, two runs
+(`docs/benchmarks/f32_gemm_2026-11-05/streamk_final.txt`):
+
+| shape | 768^3 | 1280^3 | 1536^3 | 2304^3 | 3072^3 | 2048 x 768 x 3072 | 1024 x 1028 x 1024 |
+|---|---|---|---|---|---|---|---|
+| **without W** | 0.85-0.86x | 0.93-0.94x | 1.03-1.05x | 0.92x | 0.96-0.97x | 0.72-0.73x | 0.96-0.99x |
+| **with W** | 1.24-1.25x | 1.27-1.31x | 1.20-1.21x | 1.07x | 1.06-1.07x | 0.97-0.98x | 1.11x |
+
+Any M, N and K, still bit-exact:
+- Ragged sizes with N a multiple of 4: 0.91-1.26x, from 1000^3 to 3000^3.
+  A nearly empty last tile row or column goes to narrow remainder tiles
+  instead of costing a whole wave: 1025 x 1024 x 1024 runs at 1.09x.
+- N % 4 != 0, where a B row is not 16-byte aligned throughout. Each row's
+  alignment is known at compile time, so each is copied at its own widest
+  width:
+  - N = 2 mod 4: 0.79-1.02x. BERT's vocabulary projection,
+    1024 x 30522 x 768, runs at 1.00x.
+  - N odd: 0.73-1.11x. GPT-2's, 1024 x 50257 x 768, runs at 0.96-0.99x
+    since C is stored in each float4's widest aligned pieces (it was
+    0.85x: four 4-byte stores a float4 wrote C's sectors 5 times over in
+    L2, `docs/benchmarks/f32_gemm_2026-11-05/odd_n_stores/`); a later
+    sweep of many shapes at the power cap read it at 0.89-0.94x, old
+    kernel and new alike. On the 128-column tile, 1023 x 1025 x 1027 is
+    0.89-0.90x (it was 0.80x: in a tile cut by N, the threads past N all
+    copied B from one address, and those tiles ran 1.8x as long). With
+    `W`, which now also splits K at N odd on that tile where the model
+    gives at least 1.25x, it is 0.98-1.00x, and 1025^3 0.97-0.98x against
+    0.73-0.75x (`docs/benchmarks/f32_gemm_2026-11-05/odd_n_streamk/`).
+
+### BN254 field kernels, NTT and MSM
+
+Once the integer datapath existed, the ZK backend's arithmetic could be
+expressed as Y source and compiled to PTX. These are the compiler's own kernels,
+checked on the device against `src/zk_field.rs` and against arkworks.
+
+| kernel | result | baseline |
+|---|---|---|
+| Fr Montgomery multiply | **0.160 ns/mul, 6.23 G mul/s** | 89% of the card's DRAM peak — memory-bound, not compute-bound |
+| NTT, N = 2^20 | **0.56 ms** | icicle 0.608 ms |
+| NTT, N = 2^22 | **2.47 ms** | icicle 2.834 ms |
+| MSM, n = 2^22, kernel | 6.10x a 32-core CPU | **still 2.8–4.8x behind icicle** |
+| Groth16 prove, 2^20 constraints | **~5–6x** arkworks on 32 cores | sparse *and* dense circuits, ±15% run to run |
+
+**The NTT result is the halved pass count, not the arithmetic.** Radix-4 plus
+shared-memory stage fusion takes 11 passes to 3 at N = 2^22 and is what puts Y
+ahead of icicle; the fused kernel is no longer DRAM-bound (39% of peak, 71% SM)
+so the bottleneck moved rather than shrank. **Carry-flag intrinsics were
+predicted at 2x and measured at 1.06x** — `IMAD.WIDE` already produces both
+halves of a 32x32 product in one instruction, so the two-pass carry form doubles
+the multiply count exactly as it collapses the bookkeeping. Count the work an
+instruction does, not the instructions.
+
+**The Groth16 figure is honest about which circuit it was measured on.** A
+sparse polynomial benchmark circuit reported 3.61x where a dense Poseidon chain
+reported 1.76x, and the phase split *inverted* — matrix build 73% instead of
+45%, MSM 10% instead of 39%. Both are ~5–6x after the O(k²) and the
+single-threaded matvecs that difference exposed were fixed. On the dense circuit
+the largest remaining phase is the **G2 MSM at 47%**, which needs `Fq2`
+arithmetic that does not exist in this kernel series — a roadmap drawn from the
+sparse circuit alone would have ranked it last.
+
+**Do not multiply these against the circom compile-speed numbers.** Those
+measure *emitting* R1CS; circom does not prove at all. Different stage,
+different baseline.
+
+### Where the GPU backend loses
+
+| workload | baseline | result |
+|---|---|---|
+| Paged decode attention, batch 32 / ctx 1024 | FlashInfer | 0.95–0.99x |
+| Square F16 GEMM, 4096³ | cuBLAS | 0.97–0.99x (1.01x under sustained load on random data) |
+| F16 GEMM, M = 128–256 against N or K = 11008 (Llama-2-7B's MLP) | cuBLAS | 0.97–0.98x, the best of eight tiles |
+| RoPE in place, head_dim 64 and 256, about 50 MB (the L2's size) | FlashInfer in place | 0.85–0.95x |
+| FP32 GEMM, K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.94–0.98x |
+| FP32 GEMM where the tiles overshoot a whole number of waves (768³, 2048 × 768 × 3072), without the workspace `W` | cuBLAS, TF32 off | 0.72–0.87x (with `W`: 0.97–1.25x) |
+| FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time; on 128-column tiles C stored 4 bytes at a time too) | cuBLAS, TF32 off | 0.73–1.11x on mid-size shapes without `W` (1025³: 0.73–0.75x; 1023 × 1025 × 1027: 0.89–0.90x); with `W`, 0.91–1.05x where it splits K; 0.89–0.99x on the large tile (GPT-2's 1024 × 50257 × 768) |
+| int8 GEMM, 128 × 4096 × 11008 and × 14336 (Llama's MLP), 512 × 11008 × 4096, 512 × 1024 × 4096 with B from DRAM | cuBLASLt (`torch._int_mm`) | 0.91–0.98x (at 128 rows the 64×64 tile gives 0.99x from DRAM but 0.77–0.83x from L2) |
+| int8 GEMM, K % 64 == 32 (4000³, 4096 × 4096 × 4000) | cuBLASLt | 0.93–0.95x |
+| int8 GEMM, 8192³ | cuBLASLt | 0.97–1.00x |
+| BF16 GEMM: 4096³, the ragged 1000³, and 128 or 512 rows against Llama's 11008/14336 | cuBLAS bf16 → f32 | 0.93–0.99x |
+
+Paged decode attention used to lose by up to 1.3x when the KV cache fits in
+L2 (0.76–0.81x); since 2026-10-18 it is 1.11–1.15x there. Of the DRAM-bound
+shapes it is behind only at batch 32 / ctx 1024, by 2–5% of CUPTI device time
+in both runs, about the size of FlashInfer's own run-to-run variation
+(`docs/benchmarks/paged_attention_2026-10-18/`).
+
+The square F16 GEMM lost at 512³ until 2026-10-20 (0.88–0.89x). cuBLAS runs the same
+64x64 tile on the same 64-CTA grid as Y, on 4 warps with a 64-deep K step and
+5 stages, and executes 343K warp instructions. Of nine tiles around Y's,
+cuBLAS's shape among them, Y's tuned tile was the fastest in both runs
+(`docs/benchmarks/f16_square_2026-10-18/512/`). Y's extra stall samples were
+in the K loop: 107 at its barrier and 106 on long scoreboards, against
+cuBLAS's 26 and 29. Moving the barrier to between a K-tile's last two steps
+left 512³ level, and tiles of half the size (two CTAs to an SM) took
+1.23–1.47x its time, of a quarter 1.59–1.78x
+(`docs/benchmarks/f16_xbar_2026-10-18/`). Y executed 444–450K instructions
+until 2026-10-19, when it stopped dividing by constants, and 311K after,
+fewer than cuBLAS, and was still 0.88–0.89x cuBLAS
+(`docs/benchmarks/const_div_2026-10-19/`). At M = N = 512 the loss grew with K
+against the same cuBLAS kernel, in every one of six tiles: it was the padding
+of Y's shared-memory rows, which made each K-tile's copies read 1.5 times the
+L2 sectors they needed. With the rows swizzled Y is 1.08x cuBLAS at 512³
+(`docs/benchmarks/smem_swizzle_2026-10-20/`). Its K loop still holds three
+dead loads `ptxas` places after each barrier, 7.9% of the instructions it
+executes, and 0.70 `ldmatrix` a HMMA on its 4x2 warps against cuBLAS's 0.50
+on 2x2. At 4096³ Y uses 128x128 tiles, which the swizzle left level.
+
+The decode shapes are M of 1 to 32 rows against a 4096 x 4096 B
+(`docs/benchmarks/decode_dram_2026-10-18/`). With B read from DRAM, as in a
+decode step whose weights do not fit in the L2 (each call takes the next of
+four copies, 134 MB), Y and cuBLAS tie at every M: cuBLAS takes 0.99–1.05x
+Y's time, and both move 575–618 GB/s of the card's 672. With one B, whose
+33.5 MB fits in the 48 MB L2, Y took 0.44–0.76x cuBLAS's time at M = 1, 4
+and 8 and 1.32–1.34x at M = 32, where every one of Y's 64 CTAs reads all of
+A. Since the shared-memory rows are swizzled Y takes 0.87–0.88x cuBLAS's time
+at M = 32 with B in the L2 (1.26–1.29x before, in the same two runs of
+another harness, `docs/benchmarks/smem_swizzle_2026-10-20/ab/`) and 0.34–0.68x
+at M = 1, 4 and 8; from DRAM the three tie at every M again, 54.7–57.4 us
+(`docs/benchmarks/quiet_2026-10-20/decode_dram/`). Accumulating in float32
+since then (see the accuracy section) made M = 1, 4 and 8 2–5% faster still.
+Compensating those adds, the default since 2026-10-24, costs nothing from
+DRAM at these shapes (1.02–1.03x at M = 32 with K = 11008 or 14336); with B
+in the L2, Y then takes 0.79x cuBLAS's time at M = 1, 0.39–0.42x
+at 4 and 8 and 0.92x at 32 (`docs/benchmarks/f16_kahan_2026-10-20/speed/`).
+
+At 4096³ Y is 1.2–1.6% slower per clock cycle than cuBLAS's
+`ampere_s1688gemm` 128x128 kernel: at the same clock, on small-integer
+inputs, its tensor pipe is active 48.8% of the time against 49.5%. Its K
+loop's instruction mix is not the cause: 85% of its stall samples are warps
+waiting on the tensor pipe, and its extra integer instructions (0.86 a
+16x8x16 MMA against cuBLAS's 0.23) sit off the critical path. cuBLAS's `m16n8k8` is not the cause either: two
+of them give the same bits as one `m16n8k16` and the same throughput. On
+N(0, 1) inputs, run back to back for 3 s, cuBLAS throttles to 2658–2660 MHz
+against Y's 2712–2716 and Y is 1.01x
+(`docs/benchmarks/f16_4096_2026-10-24/`).
+
+At 30 LLM layer shapes (M = 64–2048 against Llama-2-7B's and Llama-3-8B's
+MLP and attention widths) Y is level or ahead at most, up to 1.14x, with
+three exceptions (`docs/benchmarks/f16_llm_shapes_2026-10-24/`). Compiled
+without `--autotune`, 64 x 4096 x 4096 borrowed the M = 32 decode tile and
+was 0.82x; the compiler no longer borrows a tile across M = 32, and the
+analytic model's tile there is 0.97–0.98x (tuned, 1.01x). The autotuner's
+pick is slower than the tile it replaced at 13 of the 30 shapes, by up to
+3.5%: it settles ties inside its noise band on warp count, and it times B
+from DRAM. And at M = 128–256 against N = 11008 no tile of eight is faster
+than 0.98x, nor is split K.
+
+RoPE in place touches half the bytes of RoPE out of place, so the rows that
+are 100 MB out of place are about 50 MB in place, the L2's own size
+(`docs/benchmarks/rope_2026-10-19/`). There FlashInfer's in-place kernel
+took 0.85–0.95x Y's time at head_dim 64 and 256 in both runs, and at 128
+0.88x in one run and 1.05x in the other. Inside the L2, in place, Y is
+1.02–1.34x faster; out of place at 100 MB the two tie.
+
+### Memory bandwidth
+
+Y's elementwise and normalization built-ins (`vec_add_v4`, `swiglu_v4`,
+`rmsnorm_v4`) emit 128-bit loads and stores. From DRAM — 2^24 floats a vector
+add or SwiGLU, RMSNorm on 134 MB or more — they move **612–621 GB/s against
+this card's 672 GB/s GDDR6X ceiling**, 1.00x Triton's kernels in every row;
+PyTorch's vector add moves 621 GB/s and its two-kernel SwiGLU 371. Up to
+44 MB, inside the 48 MB L2, they reach 2.5–3.2 TB/s, 1.02–1.14x Triton. At
+48–56 MB, the L2's own size, either side leads by up to 1.4x from one run to
+the next. Until 2026-10-18 they marked every line evict-first, which held them
+to 690–790 GB/s where the data fitted
+(`docs/benchmarks/v4_cache_hint_2026-10-18/`).
+
+### Cold compilation latency
+
+Y emits PTX directly from Rust and loads it through the CUDA Driver API:
+**0.078 ms**, against ~50 ms for Triton / PyTorch Inductor, which parse Python,
+generate a C++ wrapper and shell out to `nvcc`/`ptxas`. This is a compile-time
+comparison, not a kernel-speed one — it matters for dynamic LLM prompt shapes
+where a new kernel is needed per shape, and for nothing else.
+
+*Measured earlier in the project's history; not re-run for this revision.*
+
+### PTX is gated on assembling, not on string matching
+
+`tests/ptx_intrinsics_assemble.rs` compiles a probe `.ysu` per intrinsic through
+the real binary and runs `ptxas`. Adding that gate is what found the sixteen dead
+Hopper intrinsics, a `.maxnreg 0` bug that made **every** kernel compiled without
+a probed hardware profile structurally invalid, and two live user-callable
+intrinsics (`tma_load`, `wgmma_async`) that printed "PTX Assembly generated
+successfully!", exited 0, and wrote a file `ptxas` rejects with five distinct
+errors. Both now refuse and fail the build. Prefer extending this gate to adding
+another substring assertion.
+
+### Portability: the artifact must not name the build machine
+
+A compiler that probes the local machine will bake that machine into its output
+unless something stops it. Y did, in seven places, and the failure is not subtle:
+a `.target` above the running device is a **hard load failure**
+(`CUDA_ERROR_NO_BINARY_FOR_GPU`) — the kernel does not run, on a machine nobody
+tested. PTX is forward compatible and never backward, so the correct target is
+the *lowest* architecture the instructions require. Guess down.
+
+**You can check this without owning the cards.** `ptxas -arch=sm_80|sm_86|sm_89|
+sm_120` assembles for architectures that are not plugged in, so "will this run on
+a 3060" is answerable locally — which is the whole reason `tests/ptx_portability.rs`
+exists. **93 of 97 committed `.ptx` files assembled at sm_80 unchanged**, so the
+over-specification was ~96% gratuitous.
+
+**`.version` is a separate requirement from `.target`: it is what the DRIVER must
+support**, and over-stating it makes a kernel unloadable on a machine whose driver
+is merely older (`CUDA_ERROR_UNSUPPORTED_PTX_VERSION`) — invisible to any assemble
+gate, because `ptxas` is perfectly happy to assemble an over-stated version. The
+floors are measured by bisecting `.version` under `ptxas -arch=<a>`, not read off
+a release table:
+
+```
+sm_75 6.3   sm_80 7.0   sm_86 7.1   sm_87 7.5   sm_89 7.8   sm_90 8.0   sm_120 8.7
+```
+
+Four of the seven were over-stated. sm_89 was **8.4** — a whole CUDA major — for
+every kernel, because FP8 `mma.sync` needs 8.4 *on that arch*. That is a
+**per-instruction** requirement and now lives on the module: a plain sm_89 kernel
+declares 7.8, an FP8 one raises the floor to 8.4 through `require_ptx_version`,
+and an `E4M3` buffer's conversions (`cvt.rn.satfinite.e4m3x2.f32`) to 8.1.
+sm_90 keeps 8.0 although `ptxas` 13.3 accepts 7.8, because sm_90 arrived in CUDA
+12.0 and this assembler is merely being lenient — guess down, but not below spec.
+
+**Below the floor, the instructions were never checked (2026-11-04).** A profile
+naming sm_61 (GTX 10xx), sm_70 (V100) or sm_75 (RTX 20xx) was accepted and given
+sm_80 code: all 25 f16 and int8 GEMMs in `tests/` compiled to `cp.async`,
+`ldmatrix` and m16n8k16 `mma.sync`, exit 0, and `ptxas` rejected every one at
+every one of the three. Nobody saw it because CUDA 13's `ptxas` no longer knows
+sm_61 or sm_70 (Triton bundles a CUDA 12 one that does). Every finished module is
+now checked against its own `.target` (`check_target_features`, at all three
+places that write PTX): an instruction the target lacks is refused by name, one
+that needs a newer ISA raises `.version`. A table of instruction families holds
+each floor, and `tests/ptx_target_features.rs` holds each row to `ptxas` both
+ways. The 36 programs those cards can run still compile, and sm_80 and newer
+output is byte-identical. Pascal declares `.version 6.0` (measured: `shfl.sync`)
+where it fell through to the 7.8 default.
+
+**Fixing the artifacts is not fixing the compiler, and this took three passes to
+learn.** The first corrected the committed `.ptx` files; the emitter still
+over-stated. The second fixed the emitter; `--emit-coprocessor`, which builds its
+own module header rather than going through `emit_program`, still wrote
+`.version 8.0` by hand — over-stated on Ada, and **rejected outright by `ptxas`
+on Blackwell** while the backend printed "generated successfully!" and exited 0.
+The gate that should have caught it hardcoded `-arch=sm_89`, the one architecture
+where 8.0 is legal.
+
+There are therefore two source-level gates as well as the artifact ones: no source
+file may hardcode a `.target` above the floor, and none may hardcode a `.version`
+above it. A literal in a Rust format string cannot be prevented from coming back
+by assembling the current output.
+
+**The CPU side had the same bug and it was worse — a SIGILL rather than a load
+failure.** `CpuHardwareProfile::default()` guessed *up* (AVX-512 masking, 16
+floats) and `--emit-cpu` used that default as its only profile, so it emitted
+AVX-512 dispatch on every machine; most consumer Intel since Alder Lake has none.
+Meanwhile the real CPUID probe existed and **had zero callers**. Two more
+portability failures had nothing to do with hardware at all: `c_src/runtime.c` was
+a CWD-relative path, so the LLVM backend linked only from inside its own source
+tree, and `-lX11` was linked unconditionally, so a headless machine could not
+build any Y program.
+
+The one genuine hardware requirement **refuses** rather than emitting: FP8
+`e4m3` really is Ada and later, so below sm_89 it fails by name and points at the
+int8/f16 path. Asserted as a biconditional — "refuse FP8 always" satisfies half of
+it and deletes a working path on the hardware that has it.
+
+---
+
+## CPU: AVX-512 GEMM
+
+A multi-threaded f32 GEMM emitted through the LLVM backend, against OpenBLAS
+built for the same ISA (`TARGET=SKYLAKEX`, 39,476 `zmm`). All-core clock
+5.09 GHz, so AVX-512 peak is 5212 GF. Every shape gated on relative L2 error
+< 1e-5. One shape per process per library, arms interleaved and rotated, four
+launches, OpenBLAS measured in the same session.
+
+**Geomean 1.52 on 16 threads, Y ahead on 13 of 18 shapes. But read it by class,
+because the mean hides where the gains came from:**
+
+| class | shapes | Y vs OpenBLAS |
+|---|---|---|
+| GEMV | `1×4096×4096`, `1×8192×8192` | **2.1–4.9x** |
+| Decode (M=4–8) | `4×4096×4096`, `8×4096×4096` | **1.8–3.1x** |
+| Small / ragged square | `250³`, `256³`, `333×777×64` | **2.4–2.8x** |
+| Rank-k / deep-k | `4096×4096×8`, `64×64×32768` | **1.1–1.6x** |
+| Tiny | `48³` | **1.00x** (was 0.43) |
+| Large square | `512³`, `1024³` | 1.08–1.13x |
+| Large square | `1021³`, `1000³`, `2048³` | **0.81–0.95x** |
+
+**Most of the 16-thread gain is Y no longer under-threading its own kernel**, not
+Y beating OpenBLAS at dense arithmetic. The thread-count constant had been
+calibrated against a redundant-packing cost that a 2-D `ntm × ntn` partition
+removed, and it was 64x too large; fixing it is worth 2.2–3.3x on the small and
+ragged shapes and nothing at all on the large ones. Large square GEMM is still
+the weak class — `2048³` is 0.81x — and a reader who cares about that should
+read those rows and ignore the geomean, which is sensitive to how many small
+shapes the set happens to contain.
+
+Single-threaded, Y is at 1.50 geomean — but that column is a control rather than
+a headline. At one thread the pool and the partition are bypassed entirely, so
+every shape that does not route to the copy-free kernel must be *unchanged* by
+this work, and all seventeen are: **0.976–1.020, at spreads of 0.5–2%**. That is
+what says the micro-kernel was not touched, and at 16 threads a ±7% instrument
+could not have told you. (The 1.50 was measured one revision before the final
+row-block change, which moves `48³` and nothing else, and moves it upward.)
+
+> **The throughput harness measures one regime and cannot see the other.** It
+> calls the kernel in a tight loop, so the thread pool never parks and a
+> dispatch is nearly free. Timing a *single* call after a gap instead, 16
+> threads against 1: `56³` measured **0.11x** — a fixed ~20 µs dispatch cost,
+> flat from `nt=2` to `nt=16`. The thread count is chosen from the caller's call
+> frequency now, which recovers it to 0.92–1.00x with throughput unchanged.
+> Spinning longer does not fix it (fast while the caller's gap fits the spin
+> window, 175 µs just past it) and asking the pool whether workers are parked
+> *latches*.
+
+> **Seven independent biases were found in the harness that produced the first
+> version of these numbers, and all seven favoured Y.** Both libraries timed in
+> one process (OpenBLAS's idle threads spin before parking, so whichever ran
+> second was measured against a busy machine); thread count driven through
+> `openblas_set_num_threads()` on a libgomp build; all 18 shapes in one process,
+> depressing later ones; a substring shape filter under which `"48^3"` matched
+> `"2048^3"` and silently reported the wrong row. The reported figures are after
+> those fixes. The run-to-run spread on this box is **±7%, measured** by running
+> two behaviourally identical binaries against each other — anything inside that
+> band is reported as a tie. Detail:
+> [docs/cpu_gemm_tuning.md](docs/cpu_gemm_tuning.md).
+
+### CPU lock-free queue vs C++
+
+20M push/pop, SPSC ring buffer, capacity 1024 (measured earlier in the project's
+history and not re-run since):
+
+| Implementation | Time | Throughput |
+|---|---|---|
+| Mutex `std::queue` | 1.460 s | 13.70 MOps/s |
+| C++ SPSC, unaligned | 0.089 s | 225.22 MOps/s |
+| C++ SPSC, cache-line aligned | 0.062 s | 321.37 MOps/s |
+| Y-compiled SPSC | 0.066 s | 301.39 MOps/s |
+
+Within 6% of hand-tuned aligned C++ without manual alignment tuning — the
+compiler derived the alignment from the measured L2 cache line size.
+
+---
+
+## Deterministic inference
+
+A quantized transformer whose output does not depend on who else is in the
+batch. Every reduction whose order changes with batch shape is made integer, and
+integer addition is associative — so tile shape, K-split, atomic completion
+order and batch size cannot change the answer. That is the whole mechanism.
+
+**And exactness is not what buys the determinism — it is what makes the
+determinism affordable.** The control that settles this was built and measured:
+a float32 path with the reduction *order* pinned instead of the arithmetic made
+exact is **also 0/16**. It just costs **6.85x**, where the exact path costs
+1.03x. The reason is the one that generalises past this implementation:
+`torch.compile` takes the exact arm from 54.7 to 238.5 tok/s/seq and the
+fixed-order arm from 37.7 to 36.0 — pinning an order *is* a constraint on how
+the reduction may execute, so it forbids exactly the fusions that make float
+fast. Integer accumulation needs no pinning, so the compiler stays free.
+
+**This is unfinished work, and it is here because the finished parts are
+measured.** What exists is a PyTorch + Triton **prototype** carrying the whole
+pipeline. Two of its products can now run on kernels the compiler emits, with
+the same tokens:
+- every linear layer's int8 product, on Y's int8 GEMM, whose schedule and
+  value have a machine-checked proof (`Y_EXACT_GEMM=y`; compiled, 0.5B, batch
+  32: 1.01-1.04x the Triton kernel's decode speed, 2026-11-07);
+- with the int8 V cache, attention's `p·V` product, on `tests/exact_pv.ysu`
+  (`Y_EXACT_V_INT8=1`; 1.00-1.03x the digit split it replaces).
+
+The attention scores and softmax, the quantisers and the norms are still
+torch and Triton; the compiler's exact attention kernel and its integer `exp2`
+are checked against them bit for bit, but not wired in. The determinism and
+accuracy numbers below are the prototype's. Replacing the rest of it with
+compiler output is the remaining work, not a detail.
+
+**`0/16` is also what a broken arm scores**, and that is not hypothetical: the
+fixed-order control's first version returned its tensor in the wrong layout, did
+not crash, emitted fluent-looking garbage, and got a number reported for it. An
+arm broken *consistently* would have scored the winning 0/16. Every arm in every
+harness now passes a sanity gate before it is counted — a factual-prompt canary
+plus a degeneracy check on its own generation — and the gate's logic is
+mutation-verified on CPU (`python3 tools/exact_ragged_batch.py --check-gate`).
+The throughput tool is the sharpest case: it never decodes a token, so a broken
+arm was invisible there, and several ways of being broken are *faster*.
+
+Model: Qwen2.5-0.5B-Instruct · RTX 4070 Ti SUPER · measured 2026-08-18.
+
+| | result | control |
+|---|---|---|
+| **Determinism** | **0 / 16** batch compositions changed the output | stock bf16 changed on **16 / 16** |
+| **Accuracy vs bf16** | **+0.12%** wikitext-2 perplexity | 4-bit arm: +189% |
+| **Task accuracy** | statistical null | net +40 of 3,000 items |
+| **Decode speed** | 1.09x slower wall clock | **0.97x device time** — the gap is launch overhead |
+
+**The same tokens on a CPU and a GPU** (2026-11-01 to 11-07,
+[Finding 12](docs/bit_identical_decode.md)). The same 5 prompts x 160 tokens
+were decoded on the host CPU (Zen 5) and on the GPU, and
+`tools/exact_cross_device.py --compare` checked the pair:
+
+| model | exact changed | stock bf16 changed |
+|---|---|---|
+| Qwen2.5-0.5B, GPU eager and compiled, Triton path and Y's GEMM | **0 / 5** | 5 / 5 |
+| Qwen2.5-7B, exact compiled on the GPU | **0 / 5** | 5 / 5 |
+
+It failed first. Six float operations gave different bits on the two devices
+with the same inputs: a divide by a Python float, which CUDA turns into a
+multiply by the reciprocal; float32 sin/cos and sigmoid, which libm and CUDA
+round differently; and three ways `torch.compile` rounds unlike eager PyTorch.
+Each was replaced. `exact_selftest.py` compares the quantisers, the norm and
+SiLU bit for bit on both devices, eager and compiled, with controls that must
+still differ.
+
+**Speed since the table** (compiled, batch 32, idle GPU): at 0.5B, with the
+CPU==GPU fixes, exact decodes 1.11x slower than stock bf16. At
+7B it decodes **1.50x faster** (47.4 against 31.5 tok/s/seq, 2026-11-04). That
+is int8 weights being half the bytes of bf16, not exactness. Against an
+8-bit engine without exactness (vLLM 0.21, FP8 weights, CUDA graphs, same card,
+2026-11-08), Y's exact path on its own int8 kernels first decoded at 0.89x
+(52.0 against 58.3 tok/s/seq). With q/k/v merged into one GEMM and a decode
+loop that does not wait for the host every token (`y_lang.exact.greedy`), it
+decodes at **0.93x** (54.4-54.5 against vLLM's 58.2-59.2 the same evening), with
+the CPU's tokens. vLLM changes the target's tokens in 2-3 of 4 batch
+compositions where Y changes none. vLLM's batch-invariant mode changes none
+too, at 16.5 tok/s/seq: **Y is 3.3x faster** than it
+([vLLM record](docs/benchmarks/vllm_fp8_7b_2026-11-08/),
+[merging](docs/benchmarks/exact_merged_7b_2026-11-08/),
+[the loop](docs/benchmarks/exact_greedy_loop_7b_2026-11-08/)). Y's GEMMs are
+already faster than vLLM's (12.6 against 13.7 ms a step); the rest of the gap
+is its other kernels ([profile](docs/benchmarks/exact_7b_profile_2026-11-08/)).
+Int8's accuracy cost at 7B is still unmeasured.
+
+**The control had to be earned.** At 24 generated tokens the stock arm was
+invariant *too*, because a bf16 reduction-order delta needs room to flip a greedy
+argmax. The test runs 160 tokens on prompts chosen for a small top-2 margin. A
+test both arms pass is measuring the harness.
+
+**The textbook lever was the wrong lever.** The remaining 2.2% perplexity gap was
+labelled "the linears", and the standard fix is group-wise weight scales.
+Measuring the ceiling first — fake quantization in fp32, no kernel — showed
+weight quantization costs **−0.12%**, i.e. nothing. The whole gap was
+*activations*: group scales recover 6.2% of it, one extra bit of activation width
+recovers 102%. And the winning fix does not fight the invariant, where group
+scales would have — they recombine partial sums with *float* weights, which is
+the exact thing being prevented.
+
+**You can check most of this without a GPU.** `python3 tools/exact_selftest.py`
+runs 11 of its 19 checks on CPU — including batch invariance itself — and says
+how many it skipped. The other eight launch Triton or Y's kernels, assert a
+CUDA-only `_int_mm` refusal, or compare the GPU against the CPU. It used to
+print `SKIP: no CUDA` and exit 0 having checked nothing.
+`python3 tools/exact_bounds_check.py` needs only z3 and runs all 22 of its
+checks on CPU.
+
+**The exactness argument is machine-checked.** `tools/exact_bounds_check.py`
+puts every bound to Z3 and then exhausts the real selectors rather than
+transcriptions of them. Checking the conjunction rather than each bound alone
+showed one bound *subsumes* another and surfaced an unwritten hard context
+ceiling (264,208 tokens at V=127). It found two live bugs doing it.
+
+**The compiler's kernel is checked against the torch path on real
+activations** — `tools/ptx_bridge.py` loads the emitted PTX through the CUDA
+driver and runs it on post-RoPE Q/K/V captured from the model: 12/12 layer/head
+pairs bit-identical, at `max(p)/mean(p) = 110.9` where a uniform softmax would
+be 1.0. That second number is the control, and it is not decorative — an earlier
+run of this bridge passed 12/12 on a temperature 65,536x too small, which is to
+say on uniform attention, and the control reproduces that failure exactly when
+the bug is put back.
+
+**The compiler emits the attention kernel itself** — `Y --emit-attention-ptx
+<head_dim> <seq_len>`, in `src/exact_attention.rs`, with an architecture-
+independent integer `exp2` (`src/fixed_exp.rs`, 0.908 ulp proved exhaustively)
+so the result is identical across GPU *architectures*, not merely across launches
+of one.
+
+### Scope: "deterministic", not "exact"
+
+RoPE's sine and cosine, the residual adds and the softmax exponential are
+approximate — deterministic, but not exact. Exactness is applied to the
+reductions whose order moves with batch shape, and nowhere else, because nowhere
+else needs it. Switching cache implementation moves the output by 5.7e-6 once
+and is stable after: batch invariance survives that, but *cache-implementation*
+invariance is a different claim and is not made.
+
+### What this does not yet claim
+
+- **One model family, one GPU.** Qwen2.5 at 0.5B and 7B, on one RTX 4070 Ti
+  SUPER and its host CPU. Cross-hardware bit-identity is the strongest thing
+  exactness buys. For the integer `exp2` it is no longer an argument:
+
+      device == host on all 1,966,085 arguments, bit for bit
+      846,328 distinct results, so the agreement is not over a constant
+
+  That is every argument the function can be reached with, x86-64 against
+  sm_89 — two instruction sets from different vendors, which is a wider gap
+  than two NVIDIA cards. The control is in the same line: a degenerate kernel
+  agreeing over one value would report 1 distinct result, not 846,328. And the
+  same run measures why the float path cannot make the claim: the device's
+  `ex2.approx.f32` disagrees with the host's `exp2` on **46,301 of 100,427**
+  arguments, worst gap 32 ulp.
+
+  The premise behind it is checked statically too: disassembling the emitted
+  cubin, the integer exp compiles to **no `MUFU` and no floating-point
+  instruction** — 72 instructions of IMAD/SHF/IADD3/ISETP, all exactly specified
+  by the ISA — while the `ex2.approx.f32` probe beside it compiles to a `MUFU`,
+  which the ISA specifies by tolerance rather than by value.
+
+  The whole decode path is now measured too, CPU against GPU (the table above:
+  0/5 at 0.5B and 7B). **Two different NVIDIA cards have not been compared.**
+  The CPU-GPU pair is the wider gap in instruction sets, but a second card
+  also brings its own kernel choices and autotuning, and none of that has run.
+  Accuracy is measured at 0.5B only.
+- **CUDA graphs are worth up to 1.47x and are blocked.** The prerequisites are
+  cheap — a static cache costs 5–8% and improves the exact/stock ratio to 1.01x
+  — and the property survives them. Capture then segfaults on *both* arms, from
+  an in-place mutation inside the captured region in this transformers/torch
+  pair. A library bug rather than an exactness problem, and its proper home is a
+  serving integration rather than this prototype.
+
+### What is being worked on now
+
+Ranked, and the first item is the one that could invalidate the framing rather
+than extend it:
+
+1. **Run a second GPU.** CPU against GPU is measured; two different NVIDIA
+   cards are not. `tools/exact_cross_device.py --record` on the other card and
+   `--compare` anywhere, with no GPU, is the whole procedure.
+2. **Move the rest of the pipeline off the prototype.** The linear layers and
+   `p·V` run on compiler-emitted kernels; the attention scores, softmax,
+   quantisers and norms do not. Then into a serving integration, which is also
+   where CUDA graphs stop being blocked.
+
+Findings 05–08 in the write-up are the result of turning this same process on
+the tooling: four rounds that found the emitted kernel enforced none of its own
+bounds, a differential whose two arms shared a wrong constant, two replicas
+checked against themselves, and a checker asserting a copy of the rule it was
+checking. None of those changed a number above; all four changed what the
+numbers are worth.
+
+**A note on how the caveats above were found.** Many of the findings in the
+write-up are not about the kernels at all — they are about the tooling that
+measures them: a differential whose two arms shared a wrong constant and so
+agreed perfectly on a uniform softmax; two implementations checked against
+transcriptions of themselves rather than against the compiler; a checker
+asserting a copy of the rule it was checking; an acceptance harness that exited
+0 on any machine without a GPU; and a coverage claim that turned out to rest on
+a code path the test could not fail on. None of them moved a number. All of them
+changed what the numbers are worth, which is the reason they are written down at
+the same length as the results.
+
+**From Python:** `from y_lang.exact import load, generate`
+([`python/README.md`](python/README.md)). The prototype's modules live in
+`python/y_lang/exact/`, so an installed y-lang carries them; `tools/` keeps
+their old names (`exact_model`, `exact_kv`, `w8a8_gemv`,
+`batch_invariance_demo`, `exact_large_model`) for the harnesses.
+
+Full write-ups: [bit-identical decode](docs/bit_identical_decode.md) (findings,
+controls, and the bugs found by turning this process on the tooling itself)
+and [deterministic inference](docs/deterministic_inference.md) (the design).
+
+---
+
+## Safety and verification
+
+These are the features the compiler refuses to compile without, and each one is
+here because the previous version of it silently passed.
+
+### `@safe` blocks and Z3-discharged invariants
+
+Every function and kernel is checked in strict mode unless it is marked
+`@unsafe`, and `@safe { }` turns strict mode back on inside an `@unsafe`
+function. Strict code must initialize all variables, cannot dereference raw
+pointers, requires an `@invariant` on every loop, and must index arrays with
+bounds it can prove; under `@unsafe` an index it cannot prove is checked when
+the program runs instead. Until October 2026 an array reached through a
+reference (`a: &mut [I16; 4]`) was neither proved nor checked: `a[9] = 1`
+compiled in strict mode and wrote past the array. `@bounds(min, max)` on a `let` is how a value the checker
+cannot bound gets a range. A range the checker cannot prove **is checked when the
+program runs**: the value is tested as the `let` stores it, and one outside the
+range stops the program (a message and exit code 1; a trap on the GPU; a panic
+in `--emit-cpu`'s Rust). Until October 2026 it was taken on trust, so a wrong
+annotation was an unguarded out-of-bounds access in code the checker calls safe.
+
+```
+fn main() {
+    @safe {
+        let x: I32 = 10;
+
+        @invariant(x >= 0)
+        while x > 0 {
+            x = x - 1;
+        }
+    }
+}
+```
+
+Every `@invariant` is discharged by Z3. **An invariant that cannot be checked
+now fails the build.** This is a deliberate reversal: the four solver call sites
+used to print a warning and continue, so on any machine without z3 — the default
+— every invariant was accepted unchecked, and `@invariant(i > 1000)` on a `0..10`
+loop compiled cleanly and printed "Compilation Successful!".
+`Y_ALLOW_UNVERIFIED_INVARIANTS=1` restores the old behaviour loudly. The solver
+is looked for at `Y_Z3_PATH`, on `PATH`, at `venv/bin/z3`, `.venv/bin/z3` and
+`z3/build/z3` in the working directory and then beside the compiler (the
+directory of `Y` or `liby.so` and up to three parents, so a repository's own venv
+is found from anywhere), and at `$HOME/.local/bin/z3`.
+
+The integer model also checks representability: every modeled arithmetic
+intermediate and stored result must fit its machine type, signed or unsigned, so
+no execution that wraps is described. Signed division truncates toward zero and
+remainder has the dividend's sign, matching execution. Unsigned values are
+modelled in `0..=2^n-1`; a literal beside one must lie in that range (`x > -1`
+is refused: every backend compares against 0xFFFFFFFF), and a signed value
+beside an unsigned one, or two unsigned widths together, must both be proved to
+lie in the range every backend reads alike, below each type's sign bit:
+`0..=2^31-1` for `U32` with `I32`.
+The checker refuses loop-local shadowing. For-loop proofs require a positive
+stable step and preservation of the index's lower bound; a bound must fit I32,
+except that a `U32` bound is read as the I32 its bits spell, as every backend
+compares it (2^31 or more: the loop does not run). An invariant such as
+`acc >= 0` alone cannot justify an increment at every signed integer value;
+relating it to a bounded loop index, for example `acc == i && i >= 0`, supplies
+the missing upper bound. These checks apply to the expressions modeled for the
+invariant, rather than constituting a proof of the whole program.
+
+The SMT encoding itself was unsound until recently. `trace_body_statements`
+ended in `_ => {}`, so a statement it did not model was skipped — and dropping a
+body's effects makes the preservation obligation strictly *easier*. The
+identical violation was rejected when written plainly (`i = i - 100;`) and
+**accepted** when wrapped in a trivially-true `if`. Branches are havoc'd now, and
+unmodellable constructs are refused by name.
+
+### `@ZeroDrift` — exact, order-independent accumulation
+
+Floating-point addition is not associative, so a reduction's result depends on
+the order the hardware happened to combine it in. On a GPU that order is decided
+by launch geometry, which means retuning a tile size can change the answer.
+
+```
+@bounds(min=0, max=1000)
+@ZeroDrift
+let acc: F32 = 0.0;
+
+acc += x;          // scaled once, then accumulated with exact integer adds
+```
+
+**Only integer and fixed-point arithmetic is drift-free.** `f64` is the same
+non-associative arithmetic with a longer mantissa — it drifts less and still
+drifts — so it is never selected, however fast it measures.
+
+**Which representation is chosen is measured, not assumed.** The compiler times a
+serially dependent accumulate chain per candidate on the GPU actually present:
+
+```
+      ->    Q16.16:      1814 ps/acc  exact
+      ->    Q32.32:      2141 ps/acc  exact
+      ->       I64:      2155 ps/acc  exact
+      ->  KahanF32:      6793 ps/acc  not exact (never selected)
+      ->       F64:     17537 ps/acc  not exact (never selected)
+      -> @ZeroDrift acc: F32 -> Q32.32 (measured 2141 ps/acc)
+```
+
+Exact fixed-point is ~8x cheaper here than reaching for higher precision, and the
+GeForce FP64 penalty lands exactly where it should. Until 2026-10-27 the
+`KahanF32` row timed a plain `add.f32` chain (about 1440 ps): the probe now
+compensates, at about three fixed-point adds.
+
+**The probe times the accumulate, not the conversion of each term, and the
+conversion was the real cost.** It went through f64: five f64 instructions per
+term on a card that runs f64 at 1/64 rate, so a `@ZeroDrift` row sum took
+3.72x a plain f32 one, more than an f64 accumulator. The term is now converted
+with integer arithmetic on its bits, the same value bit for bit, and with
+narrow bounds the accumulate's overflow test, which can then never fire, is
+gone. The sum then took 1.30x the f32 sum where memory bandwidth limits it, and
+3.71x (was 7.27x) where only a few threads hide latency
+(`docs/benchmarks/zero_drift_conversion_2026-10-27/`).
+
+**Most of what remained was where the program stops, not the arithmetic.**
+Each check ended in a trap branch right after its term, and `ptxas` does not
+unroll a loop with such an exit, so every term waited for its loads before the
+next term's were issued. Inside a `for` with step 1 that nothing outside the
+thread can see (no store, call statement, `while`, `return` or `chisel`), a
+failed check now only sets a flag, and the program stops when the loop ends:
+the same inputs stop, and nothing after the loop runs. Other loops still stop
+at the term. The row sum now takes 0.98x the f32 sum where bandwidth limits
+it, and 1.64x where latency does
+(`docs/benchmarks/zero_drift_stop_point_2026-10-28/`).
+
+**Across threads, `drift_add_to(ACC, OUT, acc)` adds every thread's partial
+into one exact total for the whole grid.** A partial is held in 128 bits, a warp
+adds its partials with shuffles, one lane adds the sum to a 64-bit atomic total
+and carries into its high word, and the last block to finish checks and stores
+it. 98 launch shapes, from one thread to 1000 blocks of 1024 and
+three-dimensional ones, store the same bits. The same partitions summed in f32
+do not. A program stops on a bad term or an out-of-range total in every shape
+or in none (`tests/zero_drift_grid_sum.rs`). On an RTX 4070 Ti SUPER it took
+1.19x `torch.sum` over 256 MB of f32, and 1.37x over 4 MB, which fits in L2
+(measured with the desktop sharing the card;
+`docs/benchmarks/zero_drift_grid_sum_2026-10-27/`). With the stop at the
+loop's end it takes 1.16x, and 1.08x when the loop's full rounds come first
+without an `if i < n`, as the manual shows (§9.6;
+`docs/benchmarks/zero_drift_stop_point_2026-10-28/`).
+
+**Many totals: `drift_add_at(ACC, i, acc)` hands a partial to total `i`, and
+`drift_finish(ACC, OUT, n)` writes all `n` once every block is done.** It is
+for scatters, such as the forces on atoms from a list of pairs. A
+Lennard-Jones kernel on 262,144 atoms (6.5 million pairs) stores the exact
+forces, bit for bit, for 5 block sizes and 3 pair orders; f32 atomics give
+15 different results. Ending with `drift_close` and converting in a second
+kernel with `drift_convert`, which stops unless the first marked the totals
+complete, it takes 1.97x the f32 atomics, 1.10x f64 atomics and 1.09x
+fixed-point atomics without checks; ending with `drift_finish`, whose last
+block converts all 786,432 totals alone, 3.28x f32. The 2.67x it took at
+first was not the atomics' wait for their old value, as guessed, but L2:
+each total's two words took 16 bytes, and its atomics made 1.84x the L2
+requests of 8-byte ones. The low words are now side by side, apart from the
+high ones (`docs/benchmarks/zero_drift_layout_2026-10-31/`). On this input f64 atomics are order-independent too,
+because every sum fits 53 bits; on denser lattices they give a different
+result for each block size and pair order, and Y the same
+(`tests/zero_drift_scatter.rs`,
+`docs/benchmarks/zero_drift_forces_2026-10-28/`).
+
+`tests/zero_drift_end_to_end.rs` compiles a program with clang and **runs it**,
+summing the same 4001 terms in opposite orders and requiring bit-identical
+results — alongside a control asserting that sequence genuinely disagrees with
+itself in `f32`, so the result cannot be vacuous.
+
+`@ZeroDrift` used to do literally nothing: it lexed, parsed, was counted, was
+printed as an advisory, and was read by no backend. Output was byte-identical
+with and without it.
+
+### Linear tracking of async tokens
+
+Async memory tokens must be consumed exactly once. "Exactly once" is a claim
+about *executions*, and the tracker used to check source lines — so
+`if n { pipe.wait(t); }` (awaited on one path of two) and
+`for i in 0..4 { pipe.wait(t); }` (one copy, four awaits) both compiled clean.
+The tracker now records conditional and loop nesting depth at creation and
+compares it at consumption. `tests/linear_tracker_enforcement.rs` is 10 tests,
+6 negative and 4 positive — rejecting every `pipe.wait` under a loop would be
+sound and would also ban the shape every real pipelined kernel is built from.
+
+### Proof-carrying kernels: the exact GEMM, verified end to end
+
+`src/cpu_gemm.rs` emits a tiled, packed, K-split, multi-threaded AVX-512
+`vpdpwssd` GEMM. It is **bit-identical** to the naive triple loop it replaces,
+and that is a theorem rather than a test result. The replacement is decided when
+the program runs: the packed kernel runs only when the call's three buffers do
+not overlap and their extents fit in 64 bits, and otherwise the loop nest runs
+as written. The theorem:
+
+```coq
+(* proofs/ExactGemmWhole.v *)
+Theorem the_threaded_gemm_holds_the_source_dot_products :
+  forall A B M N K Fl m nthr r c,
+    (0 < Fl)%nat -> 0 <= m ->
+    2 * Z.of_nat Fl * m * m <= ExactGemmMicro.I32MAX ->
+    (forall idx k, Z.abs (A idx k) <= m) ->
+    (forall k idx, Z.abs (B k idx) <= m) ->
+    (0 < nthr)%nat -> (r < M)%nat -> (c < N)%nat ->
+    thread_sum A B M N K Fl nthr r c nthr
+    = PK.sum_k (fun k => A r k * B k c) K.
+```
+
+Sum the partials of `nthr` threads, each handed a K band, each running the
+emitted driver — packing, the register tile's routing, the k-pair loop, the
+int32 flush, the output tiling and the fold-back — and every position of C is
+exactly the source matrices' dot product. **No hypothesis that `MR` divides
+`M`, that `NR` divides `N`, that `nthr` divides `K`, or that `K` is even.**
+
+**This is only possible because the kernel is exact.** Floating-point addition
+is not associative, so a tiled f32 reduction provably does *not* equal the naive
+one — `GemmBandSplit.v` refutes it at `K = 201`, `nthr = 2`, where the rounded
+version answers 1100 against its own reference's 1000. Integer addition *is*
+associative, so the relationship is an equality, which is what a proof assistant
+is good at. What exactness costs is measured below, and it is not free.
+
+25 files, 550 theorems and lemmas (counted 2026-11-06), **no axioms, nothing admitted** — and
+`tests/proofs_are_checked.rs` runs `coqc` over all of them in `cargo test`,
+with a content control per file so that "it compiles" and "no axioms" (both
+properties an *empty* file has) are not the whole check.
+
+#### What the verified kernel costs
+
+The proofs say the kernel is bit-identical to the naive nest. They say nothing
+about whether it is *fast*, so that is a separate measurement — three arms, one
+shape per process per arm, interleaved, minimum over rounds:
+
+```bash
+python3 tools/exact_gemm_bench/run.py            # the table below
+python3 tools/exact_gemm_bench/run.py --scaling  # thread scaling
+python3 tools/exact_gemm_bench/run.py --isa      # what each datapath can issue
+```
+
+**The two datapaths do not have the same ceiling, and that has to be measured
+before any ratio means anything.** `vpdpwssd` retires 32 int16 multiply-accumulates
+where `vfmadd132ps` retires 16 f32 ones. On one core they issue at the *same*
+rate — **11.18 against 11.21 G instructions/s, ratio 1.00** — so the exact
+datapath's MAC ceiling is exactly **double** the f32 one: 357.9 against 179.3
+G MAC/s per core, and 5212 against 2606 across sixteen at the 5.09 GHz all-core
+clock. The probe is verified non-foldable two ways: the disassembly must contain
+the instruction, and doubling the iteration count must double the time.
+
+| 16 threads | Y exact | Y f32 | OpenBLAS f32 | exact / Y f32 | exact / OpenBLAS |
+|---|---|---|---|---|---|
+| 512³ | 370 | 763 | 780 | 0.48x | 0.47x |
+| 1024³ | 708 | 1105 | 1319 | 0.64x | 0.54x |
+| 2048³ | 1057 | 982 | 1618 | 1.08x | 0.65x |
+| 4096³ | **1570** | 1072 | 1648 | **1.47x** | **0.95x** |
+
+G MAC/s, the unit the two datapaths share. OpenBLAS is the `scipy-openblas`
+0.3.33 numpy ships — `DYNAMIC_ARCH`, dispatching to its `SkylakeX` AVX-512
+kernel here, which the harness prints, because this repository has previously
+used a distro OpenBLAS with **zero `zmm` instructions** as a baseline. Both
+arms are seeded identically and the f32 checksum equals the exact integer one
+at these magnitudes, so the two are demonstrably computing the same GEMM.
+
+**Read the spread before reading a row.** Over three runs the exact column holds
+to ±5% and OpenBLAS to ±10%, but **Y's own f32 arm swings by up to 1.7x at 512³
+and 1024³** — that kernel takes its thread count from the caller's call
+*frequency*, so it is regime-sensitive in exactly the way documented under
+[CPU: AVX-512 GEMM](#cpu-avx-512-gemm). Read the `exact / Y f32` column at those
+two shapes as "well below 1", not as a number.
+
+**Two things are true at once, and the second says where the work is.** In wall
+clock the exact kernel reaches **0.95x OpenBLAS f32 at 4096³** and 0.47–0.65x
+below that. In ISA efficiency it is at **30% of its own ceiling** where OpenBLAS
+is at **63%** of its — so the near-parity at 4096³ is bought with an instruction
+that is twice as strong, and roughly 2x of headroom is still on the table.
+
+**Exactness is not free the way an earlier version of this README said.** That
+claim — "exact VNNI is 1.88× faster than the f32 path" — came from a *single-core
+micro-kernel* probe, and `docs/proof_carrying_kernels.md` had already corrected
+it to 1.10–1.15x for the micro-kernel without the correction reaching here.
+Against Y's own f32 GEMM through the same emitter the exact kernel does not
+cross over until about 2048³. Exactness trades range *and*, below a few
+thousand, speed.
+
+#### Cutting the right axis was worth more than any of it
+
+The wrapper used to split **K**. That is a reduction, so every thread needs a
+private `M × N` copy of C to sum out of, and the bookkeeping is `O(T·M·N)`
+against `O(M·N·K)` of work — measured at 1024³ on 8 threads, **9.311 ms of
+buffer-and-reduce against 7.344 ms of compute**, so eight threads ran *slower
+than one*. Splitting **M** is a partition instead: disjoint row bands, no private
+buffer, no zero-fill, nothing to reduce. `ExactGemmTiling.c_written_exactly_once`
+had already proved the output tiling is one, so the fix needed no new proof —
+**the kernel had been cutting the one axis that needs an arithmetic property,
+while the axis that needs none was already covered.**
+
+| threads | 1024³ | 4096³ |
+|---|---|---|
+| 1 | 152 G MAC/s | 158 G MAC/s |
+| 2 | 269 (1.77x) | 355 (2.25x) |
+| 4 | 458 (3.02x) | 649 (4.12x) |
+| 8 | 650 (4.28x) | 1069 (6.79x) |
+| 16 | **711 (4.68x)** | **1570 (9.97x)** |
+| 32 | 649 (4.28x) | 1296 (8.23x) |
+
+Bit-identical at every row and every thread count, which is the only acceptable
+evidence for changing a schedule under a certificate that claims exactness
+(`tests/exact_gemm_msplit.rs` compares whole output buffers *and* checks each
+against an independent integer reference, so two schedules cannot be wrong
+together). Thirty-two threads is never best: this is a 16-core part and the
+kernel gets nothing from SMT.
+
+**`ExactGemmMSplit.msplit_needs_no_algebra` is the part that generalises.** The
+row split is exact for an *arbitrary* accumulate — not associative, not
+commutative, not exact — because a row's accumulator is never split, so there is
+no re-bracketing to justify. Exact accumulation is what makes a *reduction*-shaped
+parallelisation provable; a *partition*-shaped one is provable without it.
+**Exactness buys the axes you could not otherwise cut; it is not the price of
+cutting anything.**
+
+#### The proof is tied to the emitted code by removing the second description
+
+The usual way to connect a proof to a compiler is to give the IR a semantics and
+prove the emitter refines it. That is a multi-year project of its own. Instead,
+**there is one description and both consumers are rendered from it** — an `Ix`
+expression tree and a `CountedLoop` iteration space that render to LLVM, to Coq,
+and to values for tests. `proofs/ExactGemmSchedule.v` is *generated* from
+`src/cpu_gemm.rs`'s own constants, and a byte-identity gate fails the build on
+any divergence.
+
+Every extraction step left all four emitted LLVM modules **byte-for-byte
+unchanged**, which is the argument that the description is what the compiler was
+already doing.
+
+#### A compilation emits its own certificate
+
+```
+$ Y gemm.ysu --emit-llvm
+  -> @ZeroDrift matmul MxN: EXACT vpdpwssd kernel substituted (|x| <= 1024, flush every 64 k-pairs)
+  -> Written to: gemm.ll
+  -> Certificate: gemm_certificate.v (check with `coqc -Q proofs "" gemm_certificate.v`)
+```
+
+The `.v` instantiates the theorem above at *this* compilation's flush interval
+and operand bound. It is not paperwork: the one hypothesis that depends on the
+program is the overflow licence `2·Fl·m² ≤ i32::MAX`, and the compiler decides
+it in **floating point** — a `sqrt` and a `floor` on `f64`. The certificate
+states it over `Z` and hands it to `coqc`, which has no floats. Two derivations
+of one obligation, by two tools, gated against each other at the boundary, which
+is one unit wide: accepted at `m = 4095`, refused at `m = 4096`.
+
+#### What the proofs find that running the code does not
+
+Every kind of check here is blind to something:
+
+| bug | correctness suites | schedule gate | Coq |
+|---|---|---|---|
+| tile count over-allocates a buffer | **pass** | **FAIL** | pass |
+| `min(a,b)` emitted as `min(b,a)` — same value | **pass** | **FAIL** | pass |
+| scratch-zeroing loop one trip long | **pass** | pass | **FAIL** |
+| fold-back loop unclamped (writes past C) | 2 of 4 **pass** | **FAIL** | pass |
+
+The last row is the one to read twice. An unclamped fold-back is a genuine
+out-of-bounds write past the last row of C, and it is **not observed** by two of
+the four correctness suites — including the one running `M = 53` against a
+6-row tile, the most ragged shape in the repo. The overrun lands in memory the
+process already owns and the answer stays correct.
+
+Writing the proofs also found a **live heap overflow**. Formalising the output
+tiling forced the hypothesis `N <= ldc` to be *stated*; nothing in the compiler
+stated it, every caller happened to pass `ldc = N`, and calling the kernel with
+a padded C corrupted the heap from three separate sites. The proof did not
+discharge the bug — it surfaced the unwritten precondition, and the test written
+from that precondition found it.
+
+The method is written up in
+**[The process: taking a kernel from *fast* to *verified*](docs/verified_kernel_process.md)**.
+
+#### The GPU kernel carries one too, and it states what `ptxas` is
+
+`docs/proof_carrying_kernels.md` Phase 3 says of the GPU pipeline that `ptxas`
+"is trusted or validated per-translation" and that **this must be stated in the
+certificate, never papered over**. Measured: there was no certificate.
+`--emit-attention-ptx` wrote a `.ptx` to stdout and nothing else, while three
+machine-checked proofs — 96 theorems — described that exact kernel. The same
+shape as the finding above: proof-carrying described the repository, not the
+output.
+
+It emits one now, to a file, with the notice on **stderr** because stdout is
+piped straight into `cuModuleLoadData`. What it instantiates is the launch
+partition (every key visited exactly once, at any geometry) and the
+order-independence of the atomics; what it *states* is the boundary:
+
+```
+- `ptxas`, which turns this PTX into the SASS the GPU runs. It is closed
+  source and is NOT covered by anything above.
+  NOT CHECKED. Closing it means validating THIS kernel per-translation
+  with `tools/ptxas_tval/`, whose standing results are the subjects its
+  `regress.sh` asserts. NONE of this module's entry points is among
+  them, so for this kernel `ptxas` is TRUSTED and not validated.
+```
+
+That absence is **checked, not remembered**: the gate reads the entry names out
+of the PTX the compiler just emitted and the subjects out of `regress.sh`, so
+neither a renamed kernel nor a widened corpus can leave the sentence standing.
+
+It used to say *"which exists and currently covers six kernels"*, and that
+number had been wrong for three increments — the validator asserts sixteen rows
+over thirteen subjects. Nothing caught it because the gate asserted the item's
+*route* and never its arithmetic, and because the error is in the safe direction:
+understating the corpus cannot make a trusted item look validated. The same
+sentence was quoted verbatim here and in `docs/proof_carrying_kernels.md`, so one
+ungated number was published three times. The fix is not a fresher number — a
+count is not what the claim rests on, and *rows* versus *subjects* is exactly the
+ambiguity that has already bitten this file once.
+
+**The obligation bites, which is what separates a certificate from paperwork.**
+The kernel reduces into a 64-bit accumulator, so exactness needs
+`S * 2^28 * 127 < 2^63`. Y decides that in `usize`; the certificate states
+it over `Z` and `coqc` decides it — two tools, no shared code, no shared
+representation, and a boundary **one unit wide**: emitted and accepted at
+`seq_len = 270,549,121`, refused by both at `270,549,122`. The maximum weight
+is `exp(0) = 2^28`; using `2^28 - 1` previously made both tools accept an
+overflowing equal-score input. The regression now derives its term from the
+actual integer exponential.
+
+The capstone the trust boundary mirrors is the dependency **root**, measured
+rather than guessed — `AttentionSchedule` ← `GridStrideSplit` ←
+`SoftmaxErrorBound`, nothing requires the last — because only a root can
+truthfully state a global negative. The bijection gate that keeps a certificate's
+list in step with its capstone's now runs over both.
+
+
+### The licence was about a zeroed destination, and nothing said so
+
+The int8 GEMM's exactness proof stated its int32 claim for the **flat**
+accumulation only — the default grid. At `gridDim.z > 1` the kernel runs *two*
+wrapping folds: each block accumulates its own share of the contraction in an
+int32 register, and the atomic reduction then combines those partials in int32
+in memory, in whatever order they land. Both are covered now, at every split
+factor and every landing order, by **one** licence hypothesis — it bounds the
+sum of *absolute* values, and every partial of either fold is a sum over a
+subset. Measured at the licensed maximum K, where every partial is at its worst:
+exact at split factors 1, 2, 3, 8, 17 and 64.
+
+**Writing the theorem is what forced its missing hypothesis into the open.** The
+combine starts from whatever `C` already holds, so choosing that value is part
+of stating the theorem — and the licence `K · 128² ≤ i32::MAX` is sufficient
+only when `C` starts at **zero**. The emitter's comment says a caller must zero
+it; nothing connected that to the licence.
+
+That is not academic. This kernel *accumulates* into `C` — which is exactly what
+lets the grid split the contraction — so a caller who instead splits K across
+**launches** into the same int32 buffer is doing the obvious thing with that
+property. Measured with every operand −128 and K=65,504 per launch (half the
+licensed maximum rounded down to a whole K step), **the compiler accepts
+every one of them**:
+
+| launch | `C[0]` | exact | |
+|---|---|---|---|
+| 1 | 1,073,217,536 | 1,073,217,536 | ok |
+| 2 | 2,146,435,072 | 2,146,435,072 | ok |
+| 3 | **−1,075,314,688** | 3,219,652,608 | **wrapped** |
+
+Every launch individually licensed; the accumulation not. The refusal message
+now names the repair it was silent about, and the proof carries the hypothesis
+with a refutation and a control rather than assuming a zeroed buffer quietly.
+
+Two mutations were expected to survive and are the reason the gate reads the
+definitions' text: **remove the wrap from either fold and every theorem still
+holds** — they become ordinary integer folds, and the file still reports "closed
+under the global context". A proof about int32 that says nothing about int32.
+
+### A suite that sweeps one kernel is not testing its sibling
+
+`emit_int8_gemm_kernel` emits two kernels. The plain one accumulates its
+partial sums with `red.global.add.s32`; the fused one dequantises to f32 —
+per-row activation scale, per-column weight scale, bias — and writes the result
+with `st.global.f32`. **Both walked the same striped split over `%ctaid.z`.**
+
+A store combines nothing. Measured on the device, M=64 N=32 K=128, unit scales
+and zero bias so the f32 output *is* the integer accumulation, three launches
+per geometry:
+
+| `gridDim.z` | wrong of 2048 | `C[0]` across three launches |
+|---|---|---|
+| 1 | **0** | −63740, −63740, −63740 |
+| 2 | 2048 | **−3016, −60724, −3016** |
+| 8 | 2048 | **−15591, −7777, −15591** |
+
+The answer is −63740. Not a rounding difference and not a stable wrong answer:
+**a different matrix between launches of the same kernel on the same inputs**,
+from the kernel whose own header reads *"the answer does not depend on how K was
+walked"* — in the shape the w8a8 inference path is meant to use.
+
+`tests/gpu_batch_invariance.rs` sweeps `gridDim.z ∈ {1,2,3,5,8,16,32}` against a
+CPU reference — **on the plain kernel only**. The suite whose entire subject is
+this family's launch invariance never loaded the other kernel. Third instance of
+one shape here, each time a step wider: a suite that sweeps one *axis* is not
+testing another; one that sweeps one kernel's *geometry* is not testing the
+other kernel; one that sweeps one *kernel* is not testing its sibling.
+
+The emitter's own comment said it and nobody read it that way —
+*"`red.global.add.s32` … being an INTEGER add it is associative"* is an argument
+about an **add**, in a function whose other branch stores.
+
+**The repair is to make the launch contract not matter.** Not an atomic float
+add (that is the non-reproducibility this family exists to avoid, and the bias
+would land once per z) and not a runtime refusal (a kernel cannot fail). A
+storing epilogue walks the whole contraction, so every z-CTA computes the
+identical value and writes identical bytes: the race is benign, the answer is
+right at every grid, and `z > 1` buys redundant work rather than a wrong matrix.
+The emitted diff is two `mov`s; `tests/int8_gemm.ptx` is byte-identical.
+
+`proofs/Int8GemmSchedule.v` gains the storing schedule as the *degenerate*
+instance of the same `GridStrideSplit` decomposition — no new reasoning — plus
+the two refutations that are the measured defect: a split CTA holds only part of
+the contraction, and **the partials disagree with each other**, which is why the
+answer moved between launches.
+
+The device test SKIPs without a driver, so the source-level half is a
+biconditional: the reducing kernel must still stripe and the storing one must
+not. With the fix reverted under `CUDA_VISIBLE_DEVICES=""`, the device test
+reports `ok` and the two source-level tests fail. The gate also found a bug in
+itself on its first run — a raw substring search for `%ctaid.z` matched the
+storing kernel's own comment explaining why it does not read it.
+
+Seven mutations, control and baseline green first. **The original defect is
+caught by the new gate and by none of the other six suites.**
+
+### The int8 GEMM computes the source dot products — and the theorem was false until the compiler learned its licence
+
+`Int8GemmSchedule.v` proved this kernel's **schedule**: which lane owns which
+element of C, that the split-K classes tile the contraction, that the atomic
+reduction is order-independent. It said nothing about the **value** landing at
+`C[r][c]`. `proofs/Int8GemmExact.v` closes that — the GPU twin of the CPU
+chain's `the_threaded_gemm_holds_the_source_dot_products`, and available for
+this kernel and no other, because 923 of the 925 `mma.sync` this compiler emits
+are floating point.
+
+**Writing the capstone forces its hypotheses to be stated, and one of them did
+not exist anywhere in the compiler.** `mma...s32.s8.s8.s32` accumulates into
+int32, this kernel has no flush, and there is nowhere to widen to because the
+*output* is int32 too — so the whole contraction must satisfy `K · 128² ≤
+i32::MAX`, i.e. `K ≤ 131 040` for full-range I8 operands. Nothing checked it: not the emitter, whose only
+refusal was on `M % 16` / `N % 8` / `K % 32`, not `proofs/`, not any test.
+
+Measured on the device before the guard existed, every operand 127:
+
+| K | exact | device | |
+|---|---|---|---|
+| **133 120** | 2 147 092 480 | 2 147 092 480 | **ok** |
+| **133 152** | 2 147 608 608 | **−2 147 358 688** | **wrapped** |
+
+One K step wide. The one GPU GEMM here whose entire claim is an exact answer
+returned a *negative number* under a green banner, with `red.global.add.s32`
+summing it. Latent rather than live — the largest K in the corpus is 16 384 —
+which is the argument for fixing it now, not against.
+
+`the_measured_overflow_is_two_s_complement` reproduces that second row from
+`wrap32` alone. The model was not fitted to the device: `wrap32` is the CPU
+chain's, written months earlier, and it lands on the exact value the card
+returned. **A model that merely said "it overflows" would agree with any wrong
+answer.**
+
+The proof establishes that the 32 lanes' register bytes are a *bijection* onto
+the 16×32 and 32×8 fragments (`MixedRadix`'s eighth and ninth consumers), that
+the emitted byte offsets address exactly the source elements that bijection
+names, that 32 products per step over `K/32` steps re-index to the flat
+contraction, and — under the licence — that the int32 accumulator does not wrap.
+28 `Print Assumptions`, no axioms.
+
+**A `nat` literal is unary, and that cost the afternoon.** Proved at the literal
+32, every tactic succeeded, the goal closed to something *syntactically
+identical* on both sides, and `Qed` did not return: 32 nested `S` inside a fold
+32 deep, carried through every conversion check. Stated for an abstract block
+size and instantiated by one `apply`, the same proof takes **0.27 s**.
+
+Mutation table, 11 rows, all resolved. **X1 — the licence removed, i.e. the
+original defect — is caught by the new gate and by nothing else**, including
+`gpu_batch_invariance` and `ptx_int8_mma_layout`; both use K ≤ 4096, and a suite
+that sweeps one axis is not testing another.
+
+
+### The int8 GEMM is 4.29x faster, and two numbers I published were wrong
+
+Of the 925 `mma.sync` instructions this compiler emits, **923 are floating
+point**. So the one place on the GPU where exact accumulation makes the
+kernel-vs-spec relationship an *equality* is the int8 tensor-core GEMM. It had
+no shared-memory staging: one warp owned a 16×8 output tile and read its 16 A
+rows and 8 B columns straight from global — **0.1875 bytes per MAC**.
+
+**Measuring what staging would cost found a cheaper lever pointing the same
+way.** Issuing `mt*nt` mma per K step *from the same fragments* amortises both
+halves with no shared memory, no barrier, and no instruction this backend does
+not already emit. A 64×64 warp tile moves **6x** less — half of what a 128×128
+staged tile would — for none of the machinery. Measured through the real
+compiler, old emitter against new in one process:
+
+| 4096³ | G MAC/s | speedup | of cuBLASLt |
+|---|---|---|---|
+| Y int8, 16×8 (was) | 14,322 | 1.00x | 0.09x |
+| Y int8, 64×64 | **61,441** | **4.29x** | 0.40x |
+| cuBLASLt (`torch._int_mm`) | 154,380 | 10.78x | 1.00x |
+
+At 8192³, past the L2 cliff, it is **7.92x**. 199 registers, zero spill. (The
+cuBLASLt column reads 144–154k across runs; every ratio here is taken *within*
+one interleaved run, never across two.)
+
+**The largest tile is a 7x LOSS at a small shape, and only sweeping found it.** A
+tile is one *warp*, so a 64×64 tile on a 64×64 matrix is one warp for the whole
+GEMM — it measures **0.14x**. So the big tile is taken only when it leaves at
+least 64 output tiles, and otherwise the schedule stays at one mma per warp.
+Validated on 14 shapes, 8 of them not used to derive the rule: **worst case
+1.00x, it never regresses**, while keeping 1.57–3.62x wherever the win exists.
+
+#### Two numbers I published two days ago were wrong, and they cancelled
+
+Re-measuring the baselines is what the "cross-session numbers do not compose"
+rule asks for. Both moved:
+
+| | published | measured | mechanism |
+|---|---|---|---|
+| cuBLASLt @ 4096³ | 38,090 | **144,196** | `.contiguous()` inside the timed loop |
+| int8 `mma` ISA ceiling | 374,027 | **179,761** | unstored accumulators deleted by `ptxas` |
+
+The first is identified rather than guessed: `_int_mm(A, B.t().contiguous())`
+measures **31,452**, essentially the published figure, because the transpose
+materialises a 16 MB copy per call.
+
+**The second is the more interesting failure, because its control passed.** The
+ceiling probe kept eight accumulator sets and stored one, so seven mma chains
+were dead code — and the doubling control read a clean 2.000 anyway, because *a
+constant dead fraction divides out of a ratio*. What caught it was arithmetic:
+374,027 is 2.1x above `66 SM × 2.61 GHz × 1024 MAC/SM/cycle`. Storing every
+accumulator gives **179,761 — 102% of that bound, and 1.94x the f16 ceiling,
+exactly the 2x a spec sheet predicts.**
+
+The tell had been written down and filed as a curiosity: the original note
+recorded int8 at **4.04x** f16 where a spec sheet says 2x, and called that
+"measured and unreconciled rather than adjusted". Refusing to fudge the number
+was right; not chasing it was not. **A measurement that disagrees with a spec
+sheet by 2x is a bug report.**
+
+This changed the conclusion. Under the published baseline a 4.29x speedup reads
+as *1.56x cuBLASLt — beating the vendor library with no shared memory*. That is
+false. Under the real baseline it is 0.09x → 0.40x: a large, cheap, real win
+that **does not close the gap**, and the staged pipeline is still needed.
+
+#### The schedule change forced a stronger property than it needed
+
+The warp tile is a compile-time function of M and N, so it is invisible at the
+call site — and a host still launching the old `(N/8, M/16, z)` grid would start
+`mt*nt` times too many CTAs, each addressing *past the end of the matrix*, with
+`red.global.add.s32` writing it. That is the defect below, one axis over. So the
+output tiles are now **grid-strided in x and y**, the way K already was in z:
+every grid is correct, and the pre-tiling host launch still computes the right
+matrix. An output row became a three-digit index, which is
+`MixedRadix.two_digit_unique` verbatim — the **seventh consumer** of that
+schema, and the composition needed no new reasoning.
+
+**The finding was a launch contract nobody had stated.** The schedule gives one
+16×8 tile to one *warp*, so a CTA has 32 threads of work however many it is
+launched with, and the emitted kernel contained one predicate — the K-loop
+bound. With every element of A = 3 and B = 5 at K=128, so every output must be
+1920:
+
+| block | result |
+|---|---|
+| (32,1,1) | correct |
+| (64,1,1) | 1344 of 2048 wrong, `C[256] = 3840` |
+| (128,1,1) | same, and it reads row 79 of a 64-row A |
+
+3840 is **exactly double**: warp 1's lane index puts its second A-row read in
+the next tile, and `red.global.add.s32` sums it in. This is the one kernel
+whose advertised claim is a bit-identical answer at every launch geometry, so a
+wrong block size falsified that claim silently. Fixed with a warp-uniform guard
+at no measurable cost, and `proofs/Int8GemmSchedule.v` (36 `Print Assumptions`,
+no axioms) now states the guard, the striped split-K — instantiated from
+`GridStrideSplit`, so `red.global.add.s32` landing in any order is a theorem
+rather than a comment — and the output tiling.
+
+**A framing correction that came out of the same measurement:** cuBLASLt's int8
+GEMM is batch-invariant too, while the f16 control differs at 5 of 6 batch
+sizes. Integer accumulation is associative, so *any* int8 GEMM has the property
+for free. What Y adds is that it is proved and stated, not that it is present.
+
+### The int8 GEMM matches cuBLASLt
+
+The warp-tiled kernel above stopped at 0.40x because it had no shared memory.
+Since 2026-11-06 it stages: K tiles copied by `cp.async` into swizzled shared
+stages, fragments loaded by `ldmatrix.x4`, the e4m3 GEMM's mainloop with the
+accumulator chained in int32 (`src/ptx_emitter/int8_staged_gemm.rs`). Against
+`torch._int_mm` (cuBLASLt) on the RTX 4070 Ti SUPER, two runs, every output
+checked against cuBLASLt and a float64 product before anything was timed:
+
+| shape | Y / cuBLASLt | the kernel it replaced |
+|---|---|---|
+| 1024³ | 1.35x | 0.50–0.51x |
+| 2048³ | 1.02x | 0.40–0.42x |
+| 4096³ | **1.03x** (316–318 TOPS) | 0.42x |
+| 8192³ | 0.97–1.00x | 0.23x |
+| 1024 × 1024 × 16384 | 1.38x | 0.49–0.50x |
+| 24 LLM shapes, M = 32–2048, operands in L2 or from DRAM | 0.91–1.68x; 83 of 96 results 0.98x or better | 0.17–0.72x (in L2) |
+| K % 64 == 32 (4000³, 4096 × 4096 × 4000) | 0.93–0.95x | 0.20–0.44x |
+
+**Staging alone measured 0.74x** (this step and the next are single
+development runs at 4096³, not in the record's logs). The old kernel reduced every output into
+`C` with `red.global.add.s32`, so it could split K over `gridDim.z`; at 4096³
+those 16.7M atomics were a quarter of the time. A launch that does not split K
+now **stores** each output (0.97x), and only a split launch reduces. Ordering
+the K loop as CUTLASS's multistage mainloop does — the next substep's fragments
+loaded under this substep's MMAs, the barrier that publishes the next K tile
+after the second-last substep, the next tile's first fragments loaded before
+the last substep's MMAs — took it to 1.03x.
+
+**The first sweep caught the tile rule computing padding.** The rule takes
+128×128 where that leaves at least 64 output tiles, else 64×128, else 64×64.
+At 32 × 11008 × 4096 the 128×128 tile left 86 tiles, three quarters of each
+past M, and ran at **0.60x**, against 1.13x for a 64-row tile. The rule now
+also requires the tile to fit inside the matrix.
+
+**The losses depend on where B lives, and no rule from the shape alone avoids
+both.** At 128 × 4096 × 11008 and × 14336 the rule's 64×128 tile measures
+0.91–0.94x when B streams from DRAM, as a model's weights do, where the 64×64
+tile gives 0.99x. With B in the 48 MB L2, the 64×128 tile measures 0.92–1.00x
+there, and the 64×64 tile is 17–24% slower than it at K = 4096 and 11008. The rule stays as it is, and both regimes are in the record. The
+other losses are 512 × 11008 × 4096 (0.97–0.98x), 512 × 1024 × 4096 from DRAM
+(0.93x), and K % 64 == 32 (0.93–0.95x). In that last case every second row
+starts 32 bytes into a 64-byte segment. K % 32 == 0 is required, so
+K % 64 is 0 or 32, and an LLM's K is a multiple of 128.
+
+**The launch contract changed, so a caller has to change with it:**
+- the block is the header's, 128 threads, and any other block traps
+  (it was 32);
+- any grid computes the same matrix, and the header's is one CTA per output
+  tile;
+- `gridDim.z = 1` overwrites `C`, and `gridDim.z > 1` adds K's partials into
+  a `C` the caller zeroes;
+- the scaled form stores always, so each of its CTAs walks the whole K;
+- A and B must be 16-byte aligned and `C` 8-byte aligned.
+
+**The proofs were restated for the staged kernel, not patched.**
+`proofs/Int8GemmSchedule.v` (39 `Print Assumptions`, no axioms) proves:
+- each output tile has exactly one owner under the grouped raster order and
+  the grid stride; without the 2^32-CTA trap the stride wraps, and the tile
+  id's wrap check detects a wrap;
+- the striped K split sums to the whole contraction at any `gridDim.z`;
+- a storing CTA and a reducing one leave the same `C`.
+
+`proofs/Int8GemmExact.v` (42) proves:
+- each swizzled `cp.async` copy lands where `ldmatrix` reads it;
+- each `ldmatrix` fragment register holds the source element the `mma` needs;
+- each CTA's int32 partial is exact, and the emitted kernel holds the source
+  dot products, split or not.
+
+`ldmatrix`'s lane layout and the `cp.async` wait semantics are ISA facts in
+the trusted base, as `mma.sync`'s already was. `compute-sanitizer` memcheck
+and racecheck are clean on ten runs: ragged M, N and K, every tile, K split,
+and several tiles per CTA. 17 of 17 mutants of the emitter
+(`int8_mutate.py`) are killed. One of them, the missing barrier between
+output tiles, is caught only by racecheck.
+
+Record, raw logs and scripts: `docs/benchmarks/int8_gemm_2026-11-06/`.
+
+**The exact-inference pipeline now runs it (2026-11-07).** Until then the
+pipeline's linear layers ran on a Triton kernel or on cuBLASLt, so the proofs
+covered a kernel the pipeline did not use. `y_lang.int8_gemm.int8_mm` calls
+this kernel from PyTorch. It is an op registered through `torch.library` (so
+`torch.compile` keeps it in the graph), pads M to a row bucket, and splits K over `gridDim.z` when the output tiles leave half
+the card idle. `Y_EXACT_GEMM=y` puts every `ExactLinear` product on it. On
+Qwen2.5-0.5B, 5 cases x 160 tokens, the GPU in that mode decodes to the CPU's
+exact token digest, eager and compiled: 0 of 5 cases changed, against 5 of 5
+for stock bf16 (`docs/bit_identical_decode.md`,
+`docs/benchmarks/exact_y_gemm_2026-11-07/`). Per layer, eager, against the
+Triton kernel: faster on most prefill shapes (1.25-1.76x) and on the decode
+layers with few output tiles. It is 0.90x on 7B's large decode layers, where
+its epilogue takes four unfused torch passes. Compiled, at Qwen2.5-0.5B decode
+(batch 32), the pipeline on Y's kernel runs at 1.01-1.04x its Triton speed
+(225-227 against 217-223 tokens/s a sequence) and above the cuBLASLt path
+(184-186). It ran at 0.87-0.91x until the op stopped being a
+`torch.library.custom_op`, whose Python-side dispatch cost about 6 us a call
+inside a compiled graph, 168 calls a step
+(`docs/benchmarks/exact_y_gemm_2026-11-07/`).
+
+### BF16 matches cuBLAS (2026-11-07)
+
+Until 2026-11-07 the parser rejected `BF16`. It is now a `GlobalMemory`
+element type, and the F16 tensor-core GEMM takes bf16 operands:
+- **Conversions.** A load widens exactly. A store rounds to nearest-even, the
+  bfloat16 torch gives on CUDA for all 2^32 float32 bit patterns. An f64 or
+  an integer is rounded once: through the nearest float32 instead, 32,644 of
+  1.18M values near bf16 midpoints came out wrong.
+- **Speed.** Against cuBLAS's bf16 GEMM with f32 output, the GEMM is
+  0.93–1.51x over 30 shapes, 21 of them 0.98x or better.
+- **Bits.** Wherever both chain the tensor core's accumulator, from 256³ to
+  4096³ and at 2048 rows with K = 4096, every output is bit-identical to
+  cuBLAS's. From K = 8192 Y sums in blocks instead, and at 2048 rows its
+  largest error is 50x below cuBLAS's at 0.99x its speed.
+- **Accuracy.** At 32 rows, and at 128–512 rows with K of 4096 and up, Y's
+  compensated and blocked sums are 6–200x closer to the exact product. At
+  8192³ the first measurement chained, at 3x cuBLAS's largest error: its
+  tile had no room for the block sums. Since the compiler widens such a
+  tile from K = 8192, Y's is 9x below cuBLAS's there (4.5e-8 against
+  4.2e-7), at 1.01–1.02x its speed.
+
+Records: `docs/benchmarks/bf16_gemm_2026-11-07/`; tests: `tests/ptx_bf16.rs`
+and `python/y_lang/tests/test_bf16.py`.
+
+### The GPU warp tiling is proved, and the guard for it was compiled out
+
+Asked when the tensor-core GEMMs get proofs, the measurement moved the plan
+twice.
+
+**923 of the 925 `mma.sync` instructions this repository emits are floating
+point** — 827 `f16`, 96 `e4m3`, and **2** `s8`. So the premise that makes the
+CPU work an *equality* (exact accumulation restores associativity) does not
+apply to them.
+
+> This figure read **950 of 952** until 2026-09-06, and it was wrong when it was
+> written rather than having gone stale — the counts have not moved since. Its
+> `f16` term came from a grep that counts comment lines and its other two terms
+> from one that does not: 854 + 96 + 2. **A sum whose terms use different
+> conventions is wrong even when every term is individually defensible.** The
+> substance is untouched — two integer instructions either way — which is
+> exactly why it survived being transcribed forward three times.
+
+And the one kernel that could carry it is a stub — no shared-memory staging at
+all. Counted as **instructions**, not as lines that mention one:
+
+```
+kernel                lines  mma.sync  cp.async  ldmatrix  bar.sync
+int8_gemm.ptx           361        16        23        12         3
+gemm_f16_4096.ptx       784        64        30        24         7
+```
+
+The int8 row read `134 / 1 / 0 / 0 / 0` until 2026-11-06, when the kernel
+began staging its K tiles in shared memory (see "The int8 GEMM matches
+cuBLASLt", above).
+
+The f16 row read `964 / 64 / 21 / 24 / 7` until 2026-10-17, when that
+kernel's K loop began computing its copy addresses once and loading B with one
+`ldmatrix.x4.trans` per 16 columns
+(`docs/benchmarks/f16_gemm_loop_2026-10-17/`). It read 672 lines until
+2026-10-19, when the epilogue's two copy loops were marked
+`.pragma "nounroll"` (`docs/benchmarks/const_div_2026-10-19/`), 674 until
+2026-10-20, when its shared-memory tiles were swizzled
+(`docs/benchmarks/smem_swizzle_2026-10-20/`), and `691 / 64 / 20 / 16 / 6`
+until the re-tune that day gave it three stages
+(`docs/benchmarks/retune_2026-10-20/`).
+
+> **Those figures read `89 lines with 2 mma … against 964 / 65 / 22 / 24 / 7`
+> until 2026-09-08, and the correction above had already been written.** The
+> line count was three increments stale, and **two of the five f16 terms were a
+> raw `grep -c`, which counts the comment naming the instruction** — 65 against
+> 64 real `mma.sync`, 22 against 21 real `cp.async`. That is the identical
+> defect the note four lines above corrects, in the sentence below it: *a
+> counting convention fixed at one site is not fixed*.
+> `python3 tools/ptxas_tval/docgate.py` re-derives the table from the committed
+> artifacts, so neither term can drift again.
+
+**The staging bring-up would widen the validator's gap, not close it**, which
+is the answer to "build the staging, then validate it". Measured before writing
+any: the int8 kernel is 3 PTX / 4 SASS opcodes short, and staging is exactly the
+difference between that and the f16 kernel's 9 / 13 — it imports the whole
+`cp.async` / `ldmatrix` family and the `LDGSTS` / `DEPBAR` / `WARPSYNC` family,
+and adds back edges to a kernel already refused for having three. The perf
+increment and the validation increment point in **opposite directions** here;
+`docs/ptxas_translation_validation.md` carries the table. (It went as
+predicted. Since 2026-11-06 both int8 GEMMs are refused on the `cp.async` in
+their K loop, as the f16 GEMMs are, rather than on the `mma.sync`.
+`int8_gemm_scaled`'s `-O1`/`-O3` SASS opcode gap went from 3 → 4 to
+13 → 13.)
+
+What *is* available is the SCHEDULE half, because `proofs/ExactGemmTiling.v`
+mentions `f16`, `f32`, `float`, `int16` and `i32` **zero times** — it is `nat`
+index reasoning and does not depend on precision. Starting there found a live
+defect.
+
+Every tensor-core GEMM derives its warp geometry by truncating division, so a
+warp's base advances by `cta / warps` while a warp *writes* `(cta / warps /
+frag) * frag`. Those agree exactly when `frag * warps` divides `cta`, and the
+precondition was three `debug_assert_eq!`s — which `[profile.release]`, absent
+from `Cargo.toml`, compiles out of every shipping binary.
+
+```
+Y_CTA_OVERRIDE=96,128,32,4,2,3   →  exit 0, "Compilation Successful!", ptxas exit 0
+    each CTA advances 96 rows and writes 64
+    NEVER WRITTEN: rows 16-23, 40-47, 64-71, 88-95
+```
+
+That is `c_written_exactly_once` failing — the theorem the CPU chain has had
+since the tiling increment — on the GPU, where there was no equivalent. Two
+producers reach it: `Y_CTA_OVERRIDE`, and a persisted `AUTOTUNE_*` line in
+`.ysu_hw_profile`, which needs no environment variable at all. All 23 built-in
+candidates satisfy the constraint, which is why the default path was never
+wrong.
+
+`Y_SWIGLU_TILE` **already validated this exact constraint**. The same rule was
+written correctly at one override site and not the other.
+
+`proofs/GpuWarpTiling.v` now states the partition and refutes the compiled
+instance — nine `Print Assumptions`, no axioms. Injectivity is
+`MixedRadix.two_digit_unique` and nothing else: a warp row is a two-digit
+positional index, the fourth consumer of that schema.
+
+It is a claim about the schedule, not the value: these GEMMs are f16, so no
+equality to a naive nest is available for them at all.
+
+### Translation validation: removing `ptxas` from the trusted base
+
+Those proofs stop at the IR. The trust boundary printed into every emitted
+certificate says so, and names the remedy in the same breath — *"translation
+validation — checking THIS object against THIS IR per compilation, which is not
+performed."*
+
+`tools/ptxas_tval/` performs it, on the GPU side. It symbolically executes a
+kernel's PTX and the SASS `ptxas` produced from that exact file, and asks z3
+whether the two can ever store different values. **An opcode neither executor
+models is a hard error, never a guess.**
+
+**2026-10-08 update:** the selected strict PTXAS stage passed **38 Rust tests,
+162 Python tests and 111 retained artifact cases**, with no failures or skips.
+Carry cuts preserve complemented and one-bit forms; failed cut queries retry
+the original store expressions, and unsigned wide products share the selected
+multiplier. The standing `bn254_permute`, `bn254_sub_vec`, `ptx_carry_chain` and
+`ptx_integer_ops` controls validate with 30, 62, 100 and 66 obligations.
+`bn254_fr_mul_fast` still lacks a completed proof: its final 120-second trial
+timed out without finishing a sweep or returning a verdict. Proof mode remains
+scoped to `sm_89`; GPU execution was unavailable. See the
+[continuation review](docs/verification/ptxas_arithmetic_cuts_2026-10-08.md)
+for evidence, reproduction commands and the remaining work.
+
+The following table preserves the September standing measurements. Its counts
+and timings are historical; the October continuation did not rerun the entire
+table or establish a new aggregate obligation count.
+
+| kernel | verdict | obligations | time | |
+|---|---|---|---|---|
+| `fma/rn` | **VALIDATED** | 9 | 0.0 s | float, contraction forbidden by `.rn` |
+| `fma/plain` | UNPROVED | 10 | 0.0 s | **a control** — `store 0: sat` |
+| `neg/folded` | **VALIDATED** | 9 | 0.0 s | a `neg.f32` folded into an `FFMA` modifier |
+| `neg/sub` | **VALIDATED** | 7 | 0.0 s | a plain float subtract |
+| `neg/unfoldable` | UNPROVED | 9 | 0.0 s | **a control** — the *other* lowering of one opcode |
+| `max/relu` | **VALIDATED** | 5 | 0.0 s | the **shipped ReLU** shape |
+| `max/general` | **VALIDATED** | 7 | 0.0 s | the same opcode, operand order preserved |
+| `max/min` | **VALIDATED** | 7 | 0.0 s | the other polarity of one SASS instruction |
+| `bn254_permute` | **VALIDATED** | 30 | 0.2 s | branching `ptxas` invented |
+| `bn254_sub_vec` | **VALIDATED** | 88 | 11.9 s | |
+| `ptx_carry_chain` | **VALIDATED** | 123 | 26.7 s | 24 predicated instructions |
+| `ptx_subword_ops` | **VALIDATED** | 31 | 0.3 s | **sub-word stores**, and a load that can read one back |
+| `ptx_integer_ops` | **VALIDATED** | 65 | 23 s | **u32 `div`/`rem`** lowered through the float unit; 3 stores proved over Int |
+| `exact_pv` @ `-O1` | **VALIDATED** | 14 | 1.1 s | across a **loop** |
+| `smem_roundtrip` | **VALIDATED** | 18 | 0.2 s | **shared memory**, 1 barrier |
+| `naive_gemm_f32` @ `-O1` | **VALIDATED** | 9 | 0.2 s | **a shipped GEMM** |
+| `naive_gemm_f32_muladd` | UNPROVED | 7 | 0.2 s | the form Y *used to* ship |
+| `naive_gemm_f32_rn` | **VALIDATED** | 9 | 0.2 s | the contraction *forbidden* |
+
+The historical table has **fifteen VALIDATED rows and three SAT controls** —
+asserted by `regress.sh` in their expected directions, because a run in
+which an UNPROVED row turns green is a regression too. `fma/plain` is the same
+kernel as `rn` without the `.rn` suffixes: `ptxas` contracts `mul.f32`+`add.f32`
+into one `FFMA` that rounds once where PTX rounds twice, and the validator
+answers `sat` with a counterexample. That is a freedom the ISA grants, not a
+`ptxas` bug. `neg/unfoldable` is a *different* refutation — one PTX opcode with
+two lowerings and two verdicts, so the refusal is about the lowering rather than
+about the opcode.
+
+#### A shipped kernel was refuted, and the repair was to say what the machine does
+
+`naive_gemm_f32` is Y's own emitted GEMM, and it was **refuted**: `BASE`, `STEP`,
+`LOOPCOND` and `ENTRY` all proved — the loop schedule corresponds exactly — and
+only the accumulated *value* could not be shown equal, because the PTX asked for
+two roundings and the hardware performed one. Two repairs exist and the obvious
+one is worse. `mul.rn.f32`+`add.rn.f32` **forbids** the fusion: it validates, and
+leaves the kernel rounding twice where the hardware rounds once. `fma.rn.f32`
+**states** it: a **byte-identical instruction stream**, more accurate, and it
+validates. Stating what the machine does is free; forbidding it is not.
+
+The emitter says it now — at the expression level, and in the hand-written
+rmsnorm, RoPE and int8-dequantise bodies — and **the corpus-wide contraction set
+is 0**: forbidding the fusion changes not one byte of SASS anywhere, because
+there is no unstated fusion left to forbid. Every artifact this repository ships
+now names every rounding the hardware performs. The RoPE `a·b − c` half was
+recorded as costing a `neg.f32` PTX cannot fold; that price was **counted in the
+wrong currency** — the `neg` *replaces* the `mul` the `fma` absorbs, so the
+instruction count is unchanged and the SASS is byte-identical.
+
+#### The float layer needed facts IEEE does not give
+
+Floats are uninterpreted functions, so every identification between the two sides
+is an assumption that must be measured. Three are load-bearing and none is
+readable off a mnemonic: `FADD` and `FMAX` commute **bit-exactly**, and the `-R`
+operand modifier is a bit-exact sign flip. "IEEE says so" is not enough — the
+claim is about stored *bits* and a NaN payload is implementation-defined — so
+seven float facts are refereed against silicon in `fpsem_abi.py`, each with a
+non-vacuity check that fails if the probe could not have observed a difference.
+`FMAX` commutativity is needed by exactly one shape in the corpus: the **shipped**
+ReLU epilogue, whose literal `ptxas` folds into `RZ` in the *first* operand slot.
+A general-max fixture alone would have validated and hidden that the fact was
+needed at all.
+
+**And the gate that was supposed to stop the emitter outgrowing the validator
+counted 5 of 30 float opcodes.** It matched `(mul|add|sub|neg|fma).f32`; the
+emitter writes thirty, and two uncounted ones cleared the bar the gate exists
+for. The rule is total now — every float-semantic opcode in a committed artifact
+is *modelled* (6) or in a **named family with a written reason** (11 conversions,
+9 macro-ops derived from the executor's own table, 4 f64) — and a thirty-first
+fails. An all-clear is also what a broken census reports, so the gate carries a
+positive control through the same classifier it uses.
+
+**The September solver measurements are historical.** The October continuation
+did not recalibrate the region thresholds below. Its final bounded field-kernel
+trial completed no sweep and returned no verdict.
+
+At the September checkpoint, the binding constraint was the solver rather than
+opcode coverage. `ptx_carry_chain` validated with 29 multiplies in 24 seconds;
+`bn254_fr_mul_fast` had 65 and was UNPROVED with **no `sat`** — its first sweep
+closed 17 of 276 partial sums in 16,237 seconds.
+(This README used to say 261 of 276 in 9,705 s. That does not reproduce, not even
+with the validator of the commit that published it, so it is withdrawn.) Nor is it
+the theory in that measurement: asked of both engines at 60 s, the exact Int translation that
+proved the division tail closes **none** of the 14 pairs the bitvector engine
+cannot (`tools/ptxas_tval/intwall.py`). Asking the
+counterfactual (*if every opcode were modelled, what could the solver close?*)
+used to put "51 of 66 kernels under that wall" and call the 23 tensor-core GEMMs
+tractable at 39–61 multiplies per barrier region. **Neither survives
+`wall.py`.** Measured at region level against named ground truth, the wall is
+between **33** (largest region PROVED) and **49** (smallest region `unknown`)
+*symbolic integer* multiplies — and the GEMMs' multiplies are almost all index
+arithmetic by an immediate, which no measurement has put at the wall in either
+direction. So the corpus is **25 under, 10 past, 29 undecided, 2 refused**, and all
+ten past are field kernels (65–717). "33 kernels are behind shared memory" was false; shared memory alone
+unlocks exactly one, a test fixture. It was still right to build, because it is
+what *creates* the cut points the GEMMs need.
+
+Tractable is not the same as close. Running the executor to enumerate what it
+*genuinely* refuses — rather than reporting its first refusal — puts each of the
+23 GEMMs at **21–27 unmodelled opcodes**: the async-copy family, `ldmatrix`,
+`mma`/`HMMA`, a loop, and the integer-divide-through-the-float-unit macro-op, all
+of them. `cp.async` is three of those nine on the PTX side, and on the SASS side
+none of the 23 ever reached it — they refused earlier on a const-bank operand for
+`gridDim`, which the vocabulary could already name and the map had simply
+omitted. Fixing that unblocks nothing and was still worth landing: the census now
+reports the real gap instead of a spurious operand refusal. Those offsets are a
+driver ABI fact, so `cbank_abi.py` referees them against `ptxas` *and* against a
+launch with six distinct extents — deriving them from `ptxas` alone would use the
+translator under test to license a fact used to validate it.
+
+**The queue was ordered by cost, and nobody had computed reach.** Every ranking
+answered "what would it take to validate *this* kernel"; none answered "how many
+kernels would *this opcode* unblock". `gap.py --rank` prints both, and they
+disagree. `ptx_subword_ops` was recorded as the cheapest kernel left at 8 unknown
+PTX ops; the dynamic gap is **three** opcodes with zero contaminated errors — and
+each of the three blocks **exactly one kernel**, it is the only corpus kernel
+using a sub-word store at all, and its SASS branch is already exercised by a
+passing kernel. Cheapest *and* worth nothing. Not built, and the reason is
+recorded: stores carry no width, so modelling one forces a soundness decision the
+tool has never had to make, and refusing them today leaves it sound. **Built
+since, and it validates** — a byte-faithful memory model gives a store its
+width, so the soundness decision stopped being a trade-off; see *The memory model
+reads through stores* below.
+
+**The loop kernels are gated twice and only one gate had been counted.**
+The validator refuses on loop *structure*, independently of opcodes, so closing
+every opcode gap would leave a kernel refused for a reason nobody had measured.
+`loopgap.py` is that census — possible only because the validator refuses by
+name — and it takes **none of the 48** kernels with control flow. **33 of the 48
+refuse for one reason: a loop body holds a cross-thread operation** (32 on the PTX
+side, 1 on the SASS) — a shared store, a barrier, an async copy or an `mma`
+inside a loop, whose effect on other threads the loop relation does not carry,
+refused by name since the 2026-10-03 source audit. That includes all 23
+tensor-core GEMMs, which also have three loops, so "21–27 opcodes each"
+understates them twice over. (Before the audit this read "25 of the 48 refuse
+for one reason: more than one loop at one level".)
+
+**That census asked ONE member of a two-member suite, and three different
+blockers were hiding behind its biggest bucket.** `loopval` handles one loop and
+`nestval` one nest; `loopval` refuses on the back-edge *count* before it looks at
+anything else, so every multi-loop kernel was filed under a blocker `nestval`
+lifts. Asked the suite: the four `gemm_fp8` carry three branches of their own
+inside the loop, `int8_gemm` and `int8_gemm_scaled` branch outside the nest, and
+`y_cpu_matmul`'s SASS holds an `@!P0 BRA P1` form that was **already counted for
+two other kernels**, so its reach was understated. Which member answered is now
+a published, gated figure — a dispatch that stopped reaching `nestval` would
+leave every row of the census plausible and the census wrong about what the
+validator can do.
+
+**That one bucket held three shapes needing three different validators**, and
+splitting it inverts the ranking: 30 are `SEQUENTIAL` (one loop after another —
+the cheap lift, and the *furthest* kernels in the corpus at 21–23 opcodes each),
+5 are `MIXED`, and 3 are a depth-3 `NESTED` loop, which is where `y_cpu_matmul`
+— the kernel that once looked like the lift's sufficiency case — sits.
+
+**The two sides were reading different functions, and that is why this says 38
+where it used to say 32.** A module with more than one function has no defined
+subject: the PTX scanners stopped at the first `}` and read entry 1, while the
+SASS side read the whole disassembly — and the corpus's two split paged-decode
+kernels declare `..._reduce` first in the PTX and the main kernel first in the
+SASS. Each `.text.` section also restarts addressing at zero, so those two
+files carry 376 and 248 **duplicated addresses**. Separately, the PTX branch
+pattern hardcoded `%p(\d+)`, so `@%rt_p0 bra` was not a branch at all and six
+coprocessor kernels had two back edges each that the CFG could not see. Both
+are refusals by name now; both were **latent** (every affected kernel was
+refused first by an unrelated arity check) and **all 16 standing results are
+byte-identical**. `int8_gemm` is one of those three, so the
+tensor-core item and the back-edge item share a blocker.
+
+> **This paragraph used to end "supporting more than one back edge is the
+> largest single lever in the corpus".** That was retracted in the doc — it
+> blocked 34 kernels as then counted (38 now) and, at the level the corpus is
+> built at, unblocks *none*,
+> because every one of them also has an opcode gap. **The retraction landed in
+> one file of two**, which is the same defect as the certificate count that was
+> published in six places and gated in none. The current position, measured by
+> `frontier.py`: in the committed corpus **no opcode, staging set or lift is the
+> sole blocker of any kernel**, at either level — `y_cpu_matmul` has an empty
+> opcode gap on both sides at `-O1`, and its back-edge refusal was `loopval`'s
+> rather than the validator's, so once the census asks the suite the kernel is
+> clear. **The one blocker with a non-zero sole-count is the solver wall**, crossed
+> in as a fifth layer: four field kernels (`bn254_fr_mul_fast`, `bn254_g1_add`,
+> `bn254_g1_dbl`, `bn254_ntt4_fused`) that the four-layer census called clear, that
+> never validated, and that are past the wall.
+> 66 kernels, 104 distinct blockers and 6 clear at `-O3`; 107 and **9**
+> at `-O1` (106 / 5 and 109 / 8 until the u32 division estimate was modelled,
+> which took `ptx_integer_ops` to clear; 103 and 106 until the PTX reader began
+> refusing a nested lexical scope, a new setup blocker for five coprocessor
+> kernels).
+>
+> **And that census was itself a LOWER BOUND, for eight increments.** It crossed
+> three layers — opcodes, loop structure, setup — and not the fourth:
+> `loopval`'s relation holds at the loop header, so it needs the two loops in
+> lockstep, and `ptxas` unrolls. `unroll.py` has measured that since before the
+> frontier existed and **the frontier never asked it**, because that file had no
+> `if __name__ == '__main__'` guard: importing it ran a whole-corpus census, so
+> no tool could ask it a question. Crossed in now. At `-O3` the three kernels
+> the frontier ranked *nearest* — `exact_pv`, `naive_gemm_f32`, `y_cpu_matmul`,
+> each at distance 3 and each blocked by the *same* three items — move to
+> distance **4**; at `-O1` all three are 1:1 so nothing moves. The proxy agrees
+> with those three kernels' standing `-O1` VALIDATED verdicts and their `-O3`
+> refusals, **six out of six**, which is a check against a result reached by a
+> completely different route. Where it cannot decide it refuses by name, and
+> `frontier.py` prints those kernels under `STILL A LOWER BOUND` — 18 of 66 at
+> `-O3`, 10 at `-O1` — so what remains of the lower bound is *named* rather than
+> silent.
+>
+> **And that last row does not survive either.** A refusal census reports the
+> FIRST refusal; `loopcfg` refuses on the back-edge count before it looks at
+> anything else. `liftgap.py` asks what is behind it — decompose the nest and run
+> the remaining structural predicates at every level a lift would produce — and
+> the answer is **0 of 38**: `y_cpu_matmul` has a **store in the body**, which
+> `loopval` refuses because it compares the stores *after* the loop. That census
+> had only ever read the `-O3` build; **re-run over every kernel re-assembled at
+> `-O1` it is still 0 of 38**, so the lift is sufficient for nothing at either
+> level — measured at both now, where it had been inferred at one.
+>
+> **And then it was built.** `nestval.py` validates `y_cpu_matmul` at `-O1`:
+> the nested relation, the store compared in every iteration, and memory carried
+> between iterations were the price, plus one piece no census counted — the SASS
+> nest is guarded by an `EXIT`, which `loopval` refuses. **The census above
+> measured `loopval`'s refusals for one increment after that and now measures the
+> suite's**, which is what takes `y_cpu_matmul` from "one blocker away" to clear
+> at `-O1`.
+
+The census also puts a number on how the opcode census
+under-reports: `bra` reads as 37 kernels where a textual scan finds 48, split
+**6 hidden by predication** (an unrecognised predicate name is attributed to the
+predicate, not the opcode behind it) and **5 by setup failure** (no instruction
+executes, so the gap is empty and sorts to the top of a cost ranking).
+
+The kernel that looked closest to passing was not a GEMM and turned out to be
+**empty**. `hello.coprocessor` had a zero opcode gap on both sides because it
+*stores nothing* — a `ret;`-only artifact the coprocessor backend now refuses to
+emit, checked in and skipped by the gate written for exactly that class, whose
+`with_extension("ysu")` pairing could never match `<stem>.coprocessor.ptx`. Gate
+extended, artifact deleted, corpus 67 → 66 with the 66 survivors byte-identical.
+The register-model refactor that would reach the rest of that family was built as
+a probe, measured, and **cancelled**: it reaches one kernel with no stores, and
+paying for it means threading register declarations through the loop validator's
+live-in recovery.
+
+#### The validator could not see six kinds of effect
+
+Pricing the honest lift means asking what a store inside a loop body needs from
+the memory model, and the model turned out to have two preconditions nothing
+checked. Both executors read every global load from the *initial* array and pair
+stores by address in any order — exact only if no load follows a store and no
+reordered store overlaps another. The PTX executor's own comment asserted the
+first as a fact about kernels. It held in every standing row by their shape, and
+it is false of `y_cpu_matmul`: the lift's one candidate carries a third blocker
+neither census counted.
+
+Built by hand from `ptxas` output and run on the **unmodified** validator — the
+loop fixtures on an archive of the previous commit, so no edit could leak into the
+"before" — ten wrong translations came back VALIDATED:
+
+| what the model assumed | wrong translation | before | now |
+|---|---|---|---|
+| a global load reads the initial memory | `las_sass`, `las_ptx` | VALIDATED | REFUSED |
+| stores may land in any order | `swap_alias`, `swap_off3`, `loop_swap_wrong` | VALIDATED | UNPROVED — `sat` |
+| the loop validator compares the epilogue's stores only | `pstore_wrong` | VALIDATED | REFUSED |
+| an `EXIT` never crosses a region boundary | `loop_swap_exit`, `loop_body_exit`, `loop_ret_wrong` | VALIDATED | REFUSED |
+| a PTX `ret` is a no-op | `pret_wrong` | VALIDATED | UNPROVED |
+| a loop kernel has something to prove | `loop_nostore` | VALIDATED | REFUSED |
+
+The `ret` row was an **inverted pair on the specification side**: the correct
+early-return translation came back UNPROVED while the wrong one validated.
+Modelling the return as an alive term at the one place a guard is computed makes
+the correct one **VALIDATE** — the only change here that adds reach. The third
+validator that pairs global stores, reached only through the shared-memory
+driver, had validated three of the ten as well, so every check now sits at all
+three sites. The sixteen standing rows are byte-identical in verdict and
+obligation count, and `regress.sh` grows to 37 rows.
+
+The price is stated as rows too. `lsls` is `ptxas`'s **correct** output — it
+keeps a store above a load it cannot prove unaliased, respecting the possibility
+the model ignored — and it is now REFUSED, because a model that reads every load
+from the initial array cannot tell it from its wrong twin. A store-ordered memory
+model is what would turn it green, and it is the real price of the back-edge lift.
+
+#### The memory model reads through stores
+
+Built, and priced first. A global load now reads memory **as updated by every
+earlier store on its own side**, byte by byte, with a store's width taken from its
+value. `lsls` **validates** and both wrong twins are **refuted** (`store 1:
+sat`). Every one of the sixteen standing rows builds **byte-identical terms** —
+fingerprinted per row against the previous commit, 31 of 34 identical, the three
+that differ being exactly the read-back fixtures.
+
+Two things had to be found before that was true. Extending the memory model's
+import-time self-check moved **nine standing rows' terms without one executor
+line changing**: z3 reuses a freed node's number, and the multiply primitive
+orders operands by that number, so the new checks run in a private z3 context. And
+the first working version took **8–11 s** for `lsls`'s one store value, re-proving
+address equalities the pairing had already proved; building the read-through from
+those addresses takes it to **0.03 s**, and `regress.sh` pins it at exactly ten
+obligations — the eleventh would be the refinement that only a slow posing needs.
+
+**On its own it validates no corpus kernel**: none of the eight clear straight-line
+kernels has a read-back. Its one corpus reach is `ptx_subword_ops`, which also
+needed sub-word stores — sound to model only once a store has a width — and two
+device facts: sub-word stores write exactly their bytes, and `cvt.u8.u32`
+truncates rather than saturates. **It validates, 31 obligations**, with a hoisted
+read-back twin refuted and a widened-store twin refused on width. The referee also
+found that **a 16- or 32-bit global access at a misaligned address faults** on the
+device, which the model does not describe — so two fixtures that pinned
+overlapping word stores at `+0` and `+3` describe programs that fault, and now say
+so. And the queue had conflated three rows: `pstore` has no load at all, so it
+needs prologue stores *compared*; `loop_ls` needs the store-in-body lift.
+
+Also measured, and reported separately because they are different claims:
+`rcp.approx` differs from `rcp.rn` on **13.23%** of inputs on the device and
+`div.approx` from `div.rn` on **27.30%** — so identifying a PTX macro-op with the
+MUFU that seeds it, the cheap way to "support floats", would validate 17 kernels
+for the wrong reason. And `ptxas` implements 32-bit `div.u32`/`rem.u32` through
+the *float* unit (`I2F.U32.RP`, `MUFU.RCP`, `F2I.TRUNC`).
+
+Nothing here is CI-gated: it needs the CUDA toolkit, z3 and minutes to hours per
+kernel. It covers one compilation of one kernel at one architecture and
+optimisation level — which is the point of the technique and also its limit. The
+CPU-side trust item (`clang`, its optimiser, the assembler and the linker) stays
+open. Full write-up, including what is *not* claimed:
+**[Translation validation for `ptxas`](docs/ptxas_translation_validation.md)**.
+
+### A machine-checked proof of the ZK control-flow lowering
+
+`proofs/ZkControlFlow.v` formalises the `return` / `if` / sequencing fragment of
+the ZK backend: an operational semantics for the language, three candidate
+lowerings, and the theorem that the shipped one agrees with the semantics **on
+every program and every environment**.
+
+```
+Theorem low_correct : forall s e, bools e s -> agrees e s.
+```
+
+Reproduce with `coqc proofs/ZkControlFlow.v && coqchk -o proofs/ZkControlFlow.vo`
+— Rocq 9.1.1, 0.3 s to compile, and the kernel checker reports:
+
+```
+* Axioms: <none>
+* Constants/Inductives relying on type-in-type: <none>
+* Constants/Inductives relying on unsafe (co)fixpoints: <none>
+* Inductives whose positivity is assumed: <none>
+```
+
+Nothing admitted, nothing assumed. **Writing it down is what found the last
+bug** — a one-sided `return` inside a *nested* `if` reported its own empty
+tail's zero, so `if c { if d { return 1; } } return 7;` emitted a circuit
+computing 0. Z3 on the emitted artifact had missed it, a fresh test file had
+missed it, and so had the fix that was supposed to close the family. The flat
+case is the one everyone tests.
+
+The proof also states what it does **not** cover, in the file: it is a model
+rather than `zk_emitter.rs` (no extraction, no refinement proof — the tests are
+what tie them together); the field is a commutative ring taken as `Z`, so
+nothing about modular range transfers; and constraint emission is modelled as
+evaluation, so it says nothing about constraint *count* or about what an
+adversarial prover could satisfy.
+
+### Generative differential fuzzing
+
+`src/zk_fuzz.rs` generates well-formed programs from a grammar — 100% parse rate
+by construction — and checks each against three oracles. It found two bugs in
+two different subsystems on its first run.
+
+The eight `cargo fuzz` targets in `fuzz/` are a useful counter-example and are
+kept as one: none has ever been run here (`cargo-fuzz` is not installed and
+there is no nightly toolchain), and none *could* have found these bugs. Two feed
+raw bytes to the lexer, so the chance of forming a program with an `if` and a
+`return` in it is negligible; the "differential" one compared nothing, merely
+asserting an output string was non-empty; and the soundness one reported every
+finding with `eprintln!` and never panicked, so libFuzzer could not see a
+failure — a week-long run over a backend computing the wrong function would have
+exited 0.
+
+| oracle | what it is | why it is there |
+|---|---|---|
+| Independent interpreter | written against the fuzzer's own IR, sharing no code with the compiler path | walking the parser's AST would have hidden the parser bug it found |
+| **Metamorphic fold** | the same program rendered twice — inputs as parameters, then as literals — must agree | needs no reference implementation, so it **cannot be wrong in the same direction as the model** |
+| Parse-failure grading | parse failures counted separately from semantic refusals | collapsing them hid an over-refusal, and reverting the parser fix passed the whole sweep |
+
+400 programs per `cargo test` run, 20,000 in the extended sweep
+(`extended_sweep --ignored`). The corpus is checked for **coverage** rather than
+assumed to have it — `the_generated_corpus_is_not_vacuous` asserts how many
+generated programs actually contain an `if`, a loop, an ordering comparison and
+a compound assignment, because a generator restriction made to simplify an
+oracle once silently deleted two bug classes. Counterexamples are minimised by
+delta debugging **over the IR**, not the text, so every candidate stays a
+well-formed program; that took a 40-line counterexample down to four lines and
+turned a guess into an attribution.
+
+### Mutation testing, as a standing practice
+
+Every gate in this repository is expected to fail when the mechanism it guards
+is removed, and the ones that did not are recorded rather than quietly fixed.
+Three of eight mutations survived one fresh, all-green test file; a device test
+for a shared-memory barrier passed with `bar.sync` deleted, because the race
+never fired; a `u32`-to-`u32` differential passed with the conversion replaced by
+the identity. Mutations that survive are then sorted into **test holes** (fix the
+test) and **confirmations** (the guard is genuinely redundant with a rule
+enforced earlier — keep it, and say so), which is a distinction that only shows
+up if you look.
+
+### A design rule the repository enforces
+
+**In any pass whose output is a correctness claim, an unhandled AST node is a
+hard error — never a silent identity, no-op, or "close enough" substitution.**
+This is written down because the same bug keeps being found: the table of
+instances has **90 rows** — one a case averted before it shipped, two in code
+nothing called, one reached by no input the parser builds — each a `_ =>` arm that guessed instead of refusing, or, in the
+later cases, a correct guard consulted at a subset of the sites where its
+property has to hold. A pass
+that silently approximates produces the paperwork of a proof without the proof,
+and the build goes green. The full table — site, silent fallback, consequence —
+is maintained in the project's engineering notes, which live outside this
+repository.
+
+The instances span every layer: a comparison lowered to the wrong operator in the
+ZK backend (`5 <= 5` was false, and Groth16 proved it anyway); an SMT encoder
+that translated `x & y` as `x + y`; a `while` loop that emitted no PTX at all;
+an ELF emitter in which every identifier read the first local; and a Coq proof
+of the ZK control-flow lowering that found a bug three rounds of testing had
+missed. Reading it as a list of past mistakes is the wrong reading — it is a
+list of **shapes to grep for in the next pass you write.**
+
+---
+
+## Building
+
+Requires: Rust toolchain, clang.
+
+The focused verification workflow runs the SMT, Coq, translation, PTXAS,
+artifact and workflow gates with strict prerequisite checks and retains JSON
+results, logs and fresh PTXAS artifacts. Add `--full` to include all workspace tests. See the
+[verification workflow guide](docs/verification/workflow.md) for prerequisites,
+partial runs and report formats.
+
+```bash
+python3 tools/verify.py
+python3 tools/verify.py --full
+```
+
+```bash
+cargo build --release
+cargo build --release --features zk     # ZK backend is NOT in a default build
+
+cargo test --release                    # ~830 tests
+cargo test --release --features zk      # ~1080 tests, ZK included
+cargo test --release -p y-gpu           # the sibling crate; a bare `cargo test`
+                                        # builds the root package ONLY and does
+                                        # not run these 8
+
+# The Python package in python/ loads target/release/liby.so, so build first.
+# Run it, and these, from the repository root - see the note below.
+PYTHONPATH=python python3 -m unittest discover -s python/tests -p "test_*.py"
+PYTHONPATH=python python3 -m unittest discover -s python/y_lang/tests -p "test_*.py"
+```
+
+**Neither `cargo test` command runs the Python tests**, and the second Python
+command does not collect `python/y_lang/tests/test_triton_parity_features.py`:
+its tests are plain functions and `discover` collects only `TestCase` classes.
+**A repository build writes `.ysu_hw_profile` into the working directory.**
+`compile_to_ptx`'s default `target_sm="auto"` reads `.ysu_hw_profile` from the
+working directory. Where there is none, the compiler runs `ysu_gpu_probe` from
+beside the loaded `liby.so` (it used to look beside the Python interpreter,
+and from outside the repository wrote `SM_VERSION=0.0`, so every kernel
+targeted `sm_80`; fixed in 8fa8beb, `python/tests/test_gpu_probe_lookup.py`)
+and writes the profile into the working directory. That is still what the `Y`
+executable and a `liby.so` built here do. `YSU_HW_PROFILE=<file>` names the
+profile outright, for every build (`sentinel::hw_profile_path`).
+
+**To use the package outside the repository, install it as a wheel.** The
+wheel carries `liby.so` and `ysu_gpu_probe`, and its build refuses either one
+missing or older than the compiler sources (`python/setup.py`, tested by
+`python/tests/test_wheel.py`):
+
+```bash
+cargo build --release
+python3 -m pip wheel ./python --no-deps -w dist
+python3 -m pip install dist/y_lang-*.whl
+```
+
+[`python/README.md`](python/README.md) gives the requirements and an example.
+Installed, the package writes nothing into the working directory: the wheel
+puts a `PROFILE_IN_USER_CACHE` file beside its `liby.so`, and that copy keeps
+its profile as `hw_profile` in `$YSU_CACHE_DIR`, else in
+`$XDG_CACHE_HOME/y-lang`, else in `~/.cache/y-lang`. The PTX cache goes in
+`$YSU_CACHE_DIR` itself if set, else in `ptx/` beside the profile. A
+`.ysu_hw_profile` in the working directory still wins, so a pinned profile
+works as before.
+
+**Many gates are conditional on an external tool or a device, and a missing one
+makes them SKIP AND REPORT `ok`.** Each prints a notice; the green summary line
+does not show it. A green run is therefore not by itself evidence that they
+ran — read this list before trusting one:
+
+| needs | for example | what they are the only check for |
+|---|---|---|
+| `coqc` | `proofs_are_checked`, `exact_gemm_certificate`, `attention_certificate` | that the proofs, and the certificates a compilation emits, are checked at all |
+| `z3` | `safe_invariant_enforcement`, `zk_gadget_soundness` | that `@invariant` is discharged rather than assumed, and that the ZK gadgets are sound |
+| `clang` | the `exact_gemm_*` model suites, `backend_differential`, `zk_llvm_differential` | that the emitted LLVM computes what the proofs' models and the other backends say |
+| `llvm-as` / `llvm-dis` | `emitted_attribute_groups` | that an emitted module's attribute groups are coherent and a non-AVX-512 target gets no AVX-512 code |
+| ThreadSanitizer | `exact_gemm_thread_sanitizer` | the happens-before edges in the threaded exact GEMM |
+| `ptxas` | `ptx_portability`, `ptx_intrinsics_assemble`, `coprocessor_ptx_assembles`, `fma_contraction` | that emitted PTX is legal, at architectures this machine does not have |
+| `nvdisasm` | `fma_contraction`'s two SASS comparisons | that stating a fusion in the PTX changes no machine code. The PyPI `nvidia-cuda-nvcc` wheel ships `ptxas` without it (`pip install nvidia-cuda-nvdisasm`); before, its absence was a panic rather than a skip |
+| a CUDA driver | `gpu_batch_invariance`, `gpu_attention_invariance`, `ptx_integer_datapath`, the `zk_gpu_*` suites | that a kernel computes the right answer on the device |
+| `solc` + Node (`npm install solc`) | `zk_solidity_verifier` | that the generated Groth16 verifier accepts a real proof on a real EVM |
+| `circom` | `circom_frontend`, `tools/circomlib_coverage.py` | that Y agrees with the reference compiler |
+| `rustc` | `cpu_emitter_lowering` | that the arithmetic `--emit-cpu` prints computes the right answer |
+| the ShadowPlay sources at `../shadowplay/` (outside this repository) | `shadowplay_builds` | that the application itself still compiles and links. A program in the test exercising the same GUI surface always runs, so the entry points, the link and the headless stubs are checked on any clone |
+| `gdb`, `opt`, `llvm-dwarfdump` | `debug_info` | that a `-g` build is debuggable as Y: gdb stops on `.ysu` lines and prints the values the source says |
+
+`cpu_emitter_output_compiles` is deliberately absent: without `rustc` it fails
+rather than skips. And the `z3` row covers only the gates that skip: with no
+solver installed, 83 tests in 31 files of the default feature set FAIL -
+`safe_invariant_enforcement` among them, 3 of its 23 - because the programs they
+compile carry an `@invariant`, and the compiler refuses one it cannot check.
+Seven of those failures never mention the solver.
+
+**No verdict depends on this machine's GPU or rewrites a committed file.** The
+compiler reads `.ysu_hw_profile` from its working directory and writes
+`--emit-ptx`/`--emit-llvm` output next to its source, so a test that compiled a
+fixture in place with the repository as working directory rewrote committed
+artifacts on every run and compiled for whatever card the machine had - thirteen
+tests assembled that at a hardcoded `sm_89` and failed under an sm_90 profile.
+Every PTX compile now runs on a copy, in a scratch directory holding a pinned
+profile (`tests/common/pinned.rs`): the `sm_80` floor, which also loads on every
+card, plus recorded `@ZeroDrift` accumulate costs - without them each compile on
+a machine with a GPU times a probe kernel on the device and appends the result.
+It also links the repository's own z3 candidates (`venv/bin/z3`, `.venv/bin/z3`,
+`z3/build/z3`), which the compiler resolves against its working directory:
+without the links, a machine whose solver lives in a repo-local venv failed 21
+tests the moment their compiles left the repository. (The compiler now also
+finds that solver beside itself; a test that needs NO solver runs a copy of the
+compiler with nothing beside it.)
+`suite_is_machine_independent` refuses a test that compiles a committed fixture
+in place, or compiles PTX against the repository's profile - named as working
+directory or inherited by a `Command` that sets none. The tests that compile
+only through the LLVM backend still run in the repository: their output depends
+on the live CPU probes and, for a `@ZeroDrift` program, on the costs the
+repository's profile records for this machine's GPU.
+
+That list is here because the Solidity gate had been skipping. Installing `solc`
+made it run — and with the G2 coordinate order reverted to `(c0, c1)`, the bug
+the module comment in `src/zk_solidity.rs` exists to prevent, it **failed
+immediately**. Before the install, the same mutation passed the whole suite in
+0.00 s under a green `ok`. `nvcc` is optional and gates only the GPU probe, not
+a correctness claim.
+
+### The whole command-line surface
+
+Every flag the binary accepts, so that none of it has to be discovered by
+reading `main.rs`. `--target=<x>` is accepted as a synonym of `--emit-<x>`
+throughout.
+
+| flag | what it does | state |
+|---|---|---|
+| *(none)* | LLVM IR → native binary via `clang` | the default backend |
+| `-g` | DWARF debug information, built at `-O0`, so the program can be debugged as Y in gdb — see [Debugging](#debugging-y-programs) | real; the default backend and `--emit-llvm` only, every other backend refuses it by name |
+| `--debug` | `-g`, then start gdb on the program, stopped on the first line of `fn main` | real; needs `gdb` |
+| `-O0` … `-O3` | the optimisation level of the LLVM backend's clang step: `-O2` by default, `-O0` under `-g`; `-g -O2` is an optimised debuggable build | real; the default backend and `--emit-llvm` only, every other backend refuses it by name |
+| `--emit-llvm` | LLVM IR | real |
+| `--emit-ptx` | NVIDIA PTX | real |
+| `--lineinfo` | with `--emit-ptx`: a PTX line table, so `ptxas -lineinfo` carries each Y line into the SASS — see [GPU kernels](#gpu-kernels-which-ptx-and-sass-a-line-became) | real; refused by every other backend |
+| `--emit-guarantees` | what the front end proved, checked or took on trust about each line, as JSON (`<stem>.guarantees.json`, or `-o`) - the table `ydb`'s `verify` reads; compiles nothing | real; refuses any backend or debug flag beside it |
+| `--emit-native` | standalone x86-64 ELF | **straight-line subset over `I32` and `bool` only**, calling only the program's own functions; refuses the rest by name |
+| `--emit-cpu` | prints **scalar host Rust** source **for you to paste** — Y never compiles it | real, but not a build step; gated on `rustc` accepting what it prints, verbatim. **It emits no SIMD**: measured, 0 of 46 corpus blobs contain a vector intrinsic, vector type or `target_feature` |
+| `--emit-attention-ptx <head_dim> <seq_len>` | the exact-attention kernel, to stdout | real; both positional arguments are required and refused by name if absent |
+| `--emit-coprocessor` | RT + Tensor Core fused schedule | **a scheduling simulation** — see "What is real". It writes a complete module whose `.version`/`.target` are gated against the PTX backend's |
+| `--emit-c`, `--c`, `--target=c` | removed; reports so and exits 1 | gone |
+| `--target=r1cs` / `--emit-r1cs` | R1CS `.r1cs` / `.sym` / `.r1cs.txt` | real, needs `--features zk` |
+| `--witness <in.json>` | also solve and write `.wtns` (iden3 format) | real |
+| `--emit-verifier <vkey.json>` | Groth16 Solidity verifier | real; `--name <N>` sets the contract name |
+| `--emit-zk-ptx` | GPU witness-generator PTX | **lowers 5 of `WitnessOp`'s 17 variants and refuses the rest by name** — the reachable subset is tiny (see below) |
+| `-l`, `--link <dir>` | circom include path | real |
+| `-o`, `--output <path>` | output path | real for every backend that writes a file; `--emit-cpu -o` writes the Rust source there instead of printing it. `--emit-ptx`, `--emit-coprocessor`, `--emit-zk-ptx` and `--emit-cpu` used to ignore it. `--emit-attention-ptx` writes to standard output and refuses it |
+| `--autotune` / `--autotune-force` / `--no-autotune` | GEMM tile selection: measure / re-measure / analytic model only | real |
+| `--portable` | clears the probed AVX / AVX-512 feature bits | real |
+
+Y integer literals currently use the signed 64-bit range, including
+`-9223372036854775808`. Positive literals above `9223372036854775807` are
+diagnosed as unsupported even in `U64` expressions. Malformed numeric literals
+and floating-point literals outside the finite `F64` range are also rejected.
+
+**`--emit-zk-ptx` is the one line in this table to read sceptically**, and the
+previous edition of this paragraph — "nothing in the test suite runs it or checks
+what it computes, treat it as unverified" — understated it. Checking found the
+backend lowered **5 of `WitnessOp`'s 17 variants** and did not fail on the other
+twelve:
+
+- `Inv` / `Div` emitted `mov s_out, s_a` under a comment reading "256-bit Field
+  Inversion / Division Hint" — the **identity**, so `1/x` computed `x`;
+- everything else hit `_ => mov 0`, writing **zero** into the witness slot.
+
+Both assemble, which is why the existing gate could not see either: `ptxas`
+cannot tell a wrong `mov` from a right one. Which operations landed in the zero
+arm is what makes it severe rather than partial — `BitOfLc` is how every
+comparison, bitwise operator, shift, integer division and range check gets its
+witness; `IsZeroLc`/`InvOrZeroLc` are `==` and `!=`; `MulAddLc` is the most
+common statement a circom program lowers to. And `MulLc` covers the binding of
+any linear expression, so **`return a + b;` was zeroed too** — the flag printed
+"compiled successfully" for essentially every circuit while filling most of the
+witness with zeros.
+
+It now **refuses by name and writes no file**, and `tests/zk_ptx_witness_refuses.rs`
+gates that in both directions: six constructs must be refused naming the
+`WitnessOp`, the two that do lower must still emit, and what they emit must
+assemble at the target it declares. Use `--target=r1cs --witness <in.json>` —
+the CPU solver handles all seventeen and is checked against circom's own witness
+calculator element for element.
+
+Empirical GEMM autotuning for `@tile`d kernels measures candidates on the real
+GPU and caches per (M, N, K, precision, GPU) in `.ysu_hw_profile`. A cold shape
+costs ~4 s (~100 s at M=N=K=16384). The cache **cannot** detect that codegen
+itself changed — re-tune with `--autotune-force` after editing a kernel or the
+compiler will keep emitting a tile chosen for the old one.
+
+---
+
+## Debugging Y programs
+
+`-g` makes a program debuggable as Y: the compiler emits DWARF describing the
+`.ysu` source, so gdb — or any DWARF debugger — sets breakpoints on Y lines,
+steps by Y statement, and prints Y variables with their Y types.
+
+```bash
+Y prog.ysu --debug              # build with -g and start gdb on the first line of `fn main`
+Y prog.ysu -g -o prog           # or build, then use any debugger
+gdb ./prog
+(gdb) break ysu_main            # `fn main`; see below for why not `break main`
+(gdb) break prog.ysu:24
+(gdb) run
+```
+
+What a session looks like — gdb on `tests/debug_info.rs`'s fixture compiled as
+`prog.ysu`, with the program in gdb's auto-load safe path as `--debug` arranges;
+unedited except that some locals are left out:
+
+```text
+(gdb) break scale
+Breakpoint 1 at 0x2677: file prog.ysu, line 14.
+(gdb) run
+Breakpoint 1, scale (p=..., k=7) at prog.ysu:14
+14	    let s: I32 = p.x * k;
+(gdb) bt
+#0  scale (p=..., k=7) at prog.ysu:14
+#1  main () at prog.ysu:61
+(gdb) up
+#1  0x0000555555556845 in main () at prog.ysu:61
+61	    let r: I32 = scale(p, a);
+(gdb) info locals
+total = 12
+greet = "x"
+name = "hello"
+v = {10, 20, 0}
+p = {x = 5, y = 1.25, flag = true}
+c = Color::Blue
+ch = 65 'A'
+u = 4000000000
+big = 5000000000
+a = 7
+```
+
+`u` is a `U32` above 2^31, printed unsigned; `name` and `greet` are `String`s,
+printed as their text; `c` is an enum, printed as `Enum::Variant`. The
+backtrace is the Y one: the C runtime's frames below `fn main` are left out
+(`bt -no-filters` shows them). `r` is not listed: its `let` has not run yet.
+
+**It describes what the compiled program actually holds, and that is checked,
+not assumed.** This backend keeps each binding in a stack slot of its own and
+`-g` compiles at `-O0`, so the slot is the variable at every statement boundary. A
+variable's described type must have its slot's size: where the declared type
+and the storage disagree, the storage wins — gdb reading a width the code did
+not store prints garbage, and a debugger that shows a wrong value is believed.
+`tests/debug_info.rs` builds a program with `-g` and drives real gdb against
+it: it asserts the lines gdb stops on, the values it prints for each type, that
+`step` into a call finds the arguments already stored, that `next` visits each
+statement of a loop once per iteration, that a variable is visible exactly
+where its scope is, that an imported function is reported in its own file, and
+that `--debug` starts on the first line of `main`. Every
+corpus program the backend accepts still passes the LLVM verifier with `-g`,
+and without `-g` the emitted module is byte-for-byte what it was (55 of 55,
+compared against the previous compiler).
+
+Things to know:
+
+- **`break main` stops in the C runtime first.** The runtime owns the
+  process's `main` — it sets up the allocator and the program's stack before
+  calling yours, which is emitted as `ysu_main`. The debugger still calls it
+  `main` in backtraces. Use `break ysu_main`, a `file:line`, or `--debug`.
+- **Y values print as Y** through an extension the compiler embeds in every
+  `-g` build (`src/debug_info_gdb.py`, in the program's `.debug_gdb_scripts`
+  section): a `String` as its text, an enum as `Color::Blue`, an `I8`/`U8` as a
+  number rather than a character, and a `@ZeroDrift` accumulator as its exact
+  value - `acc = 3.75 (Q32.32)` - where the slot holds `value * 2^32`.
+  `print/r` shows the raw representation the debug information describes, and
+  `print *s` a `String`'s `data`, `len` and `cap`. The extension only formats
+  what the DWARF says; a struct prints as gdb prints it.
+- **gdb runs that extension only for a program in its auto-load safe path.**
+  `--debug` adds the program it built. With plain `gdb ./prog`, gdb declines
+  it with a warning naming the line to add to `~/.config/gdb/gdbinit`
+  (`add-auto-load-safe-path /path/to/prog`, or a directory), and shows the raw
+  view meanwhile.
+- **Backtraces show Y frames**: a method by its Y name (`Point::sum`), no
+  return addresses, and none of the C runtime's frames below `fn main`.
+- **A variable is visible exactly where its scope is**: from the statement
+  after its `let` to the end of its block, a `for` loop's variable inside the
+  loop. Before its `let` and after its block, `print x` answers
+  `No symbol "x" in current context` - rather than showing a slot that does
+  not hold `x` yet, or any more. A `let` that shadows an outer binding hides
+  it for its block only, and the outer one is back, with its own value, after
+  the block. Each Y block is a DWARF lexical block, and so is the rest of a
+  block after a `let`, the way rustc describes shadowing.
+- The runtime is built **without** debug information, so `step` stays in Y code
+  rather than descending into the allocator behind `print_int`.
+- **The LLVM and PTX backends only.** `--emit-cpu`, `--emit-native`, the ZK
+  and co-processor backends refuse `-g` by name rather than ignore it;
+  `--emit-ptx -g` is for cuda-gdb (below), and `--debug --emit-ptx` is refused.
+- **`-g` builds at `-O0` unless told otherwise; `-g -O1` .. `-O3` is an
+  optimised debuggable build.** There the optimiser keeps values in registers,
+  folds them away and inlines calls: gdb shows `<optimized out>` for a value
+  it no longer has, an inlined function is still a frame (`break scale` stops
+  in its inlined copy, and `bt` lists it), and `next` may jump between lines.
+  It should never show a WRONG value: `tests/debug_info.rs` checks that at
+  `-O1`, `-O2` and `-O3`, where every variable at three stops in one program
+  must print as its right value or as `<optimized out>`. Near the edges of a
+  scope the optimiser has merged code across, a variable may be listed as
+  `<optimized out>` a little before or after its block.
+- **VS Code** works through the C/C++ extension's debugger (`cppdbg`,
+  `MIMode: gdb`); the bundled `ysu-lang` extension is what lets you set
+  breakpoints in `.ysu` files. With the `setupCommands` in the manual, §38.5,
+  its variables view shows the Y values and its call stack the Y frames.
+- A **data-carrying enum** cannot be constructed on the LLVM backend yet (it
+  is refused by name), so the debugger has none to show.
+
+### GPU kernels: which PTX and SASS a line became
+
+`Y kernel.ysu --emit-ptx --lineinfo` writes a PTX line table: `.file` naming
+the source, and a `.loc` before the instructions of every statement. `ptxas
+-lineinfo` carries it into the SASS, where `nvdisasm -g` prints it, and
+`tools/ydb/ymap.py` puts the three side by side - for every Y line of every
+kernel, the PTX the compiler emitted for it and the SASS `ptxas` made of that:
+
+```text
+kernel saxpy(X: GlobalMemory<F32>, Yv: GlobalMemory<F32>, N: I32) {
+    let i: I32 = thread_idx_x();
+    let a: F32 = 2.0;
+    let unused: I32 = i * 7 + N;
+    if i < N {
+        let x: F32 = X[i];
+        Yv[i] = a * x + Yv[i];
+    }
+}
+```
+
+```text
+$ python3 tools/ydb/ymap.py saxpy.ysu
+kernel saxpy  (sm_80)
+     2  let i: I32 = thread_idx_x();
+        PTX    1
+               mov.u32 %r1, %tid.x;
+        SASS   1
+               0010  S2R R0, SR_TID.X
+     3  let a: F32 = 2.0;
+        PTX    1
+               mov.f32 %f0, 2.0;
+        SASS   0  ptxas emitted nothing for this line: removed, or folded into another
+     4  let unused: I32 = i * 7 + N;
+        PTX    3
+               mov.u32 %r2, 7;
+               mul.lo.s32 %r3, %r1, %r2;
+               add.s32 %r4, %r3, %r0;
+        SASS   0  ptxas emitted nothing for this line: removed, or folded into another
+     7  Yv[i] = a * x + Yv[i];
+        PTX    9
+               ...
+               ld.global.ca.f32 %f2, [%rd7];
+               fma.rn.f32 %f3, %f0, %f1, %f2;
+               ...
+               st.global.f32 [%rd10], %f3;
+        SASS   6
+               0060  LEA R4, P1, R0.reuse, c[0x0][0x168], 0x2
+               0080  LEA.HI.X R5, R0, c[0x0][0x16c], RZ, 0x2, P1
+               00a0  LDG.E.STRONG.SM R7, [R4.64]
+               00b0  FFMA R7, R2, 2, R7
+               00c0  STG.E [R4.64], R7
+               00d0  EXIT
+```
+
+Line 3's constant is not gone: `ptxas` folded it into the `FFMA` on line 7 as
+an immediate. Line 4 is gone: nothing it computes is stored. `--line 7` shows
+one line, `--kernel` one kernel, and `--json` the same map for tools.
+
+- **The line table changes nothing else.** Over the whole corpus, the PTX with
+  `--lineinfo`, its `.file`/`.loc` lines removed, is byte-for-byte the PTX
+  without it, and `ptxas -lineinfo` emits the same instructions as `ptxas`. So
+  the SASS the map shows is the SASS the kernel runs.
+- `ptxas` runs at the module's own `.target`, never this machine's card.
+- A statement's line is its keyword's: the condition of a loop under
+  `@invariant(..)` is the `while` line, not the attribute's (this moved the
+  same lines in `-g` builds too).
+- The emitter had a field documented as emitting `.file` and `.loc`; nothing
+  set it and nothing read it, so this did not exist before.
+
+### `ydb`: Y-aware commands over gdb
+
+`tools/ydb/ydb` is a thin front end, not another debugger: it builds the
+program with `-g` and starts gdb on it with the Y extension loaded and a few
+commands that speak Y. Everything gdb does still works.
+
+```bash
+python3 tools/ydb/ydb prog.ysu            # build with -g, start (ydb)
+python3 tools/ydb/ydb prog.ysu -O2        # an optimised debuggable build
+python3 tools/ydb/ydb prog.ysu -- a b     # arguments for the program
+```
+
+| command | what it does |
+|---|---|
+| `break kernel:42` | a Y location: `NAME:LINE` is the file `NAME.ysu`, or the file the function `NAME` is in; `FILE:LINE`, `LINE`, a function and `... if COND` work as in gdb |
+| `locals` | the arguments and the bindings in scope, as `name: Type = value` with Y types; a binding an inner `let` shadows is not listed, because it is not in scope |
+| `tensor v` / `tensor Out 64` | a buffer's elements and statistics (min, max, mean, zeros, NaN, inf); an array's length is its own, a pointer (a `GlobalMemory` parameter) needs a count |
+| `asm` | the machine code the current line became |
+| `asm --ptx 14` / `asm --sass 14` | the PTX and SASS a kernel's line became, through `Y --emit-ptx --lineinfo` and `ptxas -lineinfo` at the module's own `.target` |
+| `verify` / `verify 14` | what covers a line: what the compiler proved, checked or took on trust there, and what checks the code it became - see below |
+
+A session on a program with a `Point`, an array `v`, an inner `let a` that
+shadows an outer one, and a kernel `bump` the host calls (abridged):
+
+```text
+(ydb) break prog:28
+Breakpoint 1 at 0x276d: file prog.ysu, line 28.
+(ydb) run
+Breakpoint 1, main () at prog.ysu:28
+28	        print_int(a);
+(ydb) locals
+a: I32 = 9
+r: I32 = 35
+p: Point = {x = 5, y = 1.25}
+v: [F32; 6] = {0, 1.5, 0, 0, -2, 0}
+(ydb) tensor v
+v: 6 x F32 at 0x405fffd0
+  [0] 0  [1] 1.5  [2] 0  [3] 0  [4] -2  [5] 0
+  min -2, max 1.5, mean -0.0833333333, zeros 4, NaN 0, inf 0
+(ydb) asm --sass 14
+kernel bump  (sm_80)  prog.ysu:14  Out[i] = Out[i] * 2.0 + 1.0;
+  0060  @P1 LEA R2, P0, R0, c[0x0][0x160], 0x2
+  ...
+  0100  @P1 STG.E [R2.64], R5
+```
+
+The outer `a` (7) is not in `locals`: the inner `let a` hides it for its
+block, as it does in the program.
+
+- **Plain gdb reads `scale:8` as the function `scale` and drops the `8`**: the
+  breakpoint lands on the function's first line, silently, and `main:N` lands
+  in the C runtime's `main` too. ydb's `break` resolves `NAME:LINE` to a file
+  first, which is why it is worth shadowing gdb's.
+- **`asm --ptx` / `--sass` describe the program compiled for the GPU, not the
+  process being debugged.** A kernel runs on the host under gdb only when it
+  uses no GPU intrinsic; one that calls `thread_idx_x()` does not build for the
+  host at all. For such a program ydb says so, starts without a process, and
+  the GPU commands still answer.
+
+#### `verify`: what covers a line
+
+`verify` answers two questions about the current line, or a given one, that
+the rest of the debugger cannot: what did the compiler establish here, and
+what checks the code this line became?
+
+```text
+(ydb) break prog:7
+(ydb) run
+Breakpoint 1, total (n=3) at prog.ysu:7
+7	        s = s + v[i];
+(ydb) verify
+prog.ysu:7  s = s + v[i];
+in fn total (prog.ysu:1-9)
+
+What the compiler established (the facts this binary carries):
+  PROVED       v[i]: in bounds: the index lies in [0, 5] and there are 8 elements, so no run-time
+               check is emitted
+               assumes, without checking: @bounds(0, 6) on `m` (prog.ysu:2)
+  PROVED       @invariant(i >= 0) (the loop at line 6): z3 proved it holds when the loop is entered
+               and that every iteration preserves it
+               assumes, without checking: @bounds(0, 6) on `m` (prog.ysu:2)
+  CHECKED      fn total (lines 1-9): strict mode: every `let` is initialised, ...
+
+The code this process runs (clang -O0, from the LLVM IR):
+  TRUSTED      everything below the LLVM IR - clang, the assembler, the linker and the processor.
+               Nothing checks the machine code against the IR.
+```
+
+`m` is `@bounds(0, 6)` on a parameter nothing bounds, so its range is taken on
+trust, and both proofs on the line used it, so both say so: a proof from a
+trusted premise is a proof from that premise.
+
+On a kernel's line `verify` adds what checks the PTX and SASS the line becomes.
+The repository's evidence is credited only where it applies. A proof about a
+LOWERING - the int8 and tensor-core GEMMs - is credited to a kernel given that
+lowering, whatever its shape. A proof or a `tools/ptxas_tval` standing result
+about one committed kernel is credited only to a kernel whose PTX is that
+kernel's, instruction for instruction; a kernel with the same name and one
+instruction changed gets none of it:
+
+```text
+$ python3 tools/ydb/yverify.py tests/exact_pv.ysu 64
+...
+The code the GPU runs (Y --emit-ptx for sm_89, then ptxas):
+  SAME PTX     this compile's kernel is tests/exact_pv.ptx's, instruction for instruction
+  PROVED       proofs/ExactPvExact.v: The exact PV kernel computes the source dot product -- and its
+               SASS is validated (the_emitted_exact_pv_holds_the_source_dot_product). It assumes, in
+               its own words: Hidx: every index this kernel computes stays inside i32; Hin: the
+               accesses the source intends are in range; Hacc: the accumulator licence - conditions
+               on the arguments the kernel is launched with: the compiler cannot check them, and
+               nothing checks them at launch
+  VALIDATED    the SASS ptxas -O1 makes for sm_89: loopval.py proves it stores what this PTX stores
+               - a standing result of tools/ptxas_tval/regress.sh (row o1/exact_pv), not re-run here
+  ...
+  TRUSTED      ptxas: outside the validated level and architecture above, and the CUDA driver's JIT
+               if it compiles this PTX itself
+  TRUSTED      the GPU executing its instruction set
+```
+
+- **Every fact says how it is established**: PROVED (z3 for an invariant, the
+  type checker's interval analysis for an index, a Rocq proof for a kernel the
+  backend substituted), CHECKED (a rule that would have refused the program),
+  RUN-TIME (an index under `@unsafe`, checked when the program runs), TESTED
+  (the packed f32 GEMM, tested against the nest it replaces and not
+  bit-identical to it), TRUSTED, NOT CHECKED (an index into a pointer whose
+  length the compiler does not know - in strict mode too), and UNVERIFIED (an
+  invariant `Y_ALLOW_UNVERIFIED_INVARIANTS` let through).
+- **The facts come from the compiler.** `Y -g` embeds them in the program, so
+  `verify` reports what the binary being debugged was built with.
+  `Y prog.ysu --emit-guarantees` writes the same table as JSON; `verify` uses it
+  when there is no binary (a program whose kernels use GPU intrinsics), and
+  `tools/ydb/yverify.py PROGRAM LINE` prints the report without gdb.
+- **What it cannot say.** The assumptions listed for an invariant are a
+  superset: the solver is given the range of every integer in scope, so a
+  proof can be shown resting on a trusted range it did not need. The standing
+  validation results are read from `regress.sh`, not re-run. Nothing checks the
+  host's machine code against the IR.
+- Building it found that strict mode did not bounds-check an array reached
+  through a reference (`a: &mut [I16; 4]`): `a[9] = 1` compiled and wrote past
+  the array. Fixed in `034b19f`.
+
+#### GPU kernels on the GPU: `--emit-ptx -g`, `ydb --gpu`
+
+`Y prog.ysu --emit-ptx -g` writes PTX that cuda-gdb debugs as Y: a kernel
+stops at a Y line on the GPU, and every thread's bindings print by Y name and
+type from that thread's registers. `ydb --gpu` runs one launch under
+cuda-gdb, with no host program to write:
+
+```text
+$ python3 tools/ydb/ydb saxpy.ysu --gpu 'saxpy<<<1, 32>>>(arange(32), ones(32), 20)'
+(ydb) break saxpy:7
+(ydb) run
+(ydb) lanes x
+x in warp 0 of block (0,0,0), at saxpy.ysu:7:
+  [0] 0    [1] 1    [2] 2    [3] 3    [4] 4    [5] 5    [6] 6    [7] 7
+  ...
+  lanes 20-31: not here (exited, or the block has no such thread)
+```
+
+`-g` changes no PTX instruction (checked over the corpus); the SASS is
+unoptimised debug code, and `verify` says the evidence about SASS is about the
+build without it. A value ptxas keeps no location for prints as
+`<optimized out>`, never as a wrong value. `--check memcheck` (or
+`racecheck`, `initcheck`, `synccheck`) runs the same launch under
+compute-sanitizer and reports each problem at its Y line, with the buffer
+element touched: `at Out[32] .. Out[35]: past the end of Out (32 x F32)`.
+From Python, `Y_PTX_DEBUG=1` (or `Y_PTX_LINEINFO=1`) compiles y_lang's
+kernels with debug information, and `ydb --python train.py` runs a PyTorch
+program under cuda-gdb with it set. Manual §38.10.
+
+---
+
+## Hardware probing
+
+On first run the compiler measures the host and caches to `.ysu_hw_profile`:
+CPU cache latencies via pointer-chasing, AVX-512 throughput, thread-handoff
+cost; and via an external CUDA probe, FMA/IMAD/transcendental latencies,
+shared-memory bank-conflict cycles, tensor-core latencies, warp-shuffle cost and
+global memory latency at several strides. Delete the file to force a re-probe
+after a driver, GPU or CPU-governor change — note that this also discards
+autotuning measured on the old configuration, which is the intent.
+
+---
+
+## Project layout
+
+```
+src/                       Rust bootstrap compiler
+  lexer.rs parser.rs ast.rs        front end
+  type_checker.rs                  safety blocks, Z3 invariants, interval arithmetic
+  linear_tracker.rs                async token single-consumption
+  sentinel.rs ysu_gpu_probe.rs     hardware probe
+  autotuner.rs empirical_autotune.rs cuda_runtime.rs
+  bank_conflict.rs                 shared-memory swizzle solver
+  llvm_emitter.rs                  LLVM IR (default backend)
+  debug_info.rs                    DWARF for -g: debugging Y programs in gdb
+  ptx_emitter.rs                   NVIDIA PTX
+  cpu_emitter.rs cpu_gemm.rs       x86-64 / AVX-512 GEMM
+  native_emitter.rs                standalone ELF
+  zero_drift.rs                    @ZeroDrift representation selection
+  exact_gemm_certificate.rs        the .v a compilation emits with its kernel
+  exact_attention_certificate.rs   the same, for the GPU attention kernel
+  exact_attention.rs fixed_exp.rs  exact int8 attention PTX + integer exp2
+  zk_field.rs                      BN254 Fr, Montgomery form
+  zk_emitter.rs zk_witness.rs      R1CS emission and witness solving
+  zk_poseidon_constants.rs         circomlib parameters (GENERATED — do not edit)
+  zk_solidity.rs                   Groth16 on-chain verifier
+  circom_{lexer,ast,parser,lower}.rs   circom 2.x front end
+  quantization_pass.rs             FP32 -> FP16 staging conversions
+  cpu_specializer.rs               CPU-side rewrites
+  zk_fuzz.rs                       generative differential fuzzer (grammar + 3 oracles)
+  c_api.rs                         C ABI — the crate also builds as a cdylib
+  ir_grapher.rs coprocessor_scheduler.rs rt_core_emitter.rs
+                                   scheduling simulation — see "What is real"
+  ypm.rs ysu_gpu_probe.rs          separate `[[bin]]` targets, not modules —
+                                   they build as their own executables
+
+self_hosted/    compiler phases rewritten in Y (.ysu); not the default build path
+proofs/         Rocq proofs — ExactGemmSchedule.v is GENERATED
+tests/          test programs, benchmarks, PTX assembly gates
+tools/          measurement and analysis harnesses (Python), run by hand
+  ydb/ymap.py   which PTX and SASS each Y line of a kernel became (--emit-ptx --lineinfo)
+  ydb/ydb       Y-aware commands over gdb (break NAME:LINE, locals, tensor, asm --ptx/--sass, verify)
+  ydb/yverify.py  what covers a line: the compiler's guarantees and the evidence about its code
+python/         the Python package `y_lang`: ctypes bindings to liby.so, torch
+                interop, the `y_inductor` torch.compile backend, and its tests
+  ptxas_tval/     PTX-vs-SASS translation validator — see docs/
+  exact_gemm_bench/  the three-arm GEMM benchmark this README quotes
+circomlib/      vendored circomlib (upstream 2.0.5)
+docs/           language spec and design notes
+```
+
+---
+
+## Status
+
+The Rust bootstrap compiler in `src/` is the stable reference and is what runs
+today. The self-hosted compiler in `self_hosted/` is in progress and is not the
+default build path.
+
+Author-built with LLM assistance for implementation; architecture and design
+decisions are the author's own.
+
+Further reading:
+
+- [Y Language Specification & Reference Manual](docs/y_language_documentation.md)
+- [CPU JIT embedding and optimization options](docs/cpu_jit.md)
+- [CPU JIT benchmark commands and methodology](benchmarks/cpu_jit/README.md)
+- [CPU JIT training-tier preparation savings and frozen evidence](docs/cpu_jit_benchmarks_training_tier.md)
+- [CPU JIT ORC codegen tradeoffs, materialization timings and frozen evidence](docs/cpu_jit_benchmarks_codegen.md)
+- [CPU JIT verification policy, compilation costs and frozen evidence](docs/cpu_jit_benchmarks_verification.md)
+- [CPU JIT scalar-helper results, phase costs and independent evidence](docs/cpu_jit_benchmarks_helper_effects.md)
+- [CPU JIT copy results and comparison limits](docs/cpu_jit_benchmarks_runtime_copies.md)
+- [CPU JIT adapter preparation and checked-call results](docs/cpu_jit_benchmarks_adapters.md)
+- [ZK compile-speed detail and measurement traps](docs/heavy_circuit_speed_test.md)
+- [circom front end](docs/circom_frontend.md)
+- [ZK emit profiling](docs/zk_emit_profile.md)
+- [CPU GEMM tuning, the harness biases, and the two regimes a loop benchmark
+  cannot distinguish](docs/cpu_gemm_tuning.md)
+- [The process: taking a kernel from *fast* to *verified*](docs/verified_kernel_process.md)
+- [The ZK control-flow lowering, proved in Rocq](proofs/ZkControlFlow.v)
+- [Deterministic / bit-identical decode](docs/bit_identical_decode.md)
+- [Deterministic inference design notes](docs/deterministic_inference.md)
+- [Proof-carrying kernels](docs/proof_carrying_kernels.md)
+- [RT/Tensor co-processor: why it is scaffolding](investigation_rt_tensor_coprocessor_findings.md)
+- [Benchmarks index](README_BENCHMARKS.md)
+
+Author: Umut Korkmaz (YSU)

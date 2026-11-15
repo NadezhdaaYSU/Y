@@ -325,7 +325,7 @@ fn the_ypm_docs_name_the_right_binary_and_the_right_manifest() {
 /// Collect `Y <file.ysu> [flags]` invocations out of the docs' fenced blocks,
 /// in any of the three spellings the docs use.
 fn documented_y_commands() -> Vec<(String, Vec<String>)> {
-    let mut docs = vec!["README.md".to_string()];
+    let mut docs = vec!["README.md".to_string(), "NOTEBOOK.md".to_string()];
     if let Ok(rd) = std::fs::read_dir(repo().join("docs")) {
         for e in rd.flatten() {
             if e.path().extension().and_then(|s| s.to_str()) == Some("md") {
