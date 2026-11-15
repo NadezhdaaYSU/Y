@@ -884,9 +884,9 @@ Theorem left_padding_changes_nothing : forall dm T M mw ls P R0 tok pos,
   Ragged batches are covered by `left_padding_changes_nothing`, under
   run-level conditions that hold for finite values. Triton's interleaved
   two-digit kernel is covered by `sched_dot2_exact` (since 2026-11-15).
-- The executable check has not run Triton's interleaved kernel (it needs
-  sm_80 or later). It has run Y's decode-attention kernel
-  (`Y_EXACT_ATTN=y`) on a Tesla T4 only.
+- The executable check has run Triton's interleaved kernel on one sm_89
+  GPU (it needs sm_80 or later), and Y's decode-attention kernel
+  (`Y_EXACT_ATTN=y`) on a Tesla T4 and that GPU; on no other GPUs.
 
 The trust boundary, the executable check's results and the negative
 controls are in [`docs/exact_decode_theorem.md`](exact_decode_theorem.md).

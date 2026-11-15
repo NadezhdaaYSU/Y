@@ -227,7 +227,10 @@ source; each entry there now carries its status. What is still open:
   on sm_61), and the sm_80 and sm_89 kernels are unchanged byte for byte.
   `python/tests/test_f32_gemm_below_sm80.py` runs the sm_75 kernels in the
   CPU interpreter against an in-order fma oracle, and five planted errors
-  in the change were each caught by it. Still open:
+  in the change were each caught by it. The sm_75 build on the RTX 4070 Ti
+  SUPER now runs 1023 x 1025 x 1027 at 0.84-0.95x cuBLAS (0.28-0.29x before)
+  and 1024 x 1024 x 1027 at 1.19-1.20x (0.35x)
+  (`docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/`). Still open:
   - the T4's speed after the change;
   - at two or three K tiles (K 33-47), where `ptxas` unrolls the K loop, a
     remainder set still spills 4-52 bytes (400 x 2049 x 40 and 67 x 37 x

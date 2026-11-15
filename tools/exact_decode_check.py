@@ -455,6 +455,20 @@ def main():
     tok = AutoTokenizer.from_pretrained(path)
     t0 = time.time()
     real = load(path, args.device)
+    # Count the calls into Triton's int8 GEMMs (model.py calls them through
+    # its module globals), so the report says which linear kernels ran.
+    calls = {"triton_int8_gemm": 0, "triton_hilo_gemm": 0}
+
+    def counted(fn, key):
+        if fn is None:
+            return None
+
+        def wrap(*a, **k):
+            calls[key] += 1
+            return fn(*a, **k)
+        return wrap
+    exact_model.w8a8_matmul = counted(exact_model.w8a8_matmul, "triton_int8_gemm")
+    exact_model.w8a8_matmul_hilo = counted(exact_model.w8a8_matmul_hilo, "triton_hilo_gemm")
     ref = real if args.device == "cpu" else load(path, "cpu")
     cfg = ref.config
     req = exact_model.ACT_LEVELS
@@ -586,7 +600,8 @@ def main():
     report["backends"] = {"norm_triton_op": exact_model._NORM_OP is not None,
                           "y_attention_kernel_built": bool(exact_attention._Y_ATTN),
                           "y_exact_pv_kernel_built": bool(exact_attention._Y_PV),
-                          "kv_packed": exact_kv.PACK, "v_int8": exact_kv.V_INT8}
+                          "kv_packed": exact_kv.PACK, "v_int8": exact_kv.V_INT8,
+                          "linear_gemm": exact_model.GEMM, **{k + "_calls": v for k, v in calls.items()}}
     print("backends", report["backends"])
     report["tokens"] = tokens
     report["text"] = tok.decode(tokens)

@@ -1,0 +1,16 @@
+NVIDIA GeForce RTX 4070 Ti SUPER (sm_89), torch 2.13.0+cu130, cuBLAS TF32 off
+512x512x512      tile small (plain loads): bit-exact True  (cuBLAS equals the chain on 9%)  | cuBLAS 14.45 TF  Y 15.08 TF  = 1.044x
+1024x1024x1024   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS 20.65 TF  Y 24.66 TF  = 1.194x
+2048x2048x2048   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 4%)  | cuBLAS 27.49 TF  Y 25.67 TF  = 0.934x
+4096x4096x4096   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 100%)  | cuBLAS 30.19 TF  Y 24.07 TF  = 0.797x
+1024x4096x4096   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 3%)  | cuBLAS 29.08 TF  Y 24.52 TF  = 0.843x
+4096x4096x1024   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 100%)  | cuBLAS 28.91 TF  Y 25.06 TF  = 0.867x
+1024x1025x1024   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS 19.63 TF  Y 15.36 TF  = 0.782x
+1023x1025x1027   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS 17.66 TF  Y  4.92 TF  = 0.278x
+1024x1024x1027   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS 21.20 TF  Y  7.35 TF  = 0.347x
+1023x1024x1024   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS 21.23 TF  Y 14.89 TF  = 0.701x
+2047x2049x2051   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 4%)  | cuBLAS 24.25 TF  Y  6.00 TF  = 0.247x
+4096x4096x4100   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 100%)  | cuBLAS 28.87 TF  Y  6.14 TF  = 0.213x
+1025x1025x1025   tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS 17.71 TF  Y  4.47 TF  = 0.252x
+400x2049x1025    tile mid   (plain loads): bit-exact True  (cuBLAS equals the chain on 6%)  | cuBLAS 14.95 TF  Y  4.65 TF  = 0.311x
+100x1024x1027    tile small (plain loads): bit-exact True  (cuBLAS equals the chain on 5%)  | cuBLAS 12.01 TF  Y  2.02 TF  = 0.168x

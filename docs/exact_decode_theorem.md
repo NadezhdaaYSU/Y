@@ -120,14 +120,6 @@ Hardware and compiler assumptions behind every row:
   (`--prefill`: every prompt token at the chosen layers, its output and its
   new K and V rows, bit for bit; CPU 45 of 45, packed cache 75 of 75), not
   proved.
-- **Triton's two-digit kernel run** (`w8a8_matmul_hilo`), which accumulates
-  `128 · hi` and `lo` in one interleaved int32 sum, is modelled since
-  2026-11-15 (`m_hilo`, `m_dot2`; `sched_dot2_exact` shows an int32 or
-  float64 schedule of that form is valid). The executable check has not run
-  it: it needs Triton's int8 GEMM, sm_80 or later, and the T4 is sm_75.
-- **Y's decode-attention kernel** (`Y_EXACT_ATTN=y`) is a machine of the
-  model, and the executable check has run it on the T4 with the packed cache
-  (the every-switch row below), not on any other GPU.
 - **That the model is the code.** The model is a transcription. What ties
   it to the code is the executable check and the generated constants, next.
 
@@ -161,6 +153,10 @@ France is", all 24 layers, 4 decode steps:
 | Kaggle Intel Xeon @ 2.00GHz (CPU path), Python 3.13, with the ragged stage | 127 | 575 | 575 |
 | Tesla T4, `Y_EXACT_V_INT8=1` (`p.V` on Y's `exact_pv`, one int64 sum), with the ragged stage | 127 | 817 | 817 |
 | Tesla T4, every switch: `Y_EXACT_ATTN=y` (Y's decode-attention kernel), `Y_EXACT_V_INT8=1`, `Y_EXACT_KV_PACK=1` (the packed cache), `Y_EXACT_NORM=triton`, with the ragged stage | 127 | 1009 | 1009 |
+| RTX 4070 Ti SUPER (sm_89), driver 615.78.08, torch 2.13.0+cu130: the linear layers on Triton's int8 GEMM, with the ragged stage | 127 | 817 | 817 |
+| RTX 4070 Ti SUPER, the same: Triton's interleaved two-digit GEMM (`w8a8_matmul_hilo`) | 511 | 817 | 817 |
+| RTX 4070 Ti SUPER, every switch | 127 | 1009 | 1009 |
+| RTX 4070 Ti SUPER, every switch, the interleaved two-digit GEMM | 511 | 1009 | 1009 |
 
 On the T4 the 817 add 242 checks that the int8 weights and scales built on
 the GPU equal those built on the CPU. The first `V_INT8` attempt did not
@@ -174,7 +170,11 @@ and scales, 192 checks more than the float rows they replace. Y's attention
 and `exact_pv` kernels refuse rather than fall back, so a run that finished
 ran them. The Triton norm falls back to the formula (the same bits) when
 Triton cannot be imported, and that run did not record which ran; the
-check's report has recorded the kernels that ran (`backends`) since.
+check's report has recorded the kernels that ran (`backends`) since. In the
+RTX 4070 Ti SUPER rows it shows the Triton norm op registered, Y's attention
+and `exact_pv` kernels built in the every-switch rows, and 1936 calls into
+Triton's int8 GEMM at width 127 or into its interleaved two-digit GEMM at
+511 (the stress stage's included).
 
 The ragged stage (`--ragged`) decodes the batch ["The capital of France
 is", a 14-token prompt], so the first row carries 9 padding keys. It
@@ -254,8 +254,9 @@ Must qualify, or say "checked" or "measured":
 - Ragged batches: **proved conditional** on `attend_pad_ok` at every
   attention call, and **checked** bit for bit on a real ragged batch.
 - Triton's interleaved two-digit kernel: **proved** in the model (any
-  schedule that scales partial sums mid-reduction, inside int32), **not
-  checked** against the code: no run of it has gone through the check.
+  schedule that scales partial sums mid-reduction, inside int32), and
+  **checked** bit for bit on one GPU (an RTX 4070 Ti SUPER, sm_89; it needs
+  sm_80 or later, so not on the T4).
 - The prefill as one pass, rows with inf or NaN: **not proved**.
 
 Must not say: that the implementation is verified; that Y's GPU kernels are
