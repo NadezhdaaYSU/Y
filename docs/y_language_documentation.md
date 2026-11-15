@@ -1232,8 +1232,12 @@ for i in 0..100 {
   GlobalMemory<F32>)`, A `M`x`K`, B `K`x`N`, C `M`x`N`, row-major: the GEMM
   on CUDA cores (`src/ptx_emitter/f32_simt_gemm.rs`): on sm_80 and later
   with `cp.async`; below (Turing, Volta, Pascal, since 2026-11-12) with
-  plain loads and without the 74 KB large tile, the same bits and slower
-  (`docs/known_issues.md`). **Every element of C is one `fma.rn.f32` chain over
+  plain loads, each tile's loads issued before its FMAs and stored to
+  shared memory after them, the same bits. A block holds 64 KB on Turing
+  and 48 KB on Pascal, so there the 74 KB large tile runs at two stages
+  (Turing, where its waves are more than 80% full) or not at all, and on
+  Turing the 64x128 tile runs two stages, two CTAs an SM.
+  **Every element of C is one `fma.rn.f32` chain over
   k = 0..K-1 in that order**, so its bits depend on its row of A and column
   of B only: not on M, the tile, or the grid. That is `f32::mul_add` folded
   in order, which the tests compare bit for bit; there is no split K,
@@ -1259,7 +1263,9 @@ for i in 0..100 {
   whole tile row or column would cost a whole wave.
   One of three tiles is chosen from the shape and the SM count: 128x256
   (one 256-thread CTA per SM) for at least 128 rows and about two waves of
-  them, at least 80% full; 64x128 at about one wave; 64x64 otherwise. Launch: block `(threads, 1, 1)` as the header states,
+  them, at least 80% full; 64x128 at about one wave (on Turing from 60% of
+  one, where 64x64 tiles would put two CTAs on some SM, since 2026-11-15);
+  64x64 otherwise. Launch: block `(threads, 1, 1)` as the header states,
   anything else traps; output tiles are grid-strided, so any grid is
   correct, and the header's grid runs one tile per CTA; the header states
   the dynamic shared memory. Against cuBLAS (TF32 off) on an RTX 4070 Ti
@@ -1271,8 +1277,17 @@ for i in 0..100 {
   1.00x); N odd, 0.73-1.11x (1025^3 0.73-0.75x, 1023 x 1025 x 1027
   0.89-0.90x; GPT-2's 1024 x 50257 x 768: 0.89-0.99x); one row
   (1 x 50257 x 768), 0.98x
-  ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The host backend
-  refuses the kernel: it has no body there.
+  ([record](benchmarks/f32_gemm_2026-11-05/README.md)). The sm_75 build on
+  a Tesla T4, medians of 45 paired rounds: 1.04-1.20x where the large tile
+  runs (2560^3 to 8192 x 8192 x 512), 0.96-1.09x on the 64x128 tile from
+  a wave of it (1023 x 1025 x 1027 1.04x), 0.70-1.00x where its tiles fill
+  60-100% of one (512^3 0.92x, 384 x 512 x 1024 0.70x), 0.83-1.11x where
+  one wave of 64x64 tiles covers C (512 x 256 x 512, 2048 x 64 x 512), and
+  0.45-0.71x with 16 tiles or fewer
+  and a long K (128 x 512 x 2048, 256 x 512 x 4096), where 24 of its 40 SMs
+  idle and an in-order chain cannot split K to fill them
+  ([record](benchmarks/f32_gemm_sm75_guards_2026-11-15/README.md)). The
+  host backend refuses the kernel: it has no body there.
 * **FP32 form with a workspace (since 2026-11-06)**, `(A, B, C:
   GlobalMemory<F32>, W: GlobalMemory<U64>)`: the same GEMM, which **splits K
   in order** where one tile per CTA would leave SMs idle
@@ -1294,7 +1309,12 @@ for i in 0..100 {
   keeps one tile per CTA, and for N % 4 != 0 except N odd on the 128- and
   64-column tiles (there the plan asks the model for 1.25x, not 1.04x, and
   a continuation loads C a float at a time), `W` is unused and the kernel
-  is the three-parameter one (the same SASS). With `W` at N odd, where it
+  is the three-parameter one (the same SASS). On Turing, where the
+  three-parameter form takes the 64x128 tile below 90% of a wave, `W` takes
+  the 64x64 tile split in order instead up to 1.3 of its tiles an SM, or
+  where the 64x128 launch with its remainder tiles exceeds one CTA an SM;
+  on a Tesla T4, 384 x 512 x 1024 0.74-0.82x against 0.70x
+  ([record](benchmarks/f32_gemm_sm75_guards_2026-11-15/README.md)). With `W` at N odd, where it
   splits: 1023 x 1025 x 1027 0.98-1.00x, 1025^3 0.97-0.98x, 0.91-1.05x
   over 9 shapes ([record](benchmarks/f32_gemm_2026-11-05/odd_n_streamk/README.md)).
   It assumes all its CTAs resident at once; on a GPU other programs are

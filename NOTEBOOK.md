@@ -1666,6 +1666,9 @@ different baseline.
 | FP32 GEMM, K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.94–0.98x |
 | FP32 GEMM where the tiles overshoot a whole number of waves (768³, 2048 × 768 × 3072), without the workspace `W` | cuBLAS, TF32 off | 0.72–0.87x (with `W`: 0.97–1.25x) |
 | FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time; on 128-column tiles C stored 4 bytes at a time too) | cuBLAS, TF32 off | 0.73–1.11x on mid-size shapes without `W` (1025³: 0.73–0.75x; 1023 × 1025 × 1027: 0.89–0.90x); with `W`, 0.91–1.05x where it splits K; 0.89–0.99x on the large tile (GPT-2's 1024 × 50257 × 768) |
+| FP32 GEMM on a Tesla T4 (sm_75), 64×128 tiles filling 60–100% of a wave | cuBLAS, TF32 off | 0.70–1.00x (512³: 0.92x; 384 × 512 × 1024: 0.70x, 0.74–0.82x with `W`) |
+| FP32 GEMM on a Tesla T4, one wave of 64×64 tiles or less (512 × 256 × 512) | cuBLAS, TF32 off | 0.83x |
+| FP32 GEMM on a Tesla T4, 16 tiles or fewer and a long K (128 × 512 × 2048, 256 × 256 × 8192, 256 × 512 × 4096), 24 of 40 SMs idle | cuBLAS, TF32 off | 0.45–0.71x |
 | int8 GEMM, 128 × 4096 × 11008 and × 14336 (Llama's MLP), 512 × 11008 × 4096, 512 × 1024 × 4096 with B from DRAM | cuBLASLt (`torch._int_mm`) | 0.91–0.98x (at 128 rows the 64×64 tile gives 0.99x from DRAM but 0.77–0.83x from L2) |
 | int8 GEMM, K % 64 == 32 (4000³, 4096 × 4096 × 4000) | cuBLASLt | 0.93–0.95x |
 | int8 GEMM, 8192³ | cuBLASLt | 0.97–1.00x |
