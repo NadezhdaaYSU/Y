@@ -72,6 +72,9 @@
 //! stages, is taken where its waves are more than 80% full, and the mid tile
 //! from 60% of a wave where the small one would double up on an SM (with
 //! `W`, up to 1.3 small tiles an SM, the small tile split in order instead).
+//! Where even the small tile leaves SMs idle, 32-row tiles (32 x 64, 32 x
+//! 32) give more CTAs (`f32_gemm_turing_thin`). Below sm_80 `W` splits only
+//! where M and K are whole tiles: a segment's copies would be guarded.
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -157,6 +160,15 @@ pub(crate) const F32_TILE_ROWS_MID: F32GemmTile =
 /// Remainder rows of the small tile: 4 warps of 32x16, 4x4 per thread.
 pub(crate) const F32_TILE_ROWS_SMALL: F32GemmTile =
     F32GemmTile { name: "rows32x64", bm: 32, bn: 64, bk: 16, wm: 32, wn: 16, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
+/// Few-tile shapes on Turing (`f32_gemm_turing_thin`): 4 warps of 32x16,
+/// 4x4 per thread, the row remainder's tile as the whole tile.
+pub(crate) const F32_TILE_THIN: F32GemmTile =
+    F32GemmTile { name: "thin32x64", bm: 32, bn: 64, bk: 16, wm: 32, wn: 16, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
+/// Fewer still: 2 warps of 32x16, 4x4 per thread. Its 64 threads cannot
+/// share a launch with the 128-thread remainder tiles, so it is taken only
+/// where it has none (`f32_gemm_turing_thin`).
+pub(crate) const F32_TILE_THIN32: F32GemmTile =
+    F32GemmTile { name: "thin32x32", bm: 32, bn: 32, bk: 16, wm: 32, wn: 16, tm: 4, tn: 4, stages: 3, reg_ctas: 3 };
 impl PtxEmitter {
     /// The tile for an `m x n x k` FP32 GEMM on `sms` SMs, or why there is none.
     ///
@@ -219,7 +231,40 @@ impl PtxEmitter {
         if Self::f32_gemm_turing_mid(m, n, sms, block_smem) {
             return Ok(F32_TILE_MID);
         }
+        if block_smem == 64 * 1024 {
+            if let Some(t) = Self::f32_gemm_turing_thin(m, n, sms) {
+                return Ok(t);
+            }
+        }
         Ok(F32_TILE_SMALL)
+    }
+
+    /// On Turing, where the small tile leaves SMs idle: the 32-row tile
+    /// with the most tiles that still fit one wave, if it has more than the
+    /// tile it replaces. A thin tile does less per FMA it loads (4x4 per
+    /// thread against 4x8), but where a wave is mostly empty, more CTAs win.
+    /// On a Tesla T4 (40 SMs), medians of 45 paired rounds against cuBLAS,
+    /// small / 32x64 / 32x32, all bit-exact: 128 x 256 x 4096 (8 small
+    /// tiles) 0.33x / 0.44x / 0.50x, 64 x 512 x 8192 (8) 0.29x / 0.37x /
+    /// 0.41x, 128 x 512 x 512 (16) 0.62x / 0.75x / 0.60x, 128 x 512 x 2048
+    /// (16) 0.44x / 0.54x / 0.44x, 256 x 256 x 8192 (16) 0.54x / 0.59x /
+    /// 0.47x, 192 x 384 x 4096 (18) 0.64x / 0.70x / 0.57x, 128 x 640 x 2048
+    /// (20) 0.53x / 0.64x / 0.51x; but 384 x 256 x 2048 (24 small tiles, 48
+    /// thin ones) 0.57x / 0.53x, 128 x 1024 x 1024 (32) 0.71x / 0.59x
+    /// (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_thin/). Checked
+    /// at eight shapes it was not read off, it picked the fastest of the
+    /// three at each: 64 x 512 x 1024 0.33x -> 0.56x, 160 x 256 x 4096 0.35x
+    /// -> 0.53x, 96 x 512 x 2048 0.45x -> 0.55x (t4_thin_rule/). The
+    /// 32x32 tile runs 64 threads, which no remainder tile does, so only
+    /// where M and N are multiples of 32; the thin tiles take no remainder
+    /// sets (`f32_gemm_remainder`), their ragged edges are guarded.
+    fn f32_gemm_turing_thin(m: u32, n: u32, sms: u64) -> Option<F32GemmTile> {
+        let tiles = |t: &F32GemmTile| m.div_ceil(t.bm) as u64 * n.div_ceil(t.bn) as u64;
+        let (small, thin, thin32) = (tiles(&F32_TILE_SMALL), tiles(&F32_TILE_THIN), tiles(&F32_TILE_THIN32));
+        if thin32 <= sms && thin32 > thin && m % 32 == 0 && n % 32 == 0 {
+            return Some(F32_TILE_THIN32);
+        }
+        (thin <= sms && thin > small).then_some(F32_TILE_THIN)
     }
 
     /// On Turing (64 KB a block), the mid tile (two stages,
@@ -414,6 +459,11 @@ impl PtxEmitter {
         // copy B at each row's own width (`f32_gemm_b_classes`, which an
         // edge rules out): 1024 x 30522 x 768 0.86x -> 0.97x cuBLAS,
         // 1024 x 50257 x 768 0.83x -> 0.85x.
+        // The thin tiles (`f32_gemm_turing_thin`) are themselves the few-tile
+        // case: their ragged edges stay in whole tiles.
+        if t.bm == 32 {
+            return None;
+        }
         let unlocks_widths = n % 4 != 0 && n >= 16 && (n % 2 == 0 || t.bn == 256);
         if n % t.bn == 0 || n % t.bn > t.bn / 2 || (n.div_ceil(t.bn) > 50 && !unlocks_widths) {
             return None;
@@ -428,7 +478,7 @@ impl PtxEmitter {
     /// the 64-row tiles, two on the large tile): 1025 x 1024 x 1024 took
     /// 99 us split and 138 us whole.
     pub(crate) fn f32_gemm_row_remainder(t: F32GemmTile, m: u32) -> Option<F32GemmTile> {
-        if m % t.bm == 0 || m % t.bm > t.bm / 2 || m.div_ceil(t.bm) > 50 {
+        if t.bm == 32 || m % t.bm == 0 || m % t.bm > t.bm / 2 || m.div_ceil(t.bm) > 50 {
             return None;
         }
         Some(match t.bn {
@@ -600,6 +650,15 @@ impl PtxEmitter {
                 return 32;
             }
         };
+        // Below sm_80 a stream-K segment's K loop guards its copies at a K
+        // tail or a ragged M (the plain path's short first K tile and sliding
+        // last row do not apply to a segment, which starts mid-tile), and a
+        // guarded copy there is a predicated load and a zero fill: at 1000^3
+        // all 12 loads of the loop, and on a Tesla T4 the split ran at 0.84x
+        // cuBLAS against the plain kernel's 1.02x (docs/benchmarks/
+        // f32_gemm_sm75_guards_2026-11-15/t4_sweep/). So there `W` splits
+        // only where M and K are whole tiles.
+        let guard_free = |t: F32GemmTile| self.sm_level() >= 80 || (m % t.bm == 0 && k % t.bk == 0);
         if let Some(wp) = w_ptr {
             let sms = if hw_profile.sm_count == 0 { 66 } else { hw_profile.sm_count };
             // On Turing below 90% of a wave of mid tiles, `W` can do better
@@ -608,19 +667,21 @@ impl PtxEmitter {
             let mid_by_turing_rule = t == F32_TILE_MID
                 && Self::f32_gemm_turing_mid(m, n, sms as u64, Self::f32_gemm_block_smem(self.sm_level()))
                 && (m.div_ceil(t.bm) as u64 * n.div_ceil(t.bn) as u64) * 10 < sms as u64 * 9;
-            if mid_by_turing_rule && Self::f32_gemm_turing_split_small(m, n, sms as u64) {
+            if mid_by_turing_rule && Self::f32_gemm_turing_split_small(m, n, sms as u64) && guard_free(F32_TILE_SMALL) {
                 if let Some(p) = Self::f32_gemm_streamk_plan(F32_TILE_SMALL, m, n, k, hw_profile.sm_count, hw_profile.max_smem_per_sm_bytes) {
                     return self.emit_f32_gemm_streamk_kernel(F32_TILE_SMALL, m, n, k, p, p / sms, a_ptr, b_ptr, c_ptr, wp, kernel_name);
                 }
             }
-            if let Some(p) = Self::f32_gemm_streamk_plan(t, m, n, k, hw_profile.sm_count, hw_profile.max_smem_per_sm_bytes) {
+            if let Some(p) = Self::f32_gemm_streamk_plan(t, m, n, k, hw_profile.sm_count, hw_profile.max_smem_per_sm_bytes).filter(|_| guard_free(t)) {
                 return self.emit_f32_gemm_streamk_kernel(t, m, n, k, p, p / sms, a_ptr, b_ptr, c_ptr, wp, kernel_name);
             }
         }
-        let w_line = if w_ptr.is_some() {
-            "\n    // Workspace W: not used at this shape, where one tile per CTA is as fast as splitting K in order (`f32_gemm_streamk_plan`)."
-        } else {
+        let w_line = if w_ptr.is_none() {
             ""
+        } else if !guard_free(t) && Self::f32_gemm_streamk_plan(t, m, n, k, hw_profile.sm_count, hw_profile.max_smem_per_sm_bytes).is_some() {
+            "\n    // Workspace W: not used: below sm_80 a split's copies would be guarded at this K or M, and the one-tile-per-CTA kernel is faster (`emit_f32_simt_gemm_kernel`)."
+        } else {
+            "\n    // Workspace W: not used at this shape, where one tile per CTA is as fast as splitting K in order (`f32_gemm_streamk_plan`)."
         };
         // Columns past the last whole tile go to narrow remainder tiles in
         // the same launch, instead of a whole tile column that is mostly

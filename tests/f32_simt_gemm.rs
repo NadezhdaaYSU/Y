@@ -518,10 +518,13 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
 /// wave of mid tiles beats the small ones doubled up (512^3, 32 mid tiles on
 /// 40 SMs: 0.68x cuBLAS on the small tile, 0.92x on the mid;
 /// `f32_gemm_tile`). Where one small tile an SM covers C, or the mid tile
-/// would be half empty, the small tile stays. Sm_70 (Volta) on the same
-/// SM count, and this machine's sm_89, keep the old rule.
+/// would be half empty, the small tile stays - unless it leaves SMs idle:
+/// then a 32-row tile with more tiles that still fit a wave (128 x 512 x
+/// 2048: 0.44x on the small tile, 0.54x on 32 x 64; `f32_gemm_turing_thin`).
+/// Sm_70 (Volta) on the same SM count, and this machine's sm_89, keep the
+/// old rule.
 #[test]
-fn on_turing_the_mid_tile_runs_where_the_small_tile_would_double_up() {
+fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
     let dir = profile_for("f32_gemm_turing_rule", "7.5", 40);
     // A T4's shared memory an SM, which the stream-K plan reads.
     let profile = dir.join(".ysu_hw_profile");
@@ -538,6 +541,15 @@ fn on_turing_the_mid_tile_runs_where_the_small_tile_would_double_up() {
         ((2048, 64, 512), "small"),   // 32, 32: the mid tile half empty
         ((256, 512, 4096), "small"),  // 16, 32
         ((768, 768, 768), "mid"),     // 72: the rule before
+        // Few tiles: the 32-row tile with the most tiles that fit a wave.
+        ((128, 512, 2048), "thin32x64"), // 16 small tiles, 32 thin
+        ((100, 500, 3000), "thin32x64"), // ragged, no remainder sets
+        ((128, 256, 4096), "thin32x32"), // 8 small, 16 thin, 32 of 32x32
+        ((384, 256, 2048), "small"),     // 24 small, 48 thin: over a wave
+        ((128, 1024, 1024), "small"),    // 32 small, 64 thin
+        ((32, 1024, 4096), "thin32x32"), // 16 small or 32x64, 32 of 32x32
+        ((32, 1000, 4096), "small"),     // 32x32 needs N a multiple of 32,
+        ((16, 1024, 4096), "small"),     // and M: no ragged rows in it
     ];
     for (i, ((m, n, k), want)) in cases.iter().enumerate() {
         let ptx = compile(&dir, &format!("t{i}"), *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{m}x{n}x{k}: {log}"));
@@ -545,6 +557,9 @@ fn on_turing_the_mid_tile_runs_where_the_small_tile_would_double_up() {
         assert_eq!(h.tile, *want, "{m}x{n}x{k} at sm_75 on 40 SMs");
         let stages = if h.tile == "mid" { 2 } else { 3 };
         assert!(ptx.contains(&format!("{stages} stages of plain loads")), "{m}x{n}x{k}: tile {} not at {stages} stages", h.tile);
+        if h.tile.starts_with("thin") {
+            assert!(ptx.contains("Remainder: none; none."), "{m}x{n}x{k}: a thin tile with remainder sets");
+        }
     }
     // With `W`, below 90% of a wave of mid tiles: the small tile split in
     // order where it has up to 1.3 tiles an SM, or where the mid tile's
@@ -558,6 +573,9 @@ fn on_turing_the_mid_tile_runs_where_the_small_tile_would_double_up() {
         ((512, 512, 512), None),           // 64
         ((448, 576, 512), Some("small")),  // 63, but 28 + 14 mid CTAs
         ((768, 768, 768), Some("mid")),    // 72 mid tiles: the rule before
+        // A K tail or a ragged M would guard a split's copies below sm_80.
+        ((1000, 1000, 1000), None),
+        ((768, 768, 770), None),
     ];
     for (i, ((m, n, k), want)) in w_cases.iter().enumerate() {
         let name = format!("w{i}");
@@ -566,6 +584,8 @@ fn on_turing_the_mid_tile_runs_where_the_small_tile_would_double_up() {
         assert_eq!(got.as_deref(), *want, "{m}x{n}x{k} with W at sm_75 on 40 SMs: the tile split, if any");
         if want.is_none() {
             assert_eq!(header(&ptx).tile, "mid", "{m}x{n}x{k} with W: the one-wave tile");
+            let guarded = m % 64 != 0 || k % 16 != 0;
+            assert_eq!(ptx.contains("a split's copies would be guarded"), guarded, "{m}x{n}x{k} with W: the reason W is unused");
         }
     }
     let _ = std::fs::remove_dir_all(&dir);
@@ -573,6 +593,8 @@ fn on_turing_the_mid_tile_runs_where_the_small_tile_would_double_up() {
         let dir = profile_for(&format!("f32_gemm_turing_rule_ctl{}", sm.replace('.', "")), sm, sms);
         let ptx = compile(&dir, "c512", 512, 512, 512, "--emit-ptx").unwrap_or_else(|log| panic!("sm {sm}: {log}"));
         assert_eq!(header(&ptx).tile, "small", "512^3 at sm {sm} on {sms} SMs");
+        let ptx = compile(&dir, "c128", 128, 512, 2048, "--emit-ptx").unwrap_or_else(|log| panic!("sm {sm}: {log}"));
+        assert_eq!(header(&ptx).tile, "small", "128 x 512 x 2048 at sm {sm} on {sms} SMs");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -982,7 +1004,9 @@ fn the_workspace_form_is_the_in_order_fma_chain_on_every_grid() {
 /// driver compiles sm_75 PTX for this card) on the grids the sm_80 test
 /// uses: the small tile split over 40 CTAs (448 x 384 x 512, 42 tiles, 704
 /// x 256 x 1024, 44, and 448 x 576 x 512, taken over the mid tile with `W`)
-/// and the mid tile (768^3 and the K tails). On a T4
+/// and the mid tile (768^3, 512 x 896 x 896). At a K tail or a ragged M a
+/// split's copies would be guarded here, so there `W` is not used (the
+/// Turing rule test). On a T4
 /// this form took 384 x 512 x 1024 from 0.59x cuBLAS to 0.82x on the small
 /// tile (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_w/); 512^3 is
 /// now the mid tile, one wave (0.92x), where `W` is not used.
@@ -992,7 +1016,7 @@ fn built_for_sm_75_the_workspace_form_is_the_in_order_fma_chain() {
         eprintln!("SKIP: no CUDA driver - no sm_75 stream-K GEMM was executed.");
         return;
     };
-    let cases: [(u32, u32, u32); 6] = [(448, 384, 512), (704, 256, 1024), (448, 576, 512), (768, 768, 768), (768, 768, 770), (700, 768, 1027)];
+    let cases: [(u32, u32, u32); 5] = [(448, 384, 512), (704, 256, 1024), (448, 576, 512), (768, 768, 768), (512, 896, 896)];
     for (si, &(m, n, k)) in cases.iter().enumerate() {
         let dir = pinned::pinned_scratch(&format!("f32_gemm_sk75_run{si}"), "7.5");
         let text = pinned::profile_text("7.5").replace("SM_COUNT=66", "SM_COUNT=40") + "MAX_SMEM_PER_SM_BYTES=65536\n";

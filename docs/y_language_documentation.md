@@ -1265,7 +1265,10 @@ for i in 0..100 {
   (one 256-thread CTA per SM) for at least 128 rows and about two waves of
   them, at least 80% full; 64x128 at about one wave (on Turing from 60% of
   one, where 64x64 tiles would put two CTAs on some SM, since 2026-11-15);
-  64x64 otherwise. Launch: block `(threads, 1, 1)` as the header states,
+  64x64 otherwise, except on Turing where 64x64 tiles leave SMs idle: there
+  32x64 or 32x32, whichever has the most tiles that still fit one wave (32x32
+  only for M and N multiples of 32; neither takes remainder tiles).
+  Launch: block `(threads, 1, 1)` as the header states,
   anything else traps; output tiles are grid-strided, so any grid is
   correct, and the header's grid runs one tile per CTA; the header states
   the dynamic shared memory. Against cuBLAS (TF32 off) on an RTX 4070 Ti
@@ -1283,9 +1286,9 @@ for i in 0..100 {
   a wave of it (1023 x 1025 x 1027 1.04x), 0.70-1.00x where its tiles fill
   60-100% of one (512^3 0.92x, 384 x 512 x 1024 0.70x), 0.83-1.11x where
   one wave of 64x64 tiles covers C (512 x 256 x 512, 2048 x 64 x 512), and
-  0.45-0.71x with 16 tiles or fewer
-  and a long K (128 x 512 x 2048, 256 x 512 x 4096), where 24 of its 40 SMs
-  idle and an in-order chain cannot split K to fill them
+  0.35-0.71x with few tiles and a long K (128 x 512 x 2048 0.54x, on 32x64
+  tiles that fill more of its 40 SMs since 2026-11-16; 256 x 512 x 4096
+  0.71x), where cuBLAS splits K and an in-order chain cannot
   ([record](benchmarks/f32_gemm_sm75_guards_2026-11-15/README.md)). The
   host backend refuses the kernel: it has no body there.
 * **FP32 form with a workspace (since 2026-11-06)**, `(A, B, C:
@@ -1314,7 +1317,9 @@ for i in 0..100 {
   the 64x64 tile split in order instead up to 1.3 of its tiles an SM, or
   where the 64x128 launch with its remainder tiles exceeds one CTA an SM;
   on a Tesla T4, 384 x 512 x 1024 0.74-0.82x against 0.70x
-  ([record](benchmarks/f32_gemm_sm75_guards_2026-11-15/README.md)). With `W` at N odd, where it
+  ([record](benchmarks/f32_gemm_sm75_guards_2026-11-15/README.md)). Below
+  sm_80 `W` splits only where M and K are whole tiles, since a split's
+  copies would be guarded there (the header says so). With `W` at N odd, where it
   splits: 1023 x 1025 x 1027 0.98-1.00x, 1025^3 0.97-0.98x, 0.91-1.05x
   over 9 shapes ([record](benchmarks/f32_gemm_2026-11-05/odd_n_streamk/README.md)).
   It assumes all its CTAs resident at once; on a GPU other programs are

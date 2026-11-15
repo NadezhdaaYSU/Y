@@ -356,3 +356,97 @@ these decides it on the T4 is not measured. The 16-tile shapes (128 x 512 x
 2048 at 0.45x, 256 x 256 x 8192 at 0.54x) leave 24 SMs idle, and an
 in-order chain cannot split K to fill them without `W`, whose plan needs a
 tile an SM.
+
+## Few tiles: the 32-row tiles
+
+With 16 small tiles or fewer and a long K (128 x 512 x 2048 at 0.44x), 24
+of the T4's 40 SMs idle, and an in-order chain cannot split K to fill them.
+More, smaller tiles can: 32 x 64 (4 warps, 4 x 4 outputs a thread, the
+small tile's row remainder) and 32 x 32 (2 warps). A thread then loads
+more from shared memory per FMA, which is why they lost where the small
+tile already filled the SMs (version 6), but where most of a wave is
+empty the CTAs win. Version 9 (`t4_thin/`, all 33 bit-exact) forced each
+as the whole tile:
+
+| shape | small tiles | small | 32 x 64 | 32 x 32 |
+|---|---|---|---|---|
+| 128 x 256 x 4096 | 8 | 0.326x [0.30-0.35] | 0.435x [0.40-0.49] | 0.503x [0.45-0.56] |
+| 64 x 512 x 8192 | 8 | 0.286x [0.26-0.30] | 0.367x [0.34-0.39] | 0.405x [0.37-0.43] |
+| 128 x 512 x 512 | 16 | 0.616x [0.61-0.62] | 0.749x [0.74-0.75] | 0.602x [0.60-0.61] |
+| 128 x 512 x 2048 | 16 | 0.437x [0.40-0.48] | 0.539x [0.46-0.57] | 0.436x [0.39-0.48] |
+| 64 x 1024 x 4096 | 16 | 0.522x [0.47-0.55] | 0.570x [0.52-0.58] | 0.472x [0.43-0.49] |
+| 256 x 256 x 8192 | 16 | 0.540x [0.53-0.56] | 0.585x [0.58-0.59] | 0.466x [0.45-0.47] |
+| 192 x 384 x 4096 | 18 | 0.640x [0.63-0.66] | 0.698x [0.68-0.73] | 0.572x [0.56-0.59] |
+| 128 x 640 x 2048 | 20 | 0.525x [0.51-0.59] | 0.637x [0.58-0.66] | 0.510x [0.47-0.56] |
+| 320 x 256 x 2048 | 20 | 0.534x [0.52-0.59] | 0.592x [0.56-0.65] | 0.495x [0.46-0.55] |
+| 384 x 256 x 2048 | 24 | 0.568x [0.55-0.59] | 0.534x [0.51-0.56] | 0.518x [0.47-0.54] |
+| 128 x 1024 x 1024 | 32 | 0.707x [0.62-0.74] | 0.586x [0.56-0.61] | 0.557x [0.50-0.58] |
+
+At every shape the fastest is the 32-row tile with the most tiles that
+still fit one wave, if that is more than the tile it replaces; past a
+wave the small tile is back ahead. That is the rule now on Turing
+(`f32_gemm_turing_thin`): 32 x 32 where its tiles fit a wave and outnumber
+32 x 64's, else 32 x 64 where its tiles fit and outnumber the small
+tile's. The 32 x 32 tile's 64 threads cannot share a launch with the
+128-thread remainder tiles, so it needs M and N multiples of 32; the thin
+tiles take no remainder sets, their ragged edges are guarded inside the
+tile (M at least 33, where the last row slides back, so the K loop stays
+unguarded: no spill at 10 ragged shapes, bit-exact in the CPU interpreter
+at 9). Version 10 (`t4_thin_rule/`, all 24 bit-exact) checked the rule's
+choice at eight shapes it had not seen; it picked the fastest at all eight:
+
+| shape | the rule's tile | small | 32 x 64 | 32 x 32 |
+|---|---|---|---|---|
+| 64 x 512 x 1024 | 32 x 32 (32 tiles) | 0.325x [0.32-0.33] | 0.537x [0.52-0.54] | 0.560x [0.55-0.57] |
+| 160 x 256 x 4096 | 32 x 32 (40) | 0.347x [0.30-0.41] | 0.463x [0.39-0.59] | 0.534x [0.45-0.61] |
+| 64 x 640 x 4096 | 32 x 32 (40) | 0.315x [0.28-0.37] | 0.409x [0.37-0.44] | 0.446x [0.38-0.52] |
+| 96 x 512 x 2048 | 32 x 64 (24) | 0.445x [0.38-0.47] | 0.550x [0.49-0.59] | 0.441x [0.37-0.49] |
+| 192 x 256 x 2048 | 32 x 64 (24) | 0.365x [0.34-0.39] | 0.451x [0.40-0.49] | 0.375x [0.34-0.41] |
+| 128 x 384 x 2048 | 32 x 64 (24) | 0.406x [0.39-0.43] | 0.477x [0.42-0.50] | 0.413x [0.39-0.44] |
+| 32 x 1024 x 2048 | 32 x 32 (32) | 0.626x [0.60-0.66] | 0.537x [0.52-0.56] | 0.639x [0.59-0.69] |
+| 32 x 512 x 4096 | 32 x 32 (16) | 0.340x [0.29-0.36] | 0.294x [0.28-0.30] | 0.350x [0.31-0.36] |
+
+(At 32 rows 32 x 64 has no more tiles than the small tile and is not
+taken; 32 x 32 is level with the small tile there.) These shapes are still
+behind cuBLAS, which splits K; the gain is 17-72% where M is above 32.
+
+## Where the T4 stands: a sweep, and `W` at a K tail
+
+Job `y-f32-t4-b` version 2 (`t4_sweep/`) timed the pushed build (`1d148f8`)
+at 16 common shapes, three-parameter form and `W`, all 32 bit-exact:
+
+| shape | three parameters | `W` |
+|---|---|---|
+| 4096^3 | 1.202x [1.10-1.22] | 1.191x |
+| 1024 x 30522 x 768 (BERT's vocabulary) | 1.128x [1.03-1.16] | 1.132x |
+| 1024 x 50257 x 768 (GPT-2's head) | 1.058x [0.98-1.08] | 1.062x |
+| 3000^3 | 1.033x [0.99-1.06] | 1.044x |
+| 512 x 4864 x 896 (Qwen2.5-0.5B's MLP up) | 1.069x [1.05-1.11] | 1.016x |
+| 2048^3 | 0.996x [0.98-1.03] | 1.030x (`W` unused) |
+| 2047 x 2049 x 2051 | 0.993x [0.95-1.01] | 0.993x (`W` unused) |
+| 1536^3 | 0.978x [0.92-0.99] | 1.000x [0.95-1.01] |
+| 1000^3 | 1.019x [0.93-1.05] | 0.839x [0.81-0.89] |
+| 768^3 | 0.911x [0.91-0.93] | 0.907x [0.90-0.91] |
+| 512 x 896 x 896 (Qwen2.5-0.5B's attention projections) | 0.886x [0.88-0.91] | 1.041x [1.01-1.08] |
+| 512 x 896 x 4864 (its MLP down) | 0.829x [0.81-0.88] | 0.924x [0.83-1.00] |
+| 32 x 4096 x 4096 | 0.884x [0.85-0.90] | 0.860x |
+| 128 x 896 x 896 | 0.673x [0.64-0.73] | 0.682x |
+| 8 x 4096 x 4096 | 0.773x [0.74-0.82] | 0.765x |
+| 1 x 50257 x 768 | 0.552x [0.52-0.63] | 0.549x |
+
+With `W`, 1000^3 ran 18% slower than without. Below sm_80 the short first
+K tile and the sliding last tile row (`short_first`, `slide_m`) do not
+apply to a stream-K segment, which can start anywhere in a tile's K, so a
+segment's K loop guards its copies at a K tail or a ragged M: all 12 loads
+of 1000^3's loop are predicated, against none at 768^3. So below sm_80 `W`
+now splits only where M and K are whole tiles, and elsewhere is the
+three-parameter kernel (1000^3 1.02x); its header says why. The sm_80 and
+sm_89 kernels, where a guarded copy is a `cp.async` of size 0, are
+unchanged.
+
+The one-row and few-row shapes read all of B for one to 32 rows of A, so
+they are bound by memory, not by the FMAs. Y streams B at 137-142 GB/s
+there (the T4's DRAM is rated 320); cuBLAS at 253 GB/s for one row, 171
+for 8 and 159 for 32. Y runs them on 32-row tiles of the mid tile's width,
+so a one-row GEMM computes 31 rows for nothing and its loads are those of
+a 32-row tile; the one row is the next gap to close.

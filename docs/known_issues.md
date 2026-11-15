@@ -247,10 +247,15 @@ source; each entry there now carries its status. What is still open:
     512^3 0.68x -> 0.92x, 448 x 512 x 512 0.86x -> 1.00x, 1024 x 256 x 1024
     0.68x -> 0.94x; with `W`, up to 1.3 small tiles an SM, the small tile
     split in order instead (384 x 512 x 1024 0.74-0.82x, against 0.70x on
-    the mid tile). Still behind: the shapes one wave of small tiles covers
-    (512 x 256 x 512 0.83x) and those with 16 or fewer, where 24 SMs idle
-    and an in-order chain cannot split K to fill them (128 x 512 x 2048
-    0.45x, 256 x 256 x 8192 0.54x). K tiles of 32 instead of 16 were slower
+    the mid tile). Where the small tile leaves SMs idle, 32-row tiles
+    (32 x 64, 32 x 32) now give more CTAs: 64 x 512 x 1024 0.33x -> 0.56x,
+    128 x 512 x 2048 0.44x -> 0.54x, 160 x 256 x 4096 0.35x -> 0.53x. Still
+    behind: the shapes one wave of small tiles covers (512 x 256 x 512
+    0.83x), the few-tile shapes with a long K, where cuBLAS splits K and an
+    in-order chain cannot (0.35-0.70x), and one to 32 rows, which stream B
+    at 137-142 GB/s against cuBLAS's 159-253 (1 x 50257 x 768 0.55x). Below
+    sm_80 `W` now splits K only where M and K are whole tiles (at 1000^3 a
+    split's guarded copies ran at 0.84x against 1.02x unsplit). K tiles of 32 instead of 16 were slower
     on the T4 at every shape tried, though faster on the RTX 4070 Ti SUPER
     (`docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/`);
   - neither change is measured on Volta or Pascal (ptxas only).
