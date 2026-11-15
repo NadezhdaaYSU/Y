@@ -156,7 +156,7 @@ Proof.
 Qed.
 
 (* ------------------------------------------------------------------ *)
-(** ** Base-2^d digits, as `exact_pv`'s digit split takes them         *)
+(** ** Base-2^d digits, as the Python p.V digit split takes them        *)
 (* ------------------------------------------------------------------ *)
 
 (** `(p >> shift) & ((1 << dbits) - 1)` at `shift = j * d`. *)
@@ -772,7 +772,7 @@ Definition folded (p : list Z) (vq : list (list Z * R)) : list R :=
 Definition wint (wmax : R) (w : list R) : list Z :=
   map (fun x => clamp0 (2 ^ 28) (fold_round x wmax)) w.
 
-(** `exact_pv`: one sum, or the digit split recombined in float64. *)
+(** Attention's p.V: one sum, or the digit split recombined in float64. *)
 Definition pv (M : machine) (path : list nat) (Wt vcol : list Z) : Z :=
   let d := m_digits M path in
   if d <=? 0 then m_dot M (PvDirect, path) (combine Wt vcol)
