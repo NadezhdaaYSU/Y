@@ -68,7 +68,7 @@ class EndToEnd(unittest.TestCase):
     def test_the_model_is_the_code_on_the_cpu(self):
         env = {k: v for k, v in os.environ.items() if not k.startswith("Y_EXACT_")}
         env.update(PYTHONPATH=str(ROOT / "python"), CUDA_VISIBLE_DEVICES="", HF_HUB_OFFLINE="1")
-        r = subprocess.run([sys.executable, str(TOOL), "--layers", "0", "23", "--steps", "1", "--ragged"],
+        r = subprocess.run([sys.executable, str(TOOL), "--layers", "0", "23", "--steps", "1", "--ragged", "--prefill"],
                            env=env, capture_output=True, text=True, timeout=1200)
         tail = r.stdout + r.stderr[-2000:]
         self.assertEqual(r.returncode, 0, tail)

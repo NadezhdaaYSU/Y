@@ -311,6 +311,46 @@ def load(path, device):
     return build_exact_model(path, device)
 
 
+def new_row_checks(ck, cvv, k_new, v_new, cfg):
+    """(what, code's value, model's value) for a step's new K and V rows: the
+    float rows, or with a packed cache the packed integers and scales read
+    back with the code's unpacker against this file's quantisation."""
+    if ck.dtype == torch.float32:
+        return [("new K row", ck, k_new), ("new V row", cvv, v_new)]
+    from y_lang.exact import kv as exact_kv
+    d = cfg.hidden_size // cfg.num_attention_heads
+    kl = k_levels_for(d, C["Q_LEVELS"])
+    kint, ksc = exact_kv.unpack_k(ck.detach().cpu()[:, None].contiguous(), d)
+    vint, vsc = exact_kv.unpack_v(cvv.detach().cpu()[:, None].contiguous(), d)
+    kr = [quant_ref(k_new[g], kl) for g in range(k_new.shape[0])]
+    vr = [quant_ref(v_new[g], C["V_LEVELS"]) for g in range(v_new.shape[0])]
+    return [("new K row, packed integers", kint[:, 0].to(torch.int64),
+             torch.tensor([r[0] for r in kr], dtype=torch.int64)),
+            ("new K row, packed scales", ksc[:, 0, 0], torch.stack([r[1] for r in kr])),
+            ("new V row, packed integers", vint[:, 0].to(torch.int64),
+             torch.tensor([r[0] for r in vr], dtype=torch.int64)),
+            ("new V row, packed scales", vsc[:, 0, 0], torch.stack([r[1] for r in vr]))]
+
+
+def prefill_check(ref, cfg, cache, pcap, layers, a_of, report):
+    """The prefill computes every prompt token in one pass. Row t of each
+    chosen layer must be the model's decode step for token t over the cache
+    rows before it, with the new K and V rows the cache holds at t."""
+    for i in layers:
+        x_in, x_out = pcap[i]
+        x_out = x_out[0] if isinstance(x_out, tuple) else x_out
+        x_in, x_out = x_in.detach().cpu()[0], x_out.detach().cpu()[0]
+        K, V = cache.layers[i].keys.detach().cpu()[0], cache.layers[i].values.detach().cpu()[0]
+        for t in range(x_in.shape[0]):
+            cos, sin = ref.model.rotary_emb(torch.zeros(1, 1, cfg.hidden_size), torch.tensor([[t]]))
+            y, k_new, v_new = layer_ref(ref.model.layers[i], x_in[t], K[:, :t], V[:, :t], cos, sin, cfg, a_of)
+            rows = [("prefill row output", x_out[t], y)] + new_row_checks(K[:, t], V[:, t], k_new, v_new, cfg)
+            for what, a, b in rows:
+                ok, why = bits_equal(a, b)
+                report["checks"].append({"prefill": True, "token": t, "layer": i, "what": what,
+                                         "ok": ok, "detail": why})
+
+
 LONG_PROMPT = "Write a short story about a lighthouse keeper who discovers something unusual."
 
 
@@ -400,6 +440,8 @@ def main():
     ap.add_argument("--constants", default=os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "proofs", "ExactDecodeConstants.v"))
     ap.add_argument("--out", default=None)
+    ap.add_argument("--prefill", action="store_true",
+                    help="also check each prefill row against the model's decode step for that token")
     ap.add_argument("--ragged", action="store_true",
                     help="also decode a left-padded batch and compare the padded row with the "
                          "prompt alone (left_padding_changes_nothing)")
@@ -440,8 +482,21 @@ def main():
 
     ids = tok(args.prompt, return_tensors="pt").input_ids.to(args.device)
     cache = DynamicCache(config=real.config)
-    with torch.no_grad():
-        out = real(input_ids=ids, past_key_values=cache, use_cache=True)
+    pcap, phooks = {}, []
+    if args.prefill:
+        for i in args.layers:
+            phooks.append(real.model.layers[i].register_forward_hook(
+                lambda m, a, kw, o, i=i: pcap.__setitem__(i, (kw.get("hidden_states", a[0] if a else None), o)),
+                with_kwargs=True))
+    try:
+        with torch.no_grad():
+            out = real(input_ids=ids, past_key_values=cache, use_cache=True)
+    finally:
+        for h in phooks:
+            h.remove()
+    if args.prefill:
+        with torch.no_grad():
+            prefill_check(ref, cfg, cache, pcap, args.layers, a_of, report)
     token = out.logits[:, -1].float().argmax(-1)
     pos = ids.shape[1]
     tokens = [int(token)]
@@ -473,26 +528,9 @@ def main():
                 k_prev, v_prev = prev[i]
                 y, k_new, v_new = layer_ref(ref.model.layers[i], x_in.detach().cpu().reshape(-1),
                                             k_prev[0], v_prev[0], cos, sin, cfg, a_of)
-                ck, cvv = cache.layers[i].keys[0, :, -1], cache.layers[i].values[0, :, -1]
                 rows = [("layer output", x_out.reshape(-1), y)]
-                if ck.dtype == torch.float32:
-                    rows += [("new K row", ck, k_new), ("new V row", cvv, v_new)]
-                else:
-                    # Packed cache: the code's bytes for the new row, read back,
-                    # against this file's quantisation of the new float row.
-                    from y_lang.exact import kv as exact_kv
-                    d = cfg.hidden_size // cfg.num_attention_heads
-                    kl = k_levels_for(d, C["Q_LEVELS"])
-                    kint, ksc = exact_kv.unpack_k(ck.detach().cpu()[:, None].contiguous(), d)
-                    vint, vsc = exact_kv.unpack_v(cvv.detach().cpu()[:, None].contiguous(), d)
-                    kr = [quant_ref(k_new[g], kl) for g in range(k_new.shape[0])]
-                    vr = [quant_ref(v_new[g], C["V_LEVELS"]) for g in range(v_new.shape[0])]
-                    rows += [("new K row, packed integers", kint[:, 0].to(torch.int64),
-                              torch.tensor([r[0] for r in kr], dtype=torch.int64)),
-                             ("new K row, packed scales", ksc[:, 0, 0], torch.stack([r[1] for r in kr])),
-                             ("new V row, packed integers", vint[:, 0].to(torch.int64),
-                              torch.tensor([r[0] for r in vr], dtype=torch.int64)),
-                             ("new V row, packed scales", vsc[:, 0, 0], torch.stack([r[1] for r in vr]))]
+                rows += new_row_checks(cache.layers[i].keys[0, :, -1], cache.layers[i].values[0, :, -1],
+                                       k_new, v_new, cfg)
                 for what, a, b in rows:
                     ok, why = bits_equal(a, b)
                     report["checks"].append({"step": step, "layer": i, "what": what, "ok": ok, "detail": why})

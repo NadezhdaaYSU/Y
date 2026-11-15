@@ -113,8 +113,12 @@ Hardware and compiler assumptions behind every row:
   mask constant is the most negative finite float64, a real key at the max
   has weight `2^28 · sv > 0`, and `round(0 · x) = 0` for finite `x`. They are
   premises of the theorem, not proved from the code.
-- **The prefill**, except as one decode step per prompt token (in a ragged
-  prefill, each row's keys after its own position are masked the same way).
+- **The prefill as one pass.** The model is a decode step; the prefill
+  computes all prompt tokens in one pass, each row's later keys masked. That
+  each prefill row IS the model's decode step for its token is checked
+  (`--prefill`: every prompt token at the chosen layers, its output and its
+  new K and V rows, bit for bit; CPU 45 of 45, packed cache 75 of 75), not
+  proved.
 - **Triton's two-digit kernel** (`w8a8_matmul_hilo`), which accumulates
   `128 · hi` and `lo` in one interleaved int32 sum. The separate form
   (`torch._int_mm`, Y's GEMM, float64) is modelled. The per-term bound
