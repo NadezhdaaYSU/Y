@@ -66,8 +66,10 @@
 //! `emit_f32_gemm_tile_set`; python/tests/test_f32_gemm_below_sm80.py). And a
 //! plain load's store waits for it, so the loop issues the next tile's loads
 //! first and their shared stores after the FMAs (`prefetch`; not on the
-//! large tile, at the register cap without it). On Turing the mid tile runs
-//! two stages, so two CTAs share an SM (`f32_gemm_turing_stages`).
+//! large tile, at the register cap without it, and on a T4 no faster with
+//! it). On Turing the mid tile runs two stages, so two CTAs share an SM
+//! (`f32_gemm_turing_stages`), and the large tile, which fits there at two
+//! stages, is taken where its waves are more than 80% full.
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -190,6 +192,24 @@ impl PtxEmitter {
         if fits && m >= 128 && large * 10 >= sms * 19 && large * 5 >= full_waves * 4 {
             return Ok(F32_TILE_LARGE);
         }
+        // On Turing (64 KB a block) the large tile fits at two stages (49.7
+        // KB, one CTA an SM). On a Tesla T4, medians of 45 paired rounds
+        // against cuBLAS, it against the mid tile: 2560^3 (5.0 waves of
+        // large tiles) 1.20x / 1.06x, 3072^3 (7.2) 1.09x / 1.05x, 4096 x 2048
+        // x 2048 (6.4) 1.04x / 0.97x, 4096^3 (12.8) 1.20x / 1.02x, 6144 x 4096
+        // x 1024 (19.2) 1.16x / 1.12x, 8192 x 8192 x 512 (51.2) 1.06x / 1.00x;
+        // but 2048^3 (3.2 waves, the last 20% full: 80% of its waves' slots)
+        // 0.98x / 1.03x. So more than 80%, not at least. Only where it was
+        // measured: N a multiple of 4 and M of 128. At M ragged with N odd
+        // it spilled 76 bytes at 255 registers (2047 x 2049 x 2051: 0.92x
+        // against the mid tile's 0.96x).
+        // (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_v5/)
+        let large2 = F32GemmTile { stages: 2, ..F32_TILE_LARGE };
+        if block_smem == 64 * 1024 && large2.smem_bytes() <= block_smem && m % 128 == 0 && n % 4 == 0
+            && large * 10 >= sms * 19 && large * 5 > full_waves * 4
+        {
+            return Ok(large2);
+        }
         if tiles(&F32_TILE_MID) * 10 >= sms * 9 {
             return Ok(F32_TILE_MID);
         }
@@ -245,7 +265,8 @@ impl PtxEmitter {
     /// (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/). Not on Pascal or
     /// Volta, where three stages already fit two CTAs and a third would
     /// budget 170 registers, which spills; nor where unmeasured. Every set of
-    /// one kernel shares its shared memory, so all take the same stages.
+    /// one kernel shares its shared memory, so all take the same stages: two
+    /// also where the main tile is the 2-stage large one (`f32_gemm_tile`).
     fn f32_gemm_turing_stages(&self, t: F32GemmTile, rows: Option<F32GemmTile>, rem: Option<F32GemmTile>) -> (F32GemmTile, Option<F32GemmTile>, Option<F32GemmTile>) {
         let sm = self.sm_level();
         if !(75..=79).contains(&sm) {
@@ -257,7 +278,7 @@ impl PtxEmitter {
             let smem = [Some(t), rows, rem].iter().flatten().map(|c| with(*c, stages).smem_bytes()).max().unwrap();
             per_sm / (smem + 1024)
         };
-        if ctas(3) == 1 && ctas(2) >= 2 {
+        if t.stages == 2 || (ctas(3) == 1 && ctas(2) >= 2) {
             (with(t, 2), rows.map(|r| with(r, 2)), rem.map(|r| with(r, 2)))
         } else {
             (t, rows, rem)

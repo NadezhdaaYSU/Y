@@ -409,8 +409,8 @@ fn profile_for(tag: &str, sm: &str, sms: u32) -> std::path::PathBuf {
 /// Below sm_80 there is no `cp.async`: each copy is a load and a shared
 /// store (`f32_simt_gemm.rs`, `sync_copies`). Same arithmetic, so the same
 /// 33 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
-/// of shared memory a block, so never the 74 KB large tile) and run here,
-/// where the driver compiles sm_75 PTX for this card.
+/// of shared memory a block, so the large tile only at two stages, 49.7 KB)
+/// and run here, where the driver compiles sm_75 PTX for this card.
 #[test]
 fn built_for_sm_75_each_element_is_the_same_fma_chain() {
     let Some(ctx) = CudaContext::new() else {
@@ -422,7 +422,7 @@ fn built_for_sm_75_each_element_is_the_same_fma_chain() {
         assert!(ptx.contains(".target sm_75"), "{m}x{n}x{k}: not built for sm_75");
         assert!(!instructions(ptx).contains("cp.async"), "{m}x{n}x{k}: cp.async on sm_75");
         let h = header(ptx);
-        assert_ne!(h.tile, "large", "{m}x{n}x{k}: the 74 KB tile on a 64 KB card");
+        assert!(h.tile != "large" || ptx.contains("2 stages of plain loads"), "{m}x{n}x{k}: the 3-stage 74 KB tile on a 64 KB card");
         assert!(h.smem <= 64 * 1024, "{m}x{n}x{k}: {} bytes of shared memory", h.smem);
         h.tile
     });
@@ -490,9 +490,9 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
             let h = header(&ptx);
             assert!(h.smem <= limit, "{arch} {m}x{n}x{k}: tile {} takes {} bytes, the block holds {limit}", h.tile, h.smem);
             // Turing's 64 KB holds one 3-stage mid tile and two 2-stage ones,
-            // so there the mid tile runs 2 stages; elsewhere 3
-            // (`f32_gemm_turing_stages`).
-            let stages = if sm == "7.5" && h.tile == "mid" { 2 } else { 3 };
+            // and the large tile at 2 stages only, so there both run 2;
+            // elsewhere 3 (`f32_gemm_turing_stages`, `f32_gemm_tile`).
+            let stages = if sm == "7.5" && (h.tile == "mid" || h.tile == "large") { 2 } else { 3 };
             assert!(ptx.contains(&format!("{stages} stages of plain loads")), "{arch} {m}x{n}x{k}: tile {} not {stages} stages", h.tile);
             if let Some(tool) = &tool {
                 let path = dir.join(format!("{name}.ptx"));

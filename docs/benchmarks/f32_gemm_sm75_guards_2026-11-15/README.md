@@ -179,6 +179,29 @@ the tile rule then chose it at seven shapes. So the column mixes them:
 - the large tile at 2 stages: 1.19-1.23x at the shapes with about 13 waves
   of its tiles (4096^3, 4096 x 4096 x 1024, 4096 x 4096 x 4100), no better
   or worse at about 3 waves (2048^3 1.06x -> 1.02x, 2047 x 2049 x 2051
-  0.96x -> 0.92x, where it spilled 76 bytes at 255 registers). Not taken:
-  where it pays needs measuring, and it has no prefetch (`prefetch`
-  excludes it for Volta's register cap).
+  0.96x -> 0.92x, where it spilled 76 bytes at 255 registers).
+
+Version 5 (`t4_v5/`, the same method) swept the large tile's waves (its
+tiles over 40 SMs) against the mid tile, both at 2 stages, with and without
+the prefetch on the large tile (224 registers with it, 221 without). All 24
+bit-exact.
+
+| shape | waves | mid | large | large + prefetch |
+|---|---|---|---|---|
+| 2048^3 | 3.2 | 1.025x [0.972-1.076] | 0.975x [0.952-1.022] | 1.014x [0.964-1.044] |
+| 2560^3 | 5.0 | 1.061x [0.970-1.084] | 1.204x [1.130-1.256] | 1.144x [1.100-1.202] |
+| 4096 x 2048 x 2048 | 6.4 | 0.965x [0.910-1.006] | 1.043x [0.998-1.102] | 1.016x [0.989-1.049] |
+| 3072^3 | 7.2 | 1.048x [1.008-1.083] | 1.094x [1.052-1.165] | 1.070x [1.031-1.136] |
+| 4096 x 4096 x 1024 | 12.8 | 1.058x [0.980-1.088] | 1.200x [1.154-1.272] | 1.193x [1.167-1.248] |
+| 4096^3 | 12.8 | 1.021x [1.006-1.064] | 1.197x [1.166-1.232] | 1.168x [1.128-1.226] |
+| 6144 x 4096 x 1024 | 19.2 | 1.115x [1.072-1.143] | 1.163x [1.113-1.250] | 1.167x [1.085-1.248] |
+| 8192 x 8192 x 512 | 51.2 | 1.000x [0.954-1.028] | 1.059x [1.016-1.087] | 1.026x [0.996-1.057] |
+
+The large tile wins wherever its waves are more than 80% full and loses at
+2048^3, exactly 80% (3.2 waves: the last a fifth full). The prefetch does
+not help it. So on Turing the 2-stage large tile is now taken where the
+large-tile rule holds with more than 80% (not at least 80%), without the
+prefetch, and only where measured: N a multiple of 4 and M of 128. With a
+ragged M and an odd N it spilled 76 bytes at 255 registers. Its bits:
+the interpreter check on 4 shapes (one with a column remainder set at 2
+stages), and memcheck and racecheck on 3 (sm_75 build, RTX 4070 Ti SUPER).

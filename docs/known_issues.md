@@ -240,9 +240,9 @@ source; each entry there now carries its status. What is still open:
   4100 0.34x -> 1.05x). Still open:
   - at aligned shapes the T4 is at 0.91-1.11x cuBLAS, the mid tile at two
     stages since (one CTA an SM at three): medians of 45 paired rounds. The
-    small tile is at 0.68x (512^3). A 2-stage large tile fits a T4 and ran
-    1.19-1.23x at 4096^3-sized shapes, 0.92-1.02x at 2048^3-sized ones; it
-    is not taken there yet;
+    small tile is at 0.68x (512^3). The large tile, which fits a T4 at 2
+    stages, is taken there where its waves are more than 80% full: 1.04-1.20x
+    (2560^3 to 8192 x 8192 x 512), only at N a multiple of 4 and M of 128;
   - neither change is measured on Volta or Pascal (ptxas only).
 
 - The `@tile` FP32 GEMM (2026-11-05) takes any M, N and K below 2^22. It
