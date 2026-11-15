@@ -21,6 +21,9 @@ output_bin
 
 # Assistant working notes - not for publication
 NEXT_SESSION.md
+CLAUDE.md
+docs/claude-history/
+CODEX_*.md
 
 # Rocq/Coq build artifacts
 proofs/*.vo

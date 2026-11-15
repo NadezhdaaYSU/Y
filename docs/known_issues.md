@@ -5,7 +5,7 @@ and on 2026-10-11 against every report in the archived backlog.
 
 ## Open
 
-Reviewed 2026-10-11 against every report in [the archived backlog](claude-history/UNRESOLVED.md),
+Reviewed 2026-10-11 against every report in the archived backlog (kept locally, not published),
 most reproduced against the compiler built from the tree rather than read from
 source; each entry there now carries its status. What is still open:
 
@@ -660,10 +660,10 @@ unsupported. Assembly on another architecture is assembly evidence. Preserve
 
 ## Remaining reported issues
 
-[UNRESOLVED.md](claude-history/UNRESOLVED.md) indexes every line explicitly marked
+The archived backlog (kept locally, not published) indexes every line explicitly marked
 unfixed in both original files, including duplicate and retracted reports. Each
 entry retains its original snapshot line number and investigation context.
-The [archive index](claude-history/INDEX.md) covers other findings that did not
+Its archive index covers other findings that did not
 use those markers. Original text is preserved verbatim with recorded hashes.
 
 Each entry there carries its status as of 2026-10-11 (fixed, with the test that
