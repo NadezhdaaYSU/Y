@@ -406,6 +406,7 @@ Variable fold_scale : R -> R.                  (* safe(wmax) / 2^28 *)
 Hypothesis fold_ival : forall m m' x, ival m = ival m' ->
   fold_round x m = fold_round x m' /\ fold_scale m = fold_scale m'.
 Variable fout : Z -> R -> Z -> R.              (* (acc * wscale) / max(l, 1) *)
+Variable NEG : R.                              (* a masked key's logit: finfo(float64).min *)
 Variable fadd : R -> R -> R.                   (* the residual add *)
 Variable fsilu_mul : R -> R -> R.              (* silu(gate) * up *)
 Variable embed : nat -> list R.
@@ -763,8 +764,16 @@ Definition scores (M : machine) (path : list nat) (qi : list Z) (kq : list (list
 Definition logits (a : R) (s : list Z) (kq : list (list Z * R)) : list R :=
   map (fun sk => flogit (fst sk) a (snd (snd sk))) (combine s kq).
 
-Definition probs (m : R) (lg : list R) : list Z :=
-  map (fun x => W.exp2_neg_q16_16 (clamp0 (2 ^ 30) (targ m x))) lg.
+(** The logits the max reads: `torch.where(blocked, NEG, logit)`. *)
+Definition mask_logits (lg : list R) (bl : list bool) : list R :=
+  map (fun xb : R * bool => if snd xb then NEG else fst xb) (combine lg bl).
+
+(** `p = exp2(clamp(round(m - logit), 0, 2^30))`, and 0 at a masked key
+    (the code sets the argument to 2^30 there, where `exp2` is 0, then sets
+    p to 0). *)
+Definition probs (m : R) (lg : list R) (bl : list bool) : list Z :=
+  map (fun xb : R * bool => if snd xb then 0 else W.exp2_neg_q16_16 (clamp0 (2 ^ 30) (targ m (fst xb))))
+      (combine lg bl).
 
 Definition folded (p : list Z) (vq : list (list Z * R)) : list R :=
   map (fun pv => fw (fst pv) (snd (snd pv))) (combine p vq).
@@ -792,16 +801,18 @@ Definition attend5 (M : machine) (dm : dims) (path : list nat) (w : list R) (vq 
 Definition attend4 (M : machine) (dm : dims) (path : list nat) (p : list Z) (vq : list (list Z * R)) :=
   attend5 M dm path (folded p vq) vq (m_sum M (Denom, path) p).
 
-Definition attend3 (M : machine) (dm : dims) (path : list nat) (lg : list R) (vq : list (list Z * R)) :=
-  attend4 M dm path (probs (m_fmax M (LogitMax, path) lg) lg) vq.
+Definition attend3 (M : machine) (dm : dims) (path : list nat) (lg : list R) (bl : list bool)
+  (vq : list (list Z * R)) :=
+  attend4 M dm path (probs (m_fmax M (LogitMax, path) (mask_logits lg bl)) lg bl) vq.
 
 Definition attend2 (M : machine) (dm : dims) (path : list nat) (qq : list Z * R)
-  (kq vq : list (list Z * R)) :=
-  attend3 M dm path (logits (fqa (snd qq)) (scores M path (fst qq) kq) kq) vq.
+  (kq vq : list (list Z * R)) (bl : list bool) :=
+  attend3 M dm path (logits (fqa (snd qq)) (scores M path (fst qq) kq) kq) bl vq.
 
-Definition attend (M : machine) (dm : dims) (path : list nat) (q : list R) (ks vs : list (list R)) :=
+Definition attend (M : machine) (dm : dims) (path : list nat) (q : list R) (ks vs : list (list R))
+  (bl : list bool) :=
   attend2 M dm path (quant M (0%nat :: path) C.Q_LEVELS q)
-    (quant_rows M path 1 (kl_of dm) ks) (quant_rows M path 2 C.V_LEVELS vs).
+    (quant_rows M path 1 (kl_of dm) ks) (quant_rows M path 2 C.V_LEVELS vs) bl.
 
 (** The `p.V` value, in either mode. *)
 Lemma pv_value : forall dm T M path Wt vcol, valid dm T M ->
@@ -946,32 +957,37 @@ Proof.
     pose proof (ER.zsum_bounded (2 ^ 28) p ltac:(lia) Hp'). nia.
 Qed.
 
-Lemma probs_range : forall m lg, Forall (fun x => 0 <= x <= 2 ^ 28) (probs m lg).
+Lemma probs_range : forall m lg bl, Forall (fun x => 0 <= x <= 2 ^ 28) (probs m lg bl).
 Proof.
   intros. apply Forall_forall. intros x Hx. unfold probs in Hx. apply in_map_iff in Hx.
-  destruct Hx as [y [<- _]]. apply W.the_integer_exp_is_a_q28_weight.
+  destruct Hx as [y [<- _]]. destruct (snd y); [lia|]. apply W.the_integer_exp_is_a_q28_weight.
 Qed.
 
-Lemma attend3_agree : forall dm T M path lg vq, valid dm T M ->
+Lemma probs_length : forall m lg bl, (length (probs m lg bl) <= length lg)%nat.
+Proof. intros. unfold probs. rewrite length_map. apply combine_len_l. Qed.
+
+Lemma attend3_agree : forall dm T M path lg bl vq, valid dm T M ->
   vq_ok vq -> Z.of_nat (length lg) <= T -> T * 2 ^ 28 * C.V_LEVELS <= 2 ^ 53 ->
-  attend3 M dm path lg vq = attend3 Mref dm path lg vq.
+  attend3 M dm path lg bl vq = attend3 Mref dm path lg bl vq.
 Proof.
-  intros dm T M path lg vq HM Hv Hl H53. unfold attend3. cbn [m_fmax Mref].
-  assert (Ep : probs (m_fmax M (LogitMax, path) lg) lg = probs (fmaxr lg) lg).
-  { unfold probs. apply map_ext. intros x. f_equal. f_equal. apply targ_ival.
-    apply (fmax_ival _ lg (v_fmax _ _ _ HM (LogitMax, path))). }
+  intros dm T M path lg bl vq HM Hv Hl H53. unfold attend3. cbn [m_fmax Mref].
+  assert (Ep : probs (m_fmax M (LogitMax, path) (mask_logits lg bl)) lg bl
+               = probs (fmaxr (mask_logits lg bl)) lg bl).
+  { unfold probs. apply map_ext. intros xb. destruct (snd xb); [reflexivity|].
+    f_equal. f_equal. apply targ_ival.
+    apply (fmax_ival _ _ (v_fmax _ _ _ HM (LogitMax, path))). }
   rewrite Ep. apply (attend4_agree dm T M); try assumption.
   - apply probs_range.
-  - unfold probs. rewrite length_map. exact Hl.
+  - pose proof (probs_length (fmaxr (mask_logits lg bl)) lg bl). lia.
 Qed.
 
-Lemma attend2_agree : forall dm T M path qq kq vq, valid dm T M ->
+Lemma attend2_agree : forall dm T M path qq kq vq bl, valid dm T M ->
   Forall (fun q => Z.abs q <= C.Q_LEVELS) (fst qq) -> Z.of_nat (length (fst qq)) <= dD dm ->
   Forall (fun k => Forall (fun q => Z.abs q <= kl_of dm) (fst k)) kq -> Z.of_nat (length kq) <= T ->
   vq_ok vq -> T * 2 ^ 28 * C.V_LEVELS <= 2 ^ 53 ->
-  attend2 M dm path qq kq vq = attend2 Mref dm path qq kq vq.
+  attend2 M dm path qq kq vq bl = attend2 Mref dm path qq kq vq bl.
 Proof.
-  intros dm T M path qq kq vq HM Hq Hql Hk Hkl Hv H53. unfold attend2.
+  intros dm T M path qq kq vq bl HM Hq Hql Hk Hkl Hv H53. unfold attend2.
   assert (Es : scores M path (fst qq) kq = scores Mref path (fst qq) kq).
   { unfold scores. apply map_ext_in. intros [t k] Hin. cbn [fst snd m_dot Mref].
     apply (v_dot _ _ _ HM). unfold need. cbn [fst need_st].
@@ -984,11 +1000,11 @@ Proof.
   unfold logits. rewrite length_map. pose proof (combine_len_r _ _ (scores Mref path (fst qq) kq) kq). lia.
 Qed.
 
-Lemma attend_agree : forall dm T M path q ks vs, valid dm T M ->
+Lemma attend_agree : forall dm T M path q ks vs bl, valid dm T M ->
   Z.of_nat (length q) <= dD dm -> Z.of_nat (length ks) <= T -> T * 2 ^ 28 * C.V_LEVELS <= 2 ^ 53 ->
-  attend M dm path q ks vs = attend Mref dm path q ks vs.
+  attend M dm path q ks vs bl = attend Mref dm path q ks vs bl.
 Proof.
-  intros dm T M path q ks vs HM Hq Hk H53. pose proof (the_reference_machine_is_valid dm T) as HR.
+  intros dm T M path q ks vs bl HM Hq Hk H53. pose proof (the_reference_machine_is_valid dm T) as HR.
   unfold attend.
   rewrite (quant_value dm T M), (quant_value dm T Mref), (quant_rows_value dm T M),
     (quant_rows_value dm T Mref), (quant_rows_value dm T M path 2), (quant_rows_value dm T Mref path 2)
@@ -1023,8 +1039,8 @@ Definition grow (c : list (list (list R))) (new : list (list R)) (n : nat) : lis
   map (fun g => nth g c [] ++ [nth g new []]) (seq 0 n).
 
 Definition attn_all (M : machine) (dm : dims) (li : nat) (qs : list (list R))
-  (ck cv : list (list (list R))) : list R :=
-  flat_map (fun h => attend M dm [h; li] (nth h qs []) (nth (h / rep dm) ck []) (nth (h / rep dm) cv []))
+  (ck cv : list (list (list R))) (bl : list bool) : list R :=
+  flat_map (fun h => attend M dm [h; li] (nth h qs []) (nth (h / rep dm) ck []) (nth (h / rep dm) cv []) bl)
            (seq 0 (nh dm)).
 
 Record layer_w : Type := {
@@ -1039,16 +1055,18 @@ Definition mlp (M : machine) (dm : dims) (li : nat) (lw : layer_w) (x2 : list R)
                        (linear M dm Up [li] (lup lw) (norm M [1%nat; li] x2 (ln2 lw))))).
 
 Definition layer_qkv (M : machine) (dm : dims) (li : nat) (pos : Z) (lw : layer_w)
-  (ck cv : list (list (list R))) (x qkv : list R) : list R * (list (list R) * list (list R)) :=
+  (ck cv : list (list (list R))) (bl : list bool) (x qkv : list R)
+  : list R * (list (list R) * list (list R)) :=
   (mlp M dm li lw
      (zipw fadd x (linear M dm OProj [li] (low lw)
         (attn_all M dm li (qs_of dm pos qkv) (grow ck (ks_of dm pos qkv) (nkv dm))
-                  (grow cv (vs_of dm qkv) (nkv dm))))),
+                  (grow cv (vs_of dm qkv) (nkv dm)) (bl ++ [false])))),
    (ks_of dm pos qkv, vs_of dm qkv)).
 
 Definition layer (M : machine) (dm : dims) (li : nat) (pos : Z) (lw : layer_w)
-  (ck cv : list (list (list R))) (x : list R) : list R * (list (list R) * list (list R)) :=
-  layer_qkv M dm li pos lw ck cv x (linear M dm QKV [li] (lqkv lw) (norm M [0%nat; li] x (ln1 lw))).
+  (ck cv : list (list (list R))) (bl : list bool) (x : list R)
+  : list R * (list (list R) * list (list R)) :=
+  layer_qkv M dm li pos lw ck cv bl x (linear M dm QKV [li] (lqkv lw) (norm M [0%nat; li] x (ln1 lw))).
 
 Definition layer_ok (dm : dims) (lw : layer_w) : Prop :=
   lin_ok dm QKV (lqkv lw) /\ lin_ok dm OProj (low lw) /\ lin_ok dm Gate (lgate lw)
@@ -1088,22 +1106,22 @@ Proof.
   - rewrite nth_overflow by exact Hh. cbn. lia.
 Qed.
 
-Lemma attn_all_agree : forall dm T M li qs ck cv, valid dm T M -> 1 <= T ->
+Lemma attn_all_agree : forall dm T M li qs ck cv bl, valid dm T M -> 1 <= T ->
   T * 2 ^ 28 * C.V_LEVELS <= 2 ^ 53 ->
   (forall h, Z.of_nat (length (nth h qs [])) <= dD dm) ->
   (forall g, Z.of_nat (length (nth g ck [])) <= T) ->
-  attn_all M dm li qs ck cv = attn_all Mref dm li qs ck cv.
+  attn_all M dm li qs ck cv bl = attn_all Mref dm li qs ck cv bl.
 Proof.
-  intros dm T M li qs ck cv HM HT H53 Hq Hk. unfold attn_all. apply flat_map_ext_in.
+  intros dm T M li qs ck cv bl HM HT H53 Hq Hk. unfold attn_all. apply flat_map_ext_in.
   intros h _. apply (attend_agree dm T M); auto.
 Qed.
 
-Lemma layer_agree : forall dm T M li pos lw ck cv x, valid dm T M ->
+Lemma layer_agree : forall dm T M li pos lw ck cv bl x, valid dm T M ->
   0 <= dReq dm -> 0 <= dD dm -> 1 <= T -> T * 2 ^ 28 * C.V_LEVELS <= 2 ^ 53 ->
   layer_ok dm lw -> cache_ok T ck -> Z.of_nat (length x) <= dH dm ->
-  layer M dm li pos lw ck cv x = layer Mref dm li pos lw ck cv x.
+  layer M dm li pos lw ck cv bl x = layer Mref dm li pos lw ck cv bl x.
 Proof.
-  intros dm T M li pos lw ck cv x HM Hr HD HT H53 [Hqkv [Ho [Hg [Hu Hd]]]] Hc Hx.
+  intros dm T M li pos lw ck cv bl x HM Hr HD HT H53 [Hqkv [Ho [Hg [Hu Hd]]]] Hc Hx.
   unfold layer. rewrite (norm_agree dm T M) by assumption.
   rewrite (linear_agree dm T M) by assumption.
   unfold layer_qkv. rewrite (attn_all_agree dm T M); try assumption.
@@ -1118,8 +1136,8 @@ Proof.
   reflexivity.
 Qed.
 
-Lemma layer_length : forall M dm li pos lw ck cv x,
-  (length (fst (layer M dm li pos lw ck cv x)) <= length x)%nat.
+Lemma layer_length : forall M dm li pos lw ck cv bl x,
+  (length (fst (layer M dm li pos lw ck cv bl x)) <= length x)%nat.
 Proof.
   intros. unfold layer, layer_qkv, mlp. cbn [fst].
   eapply Nat.le_trans; [apply zipw_len | apply zipw_len].
@@ -1129,23 +1147,25 @@ Qed.
 
 Definition cache : Type := (list (list (list R)) * list (list (list R)))%type.
 
-Fixpoint run_layers (M : machine) (dm : dims) (pos : Z) (li : nat) (ls : list (layer_w * cache))
+Fixpoint run_layers (M : machine) (dm : dims) (pos : Z) (bl : list bool) (li : nat)
+  (ls : list (layer_w * cache))
   (x : list R) : list R * list (list (list R) * list (list R)) :=
   match ls with
   | [] => (x, [])
   | lc :: rest =>
-      (fst (run_layers M dm pos (S li) rest (fst (layer M dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) x))),
-       snd (layer M dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) x)
-       :: snd (run_layers M dm pos (S li) rest (fst (layer M dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) x))))
+      (fst (run_layers M dm pos bl (S li) rest (fst (layer M dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) bl x))),
+       snd (layer M dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) bl x)
+       :: snd (run_layers M dm pos bl (S li) rest (fst (layer M dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) bl x))))
   end.
 
 Record model_w : Type := { mlayers : list layer_w; mnorm : list R; mhead : lin_w }.
 
-Definition step (M : machine) (dm : dims) (mw : model_w) (caches : list cache) (tok : nat) (pos : Z)
+Definition step (M : machine) (dm : dims) (mw : model_w) (caches : list cache) (bl : list bool)
+  (tok : nat) (pos : Z)
   : nat * list (list (list R) * list (list R)) :=
   (m_argmax M (linear M dm Head [0%nat] (mhead mw)
-     (norm M [2%nat] (fst (run_layers M dm pos 0 (combine (mlayers mw) caches) (embed tok))) (mnorm mw))),
-   snd (run_layers M dm pos 0 (combine (mlayers mw) caches) (embed tok))).
+     (norm M [2%nat] (fst (run_layers M dm pos bl 0 (combine (mlayers mw) caches) (embed tok))) (mnorm mw))),
+   snd (run_layers M dm pos bl 0 (combine (mlayers mw) caches) (embed tok))).
 
 Definition step_premises (dm : dims) (T : Z) (mw : model_w) (caches : list cache) (tok : nat) : Prop :=
   0 <= dReq dm /\ 0 <= dD dm /\ 1 <= T /\ T * 2 ^ 28 * C.V_LEVELS <= 2 ^ 53
@@ -1153,19 +1173,19 @@ Definition step_premises (dm : dims) (T : Z) (mw : model_w) (caches : list cache
   /\ Forall (fun c => cache_ok T (fst c)) caches
   /\ Z.of_nat (length (embed tok)) <= dH dm.
 
-Lemma run_layers_agree : forall dm T M pos ls li x, valid dm T M ->
+Lemma run_layers_agree : forall dm T M pos bl ls li x, valid dm T M ->
   0 <= dReq dm -> 0 <= dD dm -> 1 <= T -> T * 2 ^ 28 * C.V_LEVELS <= 2 ^ 53 ->
   Forall (fun lc => layer_ok dm (fst lc) /\ cache_ok T (fst (snd lc))) ls ->
   Z.of_nat (length x) <= dH dm ->
-  run_layers M dm pos li ls x = run_layers Mref dm pos li ls x
-  /\ (length (fst (run_layers M dm pos li ls x)) <= length x)%nat.
+  run_layers M dm pos bl li ls x = run_layers Mref dm pos bl li ls x
+  /\ (length (fst (run_layers M dm pos bl li ls x)) <= length x)%nat.
 Proof.
-  intros dm T M pos ls. induction ls as [|lc ls IH]; intros li x HM Hr HD HT H53 Hls Hx.
+  intros dm T M pos bl ls. induction ls as [|lc ls IH]; intros li x HM Hr HD HT H53 Hls Hx.
   - split; reflexivity.
   - inversion Hls as [|? ? [Hl Hc] Hls']; subst. cbn [run_layers].
     rewrite (layer_agree dm T M) by assumption.
-    pose proof (layer_length Mref dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) x) as Ll.
-    destruct (IH (S li) (fst (layer Mref dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) x))
+    pose proof (layer_length Mref dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) bl x) as Ll.
+    destruct (IH (S li) (fst (layer Mref dm li pos (fst lc) (fst (snd lc)) (snd (snd lc)) bl x))
                  HM Hr HD HT H53 Hls' ltac:(lia)) as [E L].
     split.
     + f_equal; [f_equal; exact E | f_equal; f_equal; exact E].
@@ -1175,33 +1195,33 @@ Qed.
 (** ** THE THEOREM *)
 
 Theorem every_valid_execution_takes_the_same_decode_step :
-  forall dm T M1 M2 mw caches tok pos,
+  forall dm T M1 M2 mw caches bl tok pos,
     step_premises dm T mw caches tok ->
     valid dm T M1 -> valid dm T M2 ->
-    step M1 dm mw caches tok pos = step M2 dm mw caches tok pos.
+    step M1 dm mw caches bl tok pos = step M2 dm mw caches bl tok pos.
 Proof.
-  assert (Key : forall dm T M mw caches tok pos, step_premises dm T mw caches tok -> valid dm T M ->
-            step M dm mw caches tok pos = step Mref dm mw caches tok pos).
-  { intros dm T M mw caches tok pos [Hr [HD [HT [H53 [Hl [Hh [Hc Hx]]]]]]] HM.
+  assert (Key : forall dm T M mw caches bl tok pos, step_premises dm T mw caches tok -> valid dm T M ->
+            step M dm mw caches bl tok pos = step Mref dm mw caches bl tok pos).
+  { intros dm T M mw caches bl tok pos [Hr [HD [HT [H53 [Hl [Hh [Hc Hx]]]]]]] HM.
     assert (Hls : Forall (fun lc => layer_ok dm (fst lc) /\ cache_ok T (fst (snd lc)))
                          (combine (mlayers mw) caches)).
     { apply Forall_forall. intros [lw c] Hin. cbn [fst snd]. split.
       - rewrite Forall_forall in Hl. apply Hl. eapply in_combine_l. exact Hin.
       - rewrite Forall_forall in Hc. apply (Hc c). eapply in_combine_r. exact Hin. }
-    destruct (run_layers_agree dm T M pos _ 0 (embed tok) HM Hr HD HT H53 Hls Hx) as [E L].
+    destruct (run_layers_agree dm T M pos bl _ 0 (embed tok) HM Hr HD HT H53 Hls Hx) as [E L].
     unfold step. rewrite E. rewrite E in L.
     rewrite (norm_agree dm T M) by (assumption || lia).
     rewrite (linear_agree dm T M) by assumption.
     rewrite (argmax_is_ref _ _ (v_argmax _ _ _ HM)). reflexivity. }
-  intros dm T M1 M2 mw caches tok pos HP H1 H2.
+  intros dm T M1 M2 mw caches bl tok pos HP H1 H2.
   rewrite (Key dm T M1), (Key dm T M2) by assumption. reflexivity.
 Qed.
 
 (** The step is the reference machine's: sums in the integers. *)
 Corollary every_valid_execution_takes_the_reference_step :
-  forall dm T M mw caches tok pos,
+  forall dm T M mw caches bl tok pos,
     step_premises dm T mw caches tok -> valid dm T M ->
-    step M dm mw caches tok pos = step Mref dm mw caches tok pos.
+    step M dm mw caches bl tok pos = step Mref dm mw caches bl tok pos.
 Proof.
   intros. apply (every_valid_execution_takes_the_same_decode_step dm T); try assumption.
   apply the_reference_machine_is_valid.
@@ -1297,7 +1317,7 @@ Qed.
 (** Any two executions that put every sum in a carrier the code uses there,
     with any schedules and any maxima, decode the same step. *)
 Corollary code_executions_agree :
-  forall dm T mw caches tok pos car1 car2 fu1 fu2 t1 t2 im1 im2 fm1 fm2 am1 am2 dg1 dg2,
+  forall dm T mw caches bl tok pos car1 car2 fu1 fu2 t1 t2 im1 im2 fm1 fm2 am1 am2 dg1 dg2,
   code_shape_ok dm T -> step_premises dm T mw caches tok ->
   (forall s, code_uses dm T (dg1 (snd s)) (fst s) (car1 s)) ->
   (forall s, code_uses dm T (dg2 (snd s)) (fst s) (car2 s)) ->
@@ -1306,14 +1326,326 @@ Corollary code_executions_agree :
   (forall s, fmax_ok (fm1 s)) -> (forall s, fmax_ok (fm2 s)) ->
   argmax_ok am1 -> argmax_ok am2 ->
   (forall p, 0 <= dg1 p) -> (forall p, 0 <= dg2 p) ->
-  step (sched_machine car1 fu1 t1 im1 fm1 am1 dg1) dm mw caches tok pos
-  = step (sched_machine car2 fu2 t2 im2 fm2 am2 dg2) dm mw caches tok pos.
+  step (sched_machine car1 fu1 t1 im1 fm1 am1 dg1) dm mw caches bl tok pos
+  = step (sched_machine car2 fu2 t2 im2 fm2 am2 dg2) dm mw caches bl tok pos.
 Proof.
-  intros dm T mw caches tok pos car1 car2 fu1 fu2 t1 t2 im1 im2 fm1 fm2 am1 am2 dg1 dg2
+  intros dm T mw caches bl tok pos car1 car2 fu1 fu2 t1 t2 im1 im2 fm1 fm2 am1 am2 dg1 dg2
     Hs Hp Hu1 Hu2 Ht1 Ht2 Hi1 Hi2 Hf1 Hf2 Ha1 Ha2 Hd1 Hd2.
   apply (every_valid_execution_takes_the_same_decode_step dm T); [exact Hp| |];
     apply schedules_in_fitting_carriers_are_valid; try assumption;
     intros s; apply the_code's_carriers_meet_every_need; auto.
+Qed.
+
+(* ------------------------------------------------------------------ *)
+(** ** Ragged batches: left padding changes nothing                     *)
+(* ------------------------------------------------------------------ *)
+
+(** A ragged batch left-pads its shorter prompts, so a row's cache holds P
+    padding rows, masked, before its R real ones. [left_padding_changes_nothing]:
+    any valid execution of the padded row gives the step of the same prompt
+    with no padding.
+
+    It needs three facts about the run, [attend_pad_ok], at every attention
+    call: the mask constant is at most the largest real logit, a padding
+    key's folded weight `0 * sv` is at most the largest real one, and the
+    fold rounds it to 0. All three hold whenever the logits and scales are
+    finite (`NEG` is the most negative finite float64; a real key at the max
+    has weight `2^28 * sv > 0`; `round(0 * x) = 0` for finite `x`). With an
+    infinity or a NaN in a row they can fail, and then the code's padded and
+    unpadded rows can differ. *)
+
+Lemma combine_app : forall (A B : Type) (a1 a2 : list A) (b1 b2 : list B),
+  length a1 = length b1 -> combine (a1 ++ a2) (b1 ++ b2) = combine a1 b1 ++ combine a2 b2.
+Proof.
+  intros A B a1. induction a1 as [|x a1 IH]; intros a2 [|y b1] b2 H; cbn in *; try discriminate; [reflexivity|].
+  f_equal. apply IH. lia.
+Qed.
+
+Lemma combine_repeat_r : forall (A B : Type) (l : list A) (b : B),
+  combine l (repeat b (length l)) = map (fun a => (a, b)) l.
+Proof. intros A B l b. induction l as [|x l IH]; cbn; [reflexivity|]. rewrite IH. reflexivity. Qed.
+
+Lemma combine_repeat_l : forall (A B : Type) (a : A) (l : list B),
+  combine (repeat a (length l)) l = map (fun b => (a, b)) l.
+Proof. intros A B a l. induction l as [|x l IH]; cbn; [reflexivity|]. rewrite IH. reflexivity. Qed.
+
+Lemma zsum_repeat0 : forall n, ER.zsum (repeat 0 n) = 0.
+Proof. induction n as [|n IH]; cbn; [reflexivity|]. rewrite IH. reflexivity. Qed.
+
+Lemma repeat_snoc : forall (A : Type) (a : A) n, repeat a n ++ [a] = repeat a (S n).
+Proof. intros A a n. induction n as [|n IH]; cbn; [reflexivity|]. rewrite IH. reflexivity. Qed.
+
+Lemma pdot_app : forall a1 a2 b1 b2, length a1 = length b1 ->
+  pdot (combine (a1 ++ a2) (b1 ++ b2)) = pdot (combine a1 b1) + pdot (combine a2 b2).
+Proof.
+  intros. rewrite combine_app by assumption. unfold pdot, prods. rewrite map_app. apply ER.zsum_app.
+Qed.
+
+Lemma pdot_zeros : forall b, pdot (combine (repeat 0 (length b)) b) = 0.
+Proof.
+  intros b. induction b as [|y b IH]; [reflexivity|].
+  cbn [length repeat combine]. unfold pdot, prods in *. cbn [map ER.zsum fst snd]. rewrite IH. ring.
+Qed.
+
+Lemma fmaxr_app_ival : forall pre l, l <> [] ->
+  (forall x, In x pre -> ival x <= ival (fmaxr l)) ->
+  ival (fmaxr (pre ++ l)) = ival (fmaxr l).
+Proof.
+  intros pre l Hl Hpre.
+  assert (Hne : pre ++ l <> []) by (destruct l; [contradiction | destruct pre; discriminate]).
+  destruct (proj2 (fmaxr_ok (pre ++ l)) Hne) as [Iin Imax].
+  destruct (proj2 (fmaxr_ok l) Hl) as [Jin Jmax].
+  apply Z.le_antisymm.
+  - apply in_app_or in Iin. destruct Iin as [I|I]; [apply Hpre, I | apply Jmax, I].
+  - apply Imax. apply in_or_app. right. exact Jin.
+Qed.
+
+Lemma logits_length : forall a s kq, length s = length kq -> length (logits a s kq) = length kq.
+Proof. intros. unfold logits. rewrite length_map, length_combine. lia. Qed.
+
+Lemma scores_ref : forall path qi kq,
+  scores Mref path qi kq = map (fun k => pdot (combine qi (fst k))) kq.
+Proof.
+  intros. unfold scores, enum. cbn [m_dot Mref].
+  exact (map_snd_enum_from _ _ (fun k => pdot (combine qi (fst k))) kq 0).
+Qed.
+
+(** The real keys' logits and folded weights, as the unpadded reference run
+    computes them. *)
+Definition lg_real (dm : dims) (q : list R) (kr : list (list R)) : list R :=
+  logits (fqa (snd (quant_ref C.Q_LEVELS q)))
+    (map (fun k => pdot (combine (fst (quant_ref C.Q_LEVELS q)) (fst k))) (map (quant_ref (kl_of dm)) kr))
+    (map (quant_ref (kl_of dm)) kr).
+
+Definition w_real (dm : dims) (q : list R) (kr vr : list (list R)) : list R :=
+  folded (probs (fmaxr (lg_real dm q kr)) (lg_real dm q kr) (repeat false (length kr)))
+         (map (quant_ref C.V_LEVELS) vr).
+
+Definition attend_pad_ok (dm : dims) (q : list R) (kp kr vp vr : list (list R)) : Prop :=
+  kr <> [] /\ length vp = length kp /\ length vr = length kr
+  /\ ival NEG <= ival (fmaxr (lg_real dm q kr))
+  /\ Forall (fun v => ival (fw 0 (snd (quant_ref C.V_LEVELS v))) <= ival (fmaxr (w_real dm q kr vr))
+                      /\ fold_round (fw 0 (snd (quant_ref C.V_LEVELS v))) (fmaxr (w_real dm q kr vr)) = 0) vp.
+
+Lemma map_fold_zero : forall (l : list (list Z * R)) m mr,
+  ival m = ival mr ->
+  Forall (fun v => fold_round (fw 0 (snd v)) mr = 0) l ->
+  map (fun x => clamp0 (2 ^ 28) (fold_round (fw 0 (snd x)) m)) l = repeat 0 (length l).
+Proof.
+  intros l m mr Im H. induction H as [|v l H0 Hl IH]; [reflexivity|].
+  cbn [map repeat length]. rewrite IH, (proj1 (fold_ival _ _ (fw 0 (snd v)) Im)), H0. reflexivity.
+Qed.
+
+Lemma attend3_padding : forall dm path lgp lgr vqp vqr,
+  length lgp = length vqp -> length lgr = length vqr -> lgr <> [] ->
+  ival NEG <= ival (fmaxr lgr) ->
+  Forall (fun v => ival (fw 0 (snd v)) <= ival (fmaxr (folded (probs (fmaxr lgr) lgr (repeat false (length lgr))) vqr))
+                   /\ fold_round (fw 0 (snd v)) (fmaxr (folded (probs (fmaxr lgr) lgr (repeat false (length lgr))) vqr)) = 0) vqp ->
+  attend3 Mref dm path (lgp ++ lgr) (repeat true (length lgp) ++ repeat false (length lgr)) (vqp ++ vqr)
+  = attend3 Mref dm path lgr (repeat false (length lgr)) vqr.
+Proof.
+  intros dm path lgp lgr vqp vqr Hp Hr Hne Hneg Hpad.
+  assert (H1 : (1 <= length lgr)%nat) by (destruct lgr; [contradiction | cbn; lia]).
+  unfold attend3, attend4, attend5. cbn [m_fmax m_sum Mref].
+  (* the masked logits *)
+  assert (Em : mask_logits (lgp ++ lgr) (repeat true (length lgp) ++ repeat false (length lgr))
+               = repeat NEG (length lgp) ++ lgr).
+  { unfold mask_logits. rewrite combine_app by (rewrite repeat_length; reflexivity).
+    rewrite map_app, !combine_repeat_r, !map_map. cbn [fst snd]. f_equal.
+    - clear. induction lgp; cbn; [reflexivity|]. rewrite IHlgp. reflexivity.
+    - apply map_id. }
+  assert (Em0 : mask_logits lgr (repeat false (length lgr)) = lgr).
+  { unfold mask_logits. rewrite combine_repeat_r, map_map. apply map_id. }
+  rewrite Em, Em0.
+  assert (Im : ival (fmaxr (repeat NEG (length lgp) ++ lgr)) = ival (fmaxr lgr)).
+  { apply fmaxr_app_ival; [exact Hne|]. intros x Hx. apply repeat_spec in Hx. subst x. exact Hneg. }
+  (* the integer weights *)
+  set (m := fmaxr (repeat NEG (length lgp) ++ lgr)) in *.
+  assert (Ep : probs m (lgp ++ lgr) (repeat true (length lgp) ++ repeat false (length lgr))
+               = repeat 0 (length lgp) ++ probs (fmaxr lgr) lgr (repeat false (length lgr))).
+  { unfold probs. rewrite combine_app by (rewrite repeat_length; reflexivity).
+    rewrite map_app, !combine_repeat_r, !map_map. cbn [fst snd]. f_equal.
+    - clear. induction lgp; cbn; [reflexivity|]. rewrite IHlgp. reflexivity.
+    - apply map_ext. intros x. f_equal. f_equal. apply targ_ival. exact Im. }
+  rewrite Ep.
+  set (pr := probs (fmaxr lgr) lgr (repeat false (length lgr))) in *.
+  assert (Lpr : length pr = length lgr).
+  { unfold pr, probs. rewrite length_map, combine_repeat_r, length_map. reflexivity. }
+  rewrite ER.zsum_app, zsum_repeat0, Z.add_0_l.
+  (* the folded weights *)
+  assert (Ef : folded (repeat 0 (length lgp) ++ pr) (vqp ++ vqr)
+               = map (fun v => fw 0 (snd v)) vqp ++ folded pr vqr).
+  { unfold folded. rewrite combine_app by (rewrite repeat_length; exact Hp).
+    rewrite map_app. f_equal. rewrite Hp, combine_repeat_l, map_map. reflexivity. }
+  rewrite Ef.
+  set (wr := folded pr vqr) in *.
+  set (wp := map (fun v => fw 0 (snd v)) vqp).
+  assert (Hwr : wr <> []).
+  { intros E. assert (length wr = 0%nat) by (rewrite E; reflexivity).
+    unfold wr, folded in H. rewrite length_map, length_combine in H. lia. }
+  assert (Iw : ival (fmaxr (wp ++ wr)) = ival (fmaxr wr)).
+  { apply fmaxr_app_ival; [exact Hwr|]. intros x Hx. unfold wp in Hx. apply in_map_iff in Hx.
+    destruct Hx as [v [<- Hv]]. rewrite Forall_forall in Hpad. apply (Hpad v Hv). }
+  destruct (fold_ival _ _ rdef Iw) as [_ Es]. rewrite Es.
+  assert (Ew : wint (fmaxr (wp ++ wr)) (wp ++ wr) = repeat 0 (length vqp) ++ wint (fmaxr wr) wr).
+  { unfold wint. rewrite map_app. f_equal.
+    - unfold wp. rewrite map_map. apply (map_fold_zero _ _ (fmaxr wr) Iw).
+      eapply Forall_impl; [|exact Hpad]. intros v [_ H0]. exact H0.
+    - apply map_ext. intros x. f_equal. apply (fold_ival _ _ x Iw). }
+  rewrite Ew. unfold attend_out. apply map_ext. intros d. f_equal.
+  unfold pv. cbn [m_digits m_dot Mref]. cbn [Z.leb Z.compare].
+  rewrite map_app, pdot_app by (rewrite repeat_length, length_map; reflexivity).
+  replace (length vqp) with (length (map (fun v => nth d (fst v) 0) vqp)) by apply length_map.
+  rewrite pdot_zeros. reflexivity.
+Qed.
+
+Lemma attend_padding : forall dm path q kp kr vp vr,
+  attend_pad_ok dm q kp kr vp vr ->
+  attend Mref dm path q (kp ++ kr) (vp ++ vr) (repeat true (length kp) ++ repeat false (length kr))
+  = attend Mref dm path q kr vr (repeat false (length kr)).
+Proof.
+  intros dm path q kp kr vp vr [Hne [Hvp [Hvr [Hneg Hpad]]]].
+  pose proof (the_reference_machine_is_valid dm 1) as HR.
+  unfold attend, attend2.
+  rewrite !(quant_value dm 1 Mref), !(quant_rows_value dm 1 Mref) by exact HR.
+  rewrite !scores_ref, !map_app.
+  unfold logits at 1. rewrite combine_app by (rewrite !length_map; reflexivity). rewrite map_app.
+  fold (logits (fqa (snd (quant_ref C.Q_LEVELS q)))
+          (map (fun k => pdot (combine (fst (quant_ref C.Q_LEVELS q)) (fst k))) (map (quant_ref (kl_of dm)) kp))
+          (map (quant_ref (kl_of dm)) kp)).
+  fold (logits (fqa (snd (quant_ref C.Q_LEVELS q)))
+          (map (fun k => pdot (combine (fst (quant_ref C.Q_LEVELS q)) (fst k))) (map (quant_ref (kl_of dm)) kr))
+          (map (quant_ref (kl_of dm)) kr)).
+  fold (lg_real dm q kr).
+  assert (Lp : length (logits (fqa (snd (quant_ref C.Q_LEVELS q)))
+            (map (fun k => pdot (combine (fst (quant_ref C.Q_LEVELS q)) (fst k))) (map (quant_ref (kl_of dm)) kp))
+            (map (quant_ref (kl_of dm)) kp)) = length kp)
+    by (rewrite logits_length by (rewrite !length_map; reflexivity); apply length_map).
+  assert (Lr : length (lg_real dm q kr) = length kr)
+    by (unfold lg_real; rewrite logits_length by (rewrite !length_map; reflexivity); apply length_map).
+  rewrite <- Lp at 1. rewrite <- Lr at 1 2.
+  apply attend3_padding.
+  - rewrite Lp, length_map. lia.
+  - rewrite Lr, length_map. lia.
+  - intros E. rewrite E in Lr. destruct kr; [contradiction | discriminate].
+  - exact Hneg.
+  - rewrite Lr. apply Forall_map. exact Hpad.
+Qed.
+
+(** Padding rows ahead of each KV head's cache. *)
+Definition padc (pd c : list (list (list R))) : list (list (list R)) := zipw (@app (list R)) pd c.
+
+Lemma nth_map_gen : forall (A B : Type) (f : A -> B) l g d d', (g < length l)%nat ->
+  nth g (map f l) d = f (nth g l d').
+Proof.
+  intros A B f l g d d' Hg. rewrite (nth_indep _ d (f d')) by (rewrite length_map; exact Hg).
+  apply map_nth.
+Qed.
+
+Lemma nth_grow : forall c new n g, (g < n)%nat ->
+  nth g (grow c new n) [] = nth g c [] ++ [nth g new []].
+Proof.
+  intros c new n g Hg. unfold grow.
+  rewrite (nth_map_gen _ _ _ _ g [] 0%nat) by (rewrite length_seq; exact Hg).
+  rewrite seq_nth by exact Hg. reflexivity.
+Qed.
+
+Lemma nth_padc : forall pd c g, length pd = length c -> (g < length c)%nat ->
+  nth g (padc pd c) [] = nth g pd [] ++ nth g c [].
+Proof.
+  intros pd c g Hl Hg. unfold padc, zipw.
+  rewrite (nth_map_gen _ _ _ _ g [] ([], [])) by (rewrite length_combine; lia).
+  rewrite combine_nth by exact Hl. reflexivity.
+Qed.
+
+Definition layer_pad_ok (dm : dims) (li : nat) (pos : Z) (lw : layer_w)
+  (ck cv kp vp : list (list (list R))) (x : list R) (P R0 : nat) : Prop :=
+  length kp = nkv dm /\ length ck = nkv dm /\ length vp = nkv dm /\ length cv = nkv dm
+  /\ (forall g, (g < nkv dm)%nat -> length (nth g kp []) = P /\ length (nth g ck []) = R0)
+  /\ forall h, (h < nh dm)%nat -> (h / rep dm < nkv dm)%nat
+     /\ attend_pad_ok dm
+          (nth h (qs_of dm pos (linear Mref dm QKV [li] (lqkv lw) (norm Mref [0%nat; li] x (ln1 lw)))) [])
+          (nth (h / rep dm) kp [])
+          (nth (h / rep dm) (grow ck (ks_of dm pos (linear Mref dm QKV [li] (lqkv lw) (norm Mref [0%nat; li] x (ln1 lw)))) (nkv dm)) [])
+          (nth (h / rep dm) vp [])
+          (nth (h / rep dm) (grow cv (vs_of dm (linear Mref dm QKV [li] (lqkv lw) (norm Mref [0%nat; li] x (ln1 lw)))) (nkv dm)) []).
+
+Lemma layer_padding : forall dm li pos lw ck cv kp vp x P R0,
+  layer_pad_ok dm li pos lw ck cv kp vp x P R0 ->
+  layer Mref dm li pos lw (padc kp ck) (padc vp cv) (repeat true P ++ repeat false R0) x
+  = layer Mref dm li pos lw ck cv (repeat false R0) x.
+Proof.
+  intros dm li pos lw ck cv kp vp x P R0 [Lk [Lc [Lv [Lcv [Hlen Hh]]]]].
+  unfold layer, layer_qkv.
+  set (qkv := linear Mref dm QKV [li] (lqkv lw) (norm Mref [0%nat; li] x (ln1 lw))) in *.
+  assert (Ea : attn_all Mref dm li (qs_of dm pos qkv) (grow (padc kp ck) (ks_of dm pos qkv) (nkv dm))
+                 (grow (padc vp cv) (vs_of dm qkv) (nkv dm)) ((repeat true P ++ repeat false R0) ++ [false])
+               = attn_all Mref dm li (qs_of dm pos qkv) (grow ck (ks_of dm pos qkv) (nkv dm))
+                 (grow cv (vs_of dm qkv) (nkv dm)) (repeat false R0 ++ [false])).
+  { unfold attn_all. apply flat_map_ext_in. intros h Hin. apply in_seq in Hin.
+    destruct (Hh h ltac:(lia)) as [Hg Hok].
+    set (g := (h / rep dm)%nat) in *.
+    destruct (Hlen g Hg) as [Lkg Lcg].
+    rewrite !nth_grow by exact Hg. rewrite !nth_grow in Hok by exact Hg.
+    rewrite !nth_padc by lia.
+    rewrite <- !app_assoc.
+    rewrite repeat_snoc.
+    replace (S R0) with (length (nth g ck [] ++ [nth g (ks_of dm pos qkv) []]))
+      by (rewrite length_app, Lcg; cbn; lia).
+    rewrite <- Lkg.
+    apply attend_padding. exact Hok. }
+  rewrite Ea. reflexivity.
+Qed.
+
+(** A model's layers with their real caches and padding rows. *)
+Definition padded_ls (ls : list (layer_w * cache * cache)) : list (layer_w * cache) :=
+  map (fun t => (fst (fst t), (padc (fst (snd t)) (fst (snd (fst t))), padc (snd (snd t)) (snd (snd (fst t)))))) ls.
+
+Definition real_ls (ls : list (layer_w * cache * cache)) : list (layer_w * cache) := map fst ls.
+
+Fixpoint run_pad_ok (dm : dims) (pos : Z) (P R0 : nat) (li : nat) (ls : list (layer_w * cache * cache))
+  (x : list R) : Prop :=
+  match ls with
+  | [] => True
+  | t :: rest =>
+      layer_pad_ok dm li pos (fst (fst t)) (fst (snd (fst t))) (snd (snd (fst t))) (fst (snd t)) (snd (snd t)) x P R0
+      /\ run_pad_ok dm pos P R0 (S li) rest
+           (fst (layer Mref dm li pos (fst (fst t)) (fst (snd (fst t))) (snd (snd (fst t))) (repeat false R0) x))
+  end.
+
+Lemma run_padding : forall dm pos P R0 ls li x,
+  run_pad_ok dm pos P R0 li ls x ->
+  run_layers Mref dm pos (repeat true P ++ repeat false R0) li (padded_ls ls) x
+  = run_layers Mref dm pos (repeat false R0) li (real_ls ls) x.
+Proof.
+  intros dm pos P R0 ls. induction ls as [|t ls IH]; intros li x H; [reflexivity|].
+  destruct H as [Hl Hr]. cbn [run_layers padded_ls real_ls map fst snd] in *.
+  destruct t as [[lw c] pd]. cbn [fst snd] in *.
+  rewrite (layer_padding dm li pos lw (fst c) (snd c) (fst pd) (snd pd) x P R0 Hl).
+  specialize (IH (S li) _ Hr).
+  f_equal; [f_equal; exact IH | f_equal; f_equal; exact IH].
+Qed.
+
+Lemma combine_map_map : forall (A B C : Type) (f : A -> B) (g : A -> C) l,
+  combine (map f l) (map g l) = map (fun t => (f t, g t)) l.
+Proof. intros. induction l as [|a l IH]; cbn; [reflexivity|]. rewrite IH. reflexivity. Qed.
+
+(** ** Ragged batches, the theorem *)
+Theorem left_padding_changes_nothing : forall dm T M mw ls P R0 tok pos,
+  step_premises dm T mw (map snd (padded_ls ls)) tok -> valid dm T M ->
+  mlayers mw = map (fun t => fst (fst t)) ls ->
+  run_pad_ok dm pos P R0 0 ls (embed tok) ->
+  step M dm mw (map snd (padded_ls ls)) (repeat true P ++ repeat false R0) tok pos
+  = step Mref dm mw (map snd (real_ls ls)) (repeat false R0) tok pos.
+Proof.
+  intros dm T M mw ls P R0 tok pos Hs HM Hl Hp.
+  rewrite (every_valid_execution_takes_the_reference_step dm T M) by assumption.
+  unfold step. rewrite Hl.
+  assert (E1 : combine (map (fun t => fst (fst t)) ls) (map snd (padded_ls ls)) = padded_ls ls).
+  { unfold padded_ls. rewrite map_map, combine_map_map. apply map_ext. intros t. reflexivity. }
+  assert (E2 : combine (map (fun t => fst (fst t)) ls) (map snd (real_ls ls)) = real_ls ls).
+  { unfold real_ls. rewrite map_map, combine_map_map. apply map_ext. intros [[a b] c]. reflexivity. }
+  rewrite E1, E2, (run_padding dm pos P R0 ls 0 (embed tok) Hp). reflexivity.
 Qed.
 
 End Step.
@@ -1409,3 +1741,5 @@ Print Assumptions the_trusted_interface_is_satisfiable.
 Print Assumptions a_float32_denominator_is_not_exact.
 Print Assumptions the_code_does_not_put_the_denominator_in_float32.
 Print Assumptions a_wider_key_does_not_fit_float32.
+Print Assumptions attend_padding.
+Print Assumptions left_padding_changes_nothing.

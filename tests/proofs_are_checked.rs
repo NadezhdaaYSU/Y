@@ -1120,6 +1120,10 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
                 "Print Assumptions qwen25_shapes_are_accepted",
                 "Print Assumptions the_premises_are_satisfiable_at_qwen25_0_5b",
                 "Print Assumptions a_float32_denominator_is_not_exact",
+                // Ragged batches: a left-padded row decodes as the prompt
+                // alone, given the run-level conditions attend_pad_ok.
+                "Print Assumptions attend_padding",
+                "Print Assumptions left_padding_changes_nothing",
             ][..],
         ),
     ]

@@ -72,6 +72,21 @@ MUTATIONS = [
        'K_LEVELS = _levels_from_env("Y_EXACT_K_LEVELS", 1023, 127)',
        'K_LEVELS = _levels_from_env("Y_EXACT_K_LEVELS", 4095, 127)')],
      ["coq", "exec"], []),
+    ("masked key let back in",
+     "a masked padding key's softmax weight no longer forced to zero",
+     [("python/y_lang/exact/attention.py",
+       "    tq = torch.where(blocked, torch.full_like(tq, 1 << 30), tq).clamp(0, 1 << 30)",
+       "    tq = tq.clamp(0, 1 << 30)"),
+      ("python/y_lang/exact/attention.py",
+       "    p = torch.where(blocked, torch.zeros_like(p), p)",
+       "    p = p")],
+     ["exec"], []),
+    ("masked key let back in, in the proof",
+     "the model's masked weight no longer zero",
+     [("proofs/ExactDecodeStep.v",
+       "  map (fun xb : R * bool => if snd xb then 0 else W.exp2_neg_q16_16 (clamp0 (2 ^ 30) (targ m (fst xb))))",
+       "  map (fun xb : R * bool => W.exp2_neg_q16_16 (clamp0 (2 ^ 30) (targ m (fst xb))))")],
+     ["coq"], []),
     ("accumulator margin dropped",
      "the `- 128` dropped from act_levels_for, the bound on the interleaved digit sums",
      [("python/y_lang/exact/model.py",
@@ -128,7 +143,7 @@ def gate_coq(dst):
 def gate_exec(dst):
     env = env_for(dst)
     r = subprocess.run([sys.executable, os.path.join(dst, "tools", "exact_decode_check.py"),
-                        "--layers", "0", "11", "23", "--steps", "2"],
+                        "--layers", "0", "11", "23", "--steps", "2", "--ragged"],
                        env=env, capture_output=True, text=True, timeout=1800)
     lines = [l for l in r.stdout.splitlines() if "compared tensors" in l or l.startswith("MISMATCH")]
     tail = lines[-1] if lines else (r.stderr.strip().splitlines() or ["no output"])[-1]

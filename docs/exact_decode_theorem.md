@@ -21,6 +21,13 @@ bound, which every carrier the code uses meets for every shape the code
 accepts. The floating-point operations that are not reductions are taken as
 given functions, the same on every device; that is the trust boundary below.
 
+**A ragged batch changes nothing either.** A row left-padded to the length
+of a longer prompt carries masked padding keys in its cache; every valid
+execution of that row gives the same next token and cache rows as the same
+prompt decoded alone (`left_padding_changes_nothing`). This needs three
+conditions on the run, stated below, which hold whenever the run's logits
+and quantiser scales are finite.
+
 ## The theorems
 
 All are in `proofs/ExactDecodeStep.v` unless named otherwise. Every one ends
@@ -31,6 +38,8 @@ in `Print Assumptions ... Closed under the global context`: no axiom, no
 |---|---|
 | `every_valid_execution_takes_the_same_decode_step` | Two valid machines, the same weights, cache and token: the same next token and new cache rows. |
 | `every_valid_execution_takes_the_reference_step` | ... and that is the step of the reference machine, whose sums are integer sums. |
+| `left_padding_changes_nothing` | A valid execution of a row with P masked padding keys before its real ones gives the reference step of the same row with no padding, given `run_pad_ok`. |
+| `attend_padding` | The same for one attention call: masked keys ahead of the real ones change no output, given `attend_pad_ok`. |
 | `code_executions_agree` | Any two executions that put each sum in a carrier the code uses there, with any schedules, agree. |
 | `the_code's_carriers_meet_every_need` | For every shape the code accepts, each carrier the code uses at a site holds that site's bound. |
 | `qwen25_shapes_are_accepted` | Qwen2.5 0.5B, 1.5B, 3B and 7B, at activation widths 127 and 511, for every T from 1 to 32768. |
@@ -94,11 +103,18 @@ Hardware and compiler assumptions behind every row:
 
 ## What the theorem does not cover
 
-- **Rows holding an infinity or a NaN.** The norm then takes a float path.
-- **Ragged batches.** Left padding adds masked keys, which the model does
-  not have. Equal-length batches of any size are covered; ragged-batch
-  invariance is measured (`docs/bit_identical_decode.md`), not proved.
-- **The prefill**, except as one decode step per prompt token.
+- **Rows holding an infinity or a NaN.** The norm then takes a float path,
+  and the padding conditions below can fail.
+- **Ragged batches beyond `attend_pad_ok`.** The padding theorem needs, at
+  every attention call of the unpadded run: (1) the mask constant
+  `finfo(float64).min` is at most the largest real logit; (2) a padding
+  key's folded weight `0 · sv` is at most the largest real one; (3) the fold
+  rounds it to 0. All three hold when the logits and scales are finite: the
+  mask constant is the most negative finite float64, a real key at the max
+  has weight `2^28 · sv > 0`, and `round(0 · x) = 0` for finite `x`. They are
+  premises of the theorem, not proved from the code.
+- **The prefill**, except as one decode step per prompt token (in a ragged
+  prefill, each row's keys after its own position are masked the same way).
 - **Triton's two-digit kernel** (`w8a8_matmul_hilo`), which accumulates
   `128 · hi` and `lo` in one interleaved int32 sum. The separate form
   (`torch._int_mm`, Y's GEMM, float64) is modelled. The per-term bound
@@ -132,8 +148,8 @@ France is", all 24 layers, 4 decode steps:
 
 | Where | Width | Compared | Bit-identical |
 |---|---|---|---|
-| AMD Ryzen 9 9950X (CPU path) | 127 | 421 | 421 |
-| AMD Ryzen 9 9950X (CPU path) | 511 | 421 | 421 |
+| AMD Ryzen 9 9950X (CPU path), with the ragged stage | 127 | 575 | 575 |
+| AMD Ryzen 9 9950X (CPU path), with the ragged stage | 511 | 575 | 575 |
 | Tesla T4, driver 580.178.04, torch 2.13.0+cu126 (GPU path vs the model on the Kaggle CPU) | 127 | 663 | 663 |
 | Tesla T4, same | 511 | 663 | 663 |
 | Kaggle Intel Xeon @ 2.00GHz (CPU path), Python 3.13 | 127 | 421 | 421 |
@@ -146,7 +162,14 @@ invariant ... the SMT solver could not be run"), the compiler failing closed.
 With `z3-solver` installed, a second run of all four configurations gave the
 same counts as the first.
 
-Each run decodes " Paris. It is the". Of the 421, 121 are the stress stage
+The ragged stage (`--ragged`) decodes the batch ["The capital of France
+is", a 14-token prompt], so the first row carries 9 padding keys. It
+compares that row with the prompt decoded alone: the logits and token at
+every step, each layer's decode output, and the K and V cache rows, 154
+tensors over 24 layers and 4 steps, all bit-identical and finite. The T4
+rows above predate the ragged stage; a T4 run with it is in progress.
+
+Each run decodes " Paris. It is the". Of the 421 non-ragged checks, 121 are the stress stage
 (five linear layers in each of 24 layers, and the LM head). Its peak column
 sums reach 1.17 × 2^24 at width 127 (`down_proj`) and 4.71 × 2^24 at 511.
 The raw reports are in
@@ -171,6 +194,8 @@ the mutation must break: the Coq chain after regenerating the constants
 | digit ceiling widened | `DIGIT_MAX` 16383 → 32767 | coq | caught: `ExactDecodeWidths.v` fails; exec holds |
 | score budget widened | float32 budget 2^26 with K at 4095 levels | coq, exec | caught by both (exec by the code's own assert) |
 | accumulator margin dropped | the `− 128` in `act_levels_for` | coq | caught: the samples no longer match |
+| masked key let back in | a masked key's weight no longer forced to 0 (`tq` and `p` unmasked) | exec | caught: 14 mismatches, the tokens change (the same mask also makes the prefill causal) |
+| masked key let back in, in the proof | the model's masked weight no longer 0 | coq | caught: `ExactDecodeStep.v` fails |
 
 Two of these are lessons rather than confirmations:
 
@@ -197,6 +222,9 @@ May say, with the theorem named:
 - "We prove that the width functions return the bounds the reductions need
   for every input, and check them against the implementation on 674
   generated samples."
+- "We prove that a row of a ragged batch decodes to the same token and cache
+  rows as the prompt alone, under three conditions on the run that hold
+  whenever its logits and scales are finite."
 
 Must qualify, or say "checked" or "measured":
 
@@ -207,8 +235,10 @@ Must qualify, or say "checked" or "measured":
   (same IEEE elementwise operations, no FTZ, no FMA contraction, kernels
   that compute each output from its own terms), and **measured** on the
   hardware listed.
-- Ragged batches, the prefill as one pass, rows with inf or NaN, Triton's
-  interleaved two-digit kernel: **not proved**.
+- Ragged batches: **proved conditional** on `attend_pad_ok` at every
+  attention call, and **checked** bit for bit on a real ragged batch.
+- The prefill as one pass, rows with inf or NaN, Triton's interleaved
+  two-digit kernel: **not proved**.
 
 Must not say: that the implementation is verified; that Y's GPU kernels are
 proved in general (only those with their own proofs, listed in the

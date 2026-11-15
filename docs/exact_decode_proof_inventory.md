@@ -843,14 +843,14 @@ next token and cache rows. The trusted float operations are Section variables.
 
 - On the decode path: all of it, at the level of the dataflow and the
   reductions; see `docs/exact_decode_theorem.md` for what is assumed.
-- Theorems and corollaries: 18. Quoted below: 4.
+- Theorems and corollaries: 19. Quoted below: 5.
 
 ```coq
 Theorem every_valid_execution_takes_the_same_decode_step :
-  forall dm T M1 M2 mw caches tok pos,
+  forall dm T M1 M2 mw caches bl tok pos,
     step_premises dm T mw caches tok ->
     valid dm T M1 -> valid dm T M2 ->
-    step M1 dm mw caches tok pos = step M2 dm mw caches tok pos.
+    step M1 dm mw caches bl tok pos = step M2 dm mw caches bl tok pos.
 ```
 
 ```coq
@@ -869,10 +869,21 @@ Theorem a_float32_denominator_is_not_exact :
   ~ exact_sum (2 * 2 ^ 28) (sched_sum ER.F32 ltree).
 ```
 
+```coq
+Theorem left_padding_changes_nothing : forall dm T M mw ls P R0 tok pos,
+  step_premises dm T mw (map snd (padded_ls ls)) tok -> valid dm T M ->
+  mlayers mw = map (fun t => fst (fst t)) ls ->
+  run_pad_ok dm pos P R0 0 ls (embed tok) ->
+  step M dm mw (map snd (padded_ls ls)) (repeat true P ++ repeat false R0) tok pos
+  = step Mref dm mw (map snd (real_ls ls)) (repeat false R0) tok pos.
+```
+
 ## Still open
 
-- Not modelled: ragged batches (left padding), rows with an infinity or a
-  NaN, Triton's interleaved two-digit kernel, the prefill as one pass.
+- Not modelled: rows with an infinity or a NaN, Triton's interleaved
+  two-digit kernel, the prefill as one pass. Ragged batches are covered by
+  `left_padding_changes_nothing`, under run-level conditions that hold for
+  finite values.
 - The executable check does not run Y's decode-attention kernel
   (`Y_EXACT_ATTN=y`), which needs the packed cache.
 

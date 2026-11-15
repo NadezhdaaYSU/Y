@@ -293,6 +293,83 @@ def load(path, device):
     return build_exact_model(path, device)
 
 
+LONG_PROMPT = "Write a short story about a lighthouse keeper who discovers something unusual."
+
+
+def decode_run(model, ids, mask, steps, layers):
+    """Prefill and `steps` greedy decode steps of a batch, as `y_lang.exact.greedy`
+    drives the model (positions from the attention mask). Returns the per-step
+    float32 last-position logits, the tokens, each chosen layer's decode-step
+    outputs, and the cache."""
+    from transformers import DynamicCache
+    cache = DynamicCache(config=model.config)
+    pos = mask.long().cumsum(-1) - 1
+    pos = pos.masked_fill(mask == 0, 0)
+    with torch.no_grad():
+        out = model(input_ids=ids, attention_mask=mask, position_ids=pos,
+                    past_key_values=cache, use_cache=True)
+    logits = [out.logits[:, -1].float()]
+    tokens = [logits[-1].argmax(-1)]
+    outs = {i: [] for i in layers}
+    hooks = [model.model.layers[i].register_forward_hook(
+        lambda m, a, o, i=i: outs[i].append((o[0] if isinstance(o, tuple) else o).detach().clone()))
+        for i in layers]
+    p = pos[:, -1:]
+    ones = mask.new_ones((mask.shape[0], 1))
+    try:
+        for _ in range(steps):
+            p = p + 1
+            mask = torch.cat([mask, ones], dim=-1)
+            with torch.no_grad():
+                out = model(input_ids=tokens[-1][:, None], attention_mask=mask, position_ids=p,
+                            past_key_values=cache, use_cache=True)
+            logits.append(out.logits[:, -1].float())
+            tokens.append(logits[-1].argmax(-1))
+    finally:
+        for h in hooks:
+            h.remove()
+    # The prefill's hook calls come first; keep the decode steps' only.
+    outs = {i: v[-steps:] for i, v in outs.items()}
+    return logits, tokens, outs, cache
+
+
+def ragged_check(real, tok, args, report):
+    """A left-padded batch [prompt, longer prompt]: the padded row's logits,
+    tokens, decode-step layer outputs and real cache rows must be the bits of
+    the prompt decoded alone. Every compared value must also be finite, the
+    condition under which `attend_pad_ok` holds."""
+    side = tok.padding_side
+    tok.padding_side = "left"
+    try:
+        enc = tok([args.prompt, LONG_PROMPT], return_tensors="pt", padding=True)
+    finally:
+        tok.padding_side = side
+    ids, mask = enc.input_ids.to(args.device), enc.attention_mask.to(args.device)
+    pad = int((mask[0] == 0).sum())
+    alone = tok(args.prompt, return_tensors="pt").input_ids.to(args.device)
+    report["ragged"] = {"padding_rows": pad, "batch_len": int(ids.shape[1])}
+    lb, tb, ob, cb = decode_run(real, ids, mask, args.steps, args.layers)
+    la, ta, oa, ca = decode_run(real, alone, torch.ones_like(alone), args.steps, args.layers)
+    for s in range(args.steps + 1):
+        ok, why = bits_equal(lb[s][0], la[s][0])
+        report["checks"].append({"ragged": True, "step": s, "what": "logits, padded row vs alone",
+                                 "ok": ok and bool(torch.isfinite(lb[s][0]).all()), "detail": why})
+        report["checks"].append({"ragged": True, "step": s, "what": "token, padded row vs alone",
+                                 "ok": int(tb[s][0]) == int(ta[s][0]),
+                                 "detail": f"{int(tb[s][0])} vs {int(ta[s][0])}"})
+    for i in args.layers:
+        for s in range(args.steps):
+            ok, why = bits_equal(ob[i][s][0], oa[i][s][0])
+            report["checks"].append({"ragged": True, "step": s, "layer": i,
+                                     "what": "layer output, padded row vs alone",
+                                     "ok": ok and bool(torch.isfinite(ob[i][s][0]).all()), "detail": why})
+        for what, a, b in (("K cache rows", cb.layers[i].keys[0, :, pad:], ca.layers[i].keys[0]),
+                           ("V cache rows", cb.layers[i].values[0, :, pad:], ca.layers[i].values[0])):
+            ok, why = bits_equal(a, b)
+            report["checks"].append({"ragged": True, "layer": i, "what": f"{what}, padded row vs alone",
+                                     "ok": ok, "detail": why})
+
+
 def main():
     global C
     ap = argparse.ArgumentParser()
@@ -305,6 +382,9 @@ def main():
     ap.add_argument("--constants", default=os.path.join(
         os.path.dirname(os.path.abspath(__file__)), "..", "proofs", "ExactDecodeConstants.v"))
     ap.add_argument("--out", default=None)
+    ap.add_argument("--ragged", action="store_true",
+                    help="also decode a left-padded batch and compare the padded row with the "
+                         "prompt alone (left_padding_changes_nothing)")
     args = ap.parse_args()
     C = coq_constants(args.constants)
 
@@ -418,6 +498,9 @@ def main():
             peak = a * int(w[row].abs().sum())
             report["checks"].append({"what": f"stress {name}", "ok": ok,
                                      "detail": f"{why}; peak |sum| {peak} ({peak / 2 ** 24:.2f} x 2^24)"})
+
+    if args.ragged:
+        ragged_check(real, tok, args, report)
 
     report["tokens"] = tokens
     report["text"] = tok.decode(tokens)
