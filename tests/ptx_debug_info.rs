@@ -248,7 +248,15 @@ fn ydb_gpu(test: &str, dir: &Path, file: &str, launch: &str, cmds: &[&str]) -> O
         skip(test, "no cuda-gdb");
         return None;
     }
-    if all.contains("no CUDA driver") || all.contains("cuInit failed") || all.contains("no CUDA-capable device") {
+    // cuda-gdb says it its own way: `fatal: CUDBG_ERROR_NO_DEVICE_AVAILABLE
+    // (39): No CUDA capable device was found.` (seen with the device hidden by
+    // CUDA_VISIBLE_DEVICES=, 2026-11-15). Without this the test ran on, every
+    // command failed, and it reported a failure rather than a skip.
+    if all.contains("no CUDA driver")
+        || all.contains("cuInit failed")
+        || all.contains("no CUDA-capable device")
+        || all.contains("CUDBG_ERROR_NO_DEVICE_AVAILABLE")
+    {
         skip(test, "no CUDA device");
         return None;
     }
