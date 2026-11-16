@@ -58,7 +58,7 @@
 //! tile is left out where its 74 KB does not fit a block
 //! (`f32_gemm_block_smem`), and registers are budgeted for the CTAs the
 //! target's shared memory admits (`f32_gemm_reg_ctas`). The arithmetic is
-//! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 35
+//! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 37
 //! exactness shapes built for sm_75, every tile among them). There a guarded copy is a predicated
 //! load and a zero fill, and guards on the K loop's copies spilled, so the K
 //! loop takes none: the short K tile comes first and a ragged last tile row
@@ -73,9 +73,10 @@
 //! from 60% of a wave where the small one would double up on an SM (with
 //! `W`, up to 1.3 small tiles an SM, the small tile split in order instead).
 //! Where even the small tile leaves SMs idle, 32-row tiles (32 x 64, 32 x
-//! 32) give more CTAs (`f32_gemm_turing_thin`), and up to 16 rows run on 8-
-//! and 16-row tiles. Below sm_80 `W` splits only where M and K are whole
-//! tiles: a segment's copies would be guarded.
+//! 32) give more CTAs (`f32_gemm_turing_thin`), up to 16 rows run on 8-
+//! and 16-row tiles, and one to 4 rows on an in-order GEMV
+//! (`emit_f32_gemv_kernel`). Below sm_80 `W` splits only where M and K are
+//! whole tiles: a segment's copies would be guarded.
 use super::*;
 
 /// One tile configuration. All sizes are powers of two, so the thread
@@ -684,6 +685,10 @@ impl PtxEmitter {
                 return 32;
             }
         };
+        let sms = if hw_profile.sm_count == 0 { 66 } else { hw_profile.sm_count };
+        if Self::f32_gemm_block_smem(self.sm_level()) == 64 * 1024 && m <= 4 && !(t == F32_TILE_SKINNY8 && n.div_ceil(t.bn) >= sms * 3) {
+            return self.emit_f32_gemv_kernel(m, n, k, sms, a_ptr, b_ptr, c_ptr, w_ptr.is_some());
+        }
         // Below sm_80 a stream-K segment's K loop guards its copies at a K
         // tail or a ragged M (the plain path's short first K tile and sliding
         // last row do not apply to a segment, which starts mid-tile), and a
@@ -883,6 +888,133 @@ impl PtxEmitter {
         w(self, "bar.sync 0;".to_string());
         w(self, format!("add.u32 {}, {}, {};", pid, pid, stride));
         w(self, format!("bra.uni {};", tile_top));
+        self.ptx_buffer.push_str(&format!("{}:\n", done));
+        nt
+    }
+
+    /// One to 4 rows on Turing: a GEMV-shaped kernel instead of tiles. Each
+    /// thread owns one column j of C, grid-strided, and runs the M chains
+    /// `C[i][j] = fma(A[i][k], B[k][j], C[i][j])` for k = 0..K-1 in order,
+    /// the same bits as every tile. It loads U rows of its column of B
+    /// before their FMAs (a warp's loads of a row are one 128-byte line),
+    /// and reads A, the same address across the warp, through the
+    /// read-only cache. The tiles computed 8 to 64 rows for one to 4, and
+    /// at a few hundred columns ran 4-16 CTAs. Blocks of 32 threads where
+    /// 128-thread ones would not give 75% of the SMs a CTA (they spread the
+    /// few columns over more SMs), with 32 rows loaded ahead; else 128
+    /// threads and 16 rows. On a Tesla T4, the CUDA C prototype it follows
+    /// (the same loads and chain), medians of 45 paired rounds against
+    /// cuBLAS, the tiles / this, all bit-exact: 1 x 1024 x 1024 0.22x /
+    /// 0.51x, 1 x 896 x 4864 0.29x / 0.58x, 1 x 4096 x 4096 0.73x / 1.18x, 1
+    /// x 4864 x 896 0.80x / 1.05x, 1 x 50257 x 768 0.61x / 0.82-0.87x, 2 x
+    /// 4096 x 11008 0.63x / 0.86-0.89x, 4 x 4096 x 4096 0.67x / 0.76x, 4 x
+    /// 896 x 4864 0.31x / 0.38x; at 8 rows the 8 x 256 tile is ahead (8 x
+    /// 4096 x 4096 1.45x / 0.95x) (docs/benchmarks/
+    /// f32_gemm_sm75_guards_2026-11-15/t4_gemv_proto/). The emitted kernel:
+    /// 1 x 1024 x 1024 0.21x -> 0.48x, 1 x 4096 x 4096 0.80x -> 1.17x, 1 x
+    /// 50257 x 768 0.62x -> 0.79x, 4 x 11008 x 4096 0.83x -> 1.00x (t4_gemv/).
+    /// But where the 8 x 256 tile (N even) has three waves of CTAs, it
+    /// streams B faster: 1 x 30522 x 768 1.03x / 0.92x, 4 x 30522 x 768 1.60x
+    /// / 0.72x, 1 x 32000 x 4096 1.29x / 0.97x, against 1 x 24576 x 768 (96
+    /// of its CTAs) 0.89x / 1.07x (t4_gemv_band/); there it stays. `W` is not
+    /// used.
+    #[allow(clippy::too_many_arguments)]
+    fn emit_f32_gemv_kernel(&mut self, m: u32, n: u32, k: u32, sms: u32, a_ptr: &str, b_ptr: &str, c_ptr: &str, has_w: bool) -> u32 {
+        let wide = n.div_ceil(128) * 4 >= sms * 3;
+        let (nt, u) = if wide { (128u32, 16u32) } else { (32, 32) };
+        let ctas = n.div_ceil(nt);
+        let (kb, kr) = (k / u, k % u);
+        let w_line = if has_w { "\n    // Workspace W: not used: one to 4 rows run the GEMV, which does not split K." } else { "" };
+        let tail = if kr != 0 { format!("; then the last {kr} steps") } else { String::new() };
+        writeln!(
+            &mut self.ptx_buffer,
+            "    // ========================================================\n\
+             \x20   // [Y F32 SIMT GEMM] M={m} N={n} K={k} | CTA of {nt} columns | one column of {m} outputs per thread | tile `gemv{nt}`\n\
+             \x20   // Plain loads, B by 4-byte copies {u} rows ahead ({kb} blocks of {u} k{tail}), A through the read-only cache.\n\
+             \x20   // Remainder: none; none.\n\
+             \x20   // Ragged edges: none (a thread past N returns).\n\
+             \x20   // Each C element is one fma.rn.f32 chain over k = 0..K-1 in order: the same bits for every shape, tile and grid.\n\
+             \x20   // Launch: block ({nt},1,1), anything else traps. {ctas} output tiles, grid-strided: ANY grid works, ({ctas}, 1, 1) is one tile per CTA.\n\
+             \x20   // A row-major [M][K], B row-major [K][N], C row-major [M][N], f32, 4-byte aligned. Dynamic shared memory required: 0 bytes.{w_line}\n\
+             \x20   // ========================================================"
+        )
+        .unwrap();
+        // 128 registers a thread: U loads in flight and M accumulators.
+        self.tile_gemm_ctas_per_sm = Some(65536 / (nt * 128));
+        let w = |e: &mut Self, line: String| {
+            e.ptx_buffer.push_str("    ");
+            e.ptx_buffer.push_str(&line);
+            e.ptx_buffer.push('\n');
+        };
+        let (ga, gb, gc) = (self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64());
+        w(self, format!("cvta.to.global.u64 {}, {};", ga, a_ptr));
+        w(self, format!("cvta.to.global.u64 {}, {};", gb, b_ptr));
+        w(self, format!("cvta.to.global.u64 {}, {};", gc, c_ptr));
+        let tmp = self.alloc_reg32();
+        let (j, stride, t64) = (self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64());
+        let bad = self.alloc_pred();
+        for (sreg, want) in [("%ntid.x", nt), ("%ntid.y", 1), ("%ntid.z", 1)] {
+            w(self, format!("mov.u32 {}, {};", tmp, sreg));
+            w(self, format!("setp.ne.u32 {}, {}, {};", bad, tmp, want));
+            w(self, format!("@{} trap;", bad));
+        }
+        // Column j = ctaid * T + tid, stepping by the grid's columns, in 64
+        // bits: a grid of 2^25 CTAs or more would wrap a 32-bit stride (at
+        // 2^32, to 0, and the loop would not end).
+        w(self, format!("mov.u32 {}, %ctaid.x;", tmp));
+        w(self, format!("mul.wide.u32 {}, {}, {};", j, tmp, nt));
+        w(self, format!("mov.u32 {}, %tid.x;", tmp));
+        w(self, format!("cvt.u64.u32 {}, {};", t64, tmp));
+        w(self, format!("add.u64 {}, {}, {};", j, j, t64));
+        w(self, format!("mov.u32 {}, %nctaid.x;", tmp));
+        w(self, format!("mul.wide.u32 {}, {}, {};", stride, tmp, nt));
+        let (col, done) = (self.alloc_label("f32_gemv_col"), self.alloc_label("f32_gemv_done"));
+        self.ptx_buffer.push_str(&format!("{}:\n", col));
+        w(self, format!("setp.ge.u64 {}, {}, {};", bad, j, n));
+        w(self, format!("@{} bra {};", bad, done));
+        let (pa, pb, off) = (self.alloc_reg64(), self.alloc_reg64(), self.alloc_reg64());
+        w(self, format!("shl.b64 {}, {}, 2;", off, j));
+        w(self, format!("add.u64 {}, {}, {};", pb, gb, off));
+        w(self, format!("mov.u64 {}, {};", pa, ga));
+        let acc: Vec<String> = (0..m).map(|_| self.alloc_regf32()).collect();
+        for a in &acc {
+            w(self, format!("mov.b32 {}, 0f00000000;", a));
+        }
+        // U steps: every load of B first, then the FMAs in k order.
+        let block = |e: &mut Self, steps: u32| {
+            let bv: Vec<String> = (0..steps).map(|_| e.alloc_regf32()).collect();
+            for (s, b) in bv.iter().enumerate() {
+                w(e, format!("ld.global.nc.f32 {}, [{}+{}];", b, pb, s as u64 * n as u64 * 4));
+            }
+            for (s, b) in bv.iter().enumerate() {
+                for (i, a) in acc.iter().enumerate() {
+                    let av = e.alloc_regf32();
+                    w(e, format!("ld.global.nc.f32 {}, [{}+{}];", av, pa, (i as u64 * k as u64 + s as u64) * 4));
+                    w(e, format!("fma.rn.f32 {0}, {1}, {2}, {0};", a, av, b));
+                }
+            }
+        };
+        if kb > 0 {
+            let (it, top) = (self.alloc_reg32(), self.alloc_label("f32_gemv_k"));
+            w(self, format!("mov.u32 {}, 0;", it));
+            self.ptx_buffer.push_str(&format!("{}:\n", top));
+            block(self, u);
+            w(self, format!("add.u64 {}, {}, {};", pb, pb, u as u64 * n as u64 * 4));
+            w(self, format!("add.u64 {}, {}, {};", pa, pa, u * 4));
+            w(self, format!("add.u32 {}, {}, 1;", it, it));
+            w(self, format!("setp.lt.u32 {}, {}, {};", bad, it, kb));
+            w(self, format!("@{} bra {};", bad, top));
+        }
+        if kr > 0 {
+            block(self, kr);
+        }
+        let pc = self.alloc_reg64();
+        w(self, format!("add.u64 {}, {}, {};", pc, gc, off));
+        for (i, a) in acc.iter().enumerate() {
+            w(self, format!("st.global.f32 [{}+{}], {};", pc, i as u64 * n as u64 * 4, a));
+        }
+        w(self, format!("add.u64 {}, {}, {};", j, j, stride));
+        w(self, format!("bra.uni {};", col));
         self.ptx_buffer.push_str(&format!("{}:\n", done));
         nt
     }

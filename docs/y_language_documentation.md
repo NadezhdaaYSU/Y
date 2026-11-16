@@ -1269,7 +1269,10 @@ for i in 0..100 {
   32x64 or 32x32, whichever has the most tiles that still fit one wave (32x32
   only for M and N multiples of 32; neither takes remainder tiles), and on
   Turing up to 16 rows 8x256 (M up to 8, N even) or 16x128, where they make
-  at least 40% of the SM count in CTAs (since 2026-11-16).
+  at least 40% of the SM count in CTAs (since 2026-11-16); and on Turing
+  one to 4 rows run a GEMV-shaped kernel instead, one thread per column of
+  C (block 32 or 128, the header says), except at N even where the 8x256
+  tile has three waves of CTAs. `W` is not used for it.
   Launch: block `(threads, 1, 1)` as the header states,
   anything else traps; output tiles are grid-strided, so any grid is
   correct, and the header's grid runs one tile per CTA; the header states
@@ -1290,10 +1293,11 @@ for i in 0..100 {
   one wave of 64x64 tiles covers C (512 x 256 x 512, 2048 x 64 x 512), and
   0.35-0.71x with few tiles and a long K (128 x 512 x 2048 0.54x, on 32x64
   tiles that fill more of its 40 SMs since 2026-11-16; 256 x 512 x 4096
-  0.71x), where cuBLAS splits K and an in-order chain cannot; up to 16 rows
-  0.59-1.48x on the 8- and 16-row tiles (1 x 50257 x 768 0.59x, 1 x 30522 x
-  768 1.01x, 8 x 4096 x 4096 1.48x), and 0.16-0.37x where only a few hundred
-  columns give few CTAs (1 x 1024 x 1024 0.22x)
+  0.71x), where cuBLAS splits K and an in-order chain cannot; one to 4
+  rows 0.38-1.17x on the GEMV (1 x 1024 x 1024 0.48x, 1 x 4096 x 4096 1.17x,
+  1 x 50257 x 768 0.79x), 5 to 16 rows 0.70-1.48x on the 8- and 16-row
+  tiles (8 x 4096 x 4096 1.48x), and 0.27-0.37x where a few hundred columns
+  give few CTAs (8 x 896 x 896, 11 x 777 x 4097)
   ([record](benchmarks/f32_gemm_sm75_guards_2026-11-15/README.md)). The
   host backend refuses the kernel: it has no body there.
 * **FP32 form with a workspace (since 2026-11-06)**, `(A, B, C:

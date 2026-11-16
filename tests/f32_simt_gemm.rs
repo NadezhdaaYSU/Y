@@ -278,7 +278,7 @@ fn as_bytes(v: &[f32]) -> Vec<u8> {
 }
 
 /// (shape, tile at the pinned sm_80 profile)
-const EXACT_SHAPES: [((u32, u32, u32), &str); 35] = [
+const EXACT_SHAPES: [((u32, u32, u32), &str); 37] = [
     ((64, 64, 16), "small"),
     ((192, 320, 112), "small"),
     ((128, 4096, 80), "mid"),
@@ -331,11 +331,14 @@ const EXACT_SHAPES: [((u32, u32, u32), &str); 35] = [
     ((2048, 4097, 40), "large"),
     ((2060, 4097, 24), "large"),
     // Built for sm_75 on 40 SMs, these two run on the 8 x 256 tile, which
-    // no shape above reaches there (the 32 x 32, 32 x 64 and 16 x 128 ones
-    // are: 64 x 64 x 16, 33 x 65 x 17, 1 x 8193 x 40): whole, and with M
-    // ragged, N = 2 mod 4 (8-byte B copies) and a K tail.
+    // no shape above reaches there (the 32 x 32 and 32 x 64 ones are: 64 x
+    // 64 x 16, 33 x 65 x 17; the GEMV: 1 x 1 x 1, 1 x 8193 x 40): whole, and
+    // with M ragged, N = 2 mod 4 (8-byte B copies) and a K tail; then the
+    // 16 x 128 tile at N odd, and the 32-thread GEMV with a K tail.
     ((8, 4096, 40), "small"),
     ((5, 4098, 35), "small"),
+    ((12, 4097, 24), "small"),
+    ((3, 1001, 37), "small"),
 ];
 
 /// Every element of each EXACT_SHAPES GEMM, compiled in `dir` (whose
@@ -414,7 +417,7 @@ fn profile_for(tag: &str, sm: &str, sms: u32) -> std::path::PathBuf {
 
 /// Below sm_80 there is no `cp.async`: each copy is a load and a shared
 /// store (`f32_simt_gemm.rs`, `sync_copies`). Same arithmetic, so the same
-/// 35 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
+/// 37 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
 /// of shared memory a block, so the large tile only at two stages, 49.7 KB)
 /// and run here, where the driver compiles sm_75 PTX for this card.
 #[test]
@@ -435,7 +438,7 @@ fn built_for_sm_75_each_element_is_the_same_fma_chain() {
         h.tile
     });
     // Every tile Turing can choose ran here, each element checked.
-    let want = ["large", "mid", "small", "thin32x32", "thin32x64", "skinny16x128", "skinny8x256"];
+    let want = ["large", "mid", "small", "thin32x32", "thin32x64", "skinny16x128", "skinny8x256", "gemv32", "gemv128"];
     let seen = seen.into_inner();
     assert!(want.iter().all(|t| seen.contains(*t)), "sm_75 tiles run: {seen:?}, want all of {want:?}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -498,14 +501,15 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
             let ptx = compile(&dir, &name, m, n, k, "--emit-ptx").unwrap_or_else(|log| panic!("{arch} {m}x{n}x{k}: {log}"));
             assert!(ptx.contains(&format!(".target {arch}")), "{arch} {m}x{n}x{k}");
             assert!(!instructions(&ptx).contains("cp.async"), "{arch} {m}x{n}x{k}: cp.async");
-            assert!(ptx.contains("stages of plain loads (no cp.async below sm_80)"), "{arch} {m}x{n}x{k}: header");
             let h = header(&ptx);
+            let gemv = h.tile.starts_with("gemv");
+            assert!(gemv || ptx.contains("stages of plain loads (no cp.async below sm_80)"), "{arch} {m}x{n}x{k}: header");
             assert!(h.smem <= limit, "{arch} {m}x{n}x{k}: tile {} takes {} bytes, the block holds {limit}", h.tile, h.smem);
             // Turing's 64 KB holds one 3-stage mid tile and two 2-stage ones,
             // and the large tile at 2 stages only, so there both run 2;
             // elsewhere 3 (`f32_gemm_turing_stages`, `f32_gemm_tile`).
             let stages = if sm == "7.5" && (h.tile == "mid" || h.tile == "large") { 2 } else { 3 };
-            assert!(ptx.contains(&format!("{stages} stages of plain loads")), "{arch} {m}x{n}x{k}: tile {} not {stages} stages", h.tile);
+            assert!(gemv || ptx.contains(&format!("{stages} stages of plain loads")), "{arch} {m}x{n}x{k}: tile {} not {stages} stages", h.tile);
             if let Some(tool) = &tool {
                 let path = dir.join(format!("{name}.ptx"));
                 std::fs::write(&path, &ptx).unwrap();
@@ -562,19 +566,33 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         ((32, 1024, 4096), "thin32x32"), // 16 small or 32x64, 32 of 32x32
         ((32, 1000, 4096), "small"),     // 32x32 needs N a multiple of 32,
         ((48, 1024, 4096), "thin32x64"), // and M
-        // Up to 16 rows: a tile no taller than M.
+        // 5 to 16 rows: a tile no taller than M.
         ((8, 4096, 4096), "skinny8x256"),
-        ((1, 30522, 768), "skinny8x256"),  // N even: 8-byte B copies
-        ((1, 50257, 768), "skinny16x128"), // N odd: 4-byte copies, 128 threads
+        ((6, 30522, 768), "skinny8x256"),  // N even: 8-byte B copies
+        ((7, 50257, 768), "skinny16x128"), // N odd: 4-byte copies, 128 threads
         ((16, 4096, 4096), "skinny16x128"),
         ((17, 4096, 4096), "mid"),
-        ((1, 1024, 1024), "small"),      // 4 of 8 x 256: under 40% of the SMs
-        ((2, 4096, 11008), "skinny8x256"), // 16 of them: 40%
+        ((6, 1024, 1024), "small"),      // 4 of 8 x 256: under 40% of the SMs
+        ((6, 4096, 11008), "skinny8x256"), // 16 of them: 40%
+        // One to 4 rows: the GEMV, 128-thread blocks where they reach 75%
+        // of the SMs, else 32.
+        ((1, 1024, 1024), "gemv32"),
+        ((4, 896, 4864), "gemv32"),
+        ((1, 50257, 768), "gemv128"),
+        ((4, 4096, 4096), "gemv128"),
+        // ... unless the 8 x 256 tile has three waves of CTAs (N even).
+        ((1, 24576, 768), "gemv128"),     // 96 of them
+        ((1, 30522, 768), "skinny8x256"), // 120
+        ((4, 30522, 768), "skinny8x256"),
     ];
     for (i, ((m, n, k), want)) in cases.iter().enumerate() {
         let ptx = compile(&dir, &format!("t{i}"), *m, *n, *k, "--emit-ptx").unwrap_or_else(|log| panic!("{m}x{n}x{k}: {log}"));
         let h = header(&ptx);
         assert_eq!(h.tile, *want, "{m}x{n}x{k} at sm_75 on 40 SMs");
+        if h.tile.starts_with("gemv") {
+            assert!(ptx.contains("Plain loads, B by 4-byte copies") && h.smem == 0, "{m}x{n}x{k}: the GEMV header");
+            continue;
+        }
         let stages = if h.tile == "mid" { 2 } else { 3 };
         assert!(ptx.contains(&format!("{stages} stages of plain loads")), "{m}x{n}x{k}: tile {} not at {stages} stages", h.tile);
         if h.tile.starts_with("thin") {

@@ -110,7 +110,7 @@ class F32GemmBelowSm80(unittest.TestCase):
         for m, n, k in SHAPES:
             with self.subTest(shape=(m, n, k)):
                 ptx = self.ptx(m, n, k)
-                if k % 16 and k >= 16:
+                if k % 16 and k >= 16 and "tile `gemv" not in ptx:
                     self.assertIn(f"the first K tile runs its {k % 16} steps", ptx)
                 A, B = inputs(m, n, k, m * 7919 + n * 31 + k)
                 want = fma32_chain(A, B).view(np.uint32)

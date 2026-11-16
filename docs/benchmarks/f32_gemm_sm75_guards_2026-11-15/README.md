@@ -510,3 +510,71 @@ x 4097 x 33; ragged M and N, odd N, K tails), each bit-exact on two grids.
 `built_for_sm_75_each_element_is_the_same_fma_chain` now asserts that its
 35 shapes run every tile Turing can choose (two shapes were added for the
 8 x 256 tile, which none reached).
+
+## One to 4 rows: an in-order GEMV
+
+At a few hundred to a few thousand columns even the short tiles left SMs
+idle (1 x 1024 x 1024 at 0.22x), and for one row an 8-row tile still
+computes 7 rows for nothing. A GEMV-shaped kernel does neither: each thread
+owns one column j of C, grid-strided, and runs C[i][j] = fma(A[i][k],
+B[k][j], C[i][j]) for k = 0..K-1 in order, the same bits as every tile. It
+loads U rows of its column of B before their FMAs (a warp's loads of one
+row are one 128-byte line) and reads A, the same address across a warp,
+through the read-only cache.
+
+It was first written as CUDA C and compiled on the T4 with NVRTC (job
+`y-f32-t4-gemv`, `t4_gemv_proto/`, the bench script beside it), in five
+block sizes and unrolls, all 72 bit-exact. Blocks of 32 threads with 32
+rows ahead won where 128-thread blocks would leave most SMs without one,
+128 threads with 16 rows elsewhere; up to 4 rows it beat the tiles (1 x
+1024 x 1024 0.22x -> 0.51x, 1 x 4096 x 4096 0.73x -> 1.18x), at 8 rows it
+did not (8 x 4096 x 4096 1.45x on the 8 x 256 tile, 0.95x). The compiler
+now emits it on Turing for one to 4 rows (`emit_f32_gemv_kernel`; 128
+threads where those give 75% of the SMs a CTA). Version 13 (`t4_gemv/`,
+all 28 bit-exact), the emitted kernel against the commit before:
+
+| shape | before | GEMV |
+|---|---|---|
+| 1 x 896 x 4864 | 0.272x [0.26-0.28] | 0.562x [0.54-0.57] |
+| 1 x 1024 x 1024 | 0.209x [0.20-0.22] | 0.481x [0.46-0.50] |
+| 1 x 2048 x 2048 | 0.575x [0.56-0.63] | 1.062x [1.06-1.07] |
+| 1 x 3840 x 1024 | 0.575x [0.55-0.64] | 1.078x [1.07-1.09] |
+| 1 x 4096 x 4096 | 0.804x [0.80-0.86] | 1.172x [1.16-1.18] |
+| 1 x 4864 x 896 | 0.769x [0.75-0.87] | 1.054x [1.05-1.06] |
+| 1 x 50257 x 768 | 0.619x [0.60-0.78] | 0.790x [0.78-0.79] |
+| 1 x 30522 x 768 | 1.026x [0.97-1.09] | 0.921x [0.89-0.93] |
+| 2 x 768 x 3072 | 0.297x [0.29-0.31] | 0.547x [0.53-0.56] |
+| 2 x 4096 x 11008 | 0.700x [0.70-0.74] | 0.966x [0.96-1.00] |
+| 3 x 1001 x 37 | 1.986x [1.93-2.04] | 2.000x [1.94-2.06] |
+| 4 x 896 x 4864 | 0.297x [0.27-0.30] | 0.379x [0.34-0.38] |
+| 4 x 4096 x 4096 | 0.702x [0.67-0.72] | 0.799x [0.74-0.81] |
+| 4 x 11008 x 4096 | 0.830x [0.82-0.84] | 0.996x [0.96-1.03] |
+
+It lost one: 1 x 30522 x 768, where the 8 x 256 tile has 120 CTAs. Version
+14 (`t4_gemv_band/`, all 20 bit-exact; the T4's clock fell to 585-945 MHz
+for part of the run, so its quartiles are wide) placed that edge at even N:
+
+| shape | 8 x 256 CTAs | GEMV | 8 x 256 |
+|---|---|---|---|
+| 1 x 12288 x 1024 | 48 | 1.456x [1.44-1.55] | 1.035x [0.99-1.08] |
+| 1 x 16384 x 1024 | 64 | 1.263x [1.21-1.33] | 1.089x [1.03-1.10] |
+| 1 x 20480 x 1024 | 80 | 1.138x [1.12-1.29] | 1.059x [0.99-1.09] |
+| 1 x 24576 x 768 | 96 | 1.066x [0.91-1.16] | 0.885x [0.84-0.94] |
+| 1 x 30522 x 768 | 120 | 1.178x [0.97-1.31] | 1.298x [1.10-1.32] |
+| 1 x 32000 x 4096 | 125 | 0.974x [0.87-1.01] | 1.288x [1.20-1.35] |
+| 1 x 65536 x 512 | 256 | 0.890x [0.84-1.40] | 1.158x [0.94-1.33] |
+| 2 x 30522 x 768 | 120 | 0.791x [0.72-0.90] | 1.122x [1.01-1.15] |
+| 4 x 30522 x 768 | 120 | 0.720x [0.66-0.79] | 1.599x [1.49-1.65] |
+| 4 x 32000 x 4096 | 125 | 1.355x [1.30-1.38] | 1.911x [1.88-1.97] |
+
+With three waves of its CTAs the 8 x 256 tile streams B faster; so at N
+even with at least three waves the tile stays, elsewhere one to 4 rows
+take the GEMV (at N odd its rival is the 16 x 128 tile, which lost at 1 x
+50257 x 768). Every shape here, built by the committed compiler, is byte
+for byte the faster variant timed. Bits: the CPU interpreter at 4 ragged
+shapes on two grids each, the RTX 4070 Ti SUPER at 9 (memcheck and
+racecheck clean at 6), and `built_for_sm_75_each_element_is_the_same_fma_chain`,
+which now runs both GEMV blocks. A grid of 2^25 CTAs or more would have
+wrapped a 32-bit column stride (at 2^32, to 0: a loop without end), so the
+column index is 64-bit. Reversing the FMAs of one block changes C by an ulp
+and the exactness test fails on it.
