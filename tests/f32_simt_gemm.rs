@@ -278,7 +278,7 @@ fn as_bytes(v: &[f32]) -> Vec<u8> {
 }
 
 /// (shape, tile at the pinned sm_80 profile)
-const EXACT_SHAPES: [((u32, u32, u32), &str); 33] = [
+const EXACT_SHAPES: [((u32, u32, u32), &str); 35] = [
     ((64, 64, 16), "small"),
     ((192, 320, 112), "small"),
     ((128, 4096, 80), "mid"),
@@ -330,6 +330,12 @@ const EXACT_SHAPES: [((u32, u32, u32), &str); 33] = [
     // the second with a 12-row `rows32x256` strip.
     ((2048, 4097, 40), "large"),
     ((2060, 4097, 24), "large"),
+    // Built for sm_75 on 40 SMs, these two run on the 8 x 256 tile, which
+    // no shape above reaches there (the 32 x 32, 32 x 64 and 16 x 128 ones
+    // are: 64 x 64 x 16, 33 x 65 x 17, 1 x 8193 x 40): whole, and with M
+    // ragged, N = 2 mod 4 (8-byte B copies) and a K tail.
+    ((8, 4096, 40), "small"),
+    ((5, 4098, 35), "small"),
 ];
 
 /// Every element of each EXACT_SHAPES GEMM, compiled in `dir` (whose
@@ -408,7 +414,7 @@ fn profile_for(tag: &str, sm: &str, sms: u32) -> std::path::PathBuf {
 
 /// Below sm_80 there is no `cp.async`: each copy is a load and a shared
 /// store (`f32_simt_gemm.rs`, `sync_copies`). Same arithmetic, so the same
-/// 33 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
+/// 35 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
 /// of shared memory a block, so the large tile only at two stages, 49.7 KB)
 /// and run here, where the driver compiles sm_75 PTX for this card.
 #[test]
@@ -418,14 +424,20 @@ fn built_for_sm_75_each_element_is_the_same_fma_chain() {
         return;
     };
     let dir = profile_for("f32_gemm_run_sm75", "7.5", 40);
+    let seen = std::cell::RefCell::new(std::collections::BTreeSet::new());
     each_element_exact(&ctx, &dir, |_, ptx, m, n, k| {
         assert!(ptx.contains(".target sm_75"), "{m}x{n}x{k}: not built for sm_75");
+        seen.borrow_mut().insert(header(ptx).tile);
         assert!(!instructions(ptx).contains("cp.async"), "{m}x{n}x{k}: cp.async on sm_75");
         let h = header(ptx);
         assert!(h.tile != "large" || ptx.contains("2 stages of plain loads"), "{m}x{n}x{k}: the 3-stage 74 KB tile on a 64 KB card");
         assert!(h.smem <= 64 * 1024, "{m}x{n}x{k}: {} bytes of shared memory", h.smem);
         h.tile
     });
+    // Every tile Turing can choose ran here, each element checked.
+    let want = ["large", "mid", "small", "thin32x32", "thin32x64", "skinny16x128", "skinny8x256"];
+    let seen = seen.into_inner();
+    assert!(want.iter().all(|t| seen.contains(*t)), "sm_75 tiles run: {seen:?}, want all of {want:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

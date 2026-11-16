@@ -501,3 +501,12 @@ least 40% of the SMs' count in CTAs (16 on a T4), and the rest keep the
 tile they had. Those few-column GEMMs (896 to 1024 outputs a row, K up to
 4864) stay far behind: 896 in-order chains are all the parallelism there
 is, and cuBLAS splits K.
+
+The four tiles added on 2026-11-16 (32 x 32, 32 x 64, 16 x 128, 8 x 256),
+built for sm_75 and run on the RTX 4070 Ti SUPER: compute-sanitizer
+memcheck 0 errors and racecheck 0 hazards on 7 shapes (64 x 64 x 16, 33 x
+65 x 17, 100 x 500 x 3000, 8 x 8192 x 40, 5 x 8194 x 35, 1 x 8193 x 40, 13
+x 4097 x 33; ragged M and N, odd N, K tails), each bit-exact on two grids.
+`built_for_sm_75_each_element_is_the_same_fma_chain` now asserts that its
+35 shapes run every tile Turing can choose (two shapes were added for the
+8 x 256 tile, which none reached).

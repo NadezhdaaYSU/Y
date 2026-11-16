@@ -58,8 +58,8 @@
 //! tile is left out where its 74 KB does not fit a block
 //! (`f32_gemm_block_smem`), and registers are budgeted for the CTAs the
 //! target's shared memory admits (`f32_gemm_reg_ctas`). The arithmetic is
-//! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 33
-//! exactness shapes built for sm_75). There a guarded copy is a predicated
+//! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 35
+//! exactness shapes built for sm_75, every tile among them). There a guarded copy is a predicated
 //! load and a zero fill, and guards on the K loop's copies spilled, so the K
 //! loop takes none: the short K tile comes first and a ragged last tile row
 //! slides back to end at row M-1 (`short_first`, `slide_m` in
