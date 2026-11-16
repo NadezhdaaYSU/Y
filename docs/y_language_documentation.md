@@ -1263,8 +1263,9 @@ for i in 0..100 {
   whole tile row or column would cost a whole wave.
   One of three tiles is chosen from the shape and the SM count: 128x256
   (one 256-thread CTA per SM) for at least 128 rows and about two waves of
-  them, at least 80% full; 64x128 at about one wave (on Turing from 60% of
-  one, where 64x64 tiles would put two CTAs on some SM, since 2026-11-15);
+  them, at least 80% full; 64x128 at about one wave (on Turing wherever
+  64x64 tiles would put two CTAs on some SM, since 2026-11-15, which is
+  more than half a wave of 64x128 tiles: since 2026-11-17 not only from 60%);
   64x64 otherwise, except on Turing where 64x64 tiles leave SMs idle: there
   32x64 or 32x32, whichever has the most tiles that still fit one wave (32x32
   only for M and N multiples of 32; neither takes remainder tiles), and on
@@ -1295,7 +1296,8 @@ for i in 0..100 {
   a Tesla T4, medians of 45 paired rounds: 1.04-1.20x where the large tile
   runs (2560^3 to 8192 x 8192 x 512), 0.96-1.09x on the 64x128 tile from
   a wave of it (1023 x 1025 x 1027 1.04x), 0.70-1.00x where its tiles fill
-  60-100% of one (512^3 0.92x, 384 x 512 x 1024 0.70x), 0.83-1.11x where
+  half to all of one (512^3 0.92x, 384 x 512 x 1024 0.70x, 192 x 896 x 896
+  0.72x), 0.83-1.11x where
   one wave of 64x64 tiles covers C (512 x 256 x 512, 2048 x 64 x 512), and
   0.23-0.71x with few tiles and a long K (128 x 512 x 2048 0.54x, on 32x64
   tiles that fill more of its 40 SMs since 2026-11-16; 256 x 512 x 4096

@@ -1666,7 +1666,7 @@ different baseline.
 | FP32 GEMM, K-heavy 256–1024-row shapes, where cuBLAS splits K | cuBLAS, TF32 off | 0.94–0.98x |
 | FP32 GEMM where the tiles overshoot a whole number of waves (768³, 2048 × 768 × 3072), without the workspace `W` | cuBLAS, TF32 off | 0.72–0.87x (with `W`: 0.97–1.25x) |
 | FP32 GEMM with N odd (half of B's rows copied 4 bytes at a time; on 128-column tiles C stored 4 bytes at a time too) | cuBLAS, TF32 off | 0.73–1.11x on mid-size shapes without `W` (1025³: 0.73–0.75x; 1023 × 1025 × 1027: 0.89–0.90x); with `W`, 0.91–1.05x where it splits K; 0.89–0.99x on the large tile (GPT-2's 1024 × 50257 × 768) |
-| FP32 GEMM on a Tesla T4 (sm_75), 64×128 tiles filling 60–100% of a wave | cuBLAS, TF32 off | 0.70–1.00x (512³: 0.92x; 384 × 512 × 1024: 0.70x, 0.74–0.82x with `W`) |
+| FP32 GEMM on a Tesla T4 (sm_75), 64×128 tiles filling half to all of a wave | cuBLAS, TF32 off | 0.70–1.00x (512³: 0.92x; 384 × 512 × 1024: 0.70x, 0.74–0.82x with `W`; 192 × 896 × 896: 0.72x, 0.60x on 64×64 before) |
 | FP32 GEMM on a Tesla T4, one wave of 64×64 tiles or less (512 × 256 × 512) | cuBLAS, TF32 off | 0.83x |
 | FP32 GEMM on a Tesla T4, few tiles and a long K (128 × 512 × 2048, 32 × 512 × 4096, 256 × 512 × 4096, 32 × 256 × 8192, 64 × 128 × 8192), where cuBLAS splits K | cuBLAS, TF32 off | 0.23–0.71x (128 × 512 × 2048 0.54x on 32 × 64 tiles, 0.44x before; K = 8192 at 128–384 columns 0.23–0.25x on 16 × 32 tiles, 0.18–0.23x on 32 × 32 before) |
 | FP32 GEMM on a Tesla T4, 1 to 32 rows streaming B (1 × 50257 × 768, 4 × 4096 × 4096, 24 × 4096 × 4096) | cuBLAS, TF32 off | 0.79–0.93x (1 × 4096 × 4096 1.17x on the GEMV, 8 × 4096 × 4096 1.48x on 8-row tiles) |

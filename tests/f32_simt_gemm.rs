@@ -544,8 +544,8 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// On Turing the mid tile (two stages) is taken from 60% of a wave of it
-/// where the small tile would put two CTAs on some SM: on a Tesla T4 one
+/// On Turing the mid tile (two stages) is taken wherever the small tile
+/// would put two CTAs on some SM (from 21 mid tiles on 40 SMs): on a Tesla T4 one
 /// wave of mid tiles beats the small ones doubled up (512^3, 32 mid tiles on
 /// 40 SMs: 0.68x cuBLAS on the small tile, 0.92x on the mid;
 /// `f32_gemm_tile`). Where one small tile an SM covers C, or the mid tile
@@ -571,7 +571,9 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         ((2048, 128, 512), "mid"),    // 32, 64
         ((448, 512, 512), "mid"),     // 28, 56
         ((384, 512, 1024), "mid"),    // 24, 48: 60%
-        ((448, 384, 512), "small"),   // 21, 42: under 60%
+        ((448, 384, 512), "mid"),     // 21, 42: just over half a wave
+        ((192, 896, 896), "mid"),     // 21, 42
+        ((320, 512, 1024), "small"),  // 20, 40: one small tile an SM
         ((512, 256, 512), "small"),   // 16, 32: one small tile an SM
         ((2048, 64, 512), "small"),   // 32, 32: the mid tile half empty
         ((256, 512, 4096), "small"),  // 16, 32
@@ -1105,7 +1107,8 @@ fn the_workspace_form_is_the_in_order_fma_chain_on_every_grid() {
 /// every one of these shapes on 40 SMs, two with a K tail, run here (the
 /// driver compiles sm_75 PTX for this card) on the grids the sm_80 test
 /// uses: the small tile split over 40 CTAs (448 x 384 x 512, 42 tiles, 704
-/// x 256 x 1024, 44, and 448 x 576 x 512, taken over the mid tile with `W`)
+/// x 256 x 1024, 44, and 448 x 576 x 512, each taken over the mid tile with
+/// `W`)
 /// and the mid tile (768^3, 512 x 896 x 896). At a K tail or a ragged M a
 /// split's copies would be guarded here, so there `W` is not used (the
 /// Turing rule test). On a T4

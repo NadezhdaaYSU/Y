@@ -70,7 +70,7 @@
 //! it). On Turing the mid tile runs two stages, so two CTAs share an SM
 //! (`f32_gemm_turing_stages`), the large tile, which fits there at two
 //! stages, is taken where its waves are more than 80% full, and the mid tile
-//! from 60% of a wave where the small one would double up on an SM (with
+//! wherever the small one would double up on an SM (with
 //! `W`, up to 1.3 small tiles an SM, the small tile split in order instead).
 //! Where even the small tile leaves SMs idle, 32-row tiles (32 x 64, 32 x
 //! 32) give more CTAs (`f32_gemm_turing_thin`), and where 32 x 32 tiles
@@ -221,8 +221,8 @@ impl PtxEmitter {
     ///
     /// The rule was read off measurements (the module doc): the large tile
     /// needs about two waves of its one-CTA-per-SM tiles, mostly full, the
-    /// mid tile about one wave (on Turing 60% of one, where the small tile
-    /// would not fit one wave), and the small tile takes the rest. The choice
+    /// mid tile about one wave (on Turing more than half of one, where the
+    /// small tile would not fit one wave), and the small tile takes the rest. The choice
     /// changes speed only, never a bit of the answer.
     pub(crate) fn f32_gemm_tile(m: u32, n: u32, k: u32, sms: u32, block_smem: u32) -> Result<F32GemmTile, String> {
         if m == 0 || n == 0 || k == 0 {
@@ -390,8 +390,9 @@ impl PtxEmitter {
     }
 
     /// On Turing (64 KB a block), the mid tile (two stages,
-    /// `f32_gemm_turing_stages`) below 90% of a wave of it: where its tiles
-    /// fill 60% of the SMs and the small tile would put two CTAs on some SM.
+    /// `f32_gemm_turing_stages`) below 90% of a wave of it: where the small
+    /// tile would put two CTAs on some SM (with at most twice the mid tiles,
+    /// so these fill more than half the SMs).
     /// On a Tesla T4 one wave of mid tiles beats the small ones doubled up
     /// (90% was read off an RTX 4070 Ti SUPER, whose mid tile is slower
     /// against its small one). Medians of 45 paired rounds against cuBLAS,
@@ -402,10 +403,16 @@ impl PtxEmitter {
     /// small tile an SM covers C it is not: 512 x 256 x 512 (32 small tiles)
     /// 0.83x / 0.61x, 2048 x 64 x 512 (the mid tile half empty) 1.11x /
     /// 0.90x (docs/benchmarks/f32_gemm_sm75_guards_2026-11-15/t4_mid/,
-    /// t4_rule/).
+    /// t4_rule/). Until 2026-11-17 the mid tile also had to fill 60% of the
+    /// SMs, which left out 21 to 23 mid tiles against 42 to 46 small ones;
+    /// there too it is ahead: 192 x 896 x 896 (21) 0.60x / 0.72x, 192 x 896
+    /// x 4864 (21) 0.65x / 0.80x, 448 x 384 x 512 (21) 0.66x / 0.78x, 704 x
+    /// 256 x 512 (22) 0.71x / 0.83x, 64 x 2816 x 1024 (22) 0.75x / 0.92x, 1408
+    /// x 128 x 512 (22) 0.66x / 0.78x, 128 x 1408 x 1024 (22) 0.61x / 0.72x,
+    /// 64 x 2944 x 1024 (23) 0.62x / 0.76x (t4_mid_half/).
     fn f32_gemm_turing_mid(m: u32, n: u32, sms: u64, block_smem: u32) -> bool {
         let tiles = |t: &F32GemmTile| m.div_ceil(t.bm) as u64 * n.div_ceil(t.bn) as u64;
-        block_smem == 64 * 1024 && tiles(&F32_TILE_MID) * 10 >= sms * 6 && tiles(&F32_TILE_SMALL) > sms
+        block_smem == 64 * 1024 && tiles(&F32_TILE_MID) * 2 > sms && tiles(&F32_TILE_SMALL) > sms
     }
 
     /// With the workspace `W`, where `f32_gemm_turing_mid` took the mid

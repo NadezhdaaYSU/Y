@@ -778,3 +778,53 @@ ragged, two K slices and a tail), the 16 x 32 tile over slices (11 x 777 x
 77) and from a 32 x 32 shape (64 x 64 x 16), and the 32 x 32 tile still
 (96 x 256 x 24). Removing either rule, or a tile row's offset, fails the
 tests.
+
+## Qwen2.5-0.5B's shapes at 64 to 384 rows, and the mid tile from half a wave
+
+Version 19 (`t4_qwen_shapes/`, all 70 bit-exact) forced each fragment tile
+on the model's projections (hidden 896, MLP 4864, q/k/v 1152) at 64 to 384
+rows, where the committed tiles fill 60-90% of the SMs:
+
+| shape | before (tile) | 64 x 64 | 32 x 64 | 32 x 32 | 64 x 128 |
+|---|---|---|---|---|---|
+| 64 x 896 x 896 | thin32x64: 0.750x [0.69-0.79] | 0.614x [0.59-0.65] | 0.775x [0.70-0.81] | 0.642x [0.61-0.68] | 0.362x [0.35-0.37] |
+| 96 x 896 x 896 | small: 0.871x [0.84-0.92] | 0.868x [0.83-0.93] | 0.774x [0.75-0.82] | 0.812x [0.77-0.84] | 0.598x [0.57-0.61] |
+| 128 x 768 x 768 | small: 0.766x [0.73-0.79] | 0.778x [0.75-0.78] | 0.746x [0.71-0.78] | 0.741x [0.70-0.76] | 0.562x [0.53-0.57] |
+| 128 x 896 x 896 | small: 0.717x [0.65-0.78] | 0.705x [0.65-0.73] | 0.686x [0.62-0.74] | 0.656x [0.58-0.72] | 0.514x [0.49-0.54] |
+| 128 x 896 x 4864 | small: 0.674x [0.64-0.69] | 0.664x [0.64-0.68] | 0.621x [0.61-0.63] | 0.526x [0.51-0.54] | 0.549x [0.54-0.56] |
+| 128 x 1024 x 1024 | small: 0.715x [0.62-0.78] | 0.690x [0.62-0.72] | 0.604x [0.54-0.63] | 0.554x [0.50-0.59] | 0.547x [0.49-0.56] |
+| 128 x 1152 x 896 | small: 0.755x [0.74-0.79] | 0.767x [0.72-0.84] | 0.628x [0.60-0.65] | 0.564x [0.54-0.62] | 0.584x [0.56-0.60] |
+| 128 x 4864 x 896 | mid: 1.022x [1.00-1.04] | 0.757x [0.74-0.77] | 0.637x [0.63-0.65] | 0.551x [0.55-0.56] | 1.019x [1.00-1.03] |
+| 192 x 896 x 896 | small: 0.608x [0.58-0.62] | 0.601x [0.58-0.62] | 0.616x [0.59-0.65] | 0.566x [0.54-0.58] | 0.708x [0.68-0.75] |
+| 256 x 768 x 768 | mid: 0.765x [0.73-0.82] | 0.654x [0.63-0.69] | 0.670x [0.64-0.71] | 0.626x [0.61-0.64] | 0.773x [0.74-0.80] |
+| 256 x 896 x 896 | mid: 0.816x [0.80-0.83] | 0.693x [0.68-0.70] | 0.637x [0.62-0.65] | 0.544x [0.53-0.55] | 0.812x [0.80-0.83] |
+| 256 x 896 x 4864 | mid: 0.825x [0.81-0.85] | 0.680x [0.66-0.69] | 0.604x [0.59-0.61] | 0.511x [0.50-0.52] | 0.833x [0.82-0.86] |
+| 256 x 1152 x 896 | mid: 0.958x [0.93-1.00] | 0.753x [0.72-0.78] | 0.621x [0.61-0.64] | 0.556x [0.54-0.57] | 0.984x [0.93-1.03] |
+| 384 x 896 x 896 | mid: 0.718x [0.69-0.74] | 0.674x [0.66-0.69] | 0.614x [0.60-0.63] | 0.562x [0.55-0.58] | 0.712x [0.69-0.75] |
+
+The committed tile was the fastest or within the noise everywhere but one
+shape: at 128 x 896 x 896 the gap to cuBLAS (0.72x) is not a choice of tile.
+The exception, 192 x 896 x 896, has 21 mid tiles, below the 60% of a wave the
+mid tile then needed, and 42 small ones, so two SMs ran two small tiles.
+The small tile has at most twice the mid tiles, so wherever it doubles up
+on an SM the mid tiles fill more than half the SMs; the 60% only left out
+21 to 23 mid tiles. Version 20 (`t4_mid_half/`, all 16 bit-exact) timed
+every such shape tried:
+
+| shape | 64 x 128 tiles | 64 x 64 (before) | 64 x 128 |
+|---|---|---|---|
+| 64 x 2816 x 1024 | 22 | 0.750x [0.64-0.78] | 0.917x [0.75-0.94] |
+| 64 x 2944 x 1024 | 23 | 0.621x [0.55-0.64] | 0.755x [0.65-0.77] |
+| 128 x 1408 x 1024 | 22 | 0.608x [0.55-0.62] | 0.715x [0.64-0.73] |
+| 192 x 896 x 896 | 21 | 0.600x [0.54-0.62] | 0.721x [0.65-0.73] |
+| 192 x 896 x 4864 | 21 | 0.653x [0.60-0.67] | 0.797x [0.74-0.82] |
+| 448 x 384 x 512 | 21 | 0.661x [0.64-0.67] | 0.776x [0.76-0.79] |
+| 704 x 256 x 512 | 22 | 0.706x [0.69-0.72] | 0.834x [0.81-0.85] |
+| 1408 x 128 x 512 | 22 | 0.663x [0.65-0.67] | 0.775x [0.77-0.80] |
+
+The mid tile won all eight, by 17-22%, so it is now taken wherever the
+small tile would double up (`f32_gemm_turing_mid`). With `W` those shapes
+still take the small tile split in order (448 x 384 x 512, 704 x 256 x
+1024: the kernel byte for byte as before). Every shape in these two runs,
+built by the committed compiler, is the faster variant timed; putting the
+60% back fails the Turing rule test.

@@ -243,9 +243,10 @@ source; each entry there now carries its status. What is still open:
     large tile, which fits a T4 at 2 stages, is taken there where its waves
     are more than 80% full: 1.04-1.20x (2560^3 to 8192 x 8192 x 512), only
     at N a multiple of 4 and M of 128. The mid tile is now taken on Turing
-    from 60% of a wave where the small tile would put two CTAs on an SM:
-    512^3 0.68x -> 0.92x, 448 x 512 x 512 0.86x -> 1.00x, 1024 x 256 x 1024
-    0.68x -> 0.94x; with `W`, up to 1.3 small tiles an SM, the small tile
+    wherever the small tile would put two CTAs on an SM (more than half a
+    wave of mid tiles; until 2026-11-17 from 60%): 512^3 0.68x -> 0.92x, 448
+    x 512 x 512 0.86x -> 1.00x, 1024 x 256 x 1024 0.68x -> 0.94x, 192 x 896
+    x 896 0.60x -> 0.72x, 64 x 2816 x 1024 0.75x -> 0.92x; with `W`, up to 1.3 small tiles an SM, the small tile
     split in order instead (384 x 512 x 1024 0.74-0.82x, against 0.70x on
     the mid tile). Where the small tile leaves SMs idle, 32-row tiles
     (32 x 64, 32 x 32) now give more CTAs: 64 x 512 x 1024 0.33x -> 0.56x,
