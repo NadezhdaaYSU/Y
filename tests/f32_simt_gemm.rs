@@ -278,7 +278,7 @@ fn as_bytes(v: &[f32]) -> Vec<u8> {
 }
 
 /// (shape, tile at the pinned sm_80 profile)
-const EXACT_SHAPES: [((u32, u32, u32), &str); 41] = [
+const EXACT_SHAPES: [((u32, u32, u32), &str); 43] = [
     ((64, 64, 16), "small"),
     ((192, 320, 112), "small"),
     ((128, 4096, 80), "mid"),
@@ -331,22 +331,24 @@ const EXACT_SHAPES: [((u32, u32, u32), &str); 41] = [
     ((2048, 4097, 40), "large"),
     ((2060, 4097, 24), "large"),
     // Built for sm_75 on 40 SMs, these two run on the 8 x 256 tile, which
-    // no shape above reaches there (the 32 x 32 and 32 x 64 ones are: 64 x
-    // 64 x 16, 33 x 65 x 17; the 128-thread GEMV 1 x 8193 x 40; the
-    // few-column 4 x 32 and 8 x 16 tiles 1 x 1 x 1 and 7 x 13 x 5): whole,
-    // and with M ragged, N = 2 mod 4 (8-byte B copies) and a K tail; then
-    // the 16 x 128 tile at N odd; the 4 x 32 tile with a K tail; the 16 x
-    // 32 tile with M and N ragged, two K slices and a tail; the 32-thread
-    // GEMV with a one-step tail; and the 4 x 32 and 8 x 16 tiles over two
-    // and three K slices and a tail.
+    // no shape above reaches there (the 32 x 64 one is: 33 x 65 x 17; the
+    // 128-thread GEMV 1 x 8193 x 40; the few-column 4 x 32, 8 x 16 and 16 x
+    // 32 tiles 1 x 1 x 1, 7 x 13 x 5 and 64 x 64 x 16): whole, and with M
+    // ragged, N = 2 mod 4 (8-byte B copies) and a K tail; then the 16 x 128
+    // tile at N odd; the 4 x 32 tile with a K tail; the 8 x 16 tile on two
+    // tile rows, M and N ragged, two K slices and a tail; the 32-thread GEMV
+    // with a one-step tail; the 4 x 32 and 8 x 16 tiles over two and three
+    // K slices and a tail; the 16 x 32 tile likewise; and the 32 x 32 tile.
     ((8, 4096, 40), "small"),
     ((5, 4098, 35), "small"),
     ((12, 4097, 24), "small"),
     ((3, 1001, 37), "small"),
-    ((11, 333, 77), "small"),
+    ((11, 300, 150), "small"),
     ((2, 3000, 33), "small"),
     ((3, 100, 200), "small"),
     ((7, 50, 150), "small"),
+    ((11, 777, 77), "small"),
+    ((96, 256, 24), "small"),
 ];
 
 /// Every element of each EXACT_SHAPES GEMM, compiled in `dir` (whose
@@ -425,7 +427,7 @@ fn profile_for(tag: &str, sm: &str, sms: u32) -> std::path::PathBuf {
 
 /// Below sm_80 there is no `cp.async`: each copy is a load and a shared
 /// store (`f32_simt_gemm.rs`, `sync_copies`). Same arithmetic, so the same
-/// 41 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
+/// 43 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
 /// of shared memory a block, so the large tile only at two stages, 49.7 KB)
 /// and run here, where the driver compiles sm_75 PTX for this card.
 #[test]
@@ -552,8 +554,9 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
 /// 2048: 0.44x on the small tile, 0.54x on 32 x 64; `f32_gemm_turing_thin`).
 /// Up to 16 rows, where no skinny tile is taken, the few-column tiles run
 /// (8 x 896 x 896: 0.37x on the small tile, 0.73x on 8 x 16;
-/// `f32_gemm_turing_slab`), and up to 4 rows they do until the GEMV's
-/// blocks would fill the SMs. Sm_70 (Volta) on the same SM count, and this
+/// `f32_gemm_turing_slab`; 8 x 16 where even 16 x 32 tiles are few), up to
+/// 4 rows until the GEMV's blocks would fill the SMs, and from 32 rows 16 x
+/// 32 tiles where 32 x 32 ones fill half a wave or less. Sm_70 (Volta) on the same SM count, and this
 /// machine's sm_89, keep the old rule.
 #[test]
 fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
@@ -582,6 +585,10 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         ((32, 1024, 4096), "thin32x32"), // 16 small or 32x64, 32 of 32x32
         ((32, 1000, 4096), "small"),     // 32x32 needs N a multiple of 32,
         ((48, 1024, 4096), "thin32x64"), // and M
+        // ... and where 32 x 32 tiles fill half a wave or less, 16 x 32 ones.
+        ((32, 640, 4096), "slab16x32"),  // 20 of 32 x 32
+        ((64, 128, 8192), "slab16x32"),  // 8
+        ((32, 672, 4096), "thin32x32"),  // 21
         // 5 to 16 rows: a tile no taller than M.
         ((8, 4096, 4096), "skinny8x256"),
         ((6, 30522, 768), "skinny8x256"),  // N even: 8-byte B copies
@@ -594,8 +601,11 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         ((6, 1024, 1024), "slab8x16"),   // 4 of 8 x 256: under 40% of the SMs
         ((8, 896, 896), "slab8x16"),
         ((6, 3072, 3072), "slab8x16"),   // the mid tile before
-        ((16, 896, 4864), "slab16x32"),
-        ((13, 999, 1001), "slab16x32"),
+        ((16, 896, 4864), "slab16x32"),  // 28 of 16 x 32
+        ((13, 999, 1001), "slab16x32"),  // 32
+        ((16, 320, 2048), "slab8x16"),   // 10 of 16 x 32: a quarter of the SMs
+        ((16, 256, 4096), "slab8x16"),
+        ((16, 352, 2048), "slab16x32"),  // 11
         ((12, 2048, 2048), "skinny16x128"), // 16 of 16 x 128
         // One to 4 rows: the 4 x 32 tile while its CTAs number under
         // 0.6 (M + 1) an SM (N up to 1504 at one row, 3808 at four)...

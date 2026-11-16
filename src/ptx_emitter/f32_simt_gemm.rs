@@ -58,7 +58,7 @@
 //! tile is left out where its 74 KB does not fit a block
 //! (`f32_gemm_block_smem`), and registers are budgeted for the CTAs the
 //! target's shared memory admits (`f32_gemm_reg_ctas`). The arithmetic is
-//! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 41
+//! the same, and so is every bit of C (`tests/f32_simt_gemm.rs`, the 43
 //! exactness shapes built for sm_75, every tile among them). There a guarded copy is a predicated
 //! load and a zero fill, and guards on the K loop's copies spilled, so the K
 //! loop takes none: the short K tile comes first and a ragged last tile row
@@ -73,7 +73,8 @@
 //! from 60% of a wave where the small one would double up on an SM (with
 //! `W`, up to 1.3 small tiles an SM, the small tile split in order instead).
 //! Where even the small tile leaves SMs idle, 32-row tiles (32 x 64, 32 x
-//! 32) give more CTAs (`f32_gemm_turing_thin`). Up to 16 rows run on 8-
+//! 32) give more CTAs (`f32_gemm_turing_thin`), and where 32 x 32 tiles
+//! fill half a wave or less, 16 x 32 ones (below). Up to 16 rows run on 8-
 //! and 16-row tiles where those make three CTAs an SM's worth of 128-column
 //! tiles, and elsewhere on few-column tiles of 4 x 32 to 16 x 32 with one to
 //! 8 outputs a thread (`emit_f32_slab_kernel`, `f32_gemm_turing_slab`); one
@@ -351,9 +352,33 @@ impl PtxEmitter {
     /// 16 x 3072 x 768 0.95x / 0.70x (docs/benchmarks/
     /// f32_gemm_sm75_guards_2026-11-15/t4_slab_band/; the CUDA C prototypes
     /// it follows, t4_slab_proto/).
+    ///
+    /// Where even these are few: 9 to 16 rows take the 8 x 16 tile (rows in
+    /// two tile rows) where 16 x 32 tiles would number a quarter of the SMs
+    /// or fewer, and from 17 rows the 16 x 32 tile replaces the 32 x 32 one
+    /// where that fills half a wave or less (more CTAs of fewer chains).
+    /// Paired as above, the 16 x 32 tile / the 8 x 16 tile: 10 x 128 x 4096
+    /// 0.23x / 0.46x, 12 x 200 x 8192 0.19x / 0.43x, 16 x 256 x 4096 0.29x /
+    /// 0.58x, 16 x 320 x 4096 0.30x / 0.57x, 16 x 256 x 512 1.29x / 2.00x, 9
+    /// x 200 x 300 1.90x / 2.63x. From 12 to 16 tiles it depends on K: 16 x
+    /// 384 x 4096 0.38x / 0.44x and 16 x 512 x 2048 0.56x / 0.60x, but 16 x
+    /// 512 x 512 0.94x / 0.85x, 16 x 512 x 1024 0.66x / 0.59x, 12 x 448 x 768
+    /// 0.92x / 0.92x; at 25 and 28 tiles the 16 x 32 tile (11 x 777 x 4097
+    /// 0.41x / 0.36x, 16 x 896 x 4864 0.41x / 0.31x, the prototypes). The 32 x 32 tile / the 16 x 32: 32 x 256 x
+    /// 8192 0.19x / 0.23x, 64 x 128 x 8192 0.18x / 0.23x, 96 x 160 x 4096
+    /// 0.40x / 0.45x, 64 x 256 x 4096 0.31x / 0.37x, 32 x 640 x 4096 (20
+    /// tiles) 0.47x / 0.54x, ties at 128 x 128 x 8192 and 64 x 320 x 4096;
+    /// at 32 tiles not (32 x 1024 x 4096 0.59x / 0.39x) (t4_slab_long/,
+    /// t4_slab_long_rule/, t4_slab_short_k/). Taller tiles than 32 rows only lost: 4 x 32, 8 x
+    /// 16, a 16 x 16 tile and 16 x 32 at 32 to 512 rows, 0.11-0.39x where
+    /// the fragment tiles ran 0.46-0.84x.
     fn f32_gemm_turing_slab(m: u32, n: u32, sms: u64, block_smem: u32, t: F32GemmTile) -> Option<F32SlabTile> {
-        if block_smem != 64 * 1024 || m > 16 {
+        let tiles = |bm: u32, bn: u32| m.div_ceil(bm) as u64 * n.div_ceil(bn) as u64;
+        if block_smem != 64 * 1024 {
             return None;
+        }
+        if m > 16 {
+            return (t == F32_TILE_THIN32 && tiles(32, 32) * 2 <= sms).then_some(F32_SLAB16);
         }
         if m <= 4 {
             return (n.div_ceil(F32_SLAB4.bn) as u64 * 5 < sms * 3 * (m as u64 + 1)).then_some(F32_SLAB4);
@@ -361,7 +386,7 @@ impl PtxEmitter {
         if t == F32_TILE_SKINNY8 || t == F32_TILE_SKINNY16 {
             return None;
         }
-        Some(if m <= 8 { F32_SLAB8 } else { F32_SLAB16 })
+        Some(if m <= 8 || tiles(16, 32) * 4 <= sms { F32_SLAB8 } else { F32_SLAB16 })
     }
 
     /// On Turing (64 KB a block), the mid tile (two stages,

@@ -693,3 +693,88 @@ and racecheck report nothing at 6 shapes with two or more slices. The
 oracle there is nvcc-built PTX: CuPy's NVRTC compiles with `-ftz=true`
 whatever the options say, and its fmaf chain flushed the subnormal that
 Y's `fma.rn.f32` kept, at 1 x 1 x 1.
+
+## Even fewer CTAs: 8 x 16 tiles at 9 to 16 rows, 16 x 32 for 32-row tiles
+
+The few-column tiles left two kinds of shape with almost no CTAs: 16 x 256
+x 4096 is 8 tiles of 16 x 32 (0.27x), and 32 x 512 x 4096 is 16 of the 32 x
+32 tile (0.33x). Version 16 (`t4_slab_long/`, all 80 bit-exact) forced
+each few-column tile, and a 16 x 16 one (64 threads of 4 x 1), on 16 shapes
+with few tiles and a long K:
+
+| shape | before (tile) | 4 x 32 | 8 x 16 | 16 x 16 | 16 x 32 |
+|---|---|---|---|---|---|
+| 16 x 256 x 4096 | slab16x32: 0.270x [0.26-0.28] | 0.417x [0.40-0.44] | 0.568x [0.52-0.58] | 0.429x [0.40-0.44] | 0.273x [0.26-0.28] |
+| 32 x 256 x 8192 | thin32x32: 0.187x [0.18-0.20] | 0.168x [0.16-0.17] | 0.228x [0.21-0.24] | 0.229x [0.22-0.25] | 0.252x [0.25-0.26] |
+| 32 x 512 x 4096 | thin32x32: 0.328x [0.32-0.35] | 0.159x [0.15-0.17] | 0.226x [0.22-0.25] | 0.242x [0.22-0.26] | 0.360x [0.34-0.39] |
+| 32 x 1024 x 4096 | thin32x32: 0.594x [0.55-0.62] | 0.164x [0.16-0.18] | 0.226x [0.22-0.25] | 0.264x [0.25-0.28] | 0.387x [0.37-0.41] |
+| 48 x 1024 x 4096 | thin32x64: 0.576x [0.53-0.61] | 0.151x [0.14-0.16] | 0.194x [0.18-0.20] | 0.233x [0.22-0.24] | 0.386x [0.35-0.40] |
+| 64 x 256 x 4096 | thin32x32: 0.316x [0.30-0.34] | 0.166x [0.16-0.17] | 0.237x [0.23-0.25] | 0.242x [0.22-0.25] | 0.356x [0.33-0.40] |
+| 64 x 512 x 8192 | thin32x32: 0.464x [0.44-0.48] | 0.131x [0.13-0.14] | 0.171x [0.17-0.18] | 0.197x [0.19-0.21] | 0.286x [0.28-0.31] |
+| 64 x 1024 x 4096 | thin32x64: 0.601x [0.58-0.66] | 0.122x [0.12-0.13] | 0.161x [0.16-0.17] | 0.193x [0.18-0.20] | 0.314x [0.30-0.33] |
+| 96 x 512 x 2048 | thin32x64: 0.563x [0.53-0.60] | 0.169x [0.16-0.18] | 0.213x [0.20-0.23] | 0.227x [0.22-0.24] | 0.388x [0.36-0.41] |
+| 128 x 256 x 4096 | thin32x32: 0.492x [0.48-0.53] | 0.162x [0.15-0.17] | 0.215x [0.20-0.22] | 0.228x [0.22-0.24] | 0.341x [0.33-0.35] |
+| 128 x 512 x 2048 | thin32x64: 0.543x [0.48-0.58] | 0.131x [0.13-0.14] | 0.172x [0.16-0.18] | 0.180x [0.17-0.19] | 0.296x [0.28-0.32] |
+| 160 x 256 x 4096 | thin32x32: 0.543x [0.52-0.56] | 0.153x [0.15-0.16] | 0.193x [0.19-0.20] | 0.221x [0.21-0.23] | 0.362x [0.35-0.38] |
+| 192 x 384 x 4096 | thin32x64: 0.712x [0.69-0.73] | 0.147x [0.14-0.15] | 0.197x [0.19-0.20] | 0.222x [0.22-0.23] | 0.362x [0.35-0.37] |
+| 256 x 256 x 8192 | thin32x64: 0.613x [0.60-0.62] | 0.145x [0.14-0.15] | 0.193x [0.19-0.20] | 0.209x [0.21-0.21] | 0.328x [0.32-0.33] |
+| 256 x 512 x 4096 | small: 0.698x [0.68-0.71] | 0.113x [0.11-0.12] | 0.152x [0.15-0.16] | 0.180x [0.18-0.18] | 0.288x [0.28-0.29] |
+| 512 x 256 x 512 | small: 0.836x [0.81-0.87] | 0.162x [0.16-0.17] | 0.221x [0.21-0.23] | 0.225x [0.22-0.23] | 0.337x [0.32-0.36] |
+
+Only where the fragment tiles had few CTAs did a smaller tile win: the 8 x
+16 tile (two tile rows) at 16 x 256 x 4096, the 16 x 32 tile where the 32 x
+32 one had 8 or 16 tiles. Everywhere else they lost badly, the row-tiled 4
+x 32 and 8 x 16 tiles worst (more CTAs, but one or two chains a thread and B
+read once a tile row). The 16 x 16 tile never won and was not kept.
+
+Two rules followed, each checked at shapes they were not read off (version
+17, `t4_slab_long_rule/`, all 48 bit-exact) and, for the first, at short K
+(version 18, `t4_slab_short_k/`, all 16 bit-exact; there the 8 x 16 column
+is the rule then proposed, the 16 x 32 column the commit before):
+
+| shape | before (tile) | 8 x 16 | 16 x 32 | committed |
+|---|---|---|---|---|
+| 10 x 128 x 4096 | slab16x32: 0.227x [0.23-0.23] | 0.464x [0.46-0.47] | 0.227x [0.23-0.23] | 8 x 16 |
+| 12 x 200 x 8192 | slab16x32: 0.193x [0.19-0.20] | 0.431x [0.42-0.45] | 0.194x [0.19-0.20] | 8 x 16 |
+| 14 x 320 x 2048 | slab16x32: 0.359x [0.36-0.37] | 0.607x [0.60-0.62] | 0.360x [0.35-0.36] | 8 x 16 |
+| 16 x 256 x 4096 | slab16x32: 0.293x [0.28-0.30] | 0.579x [0.56-0.59] | 0.289x [0.27-0.30] | 8 x 16 |
+| 16 x 320 x 4096 | slab16x32: 0.303x [0.29-0.32] | 0.569x [0.53-0.60] | 0.310x [0.29-0.32] | 8 x 16 |
+| 16 x 384 x 4096 | slab16x32: 0.384x [0.37-0.41] | 0.438x [0.40-0.45] | 0.384x [0.37-0.41] | 16 x 32 |
+| 16 x 512 x 2048 | slab16x32: 0.553x [0.54-0.56] | 0.597x [0.59-0.61] | 0.556x [0.55-0.56] | 16 x 32 |
+| 32 x 256 x 8192 | thin32x32: 0.186x [0.18-0.21] | 0.227x [0.21-0.24] | 0.233x [0.23-0.26] | 16 x 32 |
+| 32 x 384 x 8192 | thin32x32: 0.228x [0.22-0.26] | 0.194x [0.18-0.20] | 0.252x [0.25-0.28] | 16 x 32 |
+| 32 x 512 x 4096 | thin32x32: 0.335x [0.32-0.35] | 0.246x [0.23-0.26] | 0.369x [0.34-0.44] | 16 x 32 |
+| 32 x 640 x 4096 | thin32x32: 0.466x [0.43-0.50] | 0.290x [0.28-0.32] | 0.543x [0.48-0.58] | 16 x 32 |
+| 64 x 128 x 8192 | thin32x32: 0.179x [0.17-0.19] | 0.239x [0.22-0.25] | 0.225x [0.22-0.24] | 16 x 32 |
+| 64 x 256 x 4096 | thin32x32: 0.309x [0.30-0.32] | 0.244x [0.23-0.25] | 0.374x [0.34-0.40] | 16 x 32 |
+| 64 x 320 x 4096 | thin32x32: 0.452x [0.41-0.52] | 0.295x [0.28-0.33] | 0.468x [0.42-0.49] | 16 x 32 |
+| 96 x 160 x 4096 | thin32x32: 0.402x [0.39-0.43] | 0.377x [0.36-0.41] | 0.449x [0.42-0.46] | 16 x 32 |
+| 128 x 128 x 8192 | thin32x32: 0.244x [0.24-0.25] | 0.176x [0.17-0.18] | 0.241x [0.21-0.26] | 16 x 32 |
+| 9 x 200 x 300 | slab16x32: 1.902x [1.87-1.96] | 2.630x [2.56-2.71] | 1.902x [1.87-1.96] | 8 x 16 |
+| 10 x 320 x 256 | slab16x32: 2.249x [2.19-2.31] | 2.623x [2.53-2.71] | 2.249x [2.19-2.31] | 8 x 16 |
+| 12 x 448 x 768 | slab16x32: 0.923x [0.88-0.99] | 0.918x [0.88-0.98] | 0.923x [0.88-0.99] | 16 x 32 |
+| 12 x 512 x 512 | slab16x32: 0.989x [0.96-1.02] | 0.894x [0.87-0.92] | 0.989x [0.96-1.02] | 16 x 32 |
+| 16 x 256 x 512 | slab16x32: 1.294x [1.26-1.36] | 2.004x [1.94-2.11] | 1.294x [1.26-1.36] | 8 x 16 |
+| 16 x 384 x 1024 | slab16x32: 0.702x [0.67-0.72] | 0.692x [0.66-0.72] | 0.702x [0.67-0.72] | 16 x 32 |
+| 16 x 512 x 512 | slab16x32: 0.944x [0.91-0.99] | 0.852x [0.82-0.89] | 0.944x [0.91-0.99] | 16 x 32 |
+| 16 x 512 x 1024 | slab16x32: 0.656x [0.63-0.69] | 0.585x [0.56-0.61] | 0.656x [0.63-0.69] | 16 x 32 |
+
+- 9 to 16 rows: the 8 x 16 tile where 16 x 32 tiles would number a quarter
+  of the SMs or fewer (10 on a T4). Up to 10 it won at every K (4, 7, 8 and
+  10 tiles, K from 256 to 8192, 1.2-2.2x). At 12 to 16 it depends on K: 16 x
+  384 x 4096 and 16 x 512 x 2048 gained 14% and 7%, 16 x 512 x 512 and 16 x
+  512 x 1024 lost 10%; at 25 and 28 tiles it lost (the prototypes). So the
+  first threshold proposed, 0.4 an SM, which the short-K run disproved,
+  became a quarter.
+- From 17 rows: the 16 x 32 tile instead of the 32 x 32 one where that fills
+  half a wave or less (20 tiles). It gained at 8 to 20 tiles (10-26%) and
+  tied at 128 x 128 x 8192 (16) and 64 x 320 x 4096 (20); at 32 tiles it
+  lost (32 x 1024 x 4096 0.59x / 0.39x).
+
+The committed compiler builds each shape in these three runs byte for byte
+as the variant in the committed column. Bits: the sm_75 exactness run now
+also covers the 8 x 16 tile on two tile rows (11 x 300 x 150, M and N
+ragged, two K slices and a tail), the 16 x 32 tile over slices (11 x 777 x
+77) and from a 32 x 32 shape (64 x 64 x 16), and the 32 x 32 tile still
+(96 x 256 x 24). Removing either rule, or a tile row's offset, fails the
+tests.

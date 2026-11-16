@@ -1275,8 +1275,10 @@ for i in 0..100 {
   tile has three waves of CTAs. Where neither skinny tile is taken, and up
   to 4 rows while the GEMV's blocks would number under 0.6 (M + 1) an SM,
   Turing runs few-column tiles instead (4x32, 8x16 or 16x32, 64 or 128
-  threads of one to 8 outputs, two shared stages; since 2026-11-16). `W`
-  is not used for these.
+  threads of one to 8 outputs, two shared stages; since 2026-11-16): 8x16
+  also at 9 to 16 rows where 16x32 tiles would number a quarter of the SMs
+  or fewer, and 16x32 in place of 32x32 where those fill half a wave or
+  less. `W` is not used for these.
   Launch: block `(threads, 1, 1)` as the header states,
   anything else traps; output tiles are grid-strided, so any grid is
   correct, and the header's grid runs one tile per CTA; the header states
@@ -1295,16 +1297,17 @@ for i in 0..100 {
   a wave of it (1023 x 1025 x 1027 1.04x), 0.70-1.00x where its tiles fill
   60-100% of one (512^3 0.92x, 384 x 512 x 1024 0.70x), 0.83-1.11x where
   one wave of 64x64 tiles covers C (512 x 256 x 512, 2048 x 64 x 512), and
-  0.35-0.71x with few tiles and a long K (128 x 512 x 2048 0.54x, on 32x64
+  0.23-0.71x with few tiles and a long K (128 x 512 x 2048 0.54x, on 32x64
   tiles that fill more of its 40 SMs since 2026-11-16; 256 x 512 x 4096
-  0.71x), where cuBLAS splits K and an in-order chain cannot; one to 4
+  0.71x; K = 8192 at 128-384 columns 0.23-0.25x), where cuBLAS splits K and
+  an in-order chain cannot; one to 4
   rows 0.79-1.17x on the GEMV (1 x 4096 x 4096 1.17x, 1 x 50257 x 768
   0.79x), 5 to 16 rows 0.55-1.48x on the 8- and 16-row tiles (8 x 4096 x
   4096 1.48x, 12 x 2048 x 2048 0.55x), and where a few hundred columns
   gave those few CTAs, the few-column tiles: one to 4 rows 0.56-0.95x
   (1 x 1024 x 1024 0.56x, 4 x 896 x 4864 0.84x), 5 to 16 rows 0.50-1.56x
-  (8 x 896 x 896 0.73x, 6 x 512 x 512 1.56x, 16 x 896 x 4864 0.50x), and
-  16 x 256 x 4096 0.28x
+  (8 x 896 x 896 0.73x, 6 x 512 x 512 1.56x, 16 x 896 x 4864 0.50x, 16 x
+  256 x 4096 0.58x)
   ([record](benchmarks/f32_gemm_sm75_guards_2026-11-15/README.md)). The
   host backend refuses the kernel: it has no body there.
 * **FP32 form with a workspace (since 2026-11-06)**, `(A, B, C:

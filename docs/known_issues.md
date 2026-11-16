@@ -252,8 +252,11 @@ source; each entry there now carries its status. What is still open:
     128 x 512 x 2048 0.44x -> 0.54x, 160 x 256 x 4096 0.35x -> 0.53x. Still
     behind: the shapes one wave of small tiles covers (512 x 256 x 512
     0.83x), the few-tile shapes with a long K, where cuBLAS splits K and an
-    in-order chain cannot (0.35-0.70x), and few columns at 9 to 16 rows
-    with a long K (16 x 896 x 4864 0.50x, 16 x 256 x 4096 0.28x). One to 4
+    in-order chain cannot (0.23-0.70x; K = 8192 at 128-384 columns
+    0.23-0.25x, even with 16 x 32 tiles in place of 32 x 32 ones where those
+    fill half a wave or less: 32 x 256 x 8192 0.19x -> 0.23x, 64 x 256 x
+    4096 0.31x -> 0.37x), and few columns at 9 to 16 rows with a long K (16
+    x 896 x 4864 0.50x; 16 x 256 x 4096 0.29x -> 0.58x on 8 x 16 tiles). One to 4
     rows now run an in-order GEMV (1 x 1024 x 1024 0.21x -> 0.48x, 1 x 4096
     x 4096 0.80x -> 1.17x, 4 x 11008 x 4096 0.83x -> 1.00x), except at N
     even where the 8 x 256 tile has three waves (1 x 30522 x 768 1.03x
