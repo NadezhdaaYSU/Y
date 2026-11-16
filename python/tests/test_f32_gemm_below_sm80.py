@@ -38,9 +38,10 @@ from y_lang.interpreter import CPUInterpreter
 # (M, N, K): the K tail with a ragged M on the mid tile; K tail alone; M
 # alone; a row remainder set sliding into the rows before it; a 1-row GEMM
 # (no slide: M < BM); K < 16 (one short tile, still guarded); small K, where
-# ptxas unrolls the loop.
+# ptxas unrolls the loop; and the few-column tiles (`emit_f32_slab_kernel`):
+# 8 x 16 with two K slices and a tail, 16 x 32 with M and N ragged.
 SHAPES = [(1023, 1025, 99), (256, 1024, 35), (1023, 1028, 32), (400, 2049, 40), (67, 37, 35),
-          (1, 257, 40), (33, 65, 5), (130, 129, 50)]
+          (1, 257, 40), (33, 65, 5), (130, 129, 50), (6, 100, 150), (12, 70, 77)]
 
 
 def source(m, n, k):
@@ -110,7 +111,10 @@ class F32GemmBelowSm80(unittest.TestCase):
         for m, n, k in SHAPES:
             with self.subTest(shape=(m, n, k)):
                 ptx = self.ptx(m, n, k)
-                if k % 16 and k >= 16 and "tile `gemv" not in ptx:
+                slab = re.search(r"\| CTA \d+x\d+x(\d+) \| \d+ threads of \d+x\d+ outputs \| tile `slab", ptx)
+                if slab and k % int(slab.group(1)):
+                    self.assertIn(f"then the last {k % int(slab.group(1))} steps from global memory", ptx)
+                elif k % 16 and k >= 16 and "tile `gemv" not in ptx and not slab:
                     self.assertIn(f"the first K tile runs its {k % 16} steps", ptx)
                 A, B = inputs(m, n, k, m * 7919 + n * 31 + k)
                 want = fma32_chain(A, B).view(np.uint32)

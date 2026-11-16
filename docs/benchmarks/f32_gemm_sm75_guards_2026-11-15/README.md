@@ -578,3 +578,118 @@ which now runs both GEMV blocks. A grid of 2^25 CTAs or more would have
 wrapped a 32-bit column stride (at 2^32, to 0: a loop without end), so the
 column index is 64-bit. Reversing the FMAs of one block changes C by an ulp
 and the exactness test fails on it.
+
+## Few columns at one to 16 rows: small tiles
+
+At a few hundred to a few thousand columns the tiles and the GEMV were still
+far behind: 8 x 896 x 896 at 0.37x on the 64 x 64 tile (14 CTAs on 40 SMs),
+4 x 896 x 4864 at 0.39x on the GEMV (28 blocks of 32 threads). K cannot be
+split without changing the order of the chains, so the only parallelism is
+the M x N chains themselves; the fragment tiles need 4 x 4 outputs a thread,
+hence 128-column or 64-row tiles, which cut a few hundred columns into a
+handful of CTAs.
+
+The prototype (job `y-f32-t4-tile`, `t4_slab_proto/`, the bench script
+beside it; CUDA C through NVRTC, 73 kernels, all bit-exact): a `bm x bn` CTA
+tile, `r x c` outputs a thread, `bk`-deep slices of A and B through two
+shared buffers, the next slice's loads issued before the current slice's
+FMAs, the K tail read from global memory, still in order. Medians of 45
+paired rounds against cuBLAS, the best variant of each shape:
+
+| shape | Y before | best prototype |
+|---|---|---|
+| 1 x 1024 x 1024 | gemv32: 0.530x | m2n32r1c1k64: 0.429x |
+| 1 x 896 x 4864 | gemv32: 0.584x | m4n16r1c1k64: 0.670x |
+| 2 x 768 x 3072 | gemv32: 0.553x | m4n16r1c1k64: 0.676x |
+| 4 x 896 x 4864 | gemv32: 0.392x | m4n32r1c1k64: 0.642x |
+| 4 x 4096 x 4096 | gemv128: 0.749x | m4n32r1c1k64: 0.618x |
+| 6 x 1024 x 1024 | small: 0.406x | m8n16r2c1k64: 0.602x |
+| 8 x 896 x 896 | small: 0.374x | m8n16r2c1k64: 0.532x |
+| 8 x 1024 x 1024 | small: 0.409x | m8n16r2c1k64: 0.629x |
+| 7 x 4098 x 1027 | skinny8x256: 0.793x | m8n32r2c2k64: 0.744x |
+| 11 x 777 x 4097 | small: 0.316x | m16n32r4c2k32: 0.411x |
+| 12 x 3072 x 768 | skinny16x128: 0.810x | m16n32r4c2k32: 0.723x |
+| 16 x 896 x 4864 | small: 0.327x | m16n32r4c2k32: 0.412x |
+| 16 x 4096 x 4096 | skinny16x128: 1.064x | m16n32r4c2k32: 0.560x |
+
+It won wherever the shape gave the tiles or the GEMV few CTAs, and lost to
+the skinny tiles at thousands of columns and to the GEMV at 1 x 1024 x 1024
+and 4 x 4096 x 4096. Three variants went into the compiler
+(`emit_f32_slab_kernel`): `slab4x32` (128 threads of one output, `bk` 64)
+for one to 4 rows, `slab8x16` (64 threads of 2 x 1, `bk` 64) for 5 to 8,
+`slab16x32` (64 threads of 4 x 2, `bk` 32) for 9 to 16. Rows and columns
+past M and N copy row M-1 and column N-1 and are not stored, so no copy
+carries a guard. At a 128-register cap the 16-row tile spilled (24 bytes);
+the prototype ran uncapped at 125-147, and these shapes give an SM one or
+two CTAs, so the kernel is budgeted 255 (234-238 used by `slab16x32`, no
+spills).
+
+Version 15 (`t4_slab_band/`, all 90 bit-exact) timed the kernel forced on
+for every M up to 16 against the commit before, at 45 shapes:
+
+| shape | before: tile | before | few-column tile | committed |
+|---|---|---|---|---|
+| 1 x 512 x 4096 | gemv32 | 0.353x [0.35-0.36] | slab4x32: 0.591x [0.58-0.61] | slab4x32 |
+| 1 x 1024 x 1024 | gemv32 | 0.520x [0.51-0.53] | slab4x32: 0.558x [0.54-0.57] | slab4x32 |
+| 1 x 1024 x 4096 | gemv32 | 0.558x [0.55-0.58] | slab4x32: 0.861x [0.81-0.87] | slab4x32 |
+| 1 x 2048 x 1024 | gemv32 | 0.836x [0.83-0.85] | slab4x32: 0.804x [0.78-0.83] | before |
+| 1 x 2048 x 4096 | gemv32 | 1.014x [1.00-1.04] | slab4x32: 0.908x [0.88-0.94] | before |
+| 1 x 3072 x 1024 | gemv32 | 0.899x [0.89-0.91] | slab4x32: 0.808x [0.79-0.83] | before |
+| 1 x 4096 x 1024 | gemv128 | 1.034x [1.03-1.04] | slab4x32: 0.769x [0.75-0.80] | before |
+| 2 x 896 x 4864 | gemv32 | 0.496x [0.48-0.52] | slab4x32: 0.732x [0.70-0.85] | slab4x32 |
+| 2 x 1536 x 1536 | gemv32 | 0.787x [0.78-0.79] | slab4x32: 0.787x [0.77-0.80] | slab4x32 |
+| 2 x 2048 x 2048 | gemv32 | 0.842x [0.83-0.85] | slab4x32: 0.836x [0.81-0.88] | slab4x32 |
+| 2 x 3072 x 768 | gemv32 | 0.905x [0.90-0.91] | slab4x32: 0.827x [0.82-0.84] | before |
+| 4 x 512 x 2048 | gemv32 | 0.347x [0.35-0.35] | slab4x32: 0.833x [0.83-0.84] | slab4x32 |
+| 4 x 896 x 896 | gemv32 | 0.596x [0.59-0.60] | slab4x32: 0.877x [0.88-0.88] | slab4x32 |
+| 4 x 896 x 4864 | gemv32 | 0.369x [0.34-0.39] | slab4x32: 0.841x [0.67-0.99] | slab4x32 |
+| 4 x 1024 x 4096 | gemv32 | 0.383x [0.37-0.41] | slab4x32: 0.947x [0.77-1.02] | slab4x32 |
+| 4 x 2048 x 2048 | gemv32 | 0.634x [0.62-0.65] | slab4x32: 0.821x [0.81-0.86] | slab4x32 |
+| 4 x 3072 x 1024 | gemv32 | 0.785x [0.77-0.79] | slab4x32: 0.821x [0.80-0.83] | slab4x32 |
+| 4 x 4096 x 1024 | gemv128 | 0.810x [0.80-0.83] | slab4x32: 0.778x [0.76-0.79] | before |
+| 5 x 1001 x 2047 | small | 0.407x [0.39-0.42] | slab8x16: 0.992x [0.96-1.05] | slab8x16 |
+| 6 x 512 x 512 | small | 0.505x [0.50-0.51] | slab8x16: 1.555x [1.55-1.56] | slab8x16 |
+| 6 x 1536 x 1536 | small | 0.402x [0.39-0.42] | slab8x16: 0.725x [0.69-0.77] | slab8x16 |
+| 6 x 2048 x 2048 | small | 0.471x [0.46-0.49] | slab8x16: 0.601x [0.57-0.64] | slab8x16 |
+| 6 x 3072 x 3072 | mid | 0.566x [0.54-0.58] | slab8x16: 0.686x [0.66-0.71] | slab8x16 |
+| 8 x 512 x 4096 | small | 0.216x [0.21-0.23] | slab8x16: 0.830x [0.78-0.94] | slab8x16 |
+| 8 x 768 x 3072 | small | 0.300x [0.29-0.32] | slab8x16: 0.682x [0.66-0.79] | slab8x16 |
+| 8 x 896 x 896 | small | 0.368x [0.36-0.37] | slab8x16: 0.727x [0.72-0.73] | slab8x16 |
+| 8 x 1536 x 1536 | small | 0.428x [0.40-0.45] | slab8x16: 0.724x [0.71-0.78] | slab8x16 |
+| 8 x 2048 x 2048 | small | 0.582x [0.56-0.59] | slab8x16: 0.714x [0.68-0.76] | slab8x16 |
+| 8 x 2560 x 1024 | small | 0.576x [0.57-0.59] | slab8x16: 0.707x [0.69-0.72] | slab8x16 |
+| 8 x 3072 x 768 | mid | 0.535x [0.51-0.56] | slab8x16: 0.810x [0.78-0.83] | slab8x16 |
+| 8 x 3584 x 3584 | mid | 0.627x [0.62-0.63] | slab8x16: 0.644x [0.59-0.68] | slab8x16 |
+| 12 x 512 x 512 | small | 0.433x [0.42-0.46] | slab16x32: 0.848x [0.83-0.88] | slab16x32 |
+| 12 x 1024 x 4096 | small | 0.311x [0.30-0.33] | slab16x32: 0.538x [0.48-0.64] | slab16x32 |
+| 12 x 1536 x 1536 | small | 0.564x [0.55-0.57] | slab16x32: 0.753x [0.74-0.80] | slab16x32 |
+| 12 x 2048 x 2048 | skinny16x128 | 0.546x [0.54-0.56] | slab16x32: 0.631x [0.57-0.74] | before |
+| 12 x 3072 x 768 | skinny16x128 | 0.702x [0.69-0.74] | slab16x32: 0.751x [0.70-0.81] | before |
+| 13 x 999 x 1001 | small | 0.452x [0.44-0.46] | slab16x32: 0.858x [0.83-0.88] | slab16x32 |
+| 16 x 256 x 4096 | small | 0.133x [0.13-0.13] | slab16x32: 0.279x [0.28-0.28] | slab16x32 |
+| 16 x 512 x 512 | small | 0.431x [0.42-0.45] | slab16x32: 0.825x [0.81-0.86] | slab16x32 |
+| 16 x 768 x 768 | small | 0.429x [0.42-0.43] | slab16x32: 0.604x [0.60-0.61] | slab16x32 |
+| 16 x 896 x 4864 | small | 0.291x [0.27-0.30] | slab16x32: 0.497x [0.42-0.52] | slab16x32 |
+| 16 x 1024 x 1024 | small | 0.468x [0.46-0.47] | slab16x32: 0.788x [0.77-0.81] | slab16x32 |
+| 16 x 1536 x 1536 | small | 0.571x [0.56-0.58] | slab16x32: 0.731x [0.70-0.76] | slab16x32 |
+| 16 x 2048 x 2048 | skinny16x128 | 0.698x [0.64-0.71] | slab16x32: 0.547x [0.54-0.63] | before |
+| 16 x 3072 x 768 | skinny16x128 | 0.953x [0.93-0.97] | slab16x32: 0.702x [0.68-0.74] | before |
+
+The emitted kernel ran faster than its prototype (4 x 896 x 4864 0.84x
+against 0.64x; the CUDA C was compiled by CuPy, which always adds
+`-ftz=true`, and under another register budget). The rule
+(`f32_gemm_turing_slab`): from 5 rows, wherever the fragment tile is not a
+skinny one; up to 4 rows while the 32-column CTAs number under 0.6 (M + 1)
+an SM (on 40 SMs: N up to 1504 at one row, 2272 at two, 3808 at four), past
+which the GEMV streams B faster. Every shape above, built by the committed
+compiler, is byte for byte the variant in its last column. The one near tie
+it takes the other way is 2 x 2048 x 2048 (0.836x against 0.842x).
+
+Bits: on the RTX 4070 Ti SUPER the sm_75 build matches an in-order fmaf
+chain at the 17 shapes of 19 where it runs (1 x 1 x 1 to 16 x 896 x 4864; ragged M and N, K below
+one slice, K tails, N = 1) on grids of 1, 2-7 and one tile per CTA, with
+inputs whose products underflow to subnormals and signed zeros; memcheck
+and racecheck report nothing at 6 shapes with two or more slices. The
+oracle there is nvcc-built PTX: CuPy's NVRTC compiles with `-ftz=true`
+whatever the options say, and its fmaf chain flushed the subnormal that
+Y's `fma.rn.f32` kept, at 1 x 1 x 1.

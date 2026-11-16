@@ -1670,7 +1670,7 @@ different baseline.
 | FP32 GEMM on a Tesla T4, one wave of 64×64 tiles or less (512 × 256 × 512) | cuBLAS, TF32 off | 0.83x |
 | FP32 GEMM on a Tesla T4, few tiles and a long K (128 × 512 × 2048, 32 × 512 × 4096, 256 × 512 × 4096), where cuBLAS splits K | cuBLAS, TF32 off | 0.35–0.71x (128 × 512 × 2048 0.54x on 32 × 64 tiles, 0.44x before) |
 | FP32 GEMM on a Tesla T4, 1 to 32 rows streaming B (1 × 50257 × 768, 4 × 4096 × 4096, 24 × 4096 × 4096) | cuBLAS, TF32 off | 0.79–0.93x (1 × 4096 × 4096 1.17x on the GEMV, 8 × 4096 × 4096 1.48x on 8-row tiles) |
-| FP32 GEMM on a Tesla T4, few columns (1 × 1024 × 1024, 4 × 896 × 4864, 8 × 896 × 896): a few hundred in-order chains, cuBLAS splits K | cuBLAS, TF32 off | 0.38–0.56x on the GEMV (1–4 rows), 0.27–0.37x at 5–16 rows |
+| FP32 GEMM on a Tesla T4, few columns (1 × 1024 × 1024, 4 × 896 × 4864, 8 × 896 × 896, 16 × 896 × 4864): a few hundred in-order chains, cuBLAS splits K | cuBLAS, TF32 off | 0.56–0.95x at 1–4 rows on 4 × 32 tiles (1 × 1024 × 1024 0.56x, 4 × 896 × 4864 0.84x), 0.50–0.86x where 5–16 rows still lose on 8 × 16 and 16 × 32 tiles (8 × 896 × 896 0.73x, 16 × 896 × 4864 0.50x; 16 × 256 × 4096 0.28x, 0.13x on the 64 × 64 tile before) |
 | int8 GEMM, 128 × 4096 × 11008 and × 14336 (Llama's MLP), 512 × 11008 × 4096, 512 × 1024 × 4096 with B from DRAM | cuBLASLt (`torch._int_mm`) | 0.91–0.98x (at 128 rows the 64×64 tile gives 0.99x from DRAM but 0.77–0.83x from L2) |
 | int8 GEMM, K % 64 == 32 (4000³, 4096 × 4096 × 4000) | cuBLASLt | 0.93–0.95x |
 | int8 GEMM, 8192³ | cuBLASLt | 0.97–1.00x |

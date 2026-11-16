@@ -278,7 +278,7 @@ fn as_bytes(v: &[f32]) -> Vec<u8> {
 }
 
 /// (shape, tile at the pinned sm_80 profile)
-const EXACT_SHAPES: [((u32, u32, u32), &str); 37] = [
+const EXACT_SHAPES: [((u32, u32, u32), &str); 41] = [
     ((64, 64, 16), "small"),
     ((192, 320, 112), "small"),
     ((128, 4096, 80), "mid"),
@@ -332,13 +332,21 @@ const EXACT_SHAPES: [((u32, u32, u32), &str); 37] = [
     ((2060, 4097, 24), "large"),
     // Built for sm_75 on 40 SMs, these two run on the 8 x 256 tile, which
     // no shape above reaches there (the 32 x 32 and 32 x 64 ones are: 64 x
-    // 64 x 16, 33 x 65 x 17; the GEMV: 1 x 1 x 1, 1 x 8193 x 40): whole, and
-    // with M ragged, N = 2 mod 4 (8-byte B copies) and a K tail; then the
-    // 16 x 128 tile at N odd, and the 32-thread GEMV with a K tail.
+    // 64 x 16, 33 x 65 x 17; the 128-thread GEMV 1 x 8193 x 40; the
+    // few-column 4 x 32 and 8 x 16 tiles 1 x 1 x 1 and 7 x 13 x 5): whole,
+    // and with M ragged, N = 2 mod 4 (8-byte B copies) and a K tail; then
+    // the 16 x 128 tile at N odd; the 4 x 32 tile with a K tail; the 16 x
+    // 32 tile with M and N ragged, two K slices and a tail; the 32-thread
+    // GEMV with a one-step tail; and the 4 x 32 and 8 x 16 tiles over two
+    // and three K slices and a tail.
     ((8, 4096, 40), "small"),
     ((5, 4098, 35), "small"),
     ((12, 4097, 24), "small"),
     ((3, 1001, 37), "small"),
+    ((11, 333, 77), "small"),
+    ((2, 3000, 33), "small"),
+    ((3, 100, 200), "small"),
+    ((7, 50, 150), "small"),
 ];
 
 /// Every element of each EXACT_SHAPES GEMM, compiled in `dir` (whose
@@ -417,7 +425,7 @@ fn profile_for(tag: &str, sm: &str, sms: u32) -> std::path::PathBuf {
 
 /// Below sm_80 there is no `cp.async`: each copy is a load and a shared
 /// store (`f32_simt_gemm.rs`, `sync_copies`). Same arithmetic, so the same
-/// 37 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
+/// 41 shapes give the same bits. Built for sm_75 (a Tesla T4: 40 SMs, 64 KB
 /// of shared memory a block, so the large tile only at two stages, 49.7 KB)
 /// and run here, where the driver compiles sm_75 PTX for this card.
 #[test]
@@ -438,7 +446,8 @@ fn built_for_sm_75_each_element_is_the_same_fma_chain() {
         h.tile
     });
     // Every tile Turing can choose ran here, each element checked.
-    let want = ["large", "mid", "small", "thin32x32", "thin32x64", "skinny16x128", "skinny8x256", "gemv32", "gemv128"];
+    let want = ["large", "mid", "small", "thin32x32", "thin32x64", "skinny16x128", "skinny8x256", "gemv32", "gemv128",
+                "slab4x32", "slab8x16", "slab16x32"];
     let seen = seen.into_inner();
     assert!(want.iter().all(|t| seen.contains(*t)), "sm_75 tiles run: {seen:?}, want all of {want:?}");
     let _ = std::fs::remove_dir_all(&dir);
@@ -486,7 +495,8 @@ fn old_arch_ptxas() -> Option<std::path::PathBuf> {
 fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
     let shapes = [(4096, 4096, 4096), (2049, 4100, 24), (1023, 1025, 1027), (64, 64, 16), (2048, 12803, 64),
                   (1, 8193, 40), (2048, 4097, 40), (1024, 1025, 1024), (1024, 1024, 1027), (1023, 1024, 1024),
-                  (67, 37, 1035), (400, 2049, 1025), (67, 37, 35), (400, 2049, 40)];
+                  (67, 37, 1035), (400, 2049, 1025), (67, 37, 35), (400, 2049, 40),
+                  (3, 1001, 37), (8, 896, 896), (16, 777, 4097)];
     let new = ptxas::ptxas();
     let old = old_arch_ptxas();
     for (sm, sms, limit) in [("7.5", 40u32, 64 * 1024u32), ("7.0", 80, 96 * 1024), ("6.1", 6, 48 * 1024)] {
@@ -507,8 +517,11 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
             assert!(h.smem <= limit, "{arch} {m}x{n}x{k}: tile {} takes {} bytes, the block holds {limit}", h.tile, h.smem);
             // Turing's 64 KB holds one 3-stage mid tile and two 2-stage ones,
             // and the large tile at 2 stages only, so there both run 2;
-            // elsewhere 3 (`f32_gemm_turing_stages`, `f32_gemm_tile`).
-            let stages = if sm == "7.5" && (h.tile == "mid" || h.tile == "large") { 2 } else { 3 };
+            // elsewhere 3 (`f32_gemm_turing_stages`, `f32_gemm_tile`). The
+            // few-column tiles (Turing only) stage two slices.
+            let slab = h.tile.starts_with("slab");
+            assert!(!slab || sm == "7.5", "{arch} {m}x{n}x{k}: the few-column kernel off Turing");
+            let stages = if sm == "7.5" && (h.tile == "mid" || h.tile == "large" || slab) { 2 } else { 3 };
             assert!(gemv || ptx.contains(&format!("{stages} stages of plain loads")), "{arch} {m}x{n}x{k}: tile {} not {stages} stages", h.tile);
             if let Some(tool) = &tool {
                 let path = dir.join(format!("{name}.ptx"));
@@ -537,8 +550,11 @@ fn below_sm_80_the_gemm_uses_plain_loads_fits_the_block_and_assembles() {
 /// would be half empty, the small tile stays - unless it leaves SMs idle:
 /// then a 32-row tile with more tiles that still fit a wave (128 x 512 x
 /// 2048: 0.44x on the small tile, 0.54x on 32 x 64; `f32_gemm_turing_thin`).
-/// Sm_70 (Volta) on the same SM count, and this machine's sm_89, keep the
-/// old rule.
+/// Up to 16 rows, where no skinny tile is taken, the few-column tiles run
+/// (8 x 896 x 896: 0.37x on the small tile, 0.73x on 8 x 16;
+/// `f32_gemm_turing_slab`), and up to 4 rows they do until the GEMV's
+/// blocks would fill the SMs. Sm_70 (Volta) on the same SM count, and this
+/// machine's sm_89, keep the old rule.
 #[test]
 fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
     let dir = profile_for("f32_gemm_turing_rule", "7.5", 40);
@@ -572,14 +588,29 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         ((7, 50257, 768), "skinny16x128"), // N odd: 4-byte copies, 128 threads
         ((16, 4096, 4096), "skinny16x128"),
         ((17, 4096, 4096), "mid"),
-        ((6, 1024, 1024), "small"),      // 4 of 8 x 256: under 40% of the SMs
         ((6, 4096, 11008), "skinny8x256"), // 16 of them: 40%
-        // One to 4 rows: the GEMV, 128-thread blocks where they reach 75%
-        // of the SMs, else 32.
-        ((1, 1024, 1024), "gemv32"),
-        ((4, 896, 4864), "gemv32"),
+        // Where no skinny tile is taken, 5 to 16 rows run the few-column
+        // tiles (`f32_gemm_turing_slab`), whatever the fragment tile was.
+        ((6, 1024, 1024), "slab8x16"),   // 4 of 8 x 256: under 40% of the SMs
+        ((8, 896, 896), "slab8x16"),
+        ((6, 3072, 3072), "slab8x16"),   // the mid tile before
+        ((16, 896, 4864), "slab16x32"),
+        ((13, 999, 1001), "slab16x32"),
+        ((12, 2048, 2048), "skinny16x128"), // 16 of 16 x 128
+        // One to 4 rows: the 4 x 32 tile while its CTAs number under
+        // 0.6 (M + 1) an SM (N up to 1504 at one row, 3808 at four)...
+        ((1, 1024, 1024), "slab4x32"),
+        ((4, 896, 4864), "slab4x32"),
+        ((1, 1504, 1024), "slab4x32"),   // 47 CTAs
+        ((4, 3072, 1024), "slab4x32"),   // 96
+        // ... then the GEMV, 128-thread blocks where they reach 75% of the
+        // SMs, else 32.
+        ((1, 1536, 1024), "gemv32"),     // 48
+        ((1, 2048, 2048), "gemv32"),
+        ((2, 3072, 768), "gemv32"),
         ((1, 50257, 768), "gemv128"),
         ((4, 4096, 4096), "gemv128"),
+        ((4, 4096, 1024), "gemv128"),    // 128
         // ... unless the 8 x 256 tile has three waves of CTAs (N even).
         ((1, 24576, 768), "gemv128"),     // 96 of them
         ((1, 30522, 768), "skinny8x256"), // 120
@@ -591,6 +622,10 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         assert_eq!(h.tile, *want, "{m}x{n}x{k} at sm_75 on 40 SMs");
         if h.tile.starts_with("gemv") {
             assert!(ptx.contains("Plain loads, B by 4-byte copies") && h.smem == 0, "{m}x{n}x{k}: the GEMV header");
+            continue;
+        }
+        if h.tile.starts_with("slab") {
+            assert!(ptx.contains("2 stages of plain loads") && ptx.contains("Remainder: none; none."), "{m}x{n}x{k}: the few-column header");
             continue;
         }
         let stages = if h.tile == "mid" { 2 } else { 3 };
@@ -614,8 +649,9 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         // A K tail or a ragged M would guard a split's copies below sm_80.
         ((1000, 1000, 1000), None),
         ((768, 768, 770), None),
-        // The 8- and 16-row tiles are not split.
+        // The 8- and 16-row tiles are not split, nor the few-column ones.
         ((8, 11008, 4096), None),
+        ((8, 896, 896), None),
     ];
     for (i, ((m, n, k), want)) in w_cases.iter().enumerate() {
         let name = format!("w{i}");
@@ -623,8 +659,12 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         let got = sk_header(&ptx).map(|h| h.tile);
         assert_eq!(got.as_deref(), *want, "{m}x{n}x{k} with W at sm_75 on 40 SMs: the tile split, if any");
         if want.is_none() {
-            let one_wave = if *m <= 16 { "skinny8x256" } else { "mid" };
+            let one_wave = if *m > 16 { "mid" } else if *n < 4096 { "slab8x16" } else { "skinny8x256" };
             assert_eq!(header(&ptx).tile, one_wave, "{m}x{n}x{k} with W: the tile");
+            if one_wave.starts_with("slab") {
+                assert!(ptx.contains("Workspace W: not used: the few-column kernel does not split K."), "{m}x{n}x{k} with W: the reason W is unused");
+                continue;
+            }
             let guarded = *m > 16 && (m % 64 != 0 || k % 16 != 0);
             assert_eq!(ptx.contains("a split's copies would be guarded"), guarded, "{m}x{n}x{k} with W: the reason W is unused");
         }
@@ -636,6 +676,10 @@ fn on_turing_the_tile_is_the_one_that_fills_a_wave() {
         assert_eq!(header(&ptx).tile, "small", "512^3 at sm {sm} on {sms} SMs");
         let ptx = compile(&dir, "c128", 128, 512, 2048, "--emit-ptx").unwrap_or_else(|log| panic!("sm {sm}: {log}"));
         assert_eq!(header(&ptx).tile, "small", "128 x 512 x 2048 at sm {sm} on {sms} SMs");
+        let ptx = compile(&dir, "c8", 8, 896, 896, "--emit-ptx").unwrap_or_else(|log| panic!("sm {sm}: {log}"));
+        assert_eq!(header(&ptx).tile, "small", "8 x 896 x 896 at sm {sm} on {sms} SMs");
+        let ptx = compile(&dir, "c4", 4, 896, 4864, "--emit-ptx").unwrap_or_else(|log| panic!("sm {sm}: {log}"));
+        assert_eq!(header(&ptx).tile, "small", "4 x 896 x 4864 at sm {sm} on {sms} SMs");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
@@ -728,9 +772,15 @@ fn child_sanitized_runs() {
         (2048, 4097, 40),
         (2060, 4097, 24),
     ];
-    for (si, &(m, n, k)) in shapes.iter().enumerate() {
+    // Built for sm_75 on 40 SMs: the few-column tiles, whose copies past M
+    // and N read row M-1 and column N-1, over two or more K slices (the 3x1
+    // grid reuses both stages across tiles) and a K tail; N = 1.
+    let dir75 = profile_for("f32_gemm_sanitized75", "7.5", 40);
+    let shapes75 = [(3usize, 100usize, 200usize), (7, 50, 150), (11, 333, 77), (13, 1, 200), (4, 31, 65)];
+    let runs = shapes.iter().map(|s| (&dir, *s)).chain(shapes75.iter().map(|s| (&dir75, *s)));
+    for (si, (dir, (m, n, k))) in runs.enumerate() {
         let name = format!("san{si}");
-        let ptx = compile(&dir, &name, m as u32, n as u32, k as u32, "--emit-ptx").unwrap();
+        let ptx = compile(dir, &name, m as u32, n as u32, k as u32, "--emit-ptx").unwrap();
         let h = header(&ptx);
         let module = ctx.load_ptx(&ptx, &name).unwrap();
         module.set_max_dynamic_smem(h.smem).unwrap();
@@ -755,6 +805,7 @@ fn child_sanitized_runs() {
         println!("SANITIZED_RUN {m}x{n}x{k} {}", h.tile);
     }
     let _ = std::fs::remove_dir_all(&dir);
+    let _ = std::fs::remove_dir_all(&dir75);
 }
 
 #[test]
@@ -774,7 +825,7 @@ fn compute_sanitizer_finds_no_invalid_access_and_no_race() {
     // racecheck: no shared-memory hazard, including a stage reused by the
     // next tile or the next stream-K segment.
     for (check, summary) in [("memcheck", "ERROR SUMMARY: 0 errors"), ("racecheck", "RACECHECK SUMMARY: 0 hazards displayed")] {
-        for (child, mark, runs) in [("child_sanitized_runs", "SANITIZED_RUN", 19), ("child_sanitized_streamk_runs", "SANITIZED_SK_RUN", STREAMK_SANITIZED.len())] {
+        for (child, mark, runs) in [("child_sanitized_runs", "SANITIZED_RUN", 24), ("child_sanitized_streamk_runs", "SANITIZED_SK_RUN", STREAMK_SANITIZED.len())] {
             let out = Command::new(tool)
                 .args(["--tool", check, "--print-limit", "0"])
                 .arg(std::env::current_exe().unwrap())
