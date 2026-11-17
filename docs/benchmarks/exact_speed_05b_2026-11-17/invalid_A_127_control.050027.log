@@ -1,0 +1,22 @@
+210 MHz, 14.19 W, 51, 3057 MiB
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Qwen2.5-0.5B-Instruct  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 25092.28it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  76%|███████▌  | 220/290 [00:00<00:00, 2198.14it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2383.42it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  88%|████████▊ | 254/290 [00:00<00:00, 2496.57it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2615.17it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1117 05:01:38.115000 820566 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/3] Not enough SMs to use max_autotune_gemm mode
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 51 distinct tokens in reference
+  sanity fixedfloat   canary ok, 45 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.264       242.6       7761.9     0.6%
+exact  int8, order-independent           0.270       237.2       7591.5     0.3%
+fixedfloat  fp32, reduction order pinned   1.761        36.3       1163.1     0.3%
+
+  exact / stock = 1.02x slower
+
+  fixedfloat / stock = 6.67x slower
+  fixedfloat / exact = 6.53x slower

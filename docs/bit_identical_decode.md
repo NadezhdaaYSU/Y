@@ -480,36 +480,54 @@ It faces the same 16 batch compositions as the other arms, in the same harness.
 batch invariance too, and that has to be said plainly because this document
 spent several drafts implying otherwise.
 
-What it costs is the other half, measured on the same box, interleaved, best of
-3, spreads 0.2–0.8%:
+What it costs is the other half.
 
-| arm | tok/s/seq, no compile | tok/s/seq, `torch.compile` | vs stock |
+**Correction (2026-11-17).** The speed table this finding first gave was wrong,
+and so was the argument built on it. `tools/exact_throughput.py` had two bugs
+from the commit that added this arm (8f26cee) until 67b8fdc:
+
+- It builds every arm and then times them, and Qwen2 reads its attention from
+  a module global when it runs. With the exact arm and this arm in one
+  process, at least one of them ran with the other's attention.
+- This arm was returned as `torch.compile(m)`. `generate()` on that runs the
+  original module's forward, so dynamo compiled nothing. Every "compiled"
+  figure for this arm was eager.
+
+The original table, kept for the record (do not quote it):
+
+| arm | tok/s/seq, no compile | tok/s/seq, "`torch.compile`" | vs stock |
 |---|---:|---:|---:|
-| stock bf16 + SDPA | 174.3 | **246.3** | — |
-| exact int8 | 54.7 | **238.5** | 1.03x slower |
-| fixed-order fp32 | 37.7 | **36.0** | **6.85x slower** |
+| stock bf16 + SDPA | 174.3 | 246.3 | — |
+| exact int8 | 54.7 | 238.5 | 1.03x slower |
+| fixed-order fp32 | 37.7 | 36.0 (really eager) | 6.85x slower |
 
-**The interesting column is the compiler's.** `torch.compile` takes the exact
-arm from 54.7 to 238.5 tok/s/seq — a 4.4x gain — and takes the fixed-order arm
-from 37.7 to 36.0, i.e. nothing. That is not an accident of this
-implementation's shape; it is the mechanism. **Pinning a reduction order is
-precisely a constraint on how the reduction may be executed**, so the fusions
-and kernel choices that make the float path fast are exactly what the pinning
-forbids. Integer accumulation needs no pinning, so the compiler stays free.
+Measured again with the fixed tool, 0.5B, batch 32, 64 tokens, best of 5,
+arms interleaved (`docs/benchmarks/exact_speed_05b_2026-11-17/`):
 
-The honest restatement of what this work buys:
+| arm | tok/s/seq, eager | tok/s/seq, compiled (two runs) |
+|---|---:|---:|
+| stock bf16 + SDPA | 177.2 | 239.3, 247.0 |
+| exact int8 | 25.5 | 227.0, 235.6 (1.05x slower, both runs) |
+| fixed-order fp32 | **37.4** | 17.7, 18.7 (13.2-13.5x slower) |
 
-> Exactness does not buy determinism. Exactness buys determinism **while
-> leaving the compiler and the kernel autotuner free**, which is why it costs
-> 1.03x where pinning the order costs 6.85x.
+Compiling does not just fail to help the fixed-order arm: it makes it about
+twice as slow. We did not find out why. Run at its fastest (eager), the
+control is 6.5x slower than compiled stock and 6.2x slower than compiled
+exact (ratios across processes). The old 6.85x headline was close by
+chance, but the earlier claim that "`torch.compile` takes the fixed-order
+arm from 37.7 to 36.0, i.e. nothing" was never measured: compile was never
+applied.
+
+What still holds is the direction: the exact path keeps nearly all of
+compiled stock's speed, and this fixed-order construction does not get
+faster with the compiler. That this is "the mechanism" (pinning forbids the
+fusions) is an explanation, not a measurement.
 
 **What is not proven.** This arm pins the order with chunked loops in Python,
 which is the naive construction. A hand-written fixed-order CUDA kernel would be
-far faster than 6.85x slower, and nothing here rules out a fast one existing. So
-`0/16` is a solid result and the 6.85x is an upper bound on *this* construction,
-not a lower bound on the idea. What does generalise is the compiler column: any
-fixed-order implementation forbids the same class of optimisation, whoever
-writes it.
+far faster, and nothing here rules out a fast one existing. So `0/16` is a solid
+result, and 6.5x is an upper bound on *this* construction, not a lower bound on
+the idea.
 
 ---
 
@@ -867,7 +885,11 @@ Three sites, and the ones I had not hit were worse than the one I had:
 | `exact_throughput.py` | never decodes a token at all | reports a throughput — and several ways of being broken are **faster** |
 
 That last row is where the 1.03x of finding 11 comes from. A cost figure for a
-model that is not computing the right thing is not a cost.
+model that is not computing the right thing is not a cost. (2026-11-17: the gate
+below did not catch that the exact arm of finding 11 ran on the control's
+attention. A model with the wrong attention still answers the canary and does
+not collapse. The tell was its reference text: 51 distinct tokens, where the
+exact path gives 40. See `docs/benchmarks/exact_speed_05b_2026-11-17/`.)
 
 ### The gate
 
@@ -1185,8 +1207,10 @@ this is worth nothing to the person reading it.
 ### The fixed-order baseline is naive, and the int8 one is missing
 
 This section used to say exact against fixed-order float was never measured.
-Finding 11 measured it: pinned-order fp32 is also 0/16, at 6.85x slower than
-stock where exact is 1.03x. Two gaps remain:
+Finding 11 measured it: pinned-order fp32 is also 0/16. At its fastest (eager)
+it is 6.5x slower than compiled stock, where exact is 1.05x (corrected
+2026-11-17; the first figures, 6.85x and 1.03x, came from a tool with two
+bugs). Two gaps remain:
 - **That arm is the naive construction.** It pins the order with chunked
   loops in Python. A hand-written fixed-order CUDA kernel would be far faster,
   and none has been measured.

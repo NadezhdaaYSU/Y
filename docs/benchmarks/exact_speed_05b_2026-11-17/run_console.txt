@@ -1,0 +1,76 @@
+commit 90cd97f2e8e7aa496d4f03edd79852e4ab197145
+713be562a3f6f9ca923f35753a60b2aa8e4914610bc63faeddfaf72f68a96837  /tmp/y_exact_nospace/target/release/liby.so
+NVIDIA GeForce RTX 4070 Ti SUPER, 615.78.08, 3120 MHz, 285.00 W
+== A_127_control 034740  util 18%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 51 distinct tokens in reference
+  sanity fixedfloat   canary ok, 45 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.267       240.1       7683.6     0.7%
+exact  int8, order-independent           0.276       231.7       7415.2     0.3%
+fixedfloat  fp32, reduction order pinned   1.837        34.8       1115.1     0.4%
+  exact / stock = 1.04x slower
+  fixedfloat / stock = 6.89x slower
+  fixedfloat / exact = 6.65x slower
+== B_511 040311  util 38%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 48 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.266       240.2       7685.0     0.5%
+exact  int8, order-independent           0.292       219.2       7013.5     0.4%
+  exact / stock = 1.10x slower
+== C_every_switch 041609  util 23%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.265       241.9       7740.7     0.3%
+exact  int8, order-independent           0.259       247.1       7908.1     1.1%
+  exact / stock = 0.98x slower
+== D_every_switch_ygemm 042751  util 9%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.262       244.7       7830.5     0.0%
+exact  int8, order-independent           0.268       238.8       7642.8     1.1%
+  exact / stock = 1.02x slower
+== D_every_switch_ygemm 043801  util 8%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.262       244.2       7814.3     0.2%
+exact  int8, order-independent           0.273       234.5       7503.3     0.3%
+  exact / stock = 1.04x slower
+== C_every_switch 044459  util 11%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.260       245.9       7868.7     0.3%
+exact  int8, order-independent           0.257       249.0       7968.4     0.1%
+  exact / stock = 0.99x slower
+== B_511 045243  util 19%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 48 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.261       244.9       7838.2     0.2%
+exact  int8, order-independent           0.286       223.7       7157.9     0.2%
+  exact / stock = 1.10x slower
+== A_127_control 050027  util 11%  others: steam Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 51 distinct tokens in reference
+  sanity fixedfloat   canary ok, 45 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.264       242.6       7761.9     0.6%
+exact  int8, order-independent           0.270       237.2       7591.5     0.3%
+fixedfloat  fp32, reduction order pinned   1.761        36.3       1163.1     0.3%
+  exact / stock = 1.02x slower
+  fixedfloat / stock = 6.67x slower
+  fixedfloat / exact = 6.53x slower
+done 05:05:23

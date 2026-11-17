@@ -1,0 +1,18 @@
+1575 MHz, 15.31 W, 52, 2954 MiB
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Qwen2.5-0.5B-Instruct  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 31862.43it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  51%|█████▏    | 149/290 [00:00<00:00, 1467.29it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2018.35it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1117 04:29:29.123000 786385 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/3_1] Not enough SMs to use max_autotune_gemm mode
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+stock  bf16 + SDPA (what ships)          0.262       244.7       7830.5     0.0%
+exact  int8, order-independent           0.268       238.8       7642.8     1.1%
+
+  exact / stock = 1.02x slower

@@ -1950,12 +1950,15 @@ order and batch size cannot change the answer. That is the whole mechanism.
 **And exactness is not what buys the determinism — it is what makes the
 determinism affordable.** The control that settles this was built and measured:
 a float32 path with the reduction *order* pinned instead of the arithmetic made
-exact is **also 0/16**. It just costs **6.85x**, where the exact path costs
-1.03x. The reason is the one that generalises past this implementation:
-`torch.compile` takes the exact arm from 54.7 to 238.5 tok/s/seq and the
-fixed-order arm from 37.7 to 36.0 — pinning an order *is* a constraint on how
-the reduction may execute, so it forbids exactly the fusions that make float
-fast. Integer accumulation needs no pinning, so the compiler stays free.
+exact is **also 0/16**. It just costs **6.5x** at its fastest (eager, against
+compiled stock), where the exact path costs 1.05x compiled. `torch.compile`
+takes the exact arm from 25.5 to about 231 tok/s/seq, but makes the
+fixed-order arm about twice as slow (37.4 eager, 17.7-18.7 compiled). Our
+explanation: pinning an order constrains how the reduction may run, so it
+forbids the fusions that make float fast, while integer accumulation needs no
+pinning. (Corrected 2026-11-17: the first figures, 6.85x and 1.03x, came from
+a tool that gave the exact arm the control's attention and never compiled
+the control; see `docs/benchmarks/exact_speed_05b_2026-11-17/`.)
 
 **This is unfinished work, and it is here because the finished parts are
 measured.** What exists is a PyTorch + Triton **prototype** carrying the whole
@@ -2011,7 +2014,9 @@ SiLU bit for bit on both devices, eager and compiled, with controls that must
 still differ.
 
 **Speed since the table** (compiled, batch 32, idle GPU): at 0.5B, with the
-CPU==GPU fixes, exact decodes 1.11x slower than stock bf16. At
+CPU==GPU fixes, exact decoded 1.11x slower than stock bf16 (2026-11-02); on
+the code of 2026-11-17 it is 1.05x, 1.10x at width 511, and 0.98-0.99x with
+every Y kernel switch on (`docs/benchmarks/exact_speed_05b_2026-11-17/`). At
 7B it decodes **1.50x faster** (47.4 against 31.5 tok/s/seq, 2026-11-04). That
 is int8 weights being half the bytes of bf16, not exactness. Against an
 8-bit engine without exactness (vLLM 0.21, FP8 weights, CUDA graphs, same card,

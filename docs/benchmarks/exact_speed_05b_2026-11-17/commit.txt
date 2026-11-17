@@ -1,0 +1,3 @@
+commit 90cd97f2e8e7aa496d4f03edd79852e4ab197145
+713be562a3f6f9ca923f35753a60b2aa8e4914610bc63faeddfaf72f68a96837  /tmp/y_exact_nospace/target/release/liby.so
+NVIDIA GeForce RTX 4070 Ti SUPER, 615.78.08, 3120 MHz, 285.00 W
