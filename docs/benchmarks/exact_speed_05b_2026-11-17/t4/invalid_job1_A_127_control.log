@@ -1,0 +1,30 @@
+
+qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:33,  3.08it/s]
+Loading weights:  72%|███████▏  | 208/290 [00:00<00:00, 634.25it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 554.23it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:56,  2.49it/s]
+Loading weights:  80%|███████▉  | 231/290 [00:00<00:00, 589.58it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 491.44it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:54,  2.53it/s]
+Loading weights:  80%|███████▉  | 231/290 [00:00<00:00, 612.34it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 515.25it/s]
+W1117 00:45:31.378000 153 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 54 distinct tokens in reference
+  sanity fixedfloat   canary ok, 45 distinct tokens in reference
+stock  fp16 + SDPA (what ships)          1.001        63.9       2045.1     0.9%
+exact  int8, order-independent           1.351        47.4       1515.6     0.5%
+fixedfloat  fp32, reduction order pinned  10.045         6.4        203.9     0.2%
+
+  exact / stock = 1.35x slower
+
+  fixedfloat / stock = 10.03x slower
+  fixedfloat / exact = 7.43x slower

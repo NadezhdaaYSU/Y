@@ -1,0 +1,100 @@
+[{"stream_name":"stderr","time":7.352600671,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.352660908,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.352667737,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.352671633,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":7.937313569,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.93734142,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.937346062,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.937349639,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":9.083052473,"data":"index, name, compute_cap, driver_version, clocks.max.sm [MHz]\r\n"}
+,{"stream_name":"stdout","time":9.083104185,"data":"0, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":9.083109227,"data":"1, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":9.201097838,"data":"CPU(s):                                  4\r\n"}
+,{"stream_name":"stdout","time":9.201120273,"data":"Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz\r\n"}
+,{"stream_name":"stdout","time":172.417641259,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":172.417673508,"data":"easyocr 1.7.2 requires torchvision\u003e=0.5, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":172.41768018,"data":"fastai 2.8.12 requires torchvision\u003e=0.11, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":172.417685229,"data":"timm 1.0.30 requires torchvision, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":172.417690378,"data":"libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":172.417695844,"data":"cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":172.41770174,"data":"cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":172.417707689,"data":"libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":172.417713234,"data":"cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":172.417718571,"data":"libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":172.417723836,"data":"libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":245.72217127,"data":"\u001b[0mliby.so sha256 5c26fe725eb35a5d\n"}
+,{"stream_name":"stdout","time":245.722219314,"data":"exact_throughput has --stock-dtype: True\n"}
+,{"stream_name":"stdout","time":245.722235082,"data":"exact_throughput has with_attention: True\n"}
+,{"stream_name":"stderr","time":246.62940857,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":246.629433901,"data":"\n"}
+,{"stream_name":"stderr","time":246.629438409,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":265.237319535,"data":"torch 2.13.0+cu126 transformers 5.15.0 Tesla T4\n"}
+,{"stream_name":"stdout","time":4963.922524033,"data":"\n"}
+,{"stream_name":"stdout","time":4963.922572778,"data":"qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5\n"}
+,{"stream_name":"stdout","time":4963.922576708,"data":"arm                                          s   tok/s/seq  tok/s total   spread\n"}
+,{"stream_name":"stdout","time":4963.922580248,"data":"\n"}
+,{"stream_name":"stdout","time":4963.922583158,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":4963.92258656,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:37,  2.97it/s]\n"}
+,{"stream_name":"stdout","time":4963.922589512,"data":"Loading weights:  88%|████████▊ | 256/290 [00:00\u003c00:00, 761.65it/s]\n"}
+,{"stream_name":"stdout","time":4963.922593178,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 623.45it/s]\n"}
+,{"stream_name":"stdout","time":4963.922596351,"data":"\n"}
+,{"stream_name":"stdout","time":4963.9225992,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":4963.922602094,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:44,  2.77it/s]\n"}
+,{"stream_name":"stdout","time":4963.92260505,"data":"Loading weights:  80%|████████  | 233/290 [00:00\u003c00:00, 652.31it/s]\n"}
+,{"stream_name":"stdout","time":4963.922608015,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 548.61it/s]\n"}
+,{"stream_name":"stdout","time":4963.922611004,"data":"\n"}
+,{"stream_name":"stdout","time":4963.92261371,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":4963.922616646,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:49,  2.64it/s]\n"}
+,{"stream_name":"stdout","time":4963.922619563,"data":"Loading weights:  84%|████████▍ | 244/290 [00:00\u003c00:00, 665.17it/s]\n"}
+,{"stream_name":"stdout","time":4963.92262262,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 549.96it/s]\n"}
+,{"stream_name":"stdout","time":4963.922625598,"data":"W1117 03:09:04.282000 152 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode\n"}
+,{"stream_name":"stdout","time":4963.922628648,"data":"  sanity stock        canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":4963.922631514,"data":"  sanity exact        canary ok, 40 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":4963.922634448,"data":"  sanity fixedfloat   canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":4963.92263728,"data":"stock  fp16 + SDPA (what ships)          0.853        75.1       2401.9     2.4%\n"}
+,{"stream_name":"stdout","time":4963.922640184,"data":"exact  int8, order-independent           1.264        50.7       1620.9     3.2%\n"}
+,{"stream_name":"stdout","time":4963.922643053,"data":"fixedfloat  fp32, reduction order pinned   9.168         7.0        223.4     2.2%\n"}
+,{"stream_name":"stdout","time":4963.922652083,"data":"\n"}
+,{"stream_name":"stdout","time":4963.922654445,"data":"  exact / stock = 1.48x slower\n"}
+,{"stream_name":"stdout","time":4963.92265672,"data":"\n"}
+,{"stream_name":"stdout","time":4963.922658895,"data":"  fixedfloat / stock = 10.75x slower\n"}
+,{"stream_name":"stdout","time":4963.922661121,"data":"  fixedfloat / exact = 7.26x slower\n"}
+,{"stream_name":"stdout","time":4963.922663367,"data":"\n"}
+,{"stream_name":"stdout","time":4963.922665492,"data":"exit 0 4699 s\n"}
+,{"stream_name":"stdout","time":4963.92266773,"data":"960 MHz, 34.91 W, 69\r\n"}
+,{"stream_name":"stdout","time":4963.922669998,"data":"300 MHz, 9.46 W, 35\r\n"}
+,{"stream_name":"stdout","time":6747.989588894,"data":"\n"}
+,{"stream_name":"stdout","time":6747.989627473,"data":"qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5\n"}
+,{"stream_name":"stdout","time":6747.989633823,"data":"arm                                          s   tok/s/seq  tok/s total   spread\n"}
+,{"stream_name":"stdout","time":6747.98963873,"data":"\n"}
+,{"stream_name":"stdout","time":6747.989643033,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":6747.98964793,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:24,  3.41it/s]\n"}
+,{"stream_name":"stdout","time":6747.98965281,"data":"Loading weights:  76%|███████▌  | 220/290 [00:00\u003c00:00, 718.47it/s]\n"}
+,{"stream_name":"stdout","time":6747.989658938,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 628.44it/s]\n"}
+,{"stream_name":"stdout","time":6747.989664647,"data":"\n"}
+,{"stream_name":"stdout","time":6747.989669285,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":6747.989674452,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c02:02,  2.36it/s]\n"}
+,{"stream_name":"stdout","time":6747.989679227,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 577.55it/s]\n"}
+,{"stream_name":"stdout","time":6747.989684156,"data":"W1117 04:30:36.582000 1237 torch/_inductor/utils.py:1953] [0/3_1] Not enough SMs to use max_autotune_gemm mode\n"}
+,{"stream_name":"stdout","time":6747.989689106,"data":"y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there\n"}
+,{"stream_name":"stdout","time":6747.989694687,"data":"    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.\n"}
+,{"stream_name":"stdout","time":6747.989700339,"data":"    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.\n"}
+,{"stream_name":"stdout","time":6747.989706053,"data":"  sanity stock        canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":6747.989711508,"data":"  sanity exact        canary ok, 40 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":6747.989716609,"data":"stock  fp16 + SDPA (what ships)          0.859        74.5       2384.8     0.1%\n"}
+,{"stream_name":"stdout","time":6747.989721721,"data":"exact  int8, order-independent           1.177        54.4       1739.4     2.8%\n"}
+,{"stream_name":"stdout","time":6747.989726362,"data":"\n"}
+,{"stream_name":"stdout","time":6747.989730715,"data":"  exact / stock = 1.37x slower\n"}
+,{"stream_name":"stdout","time":6747.989735204,"data":"\n"}
+,{"stream_name":"stdout","time":6747.989739552,"data":"exit 0 1784 s\n"}
+,{"stream_name":"stdout","time":6747.989743837,"data":"585 MHz, 37.26 W, 76\r\n"}
+,{"stream_name":"stdout","time":6747.989765906,"data":"300 MHz, 9.76 W, 38\r\n"}
+,{"stream_name":"stderr","time":6751.397076984,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":6751.397104854,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":6751.581992339,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":6751.582017892,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":6752.371695246,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":6752.453345618,"data":"[NbConvertApp] Writing 48940 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":6754.967126528,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":6755.492958679,"data":"[NbConvertApp] Writing 325799 bytes to __results__.html\n"}
+]

@@ -55,6 +55,39 @@ The control is fastest eager. Its eager 37.4 is 6.5x slower than compiled
 stock (243 on average) and 6.2x slower than compiled exact (231). Those two
 ratios compare different processes.
 
+## Tesla T4 (Kaggle)
+
+Two Kaggle jobs on a Tesla T4 (sm_75, driver 580.178.04), made by
+`t4/make_t4_speed_job.py`. Same protocol, but the stock arm is float16,
+because a T4 has no bf16 tensor cores (`--stock-dtype float16`). Triton
+cannot build the int8 dot below sm_80, so the exact path's linear layers
+fall back to `torch._int_mm`. `liby.so` came from the wheel dataset
+(sha256 5c26fe725eb35a5d…). Job 1 ran the tool at 90cd97f and job 2 at
+67b8fdc. Each setup ran once, and the two jobs got different T4 machines
+(stock 64 against 75 tokens/s per sequence), so compare ratios, not speeds.
+
+| Setup | Stock fp16 | Exact | Exact against stock |
+|---|---|---|---|
+| Default (127 levels), job 2 | 75.1 | 50.7 | 1.48x slower |
+| 511 levels, job 1 | 64.1 | 32.2 | 1.99x slower |
+| Every switch, job 2 | 74.5 | 54.4 | 1.37x slower |
+
+The control ran at 7.0 compiled (job 2, 10.7x slower than stock) and 6.4
+eager (job 1, 10.0x slower). Job 1's control figure is valid: the control
+was built last, so it ran on its own attention, and the old tool always
+ran it eager. Job 1's exact figure in that run is not valid (bug 1), so
+that log is `t4/invalid_job1_A_127_control.log`.
+
+Job 1's every-switch run failed (`t4/failed_job1_C_every_switch.log`). The
+source tarball kept `python/y_lang/exact/exact_pv.ysu` as a symlink, and
+Kaggle unpacked it as an empty file. Y refused to build a module with no
+kernel, and the exact path refused to fall back. Job 2's tarball stores
+both copies as real files, and its notebook stops if any `.ysu` file is
+empty.
+
+On the T4 the exact arm's reference has 40 distinct tokens, as on the RTX
+4070 Ti SUPER. Stock float16 there has 45.
+
 ## The switches do not change the tokens
 
 Every exact run gives the same 64-token reference: 40 distinct tokens and the

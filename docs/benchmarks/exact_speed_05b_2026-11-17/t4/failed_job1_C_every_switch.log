@@ -1,0 +1,107 @@
+
+qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:25,  3.38it/s]
+Loading weights:  76%|███████▌  | 220/290 [00:00<00:00, 713.46it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 609.51it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:57,  2.47it/s]
+Loading weights:  84%|████████▍ | 243/290 [00:00<00:00, 625.30it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 501.61it/s]
+W1117 02:18:37.343000 1319 torch/_inductor/utils.py:1953] [0/3_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+  sanity stock        canary ok, 45 distinct tokens in reference
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/y_lang/exact/attention.py", line 214, in _pv_kernel
+    kern = TorchKernel(source.read_text(),
+                       kernel_name="exact_pv", target_sm=f"sm_{major}{minor}")
+  File "/kaggle/working/Y/python/y_lang/torch_interop.py", line 210, in __init__
+    self.ptx = compile_to_ptx(ysu_source, target_sm=target_sm, name=kernel_name)
+               ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/compiler.py", line 420, in compile_to_ptx
+    raise ValueError(f"Y Compilation Error:\n{err_msg}")
+ValueError: Y Compilation Error:
+[PTX backend] this source declares no `kernel`, so there is nothing to emit - the module would be a `.version`/`.target` header and no instructions. An empty module assembles and does nothing. Declare a `kernel`, or compile host code with the LLVM backend (the default) or --emit-cpu.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/kaggle/working/Y/tools/exact_throughput.py", line 315, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/kaggle/working/Y/tools/exact_throughput.py", line 288, in main
+    if not gate(models, tok, a.device, static_cache=a.graphs or a.static_cache):
+           ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/tools/exact_throughput.py", line 138, in gate
+    canary = D.canary_text(m, tok, device, static_cache)
+  File "/kaggle/working/Y/python/y_lang/exact/attention.py", line 754, in canary_text
+    out = model.generate(
+        input_ids=enc.input_ids, attention_mask=enc.attention_mask,
+    ...<2 lines>...
+        **({"cache_implementation": "static"} if static_cache else {}),
+    )
+  File "/usr/local/lib/python3.13/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 2668, in generate
+    result = decoding_method(
+        self,
+    ...<5 lines>...
+        **model_kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 2868, in _sample
+    outputs = self._prefill(
+        input_ids,
+    ...<2 lines>...
+        is_first_iteration=not generation_config.is_assistant,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/generation/utils.py", line 3948, in _prefill
+    return self(**model_inputs, return_dict=True)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py", line 1166, in compile_wrapper
+    result = fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 933, in wrapper
+    @wraps(func)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py", line 1446, in _fn
+    return fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_functorch/aot_autograd.py", line 1277, in forward
+    return compiled_fn(full_args)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 1141, in runtime_wrapper
+    result = _codegen_runtime_wrapper(
+        _inner_compiled_fn,
+    ...<2 lines>...
+        args,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/torch/_functorch/_aot_autograd/subclass_codegen.py:codegen(runtime_wrapper_orchestration)", line 8, in _runtime_wrapper
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/output_code.py", line 763, in __call__
+    return self.current_callable(inputs)
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "/tmp/torchinductor_root/jm/cjmeg2brz2cuhdcmktwx23znbtmttuizocjpwmzh7y33upvo3taa.py", line 3499, in call
+    buf35 = torch.ops.y.exact_pv.default(buf34, reinterpret_tensor(buf31, (1, 2, s27, 64), (160*s27, 80*s27, 80, 1), 0))
+  File "/usr/local/lib/python3.13/dist-packages/torch/_ops.py", line 875, in __call__
+    return self._op(*args, **kwargs)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_compile.py", line 54, in inner
+    return disable_fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py", line 1446, in _fn
+    return fn(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 432, in __torch_dispatch__
+    res = func(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_ops.py", line 875, in __call__
+    return self._op(*args, **kwargs)
+           ~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/y_lang/exact/attention.py", line 255, in _y_exact_pv
+    index, kern = _pv_kernel(dev)
+                  ~~~~~~~~~~^^^^^
+  File "/kaggle/working/Y/python/y_lang/exact/attention.py", line 217, in _pv_kernel
+    raise RuntimeError(
+    ...<5 lines>...
+    ) from e
+RuntimeError: Y_EXACT_V_INT8 needs Y's compiler library (liby.so; in a checkout, `cargo build --release`) and /kaggle/working/Y/python/y_lang/exact/exact_pv.ysu, and it failed: Y Compilation Error:
+[PTX backend] this source declares no `kernel`, so there is nothing to emit - the module would be a `.version`/`.target` header and no instructions. An empty module assembles and does nothing. Declare a `kernel`, or compile host code with the LLVM backend (the default) or --emit-cpu.. Not falling back to the digit split: that would cast the whole cache every step and report a number for a path nobody asked for.

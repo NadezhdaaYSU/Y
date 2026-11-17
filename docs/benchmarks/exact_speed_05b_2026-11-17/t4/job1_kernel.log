@@ -1,0 +1,145 @@
+[{"stream_name":"stderr","time":9.52420304,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":9.524313210999999,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":9.524325508,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":9.524330466,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":10.258178661,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":10.258216867,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":10.258228196,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":10.258233112,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":11.711001382,"data":"index, name, compute_cap, driver_version, clocks.max.sm [MHz]\r\n"}
+,{"stream_name":"stdout","time":11.7110473,"data":"0, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":11.71105247,"data":"1, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":11.833986614,"data":"CPU(s):                                  4\r\n"}
+,{"stream_name":"stdout","time":11.834021828000001,"data":"Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz\r\n"}
+,{"stream_name":"stdout","time":201.103374691,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":201.103416266,"data":"easyocr 1.7.2 requires torchvision\u003e=0.5, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":201.103423936,"data":"fastai 2.8.12 requires torchvision\u003e=0.11, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":201.103429344,"data":"timm 1.0.30 requires torchvision, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":201.103434641,"data":"libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":201.103440227,"data":"cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":201.103445784,"data":"cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":201.103450814,"data":"libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":201.103456128,"data":"cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":201.103461222,"data":"libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":201.103466448,"data":"libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":294.235600329,"data":"\u001b[0mliby.so sha256 5c26fe725eb35a5d\n"}
+,{"stream_name":"stdout","time":294.235681278,"data":"exact_throughput has --stock-dtype: True\n"}
+,{"stream_name":"stderr","time":295.543742739,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":295.543784019,"data":"\n"}
+,{"stream_name":"stderr","time":295.543789326,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":311.979881105,"data":"torch 2.13.0+cu126 transformers 5.15.0 Tesla T4\n"}
+,{"stream_name":"stdout","time":3140.486946297,"data":"\n"}
+,{"stream_name":"stdout","time":3140.487031417,"data":"qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5\n"}
+,{"stream_name":"stdout","time":3140.487042172,"data":"arm                                          s   tok/s/seq  tok/s total   spread\n"}
+,{"stream_name":"stdout","time":3140.487051568,"data":"\n"}
+,{"stream_name":"stdout","time":3140.487059912,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":3140.48706933,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:33,  3.08it/s]\n"}
+,{"stream_name":"stdout","time":3140.487078985,"data":"Loading weights:  72%|███████▏  | 208/290 [00:00\u003c00:00, 634.25it/s]\n"}
+,{"stream_name":"stdout","time":3140.487089141,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 554.23it/s]\n"}
+,{"stream_name":"stdout","time":3140.487098736,"data":"\n"}
+,{"stream_name":"stdout","time":3140.487108291,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":3140.487117302,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:56,  2.49it/s]\n"}
+,{"stream_name":"stdout","time":3140.487126152,"data":"Loading weights:  80%|███████▉  | 231/290 [00:00\u003c00:00, 589.58it/s]\n"}
+,{"stream_name":"stdout","time":3140.487134647,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 491.44it/s]\n"}
+,{"stream_name":"stdout","time":3140.487143772,"data":"\n"}
+,{"stream_name":"stdout","time":3140.487152705,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":3140.487162075,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:54,  2.53it/s]\n"}
+,{"stream_name":"stdout","time":3140.487171677,"data":"Loading weights:  80%|███████▉  | 231/290 [00:00\u003c00:00, 612.34it/s]\n"}
+,{"stream_name":"stdout","time":3140.487180498,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 515.25it/s]\n"}
+,{"stream_name":"stdout","time":3140.487189093,"data":"W1117 00:45:31.378000 153 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode\n"}
+,{"stream_name":"stdout","time":3140.487197386,"data":"  sanity stock        canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":3140.487205863,"data":"  sanity exact        canary ok, 54 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":3140.487214066,"data":"  sanity fixedfloat   canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":3140.487222348,"data":"stock  fp16 + SDPA (what ships)          1.001        63.9       2045.1     0.9%\n"}
+,{"stream_name":"stdout","time":3140.487230197,"data":"exact  int8, order-independent           1.351        47.4       1515.6     0.5%\n"}
+,{"stream_name":"stdout","time":3140.487238755,"data":"fixedfloat  fp32, reduction order pinned  10.045         6.4        203.9     0.2%\n"}
+,{"stream_name":"stdout","time":3140.487246955,"data":"\n"}
+,{"stream_name":"stdout","time":3140.487270616,"data":"  exact / stock = 1.35x slower\n"}
+,{"stream_name":"stdout","time":3140.487277252,"data":"\n"}
+,{"stream_name":"stdout","time":3140.48728302,"data":"  fixedfloat / stock = 10.03x slower\n"}
+,{"stream_name":"stdout","time":3140.487307727,"data":"  fixedfloat / exact = 7.43x slower\n"}
+,{"stream_name":"stdout","time":3140.487314917,"data":"\n"}
+,{"stream_name":"stdout","time":3140.487320563,"data":"exit 0 2828 s\n"}
+,{"stream_name":"stdout","time":3140.487325719,"data":"585 MHz, 29.41 W, 52\r\n"}
+,{"stream_name":"stdout","time":3140.492196554,"data":"300 MHz, 9.75 W, 34\r\n"}
+,{"stream_name":"stdout","time":5654.782341713,"data":"\n"}
+,{"stream_name":"stdout","time":5654.782397578,"data":"qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  best of 5\n"}
+,{"stream_name":"stdout","time":5654.782404734,"data":"arm                                          s   tok/s/seq  tok/s total   spread\n"}
+,{"stream_name":"stdout","time":5654.782410037,"data":"\n"}
+,{"stream_name":"stdout","time":5654.782414818,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":5654.782420209,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:28,  3.27it/s]\n"}
+,{"stream_name":"stdout","time":5654.782425456,"data":"Loading weights:  63%|██████▎   | 184/290 [00:00\u003c00:00, 582.10it/s]\n"}
+,{"stream_name":"stdout","time":5654.782431454,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 622.86it/s]\n"}
+,{"stream_name":"stdout","time":5654.782436689,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 514.92it/s]\n"}
+,{"stream_name":"stdout","time":5654.782441355,"data":"\n"}
+,{"stream_name":"stdout","time":5654.782445962,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":5654.78245113,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:38,  2.94it/s]\n"}
+,{"stream_name":"stdout","time":5654.782456888,"data":"Loading weights:  63%|██████▎   | 184/290 [00:00\u003c00:00, 536.85it/s]\n"}
+,{"stream_name":"stdout","time":5654.78246242,"data":"Loading weights:  99%|█████████▉| 288/290 [00:00\u003c00:00, 610.89it/s]\n"}
+,{"stream_name":"stdout","time":5654.782467761,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 495.06it/s]\n"}
+,{"stream_name":"stdout","time":5654.782472895,"data":"W1117 01:35:39.803000 833 torch/_inductor/utils.py:1953] [0/3] Not enough SMs to use max_autotune_gemm mode\n"}
+,{"stream_name":"stdout","time":5654.782478201,"data":"  sanity stock        canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":5654.782483108,"data":"  sanity exact        canary ok, 48 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":5654.782488203,"data":"stock  fp16 + SDPA (what ships)          0.998        64.1       2051.4     0.3%\n"}
+,{"stream_name":"stdout","time":5654.782493291,"data":"exact  int8, order-independent           1.987        32.2       1030.7     0.1%\n"}
+,{"stream_name":"stdout","time":5654.782498275,"data":"\n"}
+,{"stream_name":"stdout","time":5654.782502864,"data":"  exact / stock = 1.99x slower\n"}
+,{"stream_name":"stdout","time":5654.782507964,"data":"\n"}
+,{"stream_name":"stdout","time":5654.782512416,"data":"exit 0 2514 s\n"}
+,{"stream_name":"stdout","time":5654.782518779,"data":"585 MHz, 28.62 W, 51\r\n"}
+,{"stream_name":"stdout","time":5654.785803317,"data":"300 MHz, 9.75 W, 34\r\n"}
+,{"stream_name":"stdout","time":6127.58809431,"data":"rgs)\n"}
+,{"stream_name":"stdout","time":6127.588131559,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py\", line 1166, in compile_wrapper\n"}
+,{"stream_name":"stdout","time":6127.588160458,"data":"    result = fn(*args, **kwargs)\n"}
+,{"stream_name":"stdout","time":6127.588166033,"data":"  File \"/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py\", line 933, in wrapper\n"}
+,{"stream_name":"stdout","time":6127.588171056,"data":"    @wraps(func)\n"}
+,{"stream_name":"stdout","time":6127.588175582,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py\", line 1446, in _fn\n"}
+,{"stream_name":"stdout","time":6127.588179829,"data":"    return fn(*args, **kwargs)\n"}
+,{"stream_name":"stdout","time":6127.588183663,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_functorch/aot_autograd.py\", line 1277, in forward\n"}
+,{"stream_name":"stdout","time":6127.588187787,"data":"    return compiled_fn(full_args)\n"}
+,{"stream_name":"stdout","time":6127.588191648,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 1141, in runtime_wrapper\n"}
+,{"stream_name":"stdout","time":6127.588195988,"data":"    result = _codegen_runtime_wrapper(\n"}
+,{"stream_name":"stdout","time":6127.588199934,"data":"        _inner_compiled_fn,\n"}
+,{"stream_name":"stdout","time":6127.588207613,"data":"    ...\u003c2 lines\u003e...\n"}
+,{"stream_name":"stdout","time":6127.588210659,"data":"        args,\n"}
+,{"stream_name":"stdout","time":6127.588213224,"data":"    )\n"}
+,{"stream_name":"stdout","time":6127.588215848,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_functorch/_aot_autograd/subclass_codegen.py:codegen(runtime_wrapper_orchestration)\", line 8, in _runtime_wrapper\n"}
+,{"stream_name":"stdout","time":6127.58821894,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_inductor/output_code.py\", line 763, in __call__\n"}
+,{"stream_name":"stdout","time":6127.588221761,"data":"    return self.current_callable(inputs)\n"}
+,{"stream_name":"stdout","time":6127.588224356,"data":"           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^\n"}
+,{"stream_name":"stdout","time":6127.588226965,"data":"  File \"/tmp/torchinductor_root/jm/cjmeg2brz2cuhdcmktwx23znbtmttuizocjpwmzh7y33upvo3taa.py\", line 3499, in call\n"}
+,{"stream_name":"stdout","time":6127.588230004,"data":"    buf35 = torch.ops.y.exact_pv.default(buf34, reinterpret_tensor(buf31, (1, 2, s27, 64), (160*s27, 80*s27, 80, 1), 0))\n"}
+,{"stream_name":"stdout","time":6127.588232797,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_ops.py\", line 875, in __call__\n"}
+,{"stream_name":"stdout","time":6127.588236468,"data":"    return self._op(*args, **kwargs)\n"}
+,{"stream_name":"stdout","time":6127.588249841,"data":"           ~~~~~~~~^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stdout","time":6127.58825497,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_compile.py\", line 54, in inner\n"}
+,{"stream_name":"stdout","time":6127.588259633,"data":"    return disable_fn(*args, **kwargs)\n"}
+,{"stream_name":"stdout","time":6127.588263937,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py\", line 1446, in _fn\n"}
+,{"stream_name":"stdout","time":6127.58826872,"data":"    return fn(*args, **kwargs)\n"}
+,{"stream_name":"stdout","time":6127.588272652,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py\", line 432, in __torch_dispatch__\n"}
+,{"stream_name":"stdout","time":6127.588276968,"data":"    res = func(*args, **kwargs)\n"}
+,{"stream_name":"stdout","time":6127.58828077,"data":"  File \"/usr/local/lib/python3.13/dist-packages/torch/_ops.py\", line 875, in __call__\n"}
+,{"stream_name":"stdout","time":6127.58830562,"data":"    return self._op(*args, **kwargs)\n"}
+,{"stream_name":"stdout","time":6127.588313913,"data":"           ~~~~~~~~^^^^^^^^^^^^^^^^^\n"}
+,{"stream_name":"stdout","time":6127.58831797,"data":"  File \"/kaggle/working/Y/python/y_lang/exact/attention.py\", line 255, in _y_exact_pv\n"}
+,{"stream_name":"stdout","time":6127.588322299,"data":"    index, kern = _pv_kernel(dev)\n"}
+,{"stream_name":"stdout","time":6127.588326119,"data":"                  ~~~~~~~~~~^^^^^\n"}
+,{"stream_name":"stdout","time":6127.58833004,"data":"  File \"/kaggle/working/Y/python/y_lang/exact/attention.py\", line 217, in _pv_kernel\n"}
+,{"stream_name":"stdout","time":6127.588334135,"data":"    raise RuntimeError(\n"}
+,{"stream_name":"stdout","time":6127.588337911,"data":"    ...\u003c5 lines\u003e...\n"}
+,{"stream_name":"stdout","time":6127.58834183,"data":"    ) from e\n"}
+,{"stream_name":"stdout","time":6127.588345863,"data":"RuntimeError: Y_EXACT_V_INT8 needs Y's compiler library (liby.so; in a checkout, `cargo build --release`) and /kaggle/working/Y/python/y_lang/exact/exact_pv.ysu, and it failed: Y Compilation Error:\n"}
+,{"stream_name":"stdout","time":6127.588353349,"data":"[PTX backend] this source declares no `kernel`, so there is nothing to emit - the module would be a `.version`/`.target` header and no instructions. An empty module assembles and does nothing. Declare a `kernel`, or compile host code with the LLVM backend (the default) or --emit-cpu.. Not falling back to the digit split: that would cast the whole cache every step and report a number for a path nobody asked for.\n"}
+,{"stream_name":"stdout","time":6127.588358699,"data":"\n"}
+,{"stream_name":"stdout","time":6127.588377396,"data":"exit 1 473 s\n"}
+,{"stream_name":"stdout","time":6127.58838182,"data":"585 MHz, 29.02 W, 47\r\n"}
+,{"stream_name":"stdout","time":6127.588386535,"data":"300 MHz, 9.65 W, 34\r\n"}
+,{"stream_name":"stderr","time":6132.102784455,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":6132.102827692,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":6132.324957513,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":6132.324987006,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":6133.278548468,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":6133.379323488,"data":"[NbConvertApp] Writing 53183 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":6136.64871704,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":6137.305560811,"data":"[NbConvertApp] Writing 330620 bytes to __results__.html\n"}
+]
