@@ -1,0 +1,20 @@
+  stock      generate passes logits_to_keep=1: True
+  exact      generate passes logits_to_keep=1: True
+  stock_all  generate passes logits_to_keep=1: False
+  exact_all  generate passes logits_to_keep=1: False
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity stock_all    canary ok, 49 distinct tokens in reference
+  sanity exact_all    canary ok, 40 distinct tokens in reference
+  prompt: 28 tokens, batch 32
+  stock and stock_all give the same token ids on all 32 rows: True
+  exact and exact_all give the same token ids on all 32 rows: True
+  stock        0.382 s    167.5 tok/s/seq  median  0.5% above
+  exact        0.416 s    153.7 tok/s/seq  median  0.4% above
+  stock_all    0.388 s    164.7 tok/s/seq  median  0.4% above
+  exact_all    0.414 s    154.7 tok/s/seq  median  0.5% above
+  stock_all / stock = 1.017x
+  exact_all / exact = 0.994x
+  exact / stock (both keep one position, the fix)       = 1.089x
+  exact / stock_all (9f0c685 up to 67b8fdc, compiled)   = 1.072x
+  exact_all / stock_all (67b8fdc up to the fix)         = 1.065x

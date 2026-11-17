@@ -33,6 +33,7 @@ import _nospace
 _nospace.guard()
 
 import argparse  # noqa: E402
+import functools  # noqa: E402
 import os  # noqa: E402
 import statistics  # noqa: E402
 import time  # noqa: E402
@@ -56,6 +57,21 @@ PROMPT = ("Explain, step by step and in detail, how a suspension bridge carries 
           "the load of the traffic crossing it down into the ground. ")
 
 
+def keeps_signature(inner):
+    """`functools.wraps` for a wrapper around a model's `forward`.
+
+    `generate()` passes `logits_to_keep=1` only if `inspect.signature(
+    model.forward)` lists it. A bare `(*args, **kw)` wrapper hides it, and
+    then the prefill computes the logits of every prompt position, 151,936
+    columns each, where one row per sequence is used. Up to 2026-11-17 this
+    tool's wrappers did that: the compiled stock arm since `stock_defaults`
+    was added, and every wrapped arm from 67b8fdc. `updated=()` copies no
+    attributes from a compiled function onto the wrapper, only `__wrapped__`,
+    which `inspect.signature` follows.
+    """
+    return functools.wraps(inner, updated=())
+
+
 def with_attention(m, attention):
     """Install `attention` as Qwen2's eager attention around every call of `m`.
 
@@ -71,6 +87,7 @@ def with_attention(m, attention):
     """
     inner = m.forward
 
+    @keeps_signature(inner)
     def call(*args, _f=inner, **kw):
         prev = qwen2.eager_attention_forward
         qwen2.eager_attention_forward = attention
@@ -133,6 +150,7 @@ def build(arm, device, compile_it, graphs=False, low_memory=False):
             compiled = torch.compile(m.forward, dynamic=False,
                                      mode="reduce-overhead")
 
+            @keeps_signature(compiled)
             def fwd(*args, _c=compiled, **kw):
                 # Required, not optional: inductor's cudagraph trees reuse the
                 # capture's output buffers, and HF's static cache writes into
@@ -150,12 +168,17 @@ def build(arm, device, compile_it, graphs=False, low_memory=False):
             # first call, so the defaults are patched back around every call.
             inner = m.forward
 
+            @keeps_signature(inner)
             def stock_defaults(*args, _f=inner, **kw):
                 with _inductor_config.patch(exact_model.INDUCTOR_DEFAULTS):
                     return _f(*args, **kw)
 
             m.forward = stock_defaults
-    return with_attention(m, attention) if attention is not None else m
+    m = with_attention(m, attention) if attention is not None else m
+    if not m._supports_logits_to_keep():
+        raise SystemExit(f"*** arm {arm!r}: generate() cannot see `logits_to_keep` in its "
+                         f"forward, so its prefill would compute every position's logits")
+    return m
 
 
 def gate(models, tok, device, static_cache=False):
