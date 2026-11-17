@@ -9,7 +9,8 @@ named explicitly is refused there. The card is this machine's; `convert`'s
 rule (`triton_int8_dot_ok`) is patched, never the capability torch reports,
 which Triton would compile for. (The first version patched the capability; on
 the T4 itself Triton then built every later kernel in the process for sm_89.)
-GPU only.
+For `torch._int_mm`, the weight is stored in nn.Linear's order, the layout
+cuBLAS needs for its int8 tensor-core kernels. GPU only.
 """
 
 import copy
@@ -89,6 +90,28 @@ class TestGemmChoice(unittest.TestCase):
         new, new_layers, new_primed = self.converted(True)
         self.assertTrue(all(x.triton_ok for x in new_layers) and new_primed)
         self.same_bits(got, self.logits(new, triton_must_run=True), "Triton vs _int_mm")
+
+    def test_below_sm80_the_int_mm_weight_is_stored_in_linear_order(self):
+        # cuBLAS runs its int8 tensor-core kernels for `torch._int_mm` only in
+        # the "TN" form; a row-major [K][N] weight got a CUDA-core kernel on a
+        # T4 (docs/benchmarks/exact_t4_profile_2026-11-17). So below sm_80 the
+        # weight is stored [N][K], and `w8t` stays the [K][N] matrix as a view.
+        tn, tn_layers, _ = self.converted(False)
+        for x in tn_layers:
+            self.assertEqual(tuple(x.w8t.shape), (x.in_features, x.out_features))
+            self.assertTrue(x.w8t.t().is_contiguous() and not x.w8t.is_contiguous())
+        # The old layout, made from the same model: the same bits.
+        nn_model = copy.deepcopy(tn)
+        for x in nn_model.modules():
+            if isinstance(x, self.em.ExactLinear):
+                x.w8t = x.w8t.contiguous()
+                self.assertTrue(x.w8t.is_contiguous())
+        self.same_bits(self.logits(tn, triton_must_run=False),
+                       self.logits(nn_model, triton_must_run=False), "[N][K] vs [K][N] weight")
+        # Control: where the Triton kernel runs, the weight stays row-major.
+        if self.real_ok:
+            _, layers, _ = self.converted(True)
+            self.assertTrue(all(x.w8t.is_contiguous() for x in layers))
 
     def test_a_triton_gemm_named_explicitly_is_refused_below_sm80(self):
         with self.assertRaisesRegex(ValueError, r"Y_EXACT_GEMM=triton.*sm_\d+.*sm_80 or later"):

@@ -1009,6 +1009,20 @@ def convert(model, linears=True, norms=True, floats=None, merge=None):
         for m in exact:
             m.triton_ok = False
         triton = False
+    if exact and dev.type == "cuda" and not triton and GEMM != "y":
+        # These layers take `torch._int_mm`. cuBLAS runs its int8 tensor-core
+        # kernels only for the "TN" form: the weight stored as nn.Linear stores
+        # it, [N][K] with K contiguous, passed as its transpose. `w8t` built
+        # [K][N] row-major is the "NN" form, and on a Tesla T4 cuBLAS then ran
+        # `volta_igemm_int8_128x128_ldg4_nn`, which does not use the tensor
+        # cores: 13.7 ms of a 25.1 ms decode step, where stock float16 spent
+        # 7.6 ms on all its GEMMs (docs/benchmarks/exact_t4_profile_2026-11-17).
+        # Only the storage order changes. `w8t` is still the [K][N] matrix with
+        # the same values, now a view, as under `Y_EXACT_GEMM=y`. The Triton
+        # kernel keeps the row-major [K][N] layout it was tuned on.
+        for m in exact:
+            if not m.w8t.t().is_contiguous():
+                m.w8t = m.w8t.t().contiguous().t()
     if triton:
         from . import w8a8_gemv
         w8a8_gemv.prime(shapes, dev)
