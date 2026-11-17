@@ -48,6 +48,10 @@ import exact_model  # noqa: E402
 from y_lang.exact.greedy import greedy  # noqa: E402
 
 MODEL = "Qwen/Qwen2.5-0.5B-Instruct"
+# The stock arm's dtype. bf16 is what ships on sm_80 and newer; a Tesla T4
+# (sm_75) has no bf16 tensor cores, so there float16 is the fair stock arm
+# (`--stock-dtype float16`).
+STOCK_DTYPE = torch.bfloat16
 PROMPT = ("Explain, step by step and in detail, how a suspension bridge carries "
           "the load of the traffic crossing it down into the ground. ")
 
@@ -79,7 +83,7 @@ def build(arm, device, compile_it, graphs=False, low_memory=False):
     else:
         qwen2.eager_attention_forward = D._orig
         m = AutoModelForCausalLM.from_pretrained(
-            MODEL, dtype=torch.bfloat16, attn_implementation="sdpa"
+            MODEL, dtype=STOCK_DTYPE, attn_implementation="sdpa"
         ).to(device).eval()
     if compile_it:
         # Applied identically to both arms - see the module docstring.
@@ -230,7 +234,7 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
 
 
 def main():
-    global MODEL
+    global MODEL, STOCK_DTYPE
     ap = argparse.ArgumentParser()
     ap.add_argument("--batch", type=int, default=32)
     ap.add_argument("--tokens", type=int, default=64)
@@ -246,11 +250,14 @@ def main():
                          "and no logits processors; BOTH arms")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--model", default=MODEL)
+    ap.add_argument("--stock-dtype", choices=("bfloat16", "float16"), default="bfloat16",
+                    help="the stock arm's dtype; float16 on a GPU without bf16 tensor cores (sm_75)")
     ap.add_argument("--low-memory", action="store_true",
                     help="build layer by layer (tools/exact_large_model.py); "
                          "stock and exact only")
     a = ap.parse_args()
     MODEL = a.model
+    STOCK_DTYPE = getattr(torch, a.stock_dtype)
     torch.backends.cuda.matmul.allow_tf32 = False
     torch.backends.cudnn.allow_tf32 = False
     tok = AutoTokenizer.from_pretrained(MODEL)
@@ -268,6 +275,9 @@ def main():
     # they capture it at call time, which is why the hook is left pointing at
     # the exact path afterwards and restored at the end.
     arms = os.environ.get("Y_THR_ARMS", "stock,exact").split(",")
+    if a.low_memory and STOCK_DTYPE != torch.bfloat16 and "stock" in arms:
+        print("  *** --low-memory builds the stock arm in bf16 only; --stock-dtype float16 is refused there")
+        return 2
     if a.low_memory and set(arms) - {"stock", "exact"}:
         print(f"  *** --low-memory builds only stock and exact, not "
               f"{sorted(set(arms) - {'stock', 'exact'})}")
@@ -280,7 +290,7 @@ def main():
         return 1
     res = run_interleaved(models, tok, a.batch, a.tokens, a.device, a.reps,
                           a.graphs, a.static_cache, a.loop)
-    LABELS = {"stock": "stock  bf16 + SDPA (what ships)",
+    LABELS = {"stock": f"stock  {'bf16' if STOCK_DTYPE == torch.bfloat16 else 'fp16'} + SDPA (what ships)",
               "exact": "exact  int8, order-independent",
               "fixedfloat": "fixedfloat  fp32, reduction order pinned"}
     for arm, label in ((n, LABELS.get(n, n)) for n in arms):
