@@ -8,6 +8,8 @@ PART a: gemm_shapes (nn, tn, fp16), layout_ab default, profiles of stock
         float16 and exact default (with the decode-only difference).
 PART b: layout_ab with every Y switch, layout_ab at 511 levels, and
         logits_to_keep_ab (the cost of the hidden `logits_to_keep`).
+PART c: profiles (with host time per op) of stock float16, exact default
+        and exact with every Y switch: why is every switch slow on a T4?
 Y's source comes from the y-lang-src dataset, liby.so from y-lang-wheel.
 Qwen2.5-0.5B-Instruct at 7ae5576.
 """
@@ -48,6 +50,7 @@ print('liby.so sha256', hashlib.sha256(open(LIBY, 'rb').read()).hexdigest()[:16]
 print('exact_throughput has --stock-dtype:', '--stock-dtype' in open(f'{{REPO}}/tools/exact_throughput.py').read())
 print('exact_throughput has with_attention:', 'def with_attention' in open(f'{{REPO}}/tools/exact_throughput.py').read())
 assert 'm.w8t = m.w8t.t().contiguous().t()' in open(f'{{REPO}}/python/y_lang/exact/model.py').read(), 'model.py lacks the layout change'
+assert 'host_ops' in open(f'{{REPO}}/docs/benchmarks/exact_t4_profile_2026-11-17/profile_05b.py').read(), 'old profile_05b'
 assert 'def keeps_signature' in open(f'{{REPO}}/tools/exact_throughput.py').read(), 'exact_throughput lacks keeps_signature'
 # A symlinked .ysu once arrived as an empty file and Y refused to build it.
 empty = [p for p in glob.glob(f'{{REPO}}/**/*.ysu', recursive=True) if os.path.getsize(p) == 0]
@@ -87,8 +90,12 @@ elif PART == "b":
     run("ab_511", "Y_EXACT_ACT_LEVELS=511 " + AB)
     run("logits_to_keep_ab", f"{{sys.executable}} ../docs/benchmarks/exact_speed_05b_2026-11-17/logits_to_keep_ab.py "
         f"--stock-dtype float16 --model {{MODEL}}")
+elif PART == "c":
+    run("prof_stock_fp16", f"{PROF} stock {{OUT}}/prof_stock_fp16.json --stock-dtype float16 --model {{MODEL}}")
+    run("prof_exact_default", f"{PROF} exact {{OUT}}/prof_exact_default.json --model {{MODEL}}")
+    run("prof_exact_every_switch", EVERY + f"{PROF} exact {{OUT}}/prof_exact_every_switch.json --model {{MODEL}}")
 else:
-    raise SystemExit(f"PART {PART!r}: expected a or b")
+    raise SystemExit(f"PART {PART!r}: expected a, b or c")
 
 os.makedirs(out, exist_ok=True)
 nb = {"cells": cells, "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},

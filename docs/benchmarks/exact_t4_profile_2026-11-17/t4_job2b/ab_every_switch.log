@@ -1,0 +1,23 @@
+
+
+
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+  layout exact     {'count': 121, 'nn.Linear order ([N][K] contiguous)': 121, 'row-major [K][N]': 0}
+  layout exact_nn  {'count': 121, 'nn.Linear order ([N][K] contiguous)': 0, 'row-major [K][N]': 121}
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity exact_nn     canary ok, 40 distinct tokens in reference
+  exact and exact_nn give the same token ids on all 32 rows: True
+  GEMM kernels, exact:
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16::Params)
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)
+    volta_sgemm_64x64_nn
+  GEMM kernels, exact_nn:
+    volta_igemm_int8_128x128_ldg4_nn
+    volta_sgemm_64x64_nn
+  stock       0.934 s     68.5 tok/s/seq  median  0.2% above
+  exact       1.270 s     50.4 tok/s/seq  median  2.8% above
+  exact_nn    1.322 s     48.4 tok/s/seq  median  0.4% above
+  exact / stock = 1.36x slower
+  exact_nn / stock = 1.42x slower
+  exact_nn / exact = 1.04x

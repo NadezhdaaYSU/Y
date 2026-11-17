@@ -1,0 +1,175 @@
+0.00s - Debugger warning: It seems that frozen modules are being used, which may
+0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+0.00s - to python to disable frozen modules.
+0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+0.00s - Debugger warning: It seems that frozen modules are being used, which may
+0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+0.00s - to python to disable frozen modules.
+0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+index, name, compute_cap, driver_version, clocks.max.sm [MHz]
+0, Tesla T4, 7.5, 580.178.04, 1590 MHz
+1, Tesla T4, 7.5, 580.178.04, 1590 MHz
+CPU(s):                                  4
+Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz
+[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+easyocr 1.7.2 requires torchvision>=0.5, which is not installed.
+fastai 2.8.12 requires torchvision>=0.11, which is not installed.
+timm 1.0.30 requires torchvision, which is not installed.
+libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.
+libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.[0m[31m
+[0mliby.so sha256 5c26fe725eb35a5d
+exact_throughput has --stock-dtype: True
+exact_throughput has with_attention: True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+torch 2.13.0+cu126 transformers 5.15.0 Tesla T4
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:16,  3.76it/s]
+Loading weights:  76%|███████▌  | 220/290 [00:00<00:00, 746.25it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 652.05it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<02:08,  2.24it/s]
+Loading weights:  92%|█████████▏| 267/290 [00:00<00:00, 641.46it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 509.49it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:38,  2.93it/s]
+Loading weights:  80%|████████  | 232/290 [00:00<00:00, 662.04it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 554.62it/s]
+W1117 19:37:25.276000 152 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+USDT:2026-11-17 20:20:35 152:152 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 20:20:35 152:152 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 20:20:35 152:152 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 20:20:35 152:152 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  layout exact     {'count': 121, 'nn.Linear order ([N][K] contiguous)': 121, 'row-major [K][N]': 0}
+  layout exact_nn  {'count': 121, 'nn.Linear order ([N][K] contiguous)': 0, 'row-major [K][N]': 121}
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity exact_nn     canary ok, 40 distinct tokens in reference
+  exact and exact_nn give the same token ids on all 32 rows: True
+  GEMM kernels, exact:
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16::Params)
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)
+    volta_sgemm_64x64_nn
+  GEMM kernels, exact_nn:
+    volta_igemm_int8_128x128_ldg4_nn
+    volta_sgemm_64x64_nn
+  stock       0.934 s     68.5 tok/s/seq  median  0.2% above
+  exact       1.270 s     50.4 tok/s/seq  median  2.8% above
+  exact_nn    1.322 s     48.4 tok/s/seq  median  0.4% above
+  exact / stock = 1.36x slower
+  exact_nn / stock = 1.42x slower
+  exact_nn / exact = 1.04x
+
+exit 0 2941 s
+585 MHz, 34.63 W, 72
+300 MHz, 9.94 W, 40
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:23,  3.48it/s]
+Loading weights:  80%|████████  | 232/290 [00:00<00:00, 766.50it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 651.74it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:48,  2.66it/s]
+Loading weights:  88%|████████▊ | 255/290 [00:00<00:00, 691.66it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 571.03it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<02:11,  2.20it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 569.87it/s]
+W1117 20:28:56.864000 1007 torch/_inductor/utils.py:1953] [0/3] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-17 21:24:10 1007:1007 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 21:24:10 1007:1007 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 21:24:10 1007:1007 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 21:24:10 1007:1007 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  layout exact     {'count': 121, 'nn.Linear order ([N][K] contiguous)': 121, 'row-major [K][N]': 0}
+  layout exact_nn  {'count': 121, 'nn.Linear order ([N][K] contiguous)': 0, 'row-major [K][N]': 121}
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 48 distinct tokens in reference
+  sanity exact_nn     canary ok, 48 distinct tokens in reference
+  exact and exact_nn give the same token ids on all 32 rows: True
+  GEMM kernels, exact:
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16::Params)
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+    volta_sgemm_64x64_nn
+  GEMM kernels, exact_nn:
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+    volta_igemm_int8_128x128_ldg4_nn
+    volta_sgemm_64x64_nn
+  stock       0.924 s     69.2 tok/s/seq  median  1.4% above
+  exact       1.145 s     55.9 tok/s/seq  median  1.5% above
+  exact_nn    1.971 s     32.5 tok/s/seq  median  1.3% above
+  exact / stock = 1.24x slower
+  exact_nn / stock = 2.13x slower
+  exact_nn / exact = 1.72x
+
+exit 0 3842 s
+585 MHz, 33.39 W, 74
+300 MHz, 9.55 W, 33
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:06,  4.32it/s]
+Loading weights:  67%|██████▋   | 195/290 [00:00<00:00, 734.85it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 661.02it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:45,  2.75it/s]
+Loading weights:  84%|████████▍ | 244/290 [00:00<00:00, 673.04it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 560.22it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:19,  3.62it/s]
+Loading weights:  84%|████████▍ | 243/290 [00:00<00:00, 806.36it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 680.07it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<02:00,  2.39it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 610.31it/s]
+W1117 21:32:43.829000 1733 torch/_inductor/utils.py:1953] [0/3] Not enough SMs to use max_autotune_gemm mode
+  stock      generate passes logits_to_keep=1: True
+  exact      generate passes logits_to_keep=1: True
+  stock_all  generate passes logits_to_keep=1: False
+  exact_all  generate passes logits_to_keep=1: False
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity stock_all    canary ok, 45 distinct tokens in reference
+  sanity exact_all    canary ok, 40 distinct tokens in reference
+  prompt: 28 tokens, batch 32
+  stock and stock_all give the same token ids on all 32 rows: True
+  exact and exact_all give the same token ids on all 32 rows: True
+  stock        0.838 s     76.3 tok/s/seq  median  0.5% above
+  exact        0.819 s     78.1 tok/s/seq  median  0.7% above
+  stock_all    0.849 s     75.4 tok/s/seq  median  0.5% above
+  exact_all    0.834 s     76.8 tok/s/seq  median  0.3% above
+  stock_all / stock = 1.013x
+  exact_all / exact = 1.017x
+  exact / stock (both keep one position, the fix)       = 0.977x
+  exact / stock_all (9f0c685 up to 67b8fdc, compiled)   = 0.965x
+  exact_all / stock_all (67b8fdc up to the fix)         = 0.982x
+
+exit 0 3847 s
+585 MHz, 34.51 W, 70
+300 MHz, 10.14 W, 40
+/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+  cells[i][c] = re.sub('\\\\\|', '|', cell)
+/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+[NbConvertApp] Writing 56064 bytes to __notebook__.ipynb
+[NbConvertApp] Converting notebook __notebook__.ipynb to html
+[NbConvertApp] Writing 335000 bytes to __results__.html

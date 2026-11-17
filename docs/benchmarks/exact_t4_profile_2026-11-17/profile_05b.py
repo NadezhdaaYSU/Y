@@ -15,7 +15,9 @@ spread over the NEW tokens.
 
 Decode only: the same is then measured at 3*NEW tokens, and the difference
 divided by 2*NEW. The prefill is in both runs, so it cancels, and what is
-left is the cost of one decode step ("decode_only" in the JSON).
+left is the cost of one decode step ("decode_only" in the JSON). The host
+side is reported the same way: each CPU op's self time per step
+("host_ops"), from the profiler's CPU events.
 """
 import argparse
 import json
@@ -98,11 +100,12 @@ def measure(new):
             k = kernels.setdefault(e.name, [0.0, 0])
             k[0] += e.device_time / 1000.0
             k[1] += 1
-    return min(plain), wall, kernels
+    host = {e.key: [e.self_cpu_time_total / 1000.0, e.count] for e in prof.key_averages()}
+    return min(plain), wall, kernels, host
 
 
-plain, wall, kernels = measure(a.new)
-plain3, _, kernels3 = measure(3 * a.new)
+plain, wall, kernels, host = measure(a.new)
+plain3, _, kernels3, host3 = measure(3 * a.new)
 steps = 2 * a.new
 decode = {n: [(kernels3.get(n, [0.0, 0])[0] - kernels.get(n, [0.0, 0])[0]) / steps,
               (kernels3.get(n, [0.0, 0])[1] - kernels.get(n, [0.0, 0])[1]) / steps]
@@ -113,6 +116,10 @@ for n, (ms, calls) in decode.items():
     f[0] += ms
     f[1] += calls
 dbusy = sum(v[0] for v in decode.values())
+dhost = {n: [(host3.get(n, [0.0, 0])[0] - host.get(n, [0.0, 0])[0]) / steps,
+             (host3.get(n, [0.0, 0])[1] - host.get(n, [0.0, 0])[1]) / steps]
+         for n in set(host) | set(host3)}
+dhost_total = sum(v[0] for v in dhost.values())
 dwall = (plain3 - plain) / steps
 busy = sum(v[0] for v in kernels.values())
 launches = sum(v[1] for v in kernels.values())
@@ -133,7 +140,10 @@ out = {"arm": a.arm, "env": env, "stock_dtype": a.stock_dtype, "new_tokens": a.n
                        "families": {f: {"ms": round(v[0], 4), "calls": round(v[1], 2)}
                                     for f, v in sorted(dfams.items(), key=lambda kv: -kv[1][0])},
                        "kernels": [{"name": n, "family": family(n), "ms": round(v[0], 4), "calls": round(v[1], 2)}
-                                   for n, v in sorted(decode.items(), key=lambda kv: -kv[1][0])]}}
+                                   for n, v in sorted(decode.items(), key=lambda kv: -kv[1][0])],
+                       "host_self_cpu_ms_per_step": round(dhost_total, 3),
+                       "host_ops": [{"name": n, "self_cpu_ms": round(v[0], 4), "calls": round(v[1], 2)}
+                                    for n, v in sorted(dhost.items(), key=lambda kv: -kv[1][0])[:60]]}}
 json.dump(out, open(a.out, "w"), indent=1)
 
 per = a.new
@@ -153,3 +163,6 @@ for f, v in sorted(dfams.items(), key=lambda kv: -kv[1][0]):
 print("  top kernels, decode only:")
 for n, v in sorted(decode.items(), key=lambda kv: -kv[1][0])[:20]:
     print(f"  {v[0]:7.3f} ms/step {v[1]:6.1f}x  [{family(n)}] {n[:100]}")
+print(f"  host, decode only: {dhost_total:.2f} ms of CPU self time per step (profiled, so inflated); top ops:")
+for n, v in sorted(dhost.items(), key=lambda kv: -kv[1][0])[:20]:
+    print(f"  {v[0]:7.3f} ms/step {v[1]:6.1f}x  {n[:100]}")
