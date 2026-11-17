@@ -56,26 +56,60 @@ PROMPT = ("Explain, step by step and in detail, how a suspension bridge carries 
           "the load of the traffic crossing it down into the ground. ")
 
 
+def with_attention(m, attention):
+    """Install `attention` as Qwen2's eager attention around every call of `m`.
+
+    Qwen2 looks its attention up through the module global
+    `qwen2.eager_attention_forward` when it RUNS, not when it is built, and
+    this tool builds every arm before it times any. With the arms
+    stock,exact,fixedfloat the global was left at the control's fixed-order
+    attention, so the exact arm ran on it: 51 distinct reference tokens
+    against the exact path's 40, and its 1.02-1.04x (2026-11-17) was the
+    time of a model that is neither arm. Each arm now puts its own attention
+    in place for the length of each call, outside any compiled frame, the way
+    the stock arm patches Inductor's config.
+    """
+    inner = m.forward
+
+    def call(*args, _f=inner, **kw):
+        prev = qwen2.eager_attention_forward
+        qwen2.eager_attention_forward = attention
+        try:
+            return _f(*args, **kw)
+        finally:
+            qwen2.eager_attention_forward = prev
+
+    m.forward = call
+    return m
+
+
 def build(arm, device, compile_it, graphs=False, low_memory=False):
+    attention = None
     if low_memory:
         import exact_large_model
         m = exact_large_model.build(arm, MODEL, device)
+        attention = D.exact_attention if arm == "exact" else None
     elif arm == "fixedfloat":
         # The control the project's thesis rests on: float32 with the reduction
         # ORDER pinned instead of the arithmetic made exact. It is
         # batch-invariant too (0/16, `exact_ragged_batch.py`), so what it costs
         # is the whole question. See tools/fixed_order_float.py.
+        #
+        # It is compiled below like the other arms. It used to be returned as
+        # `torch.compile(m)`, whose `generate` is the original module's: it
+        # calls the UNcompiled forward, and dynamo compiled no frame at all
+        # (counted 2026-11-17). Every "compiled" figure for this arm before
+        # then was eager.
         import fixed_order_float
-        qwen2.eager_attention_forward = fixed_order_float.fixed_order_attention
+        attention = fixed_order_float.fixed_order_attention
+        qwen2.eager_attention_forward = attention
         m = AutoModelForCausalLM.from_pretrained(
             MODEL, dtype=torch.float32, attn_implementation="eager"
         ).to(device).eval()
         fixed_order_float.convert(m)
-        if compile_it:
-            exact_model.fail_closed_recompiles()
-        return torch.compile(m) if compile_it else m
     elif arm == "exact":
-        qwen2.eager_attention_forward = D.exact_attention
+        attention = D.exact_attention
+        qwen2.eager_attention_forward = attention
         m = AutoModelForCausalLM.from_pretrained(
             MODEL, dtype=torch.float32, attn_implementation="eager"
         ).to(device).eval()
@@ -121,7 +155,7 @@ def build(arm, device, compile_it, graphs=False, low_memory=False):
                     return _f(*args, **kw)
 
             m.forward = stock_defaults
-    return m
+    return with_attention(m, attention) if attention is not None else m
 
 
 def gate(models, tok, device, static_cache=False):
@@ -269,11 +303,10 @@ def main():
           f"{'  loop=greedy (BOTH arms)' if a.loop == 'greedy' else ''}  "
           f"best of {a.reps}")
     print(f"{'arm':<38}{'s':>8}{'tok/s/seq':>12}{'tok/s total':>13}{'spread':>9}")
-    # Both models are built BEFORE anything is timed, so the arms can be
-    # interleaved. `build` rebinds the global attention hook, so the exact
-    # model's modules must be constructed while the exact hook is installed -
-    # they capture it at call time, which is why the hook is left pointing at
-    # the exact path afterwards and restored at the end.
+    # Every model is built BEFORE anything is timed, so the arms can be
+    # interleaved. Qwen2 reads the global attention hook at call time, so
+    # `build` wraps the exact and fixed-order arms to install their own hook
+    # around each call (`with_attention`); the hook is restored at the end.
     arms = os.environ.get("Y_THR_ARMS", "stock,exact").split(",")
     if a.low_memory and STOCK_DTYPE != torch.bfloat16 and "stock" in arms:
         print("  *** --low-memory builds the stock arm in bf16 only; --stock-dtype float16 is refused there")
