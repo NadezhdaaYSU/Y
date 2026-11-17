@@ -1,0 +1,26 @@
+
+
+
+  layout exact     {'count': 121, 'nn.Linear order ([N][K] contiguous)': 121, 'row-major [K][N]': 0}
+  layout exact_nn  {'count': 121, 'nn.Linear order ([N][K] contiguous)': 0, 'row-major [K][N]': 121}
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity exact_nn     canary ok, 40 distinct tokens in reference
+  exact and exact_nn give the same token ids on all 32 rows: True
+  GEMM kernels, exact:
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16::Params)
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+    volta_sgemm_64x64_nn
+  GEMM kernels, exact_nn:
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+    volta_igemm_int8_128x128_ldg4_nn
+    volta_sgemm_64x64_nn
+  stock       0.922 s     69.4 tok/s/seq  median  0.9% above
+  exact       0.951 s     67.3 tok/s/seq  median  1.8% above
+  exact_nn    1.156 s     55.4 tok/s/seq  median  0.8% above
+  exact / stock = 1.03x slower
+  exact_nn / stock = 1.25x slower
+  exact_nn / exact = 1.21x

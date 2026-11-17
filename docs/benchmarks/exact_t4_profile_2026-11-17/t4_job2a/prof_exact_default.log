@@ -1,0 +1,65 @@
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:31,  3.16it/s]
+Loading weights:  72%|███████▏  | 209/290 [00:00<00:00, 634.47it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 559.76it/s]
+W1117 20:46:22.255000 1075 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-17 21:02:40 1075:1075 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 21:02:41 1075:1075 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 21:02:45 1075:1075 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 21:02:47 1075:1075 SyncActivityProfilerHandler.cpp:59] profiler_stop
+exact  on Tesla T4, 16 new tokens, batch 32, compiled
+  per token: wall 15.78 ms unprofiled (33.10 profiled), GPU busy 11.47 ms (73% of the unprofiled wall), 722 kernels
+  int8 GEMM          4.687 ms/token  40.8%   121.0 kernels/token
+  Inductor fused     4.674 ms/token  40.7%   426.6 kernels/token
+  float GEMM         0.879 ms/token   7.7%   120.0 kernels/token
+  copy/fill          0.720 ms/token   6.3%    27.6 kernels/token
+  other              0.514 ms/token   4.5%    26.6 kernels/token
+  top kernels:
+    4.155 ms/token  118.0x  [int8 GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816ge
+    0.667 ms/token    7.2x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.533 ms/token    3.0x  [int8 GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816
+    0.456 ms/token   90.0x  [float GEMM] void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>,
+    0.395 ms/token    1.4x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.389 ms/token    1.4x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.363 ms/token    1.5x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.333 ms/token    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.308 ms/token   21.6x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.301 ms/token    1.5x  [Inductor fused] triton_poi_fused__to_copy_add_clamp_div_gt_mul_ones_like_view_where_10
+    0.299 ms/token   21.6x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.290 ms/token   22.5x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.286 ms/token   22.5x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_clamp_div_eq_gt_mul_ones_like_round_transpose_view_where_15
+    0.257 ms/token    1.5x  [Inductor fused] triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expan
+    0.223 ms/token    7.5x  [float GEMM] volta_sgemm_64x64_nn
+    0.200 ms/token   22.5x  [float GEMM] void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>
+    0.149 ms/token    0.9x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_21
+    0.144 ms/token    1.5x  [Inductor fused] triton_poi_fused___rshift____to_copy_bitwise_and_clamp_gt_mul_ones_like_reciprocal_round_view_where_
+    0.143 ms/token   22.5x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_wi
+    0.124 ms/token   22.5x  [Inductor fused] triton_poi_fused___rshift____to_copy_bitwise_and_clamp_clone_div_eq_expand_gt_mul_ones_like_reciproc
+  decode only (16 -> 48 new tokens), per step: wall 16.04 ms unprofiled, GPU busy 8.85 ms (55%), 728 kernels
+  int8 GEMM          3.842 ms/step  43.4%   121.0 kernels/step
+  Inductor fused     2.934 ms/step  33.1%   434.0 kernels/step
+  float GEMM         0.848 ms/step   9.6%   120.0 kernels/step
+  copy/fill          0.720 ms/step   8.1%    27.0 kernels/step
+  other              0.510 ms/step   5.8%    26.0 kernels/step
+  top kernels, decode only:
+    3.838 ms/step  121.0x  [int8 GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816ge
+    0.668 ms/step    7.0x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.543 ms/step   96.0x  [float GEMM] void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>,
+    0.333 ms/step    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.318 ms/step   23.0x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.306 ms/step   23.0x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.303 ms/step   24.0x  [float GEMM] void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>
+    0.300 ms/step   24.0x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.294 ms/step   24.0x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_clamp_div_eq_gt_mul_ones_like_round_transpose_view_where_15
+    0.182 ms/step   24.0x  [Inductor fused] triton_poi_fused___rshift____to_copy_bitwise_and_clamp_clone_div_eq_expand_gt_mul_ones_like_reciproc
+    0.159 ms/step    1.0x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_21
+    0.154 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_un
+    0.148 ms/step   24.0x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_wi
+    0.142 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_cat_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_whe
+    0.132 ms/step   48.0x  [Inductor fused] triton_per_fused_abs_amax_4
+    0.127 ms/step   24.0x  [Inductor fused] triton_poi_fused_clamp_div_eq_ones_like_round_where_14
+    0.115 ms/step   24.0x  [Inductor fused] triton_red_fused__to_copy_amax_clone_div_eq_expand_mul_ones_like_sum_transpose_unsqueeze_view_where_
+    0.115 ms/step   24.0x  [Inductor fused] triton_poi_fused___lshift_____rshift____to_copy_add_arange_bitwise_and_clamp_expand_full_like_ge_ind
+    0.109 ms/step   24.0x  [Inductor fused] triton_red_fused__to_copy_add_amax_arange_bitwise_and_expand_full_like_index_le_lift_fresh_lt_new_on
+    0.104 ms/step   24.0x  [Inductor fused] triton_poi_fused_clamp_div_eq_ones_like_round_where_5

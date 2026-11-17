@@ -1,0 +1,218 @@
+0.00s - Debugger warning: It seems that frozen modules are being used, which may
+0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+0.00s - to python to disable frozen modules.
+0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+0.00s - Debugger warning: It seems that frozen modules are being used, which may
+0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off
+0.00s - to python to disable frozen modules.
+0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.
+index, name, compute_cap, driver_version, clocks.max.sm [MHz]
+0, Tesla T4, 7.5, 580.178.04, 1590 MHz
+1, Tesla T4, 7.5, 580.178.04, 1590 MHz
+CPU(s):                                  4
+Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz
+[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
+easyocr 1.7.2 requires torchvision>=0.5, which is not installed.
+fastai 2.8.12 requires torchvision>=0.11, which is not installed.
+timm 1.0.30 requires torchvision, which is not installed.
+libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.
+libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.
+libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.[0m[31m
+[0mliby.so sha256 5c26fe725eb35a5d
+exact_throughput has --stock-dtype: True
+exact_throughput has with_attention: True
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+torch 2.13.0+cu126 transformers 5.15.0 Tesla T4
+ler_start
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+qkv 896->1152          nn    81.45  tn    15.12  fp16    18.88 us   nn/fp16  4.31x  tn/fp16  0.80x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(
+o 896->896             nn   112.09  tn    19.83  fp16    25.32 us   nn/fp16  4.43x  tn/fp16  0.78x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(
+gate or up 896->4864   nn    53.10  tn    29.23  fp16    53.03 us   nn/fp16  1.00x  tn/fp16  0.55x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+gate+up 896->9728      nn   112.46  tn    58.15  fp16   100.56 us   nn/fp16  1.12x  tn/fp16  0.58x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+down 4864->896         nn   203.38  tn    39.80  fp16    58.56 us   nn/fp16  3.47x  tn/fp16  0.68x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn | void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __ha
+lm_head 896->151936    nn  1749.52  tn   803.45  fp16  1466.97 us   nn/fp16  1.19x  tn/fp16  0.55x  exact nn=True tn=True
+    int_mm nn  
+    int_mm tn  
+    fp16 mm    
+
+exit 0 21 s
+1590 MHz, 36.64 W, 52
+300 MHz, 10.31 W, 42
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<00:57,  5.06it/s]
+Loading weights:  68%|██████▊   | 196/290 [00:00<00:00, 816.19it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 725.54it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:33,  3.09it/s]
+Loading weights:  71%|███████▏  | 207/290 [00:00<00:00, 622.29it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 523.71it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:48,  2.67it/s]
+Loading weights:  89%|████████▉ | 258/290 [00:00<00:00, 711.06it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 567.35it/s]
+W1117 19:37:35.015000 166 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-17 20:32:31 166:166 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 20:32:31 166:166 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 20:32:31 166:166 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 20:32:31 166:166 SyncActivityProfilerHandler.cpp:59] profiler_stop
+  layout exact     {'count': 121, 'nn.Linear order ([N][K] contiguous)': 121, 'row-major [K][N]': 0}
+  layout exact_nn  {'count': 121, 'nn.Linear order ([N][K] contiguous)': 0, 'row-major [K][N]': 121}
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity exact_nn     canary ok, 40 distinct tokens in reference
+  exact and exact_nn give the same token ids on all 32 rows: True
+  GEMM kernels, exact:
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16::Params)
+    void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+    volta_sgemm_64x64_nn
+  GEMM kernels, exact_nn:
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+    volta_igemm_int8_128x128_ldg4_nn
+    volta_sgemm_64x64_nn
+  stock       0.922 s     69.4 tok/s/seq  median  0.9% above
+  exact       0.951 s     67.3 tok/s/seq  median  1.8% above
+  exact_nn    1.156 s     55.4 tok/s/seq  median  0.8% above
+  exact / stock = 1.03x slower
+  exact_nn / stock = 1.25x slower
+  exact_nn / exact = 1.21x
+
+exit 0 3663 s
+585 MHz, 32.16 W, 69
+300 MHz, 9.93 W, 39
+.0x  [Inductor fused] triton_poi_fused__to_copy_add_bmm_cat_cos_expand_mul_neg_sin_slice_transpose_unsqueeze_view_1
+    0.121 ms/token   45.0x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.097 ms/token    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+    0.085 ms/token   22.5x  [Inductor fused] triton_poi_fused_cat_transpose_view_2
+    0.083 ms/token   22.5x  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_7
+    0.081 ms/token   22.5x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.078 ms/token    1.5x  [float GEMM] turing_fp16_s1688gemm_fp16_128x128_ldg8_relu_f2f_tn
+    0.064 ms/token   25.5x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.062 ms/token   11.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_12
+    0.057 ms/token    3.0x  [float GEMM] turing_fp16_s1688gemm_fp16_64x64_sliced1x4_ldg8_relu_f2f_tn
+  decode only (16 -> 48 new tokens), per step: wall 15.23 ms unprofiled, GPU busy 10.30 ms (68%), 517 kernels
+  float GEMM         6.204 ms/step  60.2%   241.0 kernels/step
+  attention          2.393 ms/step  23.2%   102.0 kernels/step
+  copy/fill          0.685 ms/step   6.6%    27.0 kernels/step
+  other              0.511 ms/step   5.0%    26.0 kernels/step
+  Inductor fused     0.505 ms/step   4.9%   121.0 kernels/step
+  top kernels, decode only:
+    3.947 ms/step   49.0x  [float GEMM] turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+    1.633 ms/step   24.0x  [attention] fmha_cutlassF_f16_aligned_64x64_rf_sm75(PyTorchMemEffAttention::AttentionKernel<cutlass::half_t, cut
+    1.312 ms/step   24.0x  [float GEMM] turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn
+    0.732 ms/step   96.0x  [float GEMM] void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(cutlass_75
+    0.700 ms/step   48.0x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.501 ms/step    6.0x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.333 ms/step    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.158 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_bmm_cat_cos_expand_mul_neg_sin_slice_transpose_unsqueeze_view_1
+    0.131 ms/step    1.0x  [copy/fill] void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorB
+    0.125 ms/step   48.0x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.124 ms/step   24.0x  [Inductor fused] triton_poi_fused_cat_transpose_view_2
+    0.096 ms/step    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+    0.086 ms/step   24.0x  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_7
+    0.084 ms/step   24.0x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.047 ms/step   24.0x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.033 ms/step    3.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, a
+    0.032 ms/step   10.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_13
+    0.031 ms/step   11.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_12
+    0.027 ms/step   11.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_10
+    0.027 ms/step   10.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_11
+
+exit 0 278 s
+585 MHz, 29.93 W, 66
+300 MHz, 9.64 W, 38
+q_gt_mul_ones_like_round_transpose_view_where_15
+    0.257 ms/token    1.5x  [Inductor fused] triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expan
+    0.223 ms/token    7.5x  [float GEMM] volta_sgemm_64x64_nn
+    0.200 ms/token   22.5x  [float GEMM] void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>
+    0.149 ms/token    0.9x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_21
+    0.144 ms/token    1.5x  [Inductor fused] triton_poi_fused___rshift____to_copy_bitwise_and_clamp_gt_mul_ones_like_reciprocal_round_view_where_
+    0.143 ms/token   22.5x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_wi
+    0.124 ms/token   22.5x  [Inductor fused] triton_poi_fused___rshift____to_copy_bitwise_and_clamp_clone_div_eq_expand_gt_mul_ones_like_reciproc
+  decode only (16 -> 48 new tokens), per step: wall 16.04 ms unprofiled, GPU busy 8.85 ms (55%), 728 kernels
+  int8 GEMM          3.842 ms/step  43.4%   121.0 kernels/step
+  Inductor fused     2.934 ms/step  33.1%   434.0 kernels/step
+  float GEMM         0.848 ms/step   9.6%   120.0 kernels/step
+  copy/fill          0.720 ms/step   8.1%    27.0 kernels/step
+  other              0.510 ms/step   5.8%    26.0 kernels/step
+  top kernels, decode only:
+    3.838 ms/step  121.0x  [int8 GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816ge
+    0.668 ms/step    7.0x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.543 ms/step   96.0x  [float GEMM] void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>,
+    0.333 ms/step    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.318 ms/step   23.0x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.306 ms/step   23.0x  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq
+    0.303 ms/step   24.0x  [float GEMM] void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>
+    0.300 ms/step   24.0x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.294 ms/step   24.0x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_clamp_div_eq_gt_mul_ones_like_round_transpose_view_where_15
+    0.182 ms/step   24.0x  [Inductor fused] triton_poi_fused___rshift____to_copy_bitwise_and_clamp_clone_div_eq_expand_gt_mul_ones_like_reciproc
+    0.159 ms/step    1.0x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_21
+    0.154 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_un
+    0.148 ms/step   24.0x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_wi
+    0.142 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_cat_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_whe
+    0.132 ms/step   48.0x  [Inductor fused] triton_per_fused_abs_amax_4
+    0.127 ms/step   24.0x  [Inductor fused] triton_poi_fused_clamp_div_eq_ones_like_round_where_14
+    0.115 ms/step   24.0x  [Inductor fused] triton_red_fused__to_copy_amax_clone_div_eq_expand_mul_ones_like_sum_transpose_unsqueeze_view_where_
+    0.115 ms/step   24.0x  [Inductor fused] triton_poi_fused___lshift_____rshift____to_copy_add_arange_bitwise_and_clamp_expand_full_like_ge_ind
+    0.109 ms/step   24.0x  [Inductor fused] triton_red_fused__to_copy_add_amax_arange_bitwise_and_expand_full_like_index_le_lift_fresh_lt_new_on
+    0.104 ms/step   24.0x  [Inductor fused] triton_poi_fused_clamp_div_eq_ones_like_round_where_5
+
+exit 0 1266 s
+585 MHz, 31.17 W, 65
+300 MHz, 10.02 W, 39
+/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\|'
+  cells[i][c] = re.sub('\\\\\|', '|', cell)
+/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\_'
+  text = re.sub(r'_', '\_', text) # Escape underscores in display text
+[NbConvertApp] Converting notebook __notebook__.ipynb to notebook
+[NbConvertApp] Writing 64840 bytes to __notebook__.ipynb
+[NbConvertApp] Converting notebook __notebook__.ipynb to html
+[NbConvertApp] Writing 345774 bytes to __results__.html

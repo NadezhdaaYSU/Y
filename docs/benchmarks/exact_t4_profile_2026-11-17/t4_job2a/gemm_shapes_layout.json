@@ -1,0 +1,164 @@
+{
+ "device": "Tesla T4",
+ "torch": "2.13.0+cu126",
+ "M": 32,
+ "rows": {
+  "qkv 896->1152": {
+   "exact": {
+    "int_mm nn": true,
+    "int_mm tn": true
+   },
+   "int_mm nn": {
+    "median_us": 81.45,
+    "min_us": 42.01,
+    "kernels": [
+     "volta_igemm_int8_128x128_ldg4_nn"
+    ]
+   },
+   "int_mm tn": {
+    "median_us": 15.12,
+    "min_us": 13.5,
+    "kernels": [
+     "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)"
+    ]
+   },
+   "fp16 mm": {
+    "median_us": 18.88,
+    "min_us": 17.39,
+    "kernels": [
+     "void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8::Params)"
+    ]
+   }
+  },
+  "o 896->896": {
+   "exact": {
+    "int_mm nn": true,
+    "int_mm tn": true
+   },
+   "int_mm nn": {
+    "median_us": 112.09,
+    "min_us": 46.9,
+    "kernels": [
+     "volta_igemm_int8_128x128_ldg4_nn"
+    ]
+   },
+   "int_mm tn": {
+    "median_us": 19.83,
+    "min_us": 19.22,
+    "kernels": [
+     "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)"
+    ]
+   },
+   "fp16 mm": {
+    "median_us": 25.32,
+    "min_us": 24.31,
+    "kernels": [
+     "void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8::Params)"
+    ]
+   }
+  },
+  "gate or up 896->4864": {
+   "exact": {
+    "int_mm nn": true,
+    "int_mm tn": true
+   },
+   "int_mm nn": {
+    "median_us": 53.1,
+    "min_us": 48.5,
+    "kernels": [
+     "volta_igemm_int8_128x128_ldg4_nn"
+    ]
+   },
+   "int_mm tn": {
+    "median_us": 29.23,
+    "min_us": 28.75,
+    "kernels": [
+     "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)"
+    ]
+   },
+   "fp16 mm": {
+    "median_us": 53.03,
+    "min_us": 52.53,
+    "kernels": [
+     "turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn"
+    ]
+   }
+  },
+  "gate+up 896->9728": {
+   "exact": {
+    "int_mm nn": true,
+    "int_mm tn": true
+   },
+   "int_mm nn": {
+    "median_us": 112.46,
+    "min_us": 92.33,
+    "kernels": [
+     "volta_igemm_int8_128x128_ldg4_nn"
+    ]
+   },
+   "int_mm tn": {
+    "median_us": 58.15,
+    "min_us": 56.25,
+    "kernels": [
+     "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)"
+    ]
+   },
+   "fp16 mm": {
+    "median_us": 100.56,
+    "min_us": 99.23,
+    "kernels": [
+     "turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn"
+    ]
+   }
+  },
+  "down 4864->896": {
+   "exact": {
+    "int_mm nn": true,
+    "int_mm tn": true
+   },
+   "int_mm nn": {
+    "median_us": 203.38,
+    "min_us": 201.95,
+    "kernels": [
+     "volta_igemm_int8_128x128_ldg4_nn"
+    ]
+   },
+   "int_mm tn": {
+    "median_us": 39.8,
+    "min_us": 39.67,
+    "kernels": [
+     "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)"
+    ]
+   },
+   "fp16 mm": {
+    "median_us": 58.56,
+    "min_us": 58.43,
+    "kernels": [
+     "turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn",
+     "void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half, true, false, false>(cublasLt::cublasSplitKParams<float>, __half const*, __half const*, __half*, __half*, float const*, float const*, __half const*, __half const*, __half*, void*, long, float*, int*, float*, float const*, float const*, float const*, float const*)"
+    ]
+   }
+  },
+  "lm_head 896->151936": {
+   "exact": {
+    "int_mm nn": true,
+    "int_mm tn": true
+   },
+   "int_mm nn": {
+    "median_us": 1749.52,
+    "min_us": 1696.46,
+    "kernels": []
+   },
+   "int_mm tn": {
+    "median_us": 803.45,
+    "min_us": 801.47,
+    "kernels": []
+   },
+   "fp16 mm": {
+    "median_us": 1466.97,
+    "min_us": 1465.58,
+    "kernels": []
+   }
+  }
+ }
+}

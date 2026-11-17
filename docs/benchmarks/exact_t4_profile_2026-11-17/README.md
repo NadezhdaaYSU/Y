@@ -62,3 +62,65 @@ will take `torch._int_mm` on a GPU, store each weight in nn.Linear's order.
 `w8t` is still the same [K][N] matrix with the same values, now a view.
 `python/y_lang/tests/test_exact_gemm_choice.py` checks the layout and that
 the logits keep the same bits.
+
+## Job 2a: the fix on the T4
+
+`make_t4_layout_job.py` part a, the tool at 366bed6 (the fix, and
+`exact_throughput.py` keeping `logits_to_keep`, see below). Same T4 type,
+driver, torch and CPU as job 1. Files in `t4_job2a/`.
+
+### Each shape alone
+
+`gemm_shapes.py`, 32 rows, median of 15 samples of 200 calls:
+
+| Shape | int8, old order (NN) | int8, new order (TN) | float16 | New int8 against float16 |
+|---|---|---|---|---|
+| q/k/v 896 to 1152 | 81.5 us | 15.1 us | 18.9 us | 0.80x |
+| o 896 to 896 | 112.1 us | 19.8 us | 25.3 us | 0.78x |
+| gate or up 896 to 4864 | 53.1 us | 29.2 us | 53.0 us | 0.55x |
+| gate and up together, 896 to 9728 | 112.5 us | 58.2 us | 100.6 us | 0.58x |
+| down 4864 to 896 | 203.4 us | 39.8 us | 58.6 us | 0.68x |
+| lm_head 896 to 151936 | 1749.5 us | 803.5 us | 1467.0 us | 0.55x |
+
+With the new order cuBLAS runs `cutlass_75_tensorop_i8816gemm_s8`, a
+Turing tensor-core kernel, and int8 is now faster than float16 at every
+shape. With the old order it ran `volta_igemm_int8_128x128_ldg4_nn`, as in
+the model. All int8 results were exact. (The profiler listed no kernel
+for the `lm_head` row; the times are CUDA events, as for the others.)
+
+### The whole model
+
+`layout_ab.py`: stock float16, the exact path as `convert` now builds it,
+and the exact path with every weight copied back to the old order. One
+process, compiled, batch 32, 64 new tokens, best of 5, taken in turns.
+
+| Arm | Tokens per second per sequence | Against stock |
+|---|---|---|
+| Stock float16 | 69.4 | |
+| Exact, new order | 67.3 | 1.03x slower |
+| Exact, old order | 55.4 | 1.25x slower |
+
+The fix makes the exact path 1.21x faster on the T4. Both exact arms give
+the same token ids on all 32 rows, and the same 40 distinct reference
+tokens as before.
+
+### Where a decode step's time goes now
+
+`profile_05b.py`, the difference between 16 and 48 new tokens, so the
+prefill cancels. Per decode step (steps 17 to 48):
+
+| | Stock float16 | Exact, new order |
+|---|---|---|
+| Wall time | 15.2 ms | 16.0 ms |
+| GPU busy | 10.3 ms (68% of the wall) | 8.9 ms (55% of the wall) |
+| Kernels | 517 | 728 |
+| Matrix multiplies | 6.2 ms (float16) | 3.8 ms (int8) + 0.8 ms (float32, attention) |
+| Attention kernels | 2.4 ms | (in the fused kernels) |
+| Fused Inductor kernels | 0.5 ms | 2.9 ms |
+| Copies, fills, other | 1.2 ms | 1.2 ms |
+
+The exact path's GPU now does less work per step than stock's. What is
+left of the gap is on the host. The exact step launches 211 more kernels,
+and on this 2.00 GHz Xeon the GPU sits idle for 45% of the step. Stock is
+partly host bound too (68% busy). So on this machine the next thing to cut
+is the number of kernels, not their speed.

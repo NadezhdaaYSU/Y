@@ -1,0 +1,60 @@
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:08 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:09 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:10 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:11 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 19:36:23 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+qkv 896->1152          nn    81.45  tn    15.12  fp16    18.88 us   nn/fp16  4.31x  tn/fp16  0.80x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(
+o 896->896             nn   112.09  tn    19.83  fp16    25.32 us   nn/fp16  4.43x  tn/fp16  0.78x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(
+gate or up 896->4864   nn    53.10  tn    29.23  fp16    53.03 us   nn/fp16  1.00x  tn/fp16  0.55x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+gate+up 896->9728      nn   112.46  tn    58.15  fp16   100.56 us   nn/fp16  1.12x  tn/fp16  0.58x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+down 4864->896         nn   203.38  tn    39.80  fp16    58.56 us   nn/fp16  3.47x  tn/fp16  0.68x  exact nn=True tn=True
+    int_mm nn  volta_igemm_int8_128x128_ldg4_nn
+    int_mm tn  void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensor
+    fp16 mm    turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn | void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __ha
+lm_head 896->151936    nn  1749.52  tn   803.45  fp16  1466.97 us   nn/fp16  1.19x  tn/fp16  0.55x  exact nn=True tn=True
+    int_mm nn  
+    int_mm tn  
+    fp16 mm    
