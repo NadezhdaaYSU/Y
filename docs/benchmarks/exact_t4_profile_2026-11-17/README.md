@@ -142,3 +142,48 @@ was idle (6% use at the start, no game running).
 
 Triton stays 1% faster, so the default does not change. Both exact arms
 give the same token ids on all 32 rows.
+
+## Job 2b: the other setups, and the hidden `logits_to_keep`
+
+`make_t4_layout_job.py` part b, at 366bed6, on another T4 machine of the
+same type. Files in `t4_job2b/`. Each row is one process with stock in it,
+so compare the ratios.
+
+| Setup | Stock float16 | Exact, new order | Exact, old order | New against stock | Old against stock |
+|---|---|---|---|---|---|
+| Every switch | 68.5 | 50.4 | 48.4 | 1.36x slower | 1.42x slower |
+| Width 511 | 69.2 | 55.9 | 32.5 | 1.24x slower | 2.13x slower |
+
+(Tokens per second per sequence.) Width 511 gains the most, 1.72x,
+because each of its layers runs two int8 multiplies. In every case the
+two orders give the same token ids on all 32 rows.
+
+**Every switch is slow on the T4.** On the RTX 4070 Ti SUPER it is the
+fastest setup (0.98x and 0.99x of stock's time). On the T4 it is 1.36x,
+against 1.03x for the default in job 2a. In job 1's profile (old order, 16
+tokens with prefill) it kept the GPU busy for less time than the default
+(19.3 against 21.3 ms per token). So its extra cost is likely on the host.
+Our guess, not yet measured: each call of a Y kernel costs more CPU time to
+launch than an Inductor kernel, and on this CPU the step is already waiting
+on the host. Job 2c profiles the host side to check.
+
+**The hidden `logits_to_keep`.** `generate()` passes `logits_to_keep=1`
+only when it can see that argument in the model's `forward`.
+`exact_throughput.py`'s wrappers hid it, so the prefill computed the logits
+of every prompt position (28 here, times 151,936). This hit the compiled stock
+arm from 9f0c685 (2026-11-04), and every wrapped arm from 67b8fdc. It is
+fixed in 328c6aa. `logits_to_keep_ab.py` times each arm both ways, in one
+process:
+
+| | T4 (job 2b) | RTX 4070 Ti SUPER, a game running |
+|---|---|---|
+| Stock, all positions against one | 1.013x | 1.017x |
+| Exact, all positions against one | 1.017x | 0.994x |
+| Exact against stock, both fixed | 0.977x | 1.089x |
+| Exact against stock, as from 9f0c685 to 67b8fdc | 0.965x | 1.072x |
+| Exact against stock, as from 67b8fdc to the fix | 0.982x | 1.065x |
+
+So the bug moved exact against stock by about 1% to 2% in exact's favour.
+On this T4 machine the default exact path ran slightly faster than stock
+(0.977x), against 1.03x on job 2a's machine. The T4 step waits on the host,
+so the ratio moves with the machine.
