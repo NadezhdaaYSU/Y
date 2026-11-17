@@ -124,3 +124,21 @@ left of the gap is on the host. The exact step launches 211 more kernels,
 and on this 2.00 GHz Xeon the GPU sits idle for 45% of the step. Stock is
 partly host bound too (68% busy). So on this machine the next thing to cut
 is the number of kernels, not their speed.
+
+## Does `torch._int_mm` now beat Triton where Triton runs?
+
+No. On the RTX 4070 Ti SUPER the exact path's linear layers run the Triton
+int8 kernel. `gemm_path_ab.py` times that against the same model switched
+to `torch._int_mm` in the TN form (`triton_ok` cleared, weights in
+nn.Linear's order), next to stock bf16, in one process at 79c5cca. The GPU
+was idle (6% use at the start, no game running).
+`local_4070ti/gemm_path_ab.log`:
+
+| Arm | Tokens per second per sequence | Against stock |
+|---|---|---|
+| Stock bf16 | 244.3 | |
+| Exact, Triton (the default here) | 227.6 | 1.074x slower |
+| Exact, `torch._int_mm` TN | 225.3 | 1.084x slower |
+
+Triton stays 1% faster, so the default does not change. Both exact arms
+give the same token ids on all 32 rows.

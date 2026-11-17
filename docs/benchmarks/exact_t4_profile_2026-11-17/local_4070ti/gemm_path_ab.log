@@ -1,0 +1,23 @@
+  exact: 121 layers, 0 in nn.Linear order; exact_int_mm: 121 layers switched to _int_mm, TN
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity exact_int_mm canary ok, 40 distinct tokens in reference
+  exact and exact_int_mm give the same token ids on all 32 rows: True
+  GEMM kernels, exact:
+    _w8a8_gemm
+    _w8a8_gemm_splitk
+    ampere_sgemm_128x128_nn
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+  GEMM kernels, exact_int_mm:
+    ampere_sgemm_128x128_nn
+    void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_128x64_128x3_tn_align16>(cutlass_80_tensorop_i16832gemm_s8_128x64_128x3_tn_align16::
+    void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16>(cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16::
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+  stock           0.262 s    244.3 tok/s/seq  median  0.2% above
+  exact           0.281 s    227.6 tok/s/seq  median  0.3% above
+  exact_int_mm    0.284 s    225.3 tok/s/seq  median  0.1% above
+  exact / stock = 1.074x
+  exact_int_mm / stock = 1.084x
+  exact_int_mm / exact = 1.010x
