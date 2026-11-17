@@ -187,3 +187,55 @@ So the bug moved exact against stock by about 1% to 2% in exact's favour.
 On this T4 machine the default exact path ran slightly faster than stock
 (0.977x), against 1.03x on job 2a's machine. The T4 step waits on the host,
 so the ratio moves with the machine.
+
+## Job 2c: why every switch is slow on the T4
+
+`make_t4_layout_job.py` part c, at a2c049b. `profile_05b.py` now also
+reports each CPU op's self time per decode step. The profiler slows the
+host, so these host times are too high, but they compare well with each
+other. Files in `t4_job2c/`.
+
+Per decode step (steps 17 to 48):
+
+| | Stock float16 | Exact, default | Exact, every switch |
+|---|---|---|---|
+| Wall time, unprofiled | 14.7 ms | 15.1 ms | 19.5 ms |
+| GPU busy | 10.3 ms (70%) | 8.9 ms (59%) | 7.3 ms (38%) |
+| Kernels | 517 | 728 | 598 |
+| CPU self time, profiled | 19.9 ms | 24.3 ms | 27.1 ms |
+
+Every switch gives the GPU the least work, and is still the slowest. Its
+GPU waits on the host for 62% of the step. Two host ops make most of the
+difference:
+
+| Host op, every switch | CPU self time per step | Calls | Per call |
+|---|---|---|---|
+| `y::exact_rms_norm` (`Y_EXACT_NORM=triton`) | 4.50 ms | 49 | 92 us |
+| `y::exact_decode_attention` (`Y_EXACT_ATTN=y`) | 1.19 ms | 24 | 50 us |
+
+Each is a `torch.library` op with a Python body: the norm launches a Triton
+kernel through Triton's Python launcher, the attention a Y kernel through
+`TorchKernel`. On the RTX 4070 Ti SUPER host (a Ryzen 9 9950X) such a call
+was measured at 6 to 32 us (`docs/benchmarks/exact_y_gemm_2026-11-07/`),
+and the step there is not waiting on the host, so every switch wins there.
+On this 2.00 GHz Xeon the same calls cost 50 to 90 us under the profiler,
+and the T4's step already waits on the host.
+
+So the switches stay opt-in, as their comments already say. On a fast host
+they make the exact path faster than stock. On a slow host the default is
+faster. The cure for both would be to launch the whole step at once (CUDA
+graphs), which is blocked: `reduce-overhead` with a static cache crashes on
+transformers 5.15 with torch 2.13, for stock too.
+
+## Summary
+
+| T4, 0.5B, batch 32, compiled | Exact against stock float16 |
+|---|---|
+| Before (exact_speed_05b, old order and old tool) | 1.48x slower |
+| Old order, fixed tool (job 2a) | 1.25x slower |
+| New order, fixed tool (job 2a) | 1.03x slower |
+| New order, fixed tool, another machine (job 2b) | 0.98x (slightly faster) |
+
+The cause was the weight's storage order. With it fixed, the exact path's
+GPU does less work per step than stock's on the T4. What is left is host
+time, and it moves with the machine.

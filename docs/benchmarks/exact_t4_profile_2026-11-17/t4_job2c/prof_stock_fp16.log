@@ -1,0 +1,86 @@
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:36,  2.98it/s]
+Loading weights:  88%|████████▊ | 255/290 [00:00<00:00, 743.18it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 616.24it/s]
+W1117 22:42:24.426000 153 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-17 22:45:22 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 22:45:23 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 22:45:30 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 22:45:32 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+stock  on Tesla T4, 16 new tokens, batch 32, compiled
+  per token: wall 13.50 ms unprofiled (24.57 profiled), GPU busy 10.70 ms (79% of the unprofiled wall), 517 kernels
+  float GEMM         7.219 ms/token  67.4%   236.5 kernels/token
+  attention          1.611 ms/token  15.0%   102.0 kernels/token
+  copy/fill          0.689 ms/token   6.4%    32.1 kernels/token
+  Inductor fused     0.667 ms/token   6.2%   119.5 kernels/token
+  other              0.518 ms/token   4.8%    26.6 kernels/token
+  top kernels:
+    3.907 ms/token   46.0x  [float GEMM] turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+    1.240 ms/token   22.5x  [float GEMM] turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn
+    1.219 ms/token   24.0x  [attention] fmha_cutlassF_f16_aligned_64x64_rf_sm75(PyTorchMemEffAttention::AttentionKernel<cutlass::half_t, cut
+    1.006 ms/token    6.0x  [float GEMM] turing_fp16_s1688gemm_fp16_128x128_ldg8_f2f_tn
+    0.731 ms/token   90.0x  [float GEMM] void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(cutlass_75
+    0.499 ms/token    6.2x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.332 ms/token    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.292 ms/token   45.4x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.155 ms/token    1.5x  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_6
+    0.132 ms/token   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_bmm_cat_cos_expand_mul_neg_sin_slice_transpose_unsqueeze_view_1
+    0.131 ms/token    1.0x  [copy/fill] void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorB
+    0.125 ms/token   45.0x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.098 ms/token    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+    0.084 ms/token   22.5x  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_7
+    0.081 ms/token   22.5x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.076 ms/token    1.5x  [float GEMM] turing_fp16_s1688gemm_fp16_128x128_ldg8_relu_f2f_tn
+    0.073 ms/token   22.5x  [Inductor fused] triton_poi_fused_cat_transpose_view_2
+    0.065 ms/token   25.5x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.063 ms/token   11.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_12
+    0.055 ms/token    3.0x  [float GEMM] turing_fp16_s1688gemm_fp16_64x64_sliced1x4_ldg8_relu_f2f_tn
+  decode only (16 -> 48 new tokens), per step: wall 14.73 ms unprofiled, GPU busy 10.35 ms (70%), 517 kernels
+  float GEMM         6.237 ms/step  60.3%   241.0 kernels/step
+  attention          2.433 ms/step  23.5%   102.0 kernels/step
+  copy/fill          0.683 ms/step   6.6%    27.0 kernels/step
+  other              0.509 ms/step   4.9%    26.0 kernels/step
+  Inductor fused     0.486 ms/step   4.7%   121.0 kernels/step
+  top kernels, decode only:
+    3.948 ms/step   49.0x  [float GEMM] turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+    1.669 ms/step   24.0x  [attention] fmha_cutlassF_f16_aligned_64x64_rf_sm75(PyTorchMemEffAttention::AttentionKernel<cutlass::half_t, cut
+    1.311 ms/step   24.0x  [float GEMM] turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn
+    0.733 ms/step   96.0x  [float GEMM] void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(cutlass_75
+    0.700 ms/step   48.0x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.501 ms/step    6.0x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.333 ms/step    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.159 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_bmm_cat_cos_expand_mul_neg_sin_slice_transpose_unsqueeze_view_1
+    0.130 ms/step    1.0x  [copy/fill] void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorB
+    0.127 ms/step   48.0x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.104 ms/step   24.0x  [Inductor fused] triton_poi_fused_cat_transpose_view_2
+    0.095 ms/step    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+    0.086 ms/step   24.0x  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_7
+    0.082 ms/step   24.0x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.048 ms/step   24.0x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.032 ms/step    3.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, a
+    0.032 ms/step   11.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_12
+    0.032 ms/step   10.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_13
+    0.029 ms/step    0.0x  [float GEMM] turing_fp16_s1688gemm_fp16_128x128_ldg8_f2f_tn
+    0.028 ms/step   11.0x  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_10
+  host, decode only: 19.88 ms of CPU self time per step (profiled, so inflated); top ops:
+    7.866 ms/step    1.0x  ## Call CompiledFxGraph fbpyvtzmfnk4n6kpb5udgzqgaf2wbogvutf3cwp47zoojoimijcn ##
+    1.911 ms/step   97.0x  aten::mm
+    1.724 ms/step   72.0x  aten::addmm
+    1.584 ms/step  217.0x  cuLaunchKernel
+    1.442 ms/step  214.0x  cudaLaunchKernel
+    0.667 ms/step    1.0x  cudaStreamSynchronize
+    0.556 ms/step    1.0x  TorchDynamo Cache Lookup
+    0.536 ms/step  158.0x  aten::empty
+    0.514 ms/step   78.0x  cuLaunchKernelEx
+    0.362 ms/step   24.0x  aten::_efficient_attention_forward
+    0.358 ms/step    1.0x  Pregraph bytecode
+    0.343 ms/step   24.0x  aten::_scaled_dot_product_efficient_attention
+    0.297 ms/step    1.0x  Torch-Compiled Region: 0/2
+    0.152 ms/step   96.0x  aten::item
+    0.150 ms/step   96.0x  aten::transpose
+    0.111 ms/step  115.0x  aten::as_strided
+    0.107 ms/step   96.0x  aten::_local_scalar_dense
+    0.104 ms/step    0.1x  Unrecognized
+    0.084 ms/step    7.0x  cudaMemcpyAsync
+    0.062 ms/step    4.0x  aten::any

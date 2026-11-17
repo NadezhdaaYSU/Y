@@ -1,0 +1,1349 @@
+{
+ "arm": "exact",
+ "env": {
+  "Y_EXACT_KV_PACK": "inplace",
+  "Y_EXACT_ATTN": "y",
+  "Y_EXACT_V_INT8": "1",
+  "Y_EXACT_NORM": "triton"
+ },
+ "stock_dtype": "bfloat16",
+ "new_tokens": 16,
+ "device": "Tesla T4",
+ "torch": "2.13.0+cu126",
+ "wall_ms_unprofiled": 304.17,
+ "wall_ms_profiled": 566.62,
+ "gpu_busy_ms": 158.81,
+ "kernels_launched": 9768,
+ "families": {
+  "int8 GEMM": {
+   "ms": 75.752,
+   "calls": 1936
+  },
+  "Inductor fused": {
+   "ms": 40.66,
+   "calls": 5184
+  },
+  "Y kernel": {
+   "ms": 14.132,
+   "calls": 948
+  },
+  "copy/fill": {
+   "ms": 11.609,
+   "calls": 466
+  },
+  "other": {
+   "ms": 8.342,
+   "calls": 426
+  },
+  "other Triton": {
+   "ms": 7.5,
+   "calls": 784
+  },
+  "float GEMM": {
+   "ms": 0.818,
+   "calls": 24
+  }
+ },
+ "kernels": [
+  {
+   "name": "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)",
+   "family": "int8 GEMM",
+   "ms": 67.119,
+   "calls": 1888
+  },
+  {
+   "name": "Memcpy DtoD (Device -> Device)",
+   "family": "copy/fill",
+   "ms": 10.603,
+   "calls": 115
+  },
+  {
+   "name": "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16::Params)",
+   "family": "int8 GEMM",
+   "ms": 8.633,
+   "calls": 48
+  },
+  {
+   "name": "_rms_norm_kernel",
+   "family": "other Triton",
+   "ms": 7.5,
+   "calls": 784
+  },
+  {
+   "name": "exact_decode_attention",
+   "family": "Y kernel",
+   "ms": 6.909,
+   "calls": 360
+  },
+  {
+   "name": "triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_num_ones_like_round_unsqueeze_view_where_zeros_like_20",
+   "family": "Inductor fused",
+   "ms": 5.821,
+   "calls": 24
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1} const&)::{lambda(int)#1})",
+   "family": "other",
+   "ms": 5.298,
+   "calls": 32
+  },
+  {
+   "name": "triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_num_ones_like_round_unsqueeze_view_where_zeros_like_14",
+   "family": "Inductor fused",
+   "ms": 4.958,
+   "calls": 360
+  },
+  {
+   "name": "exact_pv",
+   "family": "Y kernel",
+   "ms": 3.602,
+   "calls": 24
+  },
+  {
+   "name": "triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_rsub_scalar_tensor_slice_sub_sum_transpose_unsqueeze_view_where_zeros_like_13",
+   "family": "Inductor fused",
+   "ms": 3.572,
+   "calls": 21
+  },
+  {
+   "name": "triton_red_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_15",
+   "family": "Inductor fused",
+   "ms": 3.024,
+   "calls": 24
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_clone_div_eq_gt_mul_ones_like_round_transpose_view_where_17",
+   "family": "Inductor fused",
+   "ms": 2.86,
+   "calls": 24
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1",
+   "family": "Inductor fused",
+   "ms": 2.546,
+   "calls": 759
+  },
+  {
+   "name": "triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_16",
+   "family": "Inductor fused",
+   "ms": 2.367,
+   "calls": 15
+  },
+  {
+   "name": "triton_poi_fused__to_copy_cat_7",
+   "family": "Inductor fused",
+   "ms": 2.287,
+   "calls": 360
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clamp_exact_pv_gt_mul_ones_like_reciprocal_round_slice_view_where_14",
+   "family": "Y kernel",
+   "ms": 2.013,
+   "calls": 24
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_18",
+   "family": "Inductor fused",
+   "ms": 1.706,
+   "calls": 48
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_12",
+   "family": "Inductor fused",
+   "ms": 1.638,
+   "calls": 720
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_2",
+   "family": "Inductor fused",
+   "ms": 1.587,
+   "calls": 384
+  },
+  {
+   "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4> >(at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4>)",
+   "family": "other",
+   "ms": 1.584,
+   "calls": 16
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_arange_bitwise_and_cat_clamp_div_eq_exact_decode_attention_expand_index_le_lift_fresh_lt_mul_neg_new_ones_ones_like_round_scalar_tensor_slice_split_with_sizes_transpose_unsqueeze_view_where_4",
+   "family": "Y kernel",
+   "ms": 1.015,
+   "calls": 285
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_13",
+   "family": "Inductor fused",
+   "ms": 1.014,
+   "calls": 360
+  },
+  {
+   "name": "triton_poi_fused__to_copy_cat_10",
+   "family": "Inductor fused",
+   "ms": 0.968,
+   "calls": 360
+  },
+  {
+   "name": "volta_sgemm_64x64_nn",
+   "family": "float GEMM",
+   "ms": 0.818,
+   "calls": 24
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_unsqueeze_view_where_5",
+   "family": "Inductor fused",
+   "ms": 0.762,
+   "calls": 360
+  },
+  {
+   "name": "triton_poi_fused__to_copy__unsafe_view_bmm_clamp_clone_div_eq_expand_ones_like_round_slice_transpose_view_where_7",
+   "family": "Inductor fused",
+   "ms": 0.749,
+   "calls": 24
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_cat_clamp_clone_div_eq_index_mul_neg_ones_like_round_slice_split_with_sizes_transpose_unsqueeze_view_where_3",
+   "family": "Inductor fused",
+   "ms": 0.714,
+   "calls": 24
+  },
+  {
+   "name": "triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq_lt_mul_ones_like_round_split_with_sizes_sub_transpose_unsqueeze_view_where_zeros_9",
+   "family": "Inductor fused",
+   "ms": 0.69,
+   "calls": 360
+  },
+  {
+   "name": "triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_lt_mul_ones_like_round_sub_view_where_zeros_6",
+   "family": "Inductor fused",
+   "ms": 0.65,
+   "calls": 360
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_8",
+   "family": "Inductor fused",
+   "ms": 0.594,
+   "calls": 360
+  },
+  {
+   "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4> >(at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4>)",
+   "family": "other",
+   "ms": 0.582,
+   "calls": 51
+  },
+  {
+   "name": "triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_rsub_scalar_tensor_slice_sub_sum_transpose_unsqueeze_view_where_zeros_like_21",
+   "family": "Inductor fused",
+   "ms": 0.559,
+   "calls": 3
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_19",
+   "family": "Inductor fused",
+   "ms": 0.48,
+   "calls": 24
+  },
+  {
+   "name": "triton_poi_fused__to_copy_add_arange_bitwise_and_clamp_div_eq_exact_decode_attention_expand_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_scalar_tensor_unsqueeze_view_where_11",
+   "family": "Y kernel",
+   "ms": 0.324,
+   "calls": 180
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_arange_bitwise_and_cat_clamp_div_eq_exact_decode_attention_expand_index_le_lift_fresh_lt_mul_neg_new_ones_ones_like_round_scalar_tensor_slice_split_with_sizes_transpose_unsqueeze_view_where_15",
+   "family": "Y kernel",
+   "ms": 0.269,
+   "calls": 75
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1})",
+   "family": "other",
+   "ms": 0.222,
+   "calls": 49
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_unsqueeze_view_where_4",
+   "family": "Inductor fused",
+   "ms": 0.197,
+   "calls": 24
+  },
+  {
+   "name": "void at::native::_scatter_gather_elementwise_kernel<128, 8, at::native::_cuda_scatter_gather_internal_kernel<false, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1}>(int, at::native::_cuda_scatter_gather_internal_kernel<false, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1})",
+   "family": "copy/fill",
+   "ms": 0.17,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::_scatter_gather_elementwise_kernel<128, 8, at::native::_cuda_scatter_gather_internal_kernel<true, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1}>(int, at::native::_cuda_scatter_gather_internal_kernel<true, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1})",
+   "family": "copy/fill",
+   "ms": 0.165,
+   "calls": 16
+  },
+  {
+   "name": "triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq_lt_mul_ones_like_round_split_with_sizes_sub_transpose_unsqueeze_view_where_zeros_11",
+   "family": "Inductor fused",
+   "ms": 0.161,
+   "calls": 24
+  },
+  {
+   "name": "void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}, function_traits<at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>::result_type*)",
+   "family": "copy/fill",
+   "ms": 0.157,
+   "calls": 48
+  },
+  {
+   "name": "triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_23",
+   "family": "Inductor fused",
+   "ms": 0.157,
+   "calls": 1
+  },
+  {
+   "name": "triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_lt_mul_ones_like_round_sub_view_where_zeros_5",
+   "family": "Inductor fused",
+   "ms": 0.14,
+   "calls": 24
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_add_amax_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_10",
+   "family": "Inductor fused",
+   "ms": 0.131,
+   "calls": 24
+  },
+  {
+   "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4> >(at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4>)",
+   "family": "other",
+   "ms": 0.127,
+   "calls": 16
+  },
+  {
+   "name": "triton_poi_fused__to_copy_clone_expand_slice_transpose_8",
+   "family": "Inductor fused",
+   "ms": 0.121,
+   "calls": 24
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<bool>, std::array<char*, 1ul> >(int, at::native::FillFunctor<bool>, std::array<char*, 1ul>)",
+   "family": "copy/fill",
+   "ms": 0.121,
+   "calls": 81
+  },
+  {
+   "name": "void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::native::(anonymous namespace)::OpaqueType<8u>, unsigned int, 2, 128, 1, 16>(at::native::(anonymous namespace)::OpaqueType<8u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<8u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int)",
+   "family": "copy/fill",
+   "ms": 0.113,
+   "calls": 48
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1} const&)::{lambda(int)#1})",
+   "family": "copy/fill",
+   "ms": 0.11,
+   "calls": 24
+  },
+  {
+   "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::MaxNanFunctor<long> >, unsigned int, long, 4, 4> >(at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::MaxNanFunctor<long> >, unsigned int, long, 4, 4>)",
+   "family": "other",
+   "ms": 0.084,
+   "calls": 16
+  },
+  {
+   "name": "triton_poi_fused__to_copy_12",
+   "family": "Inductor fused",
+   "ms": 0.061,
+   "calls": 24
+  },
+  {
+   "name": "triton_poi_fused_view_6",
+   "family": "Inductor fused",
+   "ms": 0.055,
+   "calls": 24
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1} const&)::{lambda(int)#1})",
+   "family": "copy/fill",
+   "ms": 0.055,
+   "calls": 30
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<bool, bool, bool, at::native::BitwiseOrFunctor<bool> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<bool, bool, bool, at::native::BitwiseOrFunctor<bool> >, std::array<char*, 3ul>)",
+   "family": "other",
+   "ms": 0.05,
+   "calls": 32
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_16",
+   "family": "Inductor fused",
+   "ms": 0.05,
+   "calls": 24
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, std::array<char*, 1ul> >(int, at::native::FillFunctor<float>, std::array<char*, 1ul>)",
+   "family": "copy/fill",
+   "ms": 0.049,
+   "calls": 32
+  },
+  {
+   "name": "void at::native::unrolled_elementwise_kernel<at::native::BinaryFunctor<long, long, long, at::native::BitwiseAndFunctor<long> >, std::array<char*, 3ul>, 4, TrivialOffsetCalculator<2, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<2>, at::native::memory::StoreWithCast<1> >(int, at::native::BinaryFunctor<long, long, long, at::native::BitwiseAndFunctor<long> >, std::array<char*, 3ul>, TrivialOffsetCalculator<2, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<2>, at::native::memory::StoreWithCast<1>)",
+   "family": "other",
+   "ms": 0.041,
+   "calls": 16
+  },
+  {
+   "name": "triton_poi_fused_embedding_0",
+   "family": "Inductor fused",
+   "ms": 0.039,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> >, std::array<char*, 3ul>)",
+   "family": "other",
+   "ms": 0.035,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<long> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<long> const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<long> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<long> const&)::{lambda(int)#1})",
+   "family": "other",
+   "ms": 0.035,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::compare_scalar_kernel<float>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, float)::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::compare_scalar_kernel<float>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, float)::{lambda(float)#1}, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.032,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > const&)::{lambda(int)#1})",
+   "family": "other",
+   "ms": 0.031,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnOther_add<long>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnOther_add<long>, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.03,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}, std::array<char*, 4ul> >(int, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}, std::array<char*, 4ul>)",
+   "family": "other",
+   "ms": 0.028,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> >, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.027,
+   "calls": 17
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.026,
+   "calls": 17
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctor_add<long>, std::array<char*, 3ul> >(int, at::native::CUDAFunctor_add<long>, std::array<char*, 3ul>)",
+   "family": "other",
+   "ms": 0.025,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::bitwise_not_kernel_cuda(at::TensorIteratorBase&)::{lambda(bool)#1}, std::array<char*, 2ul> >(int, at::native::bitwise_not_kernel_cuda(at::TensorIteratorBase&)::{lambda(bool)#1}, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.025,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::BUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.025,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.025,
+   "calls": 16
+  },
+  {
+   "name": "Memcpy DtoH (Device -> Pinned)",
+   "family": "copy/fill",
+   "ms": 0.024,
+   "calls": 19
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>, std::array<char*, 1ul> >(int, at::native::FillFunctor<long>, std::array<char*, 1ul>)",
+   "family": "copy/fill",
+   "ms": 0.021,
+   "calls": 17
+  },
+  {
+   "name": "Memset (Device)",
+   "family": "copy/fill",
+   "ms": 0.018,
+   "calls": 16
+  },
+  {
+   "name": "void at::native::reduce_kernel<256, 2, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4> >(at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4>)",
+   "family": "other",
+   "ms": 0.006,
+   "calls": 1
+  },
+  {
+   "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_slice_view_where_22",
+   "family": "Inductor fused",
+   "ms": 0.004,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::tensor_kernel_scan_innermost_dim<long, std::plus<long> >(long*, long const*, unsigned int, unsigned int, unsigned int, long, std::plus<long>)",
+   "family": "other",
+   "ms": 0.003,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1})",
+   "family": "other",
+   "ms": 0.002,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<2, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, bool)#1}, std::array<char*, 3ul> >(int, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, bool)#1}, std::array<char*, 3ul>)",
+   "family": "copy/fill",
+   "ms": 0.002,
+   "calls": 1
+  },
+  {
+   "name": "void at::native::vectorized_elementwise_kernel<4, at::native::compare_scalar_kernel<long>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, long)::{lambda(long)#1}, std::array<char*, 2ul> >(int, at::native::compare_scalar_kernel<long>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, long)::{lambda(long)#1}, std::array<char*, 2ul>)",
+   "family": "other",
+   "ms": 0.001,
+   "calls": 1
+  },
+  {
+   "name": "Memcpy HtoD (Pageable -> Device)",
+   "family": "copy/fill",
+   "ms": 0.001,
+   "calls": 3
+  }
+ ],
+ "decode_only": {
+  "per_step_wall_ms_unprofiled": 19.505,
+  "per_step_gpu_busy_ms": 7.333,
+  "per_step_kernels": 598.0,
+  "families": {
+   "int8 GEMM": {
+    "ms": 3.8734,
+    "calls": 121.0
+   },
+   "Inductor fused": {
+    "ms": 1.2971,
+    "calls": 315.0
+   },
+   "copy/fill": {
+    "ms": 0.7187,
+    "calls": 27.0
+   },
+   "Y kernel": {
+    "ms": 0.6213,
+    "calls": 60.0
+   },
+   "other": {
+    "ms": 0.5114,
+    "calls": 26.0
+   },
+   "other Triton": {
+    "ms": 0.3104,
+    "calls": 49.0
+   },
+   "float GEMM": {
+    "ms": 0.001,
+    "calls": 0.0
+   }
+  },
+  "kernels": [
+   {
+    "name": "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16::Params)",
+    "family": "int8 GEMM",
+    "ms": 3.8677,
+    "calls": 121.0
+   },
+   {
+    "name": "Memcpy DtoD (Device -> Device)",
+    "family": "copy/fill",
+    "ms": 0.6653,
+    "calls": 7.0
+   },
+   {
+    "name": "exact_decode_attention",
+    "family": "Y kernel",
+    "ms": 0.5138,
+    "calls": 24.0
+   },
+   {
+    "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}>(at::TensorIteratorBase&, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1} const&)::{lambda(int)#1})",
+    "family": "other",
+    "ms": 0.3324,
+    "calls": 2.0
+   },
+   {
+    "name": "triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_num_ones_like_round_unsqueeze_view_where_zeros_like_14",
+    "family": "Inductor fused",
+    "ms": 0.311,
+    "calls": 24.0
+   },
+   {
+    "name": "_rms_norm_kernel",
+    "family": "other Triton",
+    "ms": 0.3104,
+    "calls": 49.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_cat_7",
+    "family": "Inductor fused",
+    "ms": 0.2197,
+    "calls": 24.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_16",
+    "family": "Inductor fused",
+    "ms": 0.1584,
+    "calls": 1.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1",
+    "family": "Inductor fused",
+    "ms": 0.1288,
+    "calls": 49.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_12",
+    "family": "Inductor fused",
+    "ms": 0.1059,
+    "calls": 48.0
+   },
+   {
+    "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4> >(at::native::ReduceOp<float, at::native::ArgMaxOps<float>, unsigned int, long, 4, 4>)",
+    "family": "other",
+    "ms": 0.0955,
+    "calls": 1.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_cat_10",
+    "family": "Inductor fused",
+    "ms": 0.0756,
+    "calls": 24.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_add_amax_arange_bitwise_and_cat_clamp_div_eq_exact_decode_attention_expand_index_le_lift_fresh_lt_mul_neg_new_ones_ones_like_round_scalar_tensor_slice_split_with_sizes_transpose_unsqueeze_view_where_4",
+    "family": "Y kernel",
+    "ms": 0.0634,
+    "calls": 19.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_13",
+    "family": "Inductor fused",
+    "ms": 0.0631,
+    "calls": 24.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_2",
+    "family": "Inductor fused",
+    "ms": 0.0487,
+    "calls": 24.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_unsqueeze_view_where_5",
+    "family": "Inductor fused",
+    "ms": 0.0472,
+    "calls": 24.0
+   },
+   {
+    "name": "triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq_lt_mul_ones_like_round_split_with_sizes_sub_transpose_unsqueeze_view_where_zeros_9",
+    "family": "Inductor fused",
+    "ms": 0.043,
+    "calls": 24.0
+   },
+   {
+    "name": "triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_lt_mul_ones_like_round_sub_view_where_zeros_6",
+    "family": "Inductor fused",
+    "ms": 0.0404,
+    "calls": 24.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_add_amax_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_8",
+    "family": "Inductor fused",
+    "ms": 0.0369,
+    "calls": 24.0
+   },
+   {
+    "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4> >(at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4>)",
+    "family": "other",
+    "ms": 0.0333,
+    "calls": 3.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_add_arange_bitwise_and_clamp_div_eq_exact_decode_attention_expand_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_scalar_tensor_unsqueeze_view_where_11",
+    "family": "Y kernel",
+    "ms": 0.0207,
+    "calls": 12.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_add_amax_arange_bitwise_and_cat_clamp_div_eq_exact_decode_attention_expand_index_le_lift_fresh_lt_mul_neg_new_ones_ones_like_round_scalar_tensor_slice_split_with_sizes_transpose_unsqueeze_view_where_15",
+    "family": "Y kernel",
+    "ms": 0.0167,
+    "calls": 5.0
+   },
+   {
+    "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1})",
+    "family": "other",
+    "ms": 0.0129,
+    "calls": 3.0
+   },
+   {
+    "name": "void at::native::_scatter_gather_elementwise_kernel<128, 8, at::native::_cuda_scatter_gather_internal_kernel<false, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1}>(int, at::native::_cuda_scatter_gather_internal_kernel<false, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1})",
+    "family": "copy/fill",
+    "ms": 0.0104,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::_scatter_gather_elementwise_kernel<128, 8, at::native::_cuda_scatter_gather_internal_kernel<true, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1}>(int, at::native::_cuda_scatter_gather_internal_kernel<true, at::native::OpaqueType<4>, long>::operator()<at::native::TensorAssign>(at::TensorIterator&, long, long, long, at::native::TensorAssign const&)::{lambda(int)#1})",
+    "family": "copy/fill",
+    "ms": 0.0103,
+    "calls": 1.0
+   },
+   {
+    "name": "void (anonymous namespace)::elementwise_kernel_with_index<int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(int, at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}, function_traits<at::native::arange_cuda_out(c10::Scalar const&, c10::Scalar const&, c10::Scalar const&, at::Tensor&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>::result_type*)",
+    "family": "copy/fill",
+    "ms": 0.0092,
+    "calls": 3.0
+   },
+   {
+    "name": "void at::native::reduce_kernel<128, 4, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4> >(at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4>)",
+    "family": "other",
+    "ms": 0.0074,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<bool>, std::array<char*, 1ul> >(int, at::native::FillFunctor<bool>, std::array<char*, 1ul>)",
+    "family": "copy/fill",
+    "ms": 0.007,
+    "calls": 5.0
+   },
+   {
+    "name": "void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::native::(anonymous namespace)::OpaqueType<8u>, unsigned int, 2, 128, 1, 16>(at::native::(anonymous namespace)::OpaqueType<8u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<8u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int)",
+    "family": "copy/fill",
+    "ms": 0.0067,
+    "calls": 3.0
+   },
+   {
+    "name": "void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16::Params)",
+    "family": "int8 GEMM",
+    "ms": 0.0057,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_rsub_scalar_tensor_slice_sub_sum_transpose_unsqueeze_view_where_zeros_like_13",
+    "family": "Inductor fused",
+    "ms": 0.0053,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::MaxNanFunctor<long> >, unsigned int, long, 4, 4> >(at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::MaxNanFunctor<long> >, unsigned int, long, 4, 4>)",
+    "family": "other",
+    "ms": 0.0049,
+    "calls": 1.0
+   },
+   {
+    "name": "triton_red_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_15",
+    "family": "Inductor fused",
+    "ms": 0.0045,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_clamp_clone_div_eq_gt_mul_ones_like_round_transpose_view_where_17",
+    "family": "Inductor fused",
+    "ms": 0.0041,
+    "calls": 0.0
+   },
+   {
+    "name": "exact_pv",
+    "family": "Y kernel",
+    "ms": 0.0037,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#4}::operator()() const::{lambda(long)#1} const&)::{lambda(int)#1})",
+    "family": "copy/fill",
+    "ms": 0.0033,
+    "calls": 2.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_clamp_exact_pv_gt_mul_ones_like_reciprocal_round_slice_view_where_14",
+    "family": "Y kernel",
+    "ms": 0.003,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::FillFunctor<float>, std::array<char*, 1ul> >(int, at::native::FillFunctor<float>, std::array<char*, 1ul>)",
+    "family": "copy/fill",
+    "ms": 0.0029,
+    "calls": 2.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<bool, bool, bool, at::native::BitwiseOrFunctor<bool> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<bool, bool, bool, at::native::BitwiseOrFunctor<bool> >, std::array<char*, 3ul>)",
+    "family": "other",
+    "ms": 0.0028,
+    "calls": 2.0
+   },
+   {
+    "name": "void at::native::unrolled_elementwise_kernel<at::native::BinaryFunctor<long, long, long, at::native::BitwiseAndFunctor<long> >, std::array<char*, 3ul>, 4, TrivialOffsetCalculator<2, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<2>, at::native::memory::StoreWithCast<1> >(int, at::native::BinaryFunctor<long, long, long, at::native::BitwiseAndFunctor<long> >, std::array<char*, 3ul>, TrivialOffsetCalculator<2, unsigned int>, TrivialOffsetCalculator<1, unsigned int>, at::native::memory::LoadWithCast<2>, at::native::memory::StoreWithCast<1>)",
+    "family": "other",
+    "ms": 0.0024,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<long> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<long> const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<long> >(at::TensorIteratorBase&, at::native::CUDAFunctor_add<long> const&)::{lambda(int)#1})",
+    "family": "other",
+    "ms": 0.002,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<2, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> >, std::array<char*, 3ul> >(int, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> >, std::array<char*, 3ul>)",
+    "family": "other",
+    "ms": 0.002,
+    "calls": 1.0
+   },
+   {
+    "name": "triton_poi_fused_embedding_0",
+    "family": "Inductor fused",
+    "ms": 0.002,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::compare_scalar_kernel<float>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, float)::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::compare_scalar_kernel<float>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, float)::{lambda(float)#1}, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0019,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<long, long, long, at::native::binary_internal::MulFunctor<long> > const&)::{lambda(int)#1})",
+    "family": "other",
+    "ms": 0.0018,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnOther_add<long>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnOther_add<long>, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0017,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}, std::array<char*, 4ul> >(int, at::native::(anonymous namespace)::where_kernel_impl(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#3}::operator()() const::{lambda(bool, unsigned int, unsigned int)#1}, std::array<char*, 4ul>)",
+    "family": "other",
+    "ms": 0.0017,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::BUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0015,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> >, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0015,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul> >(int, at::native::AUnaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> >, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0014,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::bitwise_not_kernel_cuda(at::TensorIteratorBase&)::{lambda(bool)#1}, std::array<char*, 2ul> >(int, at::native::bitwise_not_kernel_cuda(at::TensorIteratorBase&)::{lambda(bool)#1}, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0014,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctor_add<long>, std::array<char*, 3ul> >(int, at::native::CUDAFunctor_add<long>, std::array<char*, 3ul>)",
+    "family": "other",
+    "ms": 0.0014,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul> >(int, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0014,
+    "calls": 1.0
+   },
+   {
+    "name": "Memcpy DtoH (Device -> Pinned)",
+    "family": "copy/fill",
+    "ms": 0.0012,
+    "calls": 1.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<2, at::native::FillFunctor<long>, std::array<char*, 1ul> >(int, at::native::FillFunctor<long>, std::array<char*, 1ul>)",
+    "family": "copy/fill",
+    "ms": 0.0012,
+    "calls": 1.0
+   },
+   {
+    "name": "Memset (Device)",
+    "family": "copy/fill",
+    "ms": 0.0011,
+    "calls": 1.0
+   },
+   {
+    "name": "volta_sgemm_64x64_nn",
+    "family": "float GEMM",
+    "ms": 0.001,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_index_le_lift_fresh_lt_mul_new_ones_ones_like_round_rsub_scalar_tensor_slice_sub_sum_transpose_unsqueeze_view_where_zeros_like_21",
+    "family": "Inductor fused",
+    "ms": 0.0007,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_19",
+    "family": "Inductor fused",
+    "ms": 0.0006,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_add_amax_cat_clamp_clone_div_eq_index_mul_neg_ones_like_round_slice_split_with_sizes_transpose_unsqueeze_view_where_3",
+    "family": "Inductor fused",
+    "ms": 0.0003,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_lt_mul_ones_like_round_sub_view_where_zeros_5",
+    "family": "Inductor fused",
+    "ms": 0.0002,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_unsqueeze_view_where_4",
+    "family": "Inductor fused",
+    "ms": 0.0002,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_add_amax_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_10",
+    "family": "Inductor fused",
+    "ms": 0.0002,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq_lt_mul_ones_like_round_split_with_sizes_sub_transpose_unsqueeze_view_where_zeros_11",
+    "family": "Inductor fused",
+    "ms": 0.0002,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#2}::operator()() const::{lambda(signed char)#1} const&)::{lambda(int)#1})",
+    "family": "copy/fill",
+    "ms": 0.0001,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_clone_expand_slice_transpose_8",
+    "family": "Inductor fused",
+    "ms": 0.0001,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused_view_6",
+    "family": "Inductor fused",
+    "ms": 0.0001,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_12",
+    "family": "Inductor fused",
+    "ms": 0.0001,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_16",
+    "family": "Inductor fused",
+    "ms": 0.0001,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy__unsafe_view_bmm_clamp_clone_div_eq_expand_ones_like_round_slice_transpose_view_where_7",
+    "family": "Inductor fused",
+    "ms": 0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_slice_view_where_22",
+    "family": "Inductor fused",
+    "ms": 0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<4, at::native::compare_scalar_kernel<long>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, long)::{lambda(long)#1}, std::array<char*, 2ul> >(int, at::native::compare_scalar_kernel<long>(at::TensorIteratorBase&, at::native::(anonymous namespace)::OpType, long)::{lambda(long)#1}, std::array<char*, 2ul>)",
+    "family": "other",
+    "ms": 0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::vectorized_elementwise_kernel<2, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, bool)#1}, std::array<char*, 3ul> >(int, at::native::(anonymous namespace)::masked_fill_kernel(at::TensorIterator&, c10::Scalar const&)::{lambda()#1}::operator()() const::{lambda()#4}::operator()() const::{lambda(long, bool)#1}, std::array<char*, 3ul>)",
+    "family": "copy/fill",
+    "ms": 0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::elementwise_kernel<128, 4, at::native::gpu_kernel_impl_nocast<at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > >(at::TensorIteratorBase&, at::native::AUnaryFunctor<long, long, bool, at::native::(anonymous namespace)::CompareEqFunctor<long> > const&)::{lambda(int)#1})",
+    "family": "other",
+    "ms": 0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "Memcpy HtoD (Pageable -> Device)",
+    "family": "copy/fill",
+    "ms": -0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::tensor_kernel_scan_innermost_dim<long, std::plus<long> >(long*, long const*, unsigned int, unsigned int, unsigned int, long, std::plus<long>)",
+    "family": "other",
+    "ms": -0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_18",
+    "family": "Inductor fused",
+    "ms": -0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "void at::native::reduce_kernel<256, 2, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4> >(at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, at::native::or_kernel_cuda(at::TensorIterator&)::{lambda()#1}::operator()() const::{lambda()#12}::operator()() const::{lambda(bool, bool)#1}>, unsigned int, bool, 4, 4>)",
+    "family": "other",
+    "ms": -0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_23",
+    "family": "Inductor fused",
+    "ms": -0.0,
+    "calls": 0.0
+   },
+   {
+    "name": "triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_num_ones_like_round_unsqueeze_view_where_zeros_like_20",
+    "family": "Inductor fused",
+    "ms": -0.0002,
+    "calls": 0.0
+   }
+  ],
+  "host_self_cpu_ms_per_step": 27.105,
+  "host_ops": [
+   {
+    "name": "## Call CompiledFxGraph fj34te3v6ybi7ob2hjzn4epfqmdgzxocvih5bkgyifzf2p5bnq35 ##",
+    "self_cpu_ms": 9.6198,
+    "calls": 1.0
+   },
+   {
+    "name": "y::exact_rms_norm",
+    "self_cpu_ms": 4.4992,
+    "calls": 49.0
+   },
+   {
+    "name": "cuLaunchKernel",
+    "self_cpu_ms": 3.0446,
+    "calls": 412.0
+   },
+   {
+    "name": "aten::_int_mm",
+    "self_cpu_ms": 2.5176,
+    "calls": 121.0
+   },
+   {
+    "name": "y::exact_decode_attention",
+    "self_cpu_ms": 1.1898,
+    "calls": 24.0
+   },
+   {
+    "name": "cuLaunchKernelEx",
+    "self_cpu_ms": 1.1607,
+    "calls": 133.0
+   },
+   {
+    "name": "aten::empty",
+    "self_cpu_ms": 1.017,
+    "calls": 107.0
+   },
+   {
+    "name": "TorchDynamo Cache Lookup",
+    "self_cpu_ms": 0.841,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::view",
+    "self_cpu_ms": 0.6806,
+    "calls": 150.0
+   },
+   {
+    "name": "cudaLaunchKernel",
+    "self_cpu_ms": 0.3472,
+    "calls": 44.0
+   },
+   {
+    "name": "Pregraph bytecode",
+    "self_cpu_ms": 0.2664,
+    "calls": 1.0
+   },
+   {
+    "name": "Torch-Compiled Region: 0/2",
+    "self_cpu_ms": 0.2539,
+    "calls": 1.0
+   },
+   {
+    "name": "Unrecognized",
+    "self_cpu_ms": 0.217,
+    "calls": 0.09
+   },
+   {
+    "name": "cudaStreamSynchronize",
+    "self_cpu_ms": 0.1774,
+    "calls": 1.0
+   },
+   {
+    "name": "cudaMemcpyAsync",
+    "self_cpu_ms": 0.1023,
+    "calls": 8.0
+   },
+   {
+    "name": "aten::reshape",
+    "self_cpu_ms": 0.0835,
+    "calls": 49.0
+   },
+   {
+    "name": "aten::item",
+    "self_cpu_ms": 0.0704,
+    "calls": 44.0
+   },
+   {
+    "name": "cudaDeviceGetAttribute",
+    "self_cpu_ms": 0.0682,
+    "calls": 121.0
+   },
+   {
+    "name": "aten::isin",
+    "self_cpu_ms": 0.0656,
+    "calls": 3.0
+   },
+   {
+    "name": "aten::any",
+    "self_cpu_ms": 0.0628,
+    "calls": 4.0
+   },
+   {
+    "name": "aten::eq",
+    "self_cpu_ms": 0.0564,
+    "calls": 4.0
+   },
+   {
+    "name": "aten::copy_",
+    "self_cpu_ms": 0.0545,
+    "calls": 9.0
+   },
+   {
+    "name": "aten::fill_",
+    "self_cpu_ms": 0.0513,
+    "calls": 8.0
+   },
+   {
+    "name": "aten::where",
+    "self_cpu_ms": 0.051,
+    "calls": 5.0
+   },
+   {
+    "name": "aten::_local_scalar_dense",
+    "self_cpu_ms": 0.0453,
+    "calls": 44.0
+   },
+   {
+    "name": "aten::cat",
+    "self_cpu_ms": 0.0427,
+    "calls": 3.0
+   },
+   {
+    "name": "aten::arange",
+    "self_cpu_ms": 0.0402,
+    "calls": 6.0
+   },
+   {
+    "name": "aten::add",
+    "self_cpu_ms": 0.0398,
+    "calls": 3.0
+   },
+   {
+    "name": "aten::mul",
+    "self_cpu_ms": 0.0386,
+    "calls": 3.0
+   },
+   {
+    "name": "aten::resize_",
+    "self_cpu_ms": 0.0326,
+    "calls": 6.0
+   },
+   {
+    "name": "aten::empty_strided",
+    "self_cpu_ms": 0.0248,
+    "calls": 3.0
+   },
+   {
+    "name": "aten::bitwise_or",
+    "self_cpu_ms": 0.0243,
+    "calls": 2.0
+   },
+   {
+    "name": "aten::gather",
+    "self_cpu_ms": 0.0236,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::as_strided",
+    "self_cpu_ms": 0.0228,
+    "calls": 19.0
+   },
+   {
+    "name": "aten::argmax",
+    "self_cpu_ms": 0.022,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::slice",
+    "self_cpu_ms": 0.0207,
+    "calls": 4.0
+   },
+   {
+    "name": "aten::clone",
+    "self_cpu_ms": 0.0203,
+    "calls": 4.0
+   },
+   {
+    "name": "aten::select",
+    "self_cpu_ms": 0.0193,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::scatter",
+    "self_cpu_ms": 0.0191,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::lt",
+    "self_cpu_ms": 0.0188,
+    "calls": 1.0
+   },
+   {
+    "name": "## Call CompiledFxGraph f3er7j6fnum4cc7un2rqy4llaezj4qt6rqyeq3rw7b2xpdylalhi ##",
+    "self_cpu_ms": 0.0172,
+    "calls": 0.0
+   },
+   {
+    "name": "aten::max",
+    "self_cpu_ms": 0.0162,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::div",
+    "self_cpu_ms": 0.014,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::bitwise_not",
+    "self_cpu_ms": 0.0118,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::sub",
+    "self_cpu_ms": 0.0109,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::bitwise_and",
+    "self_cpu_ms": 0.0106,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::unsqueeze",
+    "self_cpu_ms": 0.0095,
+    "calls": 4.0
+   },
+   {
+    "name": "aten::full",
+    "self_cpu_ms": 0.0093,
+    "calls": 2.0
+   },
+   {
+    "name": "cudaMemsetAsync",
+    "self_cpu_ms": 0.0081,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::to",
+    "self_cpu_ms": 0.0072,
+    "calls": 24.0
+   },
+   {
+    "name": "aten::rsub",
+    "self_cpu_ms": 0.0066,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::_to_copy",
+    "self_cpu_ms": 0.0066,
+    "calls": 1.0
+   },
+   {
+    "name": "AOTDispatcher Runtime Wrapper Prologue",
+    "self_cpu_ms": 0.0066,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::scalar_tensor",
+    "self_cpu_ms": 0.0063,
+    "calls": 2.0
+   },
+   {
+    "name": "Buffer Flush",
+    "self_cpu_ms": 0.0059,
+    "calls": 0.06
+   },
+   {
+    "name": "aten::new_ones",
+    "self_cpu_ms": 0.0039,
+    "calls": 1.0
+   },
+   {
+    "name": "aten::__or__",
+    "self_cpu_ms": 0.0036,
+    "calls": 2.0
+   },
+   {
+    "name": "aten::lift_fresh",
+    "self_cpu_ms": 0.0032,
+    "calls": 20.0
+   },
+   {
+    "name": "aten::empty_like",
+    "self_cpu_ms": 0.0031,
+    "calls": 2.0
+   },
+   {
+    "name": "aten::__and__",
+    "self_cpu_ms": 0.0021,
+    "calls": 1.0
+   }
+  ]
+ }
+}

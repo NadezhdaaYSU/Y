@@ -1,0 +1,93 @@
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:23,  3.47it/s]
+Loading weights:  71%|███████▏  | 207/290 [00:00<00:00, 683.90it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 593.12it/s]
+W1117 23:10:10.967000 575 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+USDT:2026-11-17 23:23:12 575:575 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 23:23:12 575:575 SyncActivityProfilerHandler.cpp:59] profiler_stop
+USDT:2026-11-17 23:23:18 575:575 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 23:23:19 575:575 SyncActivityProfilerHandler.cpp:59] profiler_stop
+exact {'Y_EXACT_KV_PACK': 'inplace', 'Y_EXACT_ATTN': 'y', 'Y_EXACT_V_INT8': '1', 'Y_EXACT_NORM': 'triton'} on Tesla T4, 16 new tokens, batch 32, compiled
+  per token: wall 19.01 ms unprofiled (35.41 profiled), GPU busy 9.93 ms (52% of the unprofiled wall), 610 kernels
+  int8 GEMM          4.734 ms/token  47.7%   121.0 kernels/token
+  Inductor fused     2.541 ms/token  25.6%   324.0 kernels/token
+  Y kernel           0.883 ms/token   8.9%    59.2 kernels/token
+  copy/fill          0.726 ms/token   7.3%    29.1 kernels/token
+  other              0.521 ms/token   5.3%    26.6 kernels/token
+  other Triton       0.469 ms/token   4.7%    49.0 kernels/token
+  float GEMM         0.051 ms/token   0.5%     1.5 kernels/token
+  top kernels:
+    4.195 ms/token  118.0x  [int8 GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816ge
+    0.663 ms/token    7.2x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.540 ms/token    3.0x  [int8 GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_128x128_tn_align16>(cutlass_75_tensorop_i8816
+    0.469 ms/token   49.0x  [other Triton] _rms_norm_kernel
+    0.432 ms/token   22.5x  [Y kernel] exact_decode_attention
+    0.364 ms/token    1.5x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.331 ms/token    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.310 ms/token   22.5x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.225 ms/token    1.5x  [Y kernel] exact_pv
+    0.223 ms/token    1.3x  [Inductor fused] triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expan
+    0.189 ms/token    1.5x  [Inductor fused] triton_red_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_15
+    0.179 ms/token    1.5x  [Inductor fused] triton_poi_fused__to_copy_clamp_clone_div_eq_gt_mul_ones_like_round_transpose_view_where_17
+    0.159 ms/token   47.4x  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1
+    0.148 ms/token    0.9x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_16
+    0.143 ms/token   22.5x  [Inductor fused] triton_poi_fused__to_copy_cat_7
+    0.126 ms/token    1.5x  [Y kernel] triton_poi_fused__to_copy_clamp_exact_pv_gt_mul_ones_like_reciprocal_round_slice_view_where_14
+    0.107 ms/token    3.0x  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_18
+    0.102 ms/token   45.0x  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_12
+    0.099 ms/token   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_2
+    0.099 ms/token    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+  decode only (16 -> 48 new tokens), per step: wall 19.50 ms unprofiled, GPU busy 7.33 ms (38%), 598 kernels
+  int8 GEMM          3.873 ms/step  52.8%   121.0 kernels/step
+  Inductor fused     1.297 ms/step  17.7%   315.0 kernels/step
+  copy/fill          0.719 ms/step   9.8%    27.0 kernels/step
+  Y kernel           0.621 ms/step   8.5%    60.0 kernels/step
+  other              0.511 ms/step   7.0%    26.0 kernels/step
+  other Triton       0.310 ms/step   4.2%    49.0 kernels/step
+  float GEMM         0.001 ms/step   0.0%     0.0 kernels/step
+  top kernels, decode only:
+    3.868 ms/step  121.0x  [int8 GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816ge
+    0.665 ms/step    7.0x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.514 ms/step   24.0x  [Y kernel] exact_decode_attention
+    0.332 ms/step    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.311 ms/step   24.0x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.310 ms/step   49.0x  [other Triton] _rms_norm_kernel
+    0.220 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_cat_7
+    0.158 ms/step    1.0x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_16
+    0.129 ms/step   49.0x  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1
+    0.106 ms/step   48.0x  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_12
+    0.096 ms/step    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+    0.076 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_cat_10
+    0.063 ms/step   19.0x  [Y kernel] triton_per_fused__to_copy_abs_add_amax_arange_bitwise_and_cat_clamp_div_eq_exact_decode_attention_ex
+    0.063 ms/step   24.0x  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_13
+    0.049 ms/step   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_2
+    0.047 ms/step   24.0x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_tra
+    0.043 ms/step   24.0x  [Inductor fused] triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq
+    0.040 ms/step   24.0x  [Inductor fused] triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_lt_mul_ones_l
+    0.037 ms/step   24.0x  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_vie
+    0.033 ms/step    3.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<bool, at::native::func_wrapper_t<bool, a
+  host, decode only: 27.11 ms of CPU self time per step (profiled, so inflated); top ops:
+    9.620 ms/step    1.0x  ## Call CompiledFxGraph fj34te3v6ybi7ob2hjzn4epfqmdgzxocvih5bkgyifzf2p5bnq35 ##
+    4.499 ms/step   49.0x  y::exact_rms_norm
+    3.045 ms/step  412.0x  cuLaunchKernel
+    2.518 ms/step  121.0x  aten::_int_mm
+    1.190 ms/step   24.0x  y::exact_decode_attention
+    1.161 ms/step  133.0x  cuLaunchKernelEx
+    1.017 ms/step  107.0x  aten::empty
+    0.841 ms/step    1.0x  TorchDynamo Cache Lookup
+    0.681 ms/step  150.0x  aten::view
+    0.347 ms/step   44.0x  cudaLaunchKernel
+    0.266 ms/step    1.0x  Pregraph bytecode
+    0.254 ms/step    1.0x  Torch-Compiled Region: 0/2
+    0.217 ms/step    0.1x  Unrecognized
+    0.177 ms/step    1.0x  cudaStreamSynchronize
+    0.102 ms/step    8.0x  cudaMemcpyAsync
+    0.083 ms/step   49.0x  aten::reshape
+    0.070 ms/step   44.0x  aten::item
+    0.068 ms/step  121.0x  cudaDeviceGetAttribute
+    0.066 ms/step    3.0x  aten::isin
+    0.063 ms/step    4.0x  aten::any
