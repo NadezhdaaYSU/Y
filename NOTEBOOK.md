@@ -1951,14 +1951,16 @@ order and batch size cannot change the answer. That is the whole mechanism.
 determinism affordable.** The control that settles this was built and measured:
 a float32 path with the reduction *order* pinned instead of the arithmetic made
 exact is **also 0/16**. It just costs **6.5x** at its fastest (eager, against
-compiled stock), where the exact path costs 1.05x compiled. `torch.compile`
+compiled stock), where the exact path costs 1.07x compiled. `torch.compile`
 takes the exact arm from 25.5 to about 231 tok/s/seq, but makes the
 fixed-order arm about twice as slow (37.4 eager, 17.7-18.7 compiled). Our
 explanation: pinning an order constrains how the reduction may run, so it
 forbids the fusions that make float fast, while integer accumulation needs no
 pinning. (Corrected 2026-11-17: the first figures, 6.85x and 1.03x, came from
 a tool that gave the exact arm the control's attention and never compiled
-the control; see `docs/benchmarks/exact_speed_05b_2026-11-17/`.)
+the control; see `docs/benchmarks/exact_speed_05b_2026-11-17/`. Corrected
+again 2026-11-18: the exact figure moved from 1.05x to 1.07x once the tool
+stopped hiding `logits_to_keep` from `generate()`.)
 
 **This is unfinished work, and it is here because the finished parts are
 measured.** What exists is a PyTorch + Triton **prototype** carrying the whole
@@ -2015,8 +2017,14 @@ still differ.
 
 **Speed since the table** (compiled, batch 32, idle GPU): at 0.5B, with the
 CPU==GPU fixes, exact decoded 1.11x slower than stock bf16 (2026-11-02); on
-the code of 2026-11-17 it is 1.05x, 1.10x at width 511, and 0.98-0.99x with
-every Y kernel switch on (`docs/benchmarks/exact_speed_05b_2026-11-17/`). At
+the code of 2026-11-17, timed with the tool fixed on 2026-11-18, it is
+1.07x, 1.10x at width 511, and 0.99-1.00x with every Y kernel switch on
+(`docs/benchmarks/exact_speed_05b_2026-11-17/`). On a Tesla T4 it is 1.03x
+on one machine and 0.98x on another, after a fix to how the int8 weights
+are stored (`docs/benchmarks/exact_t4_profile_2026-11-17/`). From 9f0c685
+(2026-11-04) to 328c6aa the timing tool made the compiled stock arm compute
+every prompt position's logits in the prefill, which flattered exact by 1%
+to 2% at 0.5B. Its size in the 7B stock comparisons below was not measured. At
 7B it decodes **1.50x faster** (47.4 against 31.5 tok/s/seq, 2026-11-04). That
 is int8 weights being half the bytes of bf16, not exactness. Against an
 8-bit engine without exactness (vLLM 0.21, FP8 weights, CUDA graphs, same card,

@@ -510,6 +510,14 @@ arms interleaved (`docs/benchmarks/exact_speed_05b_2026-11-17/`):
 | exact int8 | 25.5 | 227.0, 235.6 (1.05x slower, both runs) |
 | fixed-order fp32 | **37.4** | 17.7, 18.7 (13.2-13.5x slower) |
 
+Corrected again on 2026-11-18. The tool also hid `logits_to_keep` from
+`generate()`, so some prefills computed the logits of every prompt
+position (fixed in 328c6aa). With that fixed, compiled: stock 241.3 and
+246.8, exact 225.0 and 231.5 (**1.07x slower**, both runs), the control
+17.9 and 18.6 (`exact_speed_05b_2026-11-17/after_logits_fix/`). The eager
+column above still has the bug. Its size there was not measured; for the
+compiled arms it was 1% to 2%.
+
 Compiling does not just fail to help the fixed-order arm: it makes it about
 twice as slow. We did not find out why. Run at its fastest (eager), the
 control is 6.5x slower than compiled stock and 6.2x slower than compiled
@@ -1208,9 +1216,9 @@ this is worth nothing to the person reading it.
 
 This section used to say exact against fixed-order float was never measured.
 Finding 11 measured it: pinned-order fp32 is also 0/16. At its fastest (eager)
-it is 6.5x slower than compiled stock, where exact is 1.05x (corrected
-2026-11-17; the first figures, 6.85x and 1.03x, came from a tool with two
-bugs). Two gaps remain:
+it is 6.5x slower than compiled stock, where exact is 1.07x (corrected
+2026-11-17 and 2026-11-18; the first figures, 6.85x and 1.03x, came from a
+tool with three bugs). Two gaps remain:
 - **That arm is the naive construction.** It pins the order with chunked
   loops in Python. A hand-written fixed-order CUDA kernel would be far faster,
   and none has been measured.
