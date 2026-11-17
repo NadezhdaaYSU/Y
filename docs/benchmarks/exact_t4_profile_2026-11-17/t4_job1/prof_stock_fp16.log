@@ -1,0 +1,36 @@
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:14,  3.87it/s]
+Loading weights:  71%|███████▏  | 207/290 [00:00<00:00, 722.05it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 649.44it/s]
+W1117 17:51:17.640000 163 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-17 17:54:21 163:163 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 17:54:21 163:163 SyncActivityProfilerHandler.cpp:59] profiler_stop
+stock  on Tesla T4, 16 new tokens, batch 32, compiled
+  per token: wall 14.32 ms unprofiled (27.29 profiled), GPU busy 11.13 ms (78% of the unprofiled wall), 540 kernels
+  float GEMM         7.597 ms/token  68.3%   236.5 kernels/token
+  attention          1.593 ms/token  14.3%    83.6 kernels/token
+  Inductor fused     0.732 ms/token   6.6%   166.0 kernels/token
+  copy/fill          0.687 ms/token   6.2%    29.1 kernels/token
+  other              0.516 ms/token   4.6%    24.4 kernels/token
+  top kernels:
+    3.816 ms/token   45.9x  [float GEMM] turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+    1.253 ms/token   22.5x  [float GEMM] turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn
+    1.253 ms/token   24.0x  [attention] fmha_cutlassF_f16_aligned_64x64_rf_sm75(PyTorchMemEffAttention::AttentionKernel<cutlass::half_t, cut
+    1.032 ms/token    6.0x  [float GEMM] turing_fp16_s1688gemm_fp16_128x128_ldg8_f2f_tn
+    0.747 ms/token   90.0x  [float GEMM] void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(cutlass_75
+    0.499 ms/token    6.1x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.392 ms/token    0.1x  [float GEMM] turing_fp16_s1688gemm_fp16_256x128_ldg8_f2f_tn
+    0.332 ms/token    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.299 ms/token   45.0x  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_arange_bitwise_an
+    0.154 ms/token    1.5x  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_6
+    0.130 ms/token   45.0x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.125 ms/token    0.9x  [copy/fill] void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorB
+    0.098 ms/token    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+    0.086 ms/token   22.5x  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_8
+    0.086 ms/token   22.5x  [float GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half
+    0.079 ms/token    1.5x  [float GEMM] turing_fp16_s1688gemm_fp16_128x128_ldg8_relu_f2f_tn
+    0.073 ms/token   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_arange_bmm_cat_cos_expand_mul_neg_sin_slice_transpose_unsqueeze_view_1
+    0.073 ms/token   22.5x  [Inductor fused] triton_poi_fused_cat_transpose_view_4
+    0.072 ms/token   22.5x  [Inductor fused] triton_poi_fused_cat_3
+    0.061 ms/token    3.0x  [float GEMM] turing_fp16_s1688gemm_fp16_64x64_sliced1x4_ldg8_relu_f2f_tn

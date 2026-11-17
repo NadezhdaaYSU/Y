@@ -1,0 +1,73 @@
+{
+ "device": "Tesla T4",
+ "torch": "2.13.0+cu126",
+ "M": 32,
+ "rows": {
+  "qkv 896->1152": {
+   "exact": true,
+   "int_mm": {
+    "median_us": 82.98,
+    "min_us": 42.02
+   },
+   "fp16 mm": {
+    "median_us": 25.85,
+    "min_us": 13.94
+   }
+  },
+  "o 896->896": {
+   "exact": true,
+   "int_mm": {
+    "median_us": 41.85,
+    "min_us": 41.66
+   },
+   "fp16 mm": {
+    "median_us": 15.24,
+    "min_us": 14.49
+   }
+  },
+  "gate or up 896->4864": {
+   "exact": true,
+   "int_mm": {
+    "median_us": 54.83,
+    "min_us": 44.26
+   },
+   "fp16 mm": {
+    "median_us": 43.14,
+    "min_us": 41.39
+   }
+  },
+  "gate+up 896->9728": {
+   "exact": true,
+   "int_mm": {
+    "median_us": 118.7,
+    "min_us": 109.17
+   },
+   "fp16 mm": {
+    "median_us": 75.48,
+    "min_us": 74.75
+   }
+  },
+  "down 4864->896": {
+   "exact": true,
+   "int_mm": {
+    "median_us": 207.16,
+    "min_us": 203.5
+   },
+   "fp16 mm": {
+    "median_us": 47.61,
+    "min_us": 47.44
+   }
+  },
+  "lm_head 896->151936": {
+   "exact": true,
+   "int_mm": {
+    "median_us": 1837.63,
+    "min_us": 1771.22
+   },
+   "fp16 mm": {
+    "median_us": 1140.53,
+    "min_us": 1138.5
+   }
+  }
+ }
+}

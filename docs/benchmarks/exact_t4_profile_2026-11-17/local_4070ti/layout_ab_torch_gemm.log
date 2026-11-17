@@ -1,0 +1,24 @@
+  layout exact     {'count': 121, 'nn.Linear order ([N][K] contiguous)': 121, 'row-major [K][N]': 0}
+  layout exact_nn  {'count': 121, 'nn.Linear order ([N][K] contiguous)': 0, 'row-major [K][N]': 121}
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity exact_nn     canary ok, 40 distinct tokens in reference
+  exact and exact_nn give the same token ids on all 32 rows: True
+  GEMM kernels, exact:
+    ampere_sgemm_128x128_nn
+    void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_128x64_128x3_tn_align16>(cutlass_80_tensorop_i16832gemm_s8_128x64_128x3_tn_align16::
+    void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16>(cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16::
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+  GEMM kernels, exact_nn:
+    ampere_sgemm_128x128_nn
+    void cutlass1x::gemm::gemm_kernel_nolb<cutlass1x::gemm::Gemm<cutlass1x::gemm::IgemmTraits<(cutlass1x::MatrixLayout::Kind)1, (cutlass1x::Matr
+    void cutlass1x::gemm::gemm_kernel_nolb<cutlass1x::gemm::Gemm<cutlass1x::gemm::IgemmTraits<(cutlass1x::MatrixLayout::Kind)1, (cutlass1x::Matr
+    void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float co
+    void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGemvTensorStridedBatched<float c
+  stock       0.350 s    182.7 tok/s/seq  median  1.5% above
+  exact       0.390 s    164.2 tok/s/seq  median  3.7% above
+  exact_nn    0.457 s    140.1 tok/s/seq  median  0.1% above
+  exact / stock = 1.11x slower
+  exact_nn / stock = 1.30x slower
+  exact_nn / exact = 1.17x

@@ -1,0 +1,6 @@
+qkv 896->1152          int_mm    82.98 us  fp16    25.85 us  int8/fp16  3.21x  exact=True
+o 896->896             int_mm    41.85 us  fp16    15.24 us  int8/fp16  2.75x  exact=True
+gate or up 896->4864   int_mm    54.83 us  fp16    43.14 us  int8/fp16  1.27x  exact=True
+gate+up 896->9728      int_mm   118.70 us  fp16    75.48 us  int8/fp16  1.57x  exact=True
+down 4864->896         int_mm   207.16 us  fp16    47.61 us  int8/fp16  4.35x  exact=True
+lm_head 896->151936    int_mm  1837.63 us  fp16  1140.53 us  int8/fp16  1.61x  exact=True

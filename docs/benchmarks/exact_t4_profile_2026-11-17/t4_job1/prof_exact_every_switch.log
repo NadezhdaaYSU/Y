@@ -1,0 +1,41 @@
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:45,  2.74it/s]
+Loading weights:  80%|████████  | 233/290 [00:00<00:00, 654.63it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 545.75it/s]
+W1117 18:20:25.208000 616 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+USDT:2026-11-17 18:34:08 616:616 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-17 18:34:09 616:616 SyncActivityProfilerHandler.cpp:59] profiler_stop
+exact {'Y_EXACT_KV_PACK': 'inplace', 'Y_EXACT_ATTN': 'y', 'Y_EXACT_V_INT8': '1', 'Y_EXACT_NORM': 'triton'} on Tesla T4, 16 new tokens, batch 32, compiled
+  per token: wall 23.48 ms unprofiled (40.21 profiled), GPU busy 19.32 ms (82% of the unprofiled wall), 605 kernels
+  int8 GEMM         13.598 ms/token  70.4%   121.0 kernels/token
+  Inductor fused     2.921 ms/token  15.1%   324.0 kernels/token
+  Y kernel           1.000 ms/token   5.2%    59.2 kernels/token
+  copy/fill          0.724 ms/token   3.7%    26.1 kernels/token
+  other              0.516 ms/token   2.7%    24.4 kernels/token
+  other Triton       0.493 ms/token   2.6%    49.0 kernels/token
+  float GEMM         0.064 ms/token   0.3%     1.5 kernels/token
+  top kernels:
+   13.598 ms/token  121.0x  [int8 GEMM] volta_igemm_int8_128x128_ldg4_nn
+    0.655 ms/token    7.1x  [copy/fill] Memcpy DtoD (Device -> Device)
+    0.493 ms/token   49.0x  [other Triton] _rms_norm_kernel
+    0.416 ms/token   22.5x  [Y kernel] exact_decode_attention
+    0.366 ms/token    1.5x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.333 ms/token    2.0x  [other] void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymou
+    0.298 ms/token   22.5x  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul
+    0.273 ms/token    1.3x  [Inductor fused] triton_red_fused___lshift_____rshift____to_copy_add_amax_arange_bitwise_and_clamp_clone_div_eq_expan
+    0.272 ms/token    0.1x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_22
+    0.263 ms/token    1.5x  [Y kernel] exact_pv
+    0.238 ms/token    1.5x  [Inductor fused] triton_red_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_15
+    0.222 ms/token    1.5x  [Inductor fused] triton_poi_fused__to_copy_clamp_clone_div_eq_gt_mul_ones_like_round_transpose_view_where_17
+    0.163 ms/token   47.5x  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1
+    0.156 ms/token    1.5x  [Y kernel] triton_poi_fused__to_copy_clamp_exact_pv_gt_mul_ones_like_reciprocal_round_slice_view_where_14
+    0.149 ms/token    0.9x  [Inductor fused] triton_poi_fused__to_copy_div_eq_mul_ones_like_unsqueeze_where_16
+    0.112 ms/token   17.8x  [Y kernel] triton_per_fused__to_copy_abs_add_amax_arange_bitwise_and_cat_clamp_div_eq_exact_decode_attention_ex
+    0.108 ms/token    3.0x  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_18
+    0.098 ms/token    1.0x  [other] void at::native::reduce_kernel<512, 1, at::native::ReduceOp<float, at::native::ArgMaxOps<float>, uns
+    0.097 ms/token   22.5x  [Inductor fused] triton_poi_fused__to_copy_cat_10
+    0.096 ms/token   24.0x  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_2
