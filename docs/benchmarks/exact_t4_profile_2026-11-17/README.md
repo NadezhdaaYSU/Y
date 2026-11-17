@@ -215,11 +215,13 @@ difference:
 
 Each is a `torch.library` op with a Python body: the norm launches a Triton
 kernel through Triton's Python launcher, the attention a Y kernel through
-`TorchKernel`. On the RTX 4070 Ti SUPER host (a Ryzen 9 9950X) such a call
-was measured at 6 to 32 us (`docs/benchmarks/exact_y_gemm_2026-11-07/`),
-and the step there is not waiting on the host, so every switch wins there.
-On this 2.00 GHz Xeon the same calls cost 50 to 90 us under the profiler,
-and the T4's step already waits on the host.
+`TorchKernel`. On the RTX 4070 Ti SUPER's host (a Ryzen 9 9950X), unprofiled
+and eager, a `Library` op was measured at 5.8 us a call and a Triton launch
+at 9.9 us, against 3.9 us for `torch._int_mm`
+(`docs/benchmarks/exact_y_gemm_2026-11-07/dispatch/dispatch_cost.log`).
+There the step is not waiting on the host, so every switch wins. On this
+2.00 GHz Xeon the two ops cost 50 and 92 us a call under the profiler, and
+the T4's step already waits on the host.
 
 So the switches stay opt-in, as their comments already say. On a fast host
 they make the exact path faster than stock. On a slow host the default is
