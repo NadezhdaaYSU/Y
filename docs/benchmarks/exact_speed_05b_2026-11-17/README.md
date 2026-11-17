@@ -6,6 +6,45 @@ found two bugs in `tools/exact_throughput.py` that affected every earlier run
 that timed the fixed-order control next to the exact arm. They are fixed in
 67b8fdc.
 
+**Correction (2026-11-18).** A third bug in the same tool made some prefills
+compute logits for every prompt position, so the tables under "Results"
+below are off by 1% to 2%. The corrected RTX 4070 Ti SUPER figures are in
+"Results after the third fix". On the Tesla T4, the exact path was also
+slow for a reason in the code itself, now fixed (56847c5). See
+`docs/benchmarks/exact_t4_profile_2026-11-17`.
+
+## Results after the third fix (2026-11-18)
+
+`generate()` passes `logits_to_keep=1` only when it can see that argument
+in the model's `forward`. The tool's wrappers around `forward` hid it, so
+the prefill computed the logits of all 28 prompt positions, not one per
+sequence. `run.sh` ran at 90cd97f, where only stock was wrapped, so stock
+did the extra work. `run_fixed.sh` ran at 67b8fdc, where both arms were
+wrapped. 328c6aa fixes it, and `build()` now refuses an arm that hides
+the argument.
+
+`run_after_logits_fix.sh` ran all four setups again at 79c5cca and
+f26a0a0 (the tool is the same in both). The order was A B, then a stop
+for the GPU owner (`after_logits_fix/stopped_C_every_switch.010924.log`
+is that partial run), then C D D C B A. Same `liby.so`. Steam (no game),
+Discord and Chromium were open. Logs in `after_logits_fix/`, console in
+`after_logits_fix_console.txt`.
+
+| Setup | Stock | Exact | Exact against stock | Before the fix |
+|---|---|---|---|---|
+| A: default (127 levels), run 1 | 241.3 | 225.0 | 1.07x slower | 1.05x |
+| A: default, run 2 | 246.8 | 231.5 | 1.07x slower | 1.05x |
+| B: 511 levels, run 1 | 241.6 | 219.2 | 1.10x slower | 1.10x |
+| B: 511 levels, run 2 | 244.1 | 221.3 | 1.10x slower | 1.10x |
+| C: every switch, run 1 | 250.5 | 251.1 | 1.00x | 0.98x |
+| C: every switch, run 2 | 245.5 | 249.1 | 0.99x (exact faster) | 0.99x |
+| D: every switch and Y's GEMM, run 1 | 241.1 | 231.8 | 1.04x slower | 1.02x |
+| D: every switch and Y's GEMM, run 2 | 244.7 | 234.5 | 1.04x slower | 1.04x |
+
+Every exact run at 127 levels gives the 64-token reference with 40
+distinct tokens, and at 511 levels with 48, as before. The fixed-order
+control ran at 17.9 and 18.6 compiled, 13.5x and 13.3x slower than stock.
+
 ## Setup
 
 - RTX 4070 Ti SUPER (sm_89), driver 615.78.08, 285 W limit. This GPU also
@@ -23,10 +62,11 @@ that timed the fixed-order control next to the exact arm. They are fixed in
   other two ran on 67b8fdc.
 - `liby.so` sha256 713be562…, built at 258e49f (`commit.txt`).
 
-## Results
+## Results (before the third fix)
 
 Tokens per second per sequence. The ratio is stock time over exact time,
-in the same process.
+in the same process. These runs have the `logits_to_keep` bug described
+above.
 
 | Setup | Stock | Exact | Exact against stock |
 |---|---|---|---|
@@ -56,6 +96,11 @@ stock (243 on average) and 6.2x slower than compiled exact (231). Those two
 ratios compare different processes.
 
 ## Tesla T4 (Kaggle)
+
+These runs had the `logits_to_keep` bug, and the exact path's int8 weights
+in the order that kept `torch._int_mm` off the T4's tensor cores. With both
+fixed, the default exact path was 1.03x slower than stock float16 on one T4
+machine and 0.98x on another. See `docs/benchmarks/exact_t4_profile_2026-11-17`.
 
 Two Kaggle jobs on a Tesla T4 (sm_75, driver 580.178.04), made by
 `t4/make_t4_speed_job.py`. Same protocol, but the stock arm is float16,
