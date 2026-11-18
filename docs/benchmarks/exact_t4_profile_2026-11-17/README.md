@@ -227,7 +227,20 @@ So the switches stay opt-in, as their comments already say. On a fast host
 they make the exact path faster than stock. On a slow host the default is
 faster. The cure for both would be to launch the whole step at once (CUDA
 graphs), which is blocked: `reduce-overhead` with a static cache crashes on
-transformers 5.15 with torch 2.13, for stock too.
+transformers 5.15 with torch 2.13, for stock too. (Later the same day,
+`../exact_graphed_2026-11-18/` built its own graphed decode step instead.)
+
+## Inductor's C++ wrapper does not help
+
+A compiled step launches its kernels from Inductor's generated wrapper,
+which is Python by default, at about 4 us of host time a kernel.
+`cpp_wrapper_ab.py` compares it with `torch._inductor.config.cpp_wrapper =
+True` on the RTX 4070 Ti SUPER (exact at its defaults, `generate()`, batch
+32, 64 new tokens, best of 5, in turns). Same token ids on all 32 rows for
+both arms, and no gain: with the C++ wrapper stock took 1.003x the time it
+took with the Python one, and exact 1.002x
+(`local_4070ti/cpp_wrapper_ab.log`, the console tail; the
+full output was not kept). Not run on the T4.
 
 ## Summary
 

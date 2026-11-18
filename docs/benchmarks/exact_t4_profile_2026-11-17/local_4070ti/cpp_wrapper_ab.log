@@ -1,0 +1,22 @@
+# cpp_wrapper_ab.py, RTX 4070 Ti SUPER, 2026-11-18 04:03, HEAD 47913a7, exact at its defaults.
+# Console tail only (the run's full output was not kept); command: cd tools && python3 ../docs/benchmarks/exact_t4_profile_2026-11-17/cpp_wrapper_ab.py
+exit 0
+  arms ['stock', 'stock_cpp', 'exact', 'exact_cpp'], exact switches none
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity stock_cpp    canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  sanity exact_cpp    canary ok, 40 distinct tokens in reference
+  stock_cpp and stock give the same token ids on all 32 rows: True
+  exact_cpp and exact give the same token ids on all 32 rows: True
+  stock        0.265 s    241.7 tok/s/seq  median  1.2% above
+  stock_cpp    0.265 s    241.1 tok/s/seq  median  0.4% above
+  exact        0.284 s    225.2 tok/s/seq  median  0.1% above
+  exact_cpp    0.285 s    224.7 tok/s/seq  median  0.1% above
+  stock_cpp / stock = 1.003x
+  exact_cpp / exact = 1.002x
+  exact / stock = 1.074x
+  exact / stock_cpp = 1.071x
+  exact_cpp / stock = 1.076x
+  exact_cpp / stock_cpp = 1.073x
+
+[exited with code 0]
