@@ -125,24 +125,39 @@ and graphed == greedy, on all 32 rows). Files: `t4_job_e/`, `t4_job_f/`.
   only over the rows so far.
 - Against stock's fastest loop, graphed exact is 1.13x faster at its
   defaults (105.7 against 93.5) and 1.44x faster with every switch (129.4
-  against 90.0). Each pair is two processes on one machine. Job g
-  (`y-t4-graphed-g`, `--loop graphed --stock-loop greedy`) times them in one
-  process.
+  against 90.0). Each pair is two processes on one machine. Job g times
+  them in one process (below): 1.13x and 1.43x.
 - With every switch, the graph makes the exact path 1.87x faster on the T4
   (69.2 to 129.4). Its `torch.library` ops cost 50 to 92 us of host time a
   call on this Xeon (`../exact_t4_profile_2026-11-17/`, job 2c), and the
   graph replays them without the host.
 
+### Job g: graphed exact against greedy stock, in one process
+
+`--loop graphed --stock-loop greedy` (61f08de): each arm runs its own
+fastest loop on the T4, in turns inside one process. Another Kaggle machine
+of the same kind (T4, 4-core Xeon at 2.00 GHz). Files: `t4_job_g/`.
+
+| Setup | Stock fp16, greedy | Exact, graphed | Exact time / stock time |
+|---|---|---|---|
+| Defaults | 91.1 | 102.5 | 0.89 (1.13x faster) |
+| Every switch | 92.7 | 132.8 | 0.70 (1.43x faster) |
+
+Both processes passed the token checks: stock greedy == `generate()`, exact
+greedy == `generate()` and exact graphed == exact greedy, on all 32 rows.
+This matches the estimates from jobs e and f (1.13x and 1.44x).
+
 ## What this means
 
 - With every switch, the exact path is now faster than stock on both GPUs:
-  with both arms graphed, 1.26x to 1.27x on the RTX 4070 Ti SUPER and 1.54x
-  on the T4; against stock's fastest loop on the T4, 1.44x. Its tokens are
-  the greedy loop's tokens bit for bit. The host cost that hid its smaller
-  GPU work is gone.
+  with both arms graphed, 1.26x to 1.27x on the RTX 4070 Ti SUPER (where
+  graphed is also stock's fastest loop, by 0 to 8%) and 1.54x on the T4;
+  against stock's fastest loop on the T4 (greedy), 1.43x in one process
+  (job g). Its tokens are the greedy loop's tokens bit for bit. The host
+  cost that hid its smaller GPU work is gone.
 - At its defaults, the exact path ties stock with graphs on the 4070 Ti
   (1.00x) and is faster on the T4 (1.19x against graphed stock, 1.13x
-  against greedy stock).
+  against greedy stock in one process).
 - Every switch is still opt-in. With graphs it is the faster setting on
   both GPUs; without graphs it is slower on the T4 (1.30x). Turning it on by
   default would also change what the exact path computes (the int8 V cache
@@ -180,7 +195,7 @@ tokens per second per sequence):
 
 - `run.sh`: the timing runs. `runs/`, `runs_console.txt`: the graphed loop.
   `runs_greedy/`, `runs_greedy_console.txt`: the greedy loop.
-- `t4_job_e/`, `t4_job_f/`: the T4 logs (each loop's log, and the
+- `t4_job_e/`, `t4_job_f/`, `t4_job_g/`: the T4 logs (each loop's log, and the
   notebook's console as `job_*_console.log`). `make_t4_graphed_job.py`
   writes those Kaggle jobs.
 - `prototype/`: the first scripts.
