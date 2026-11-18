@@ -1,0 +1,15 @@
+795 MHz, 19.21 W, 54, 2164 MiB
+env: Y_EXACT_GEMM=y Y_EXACT_V_INT8=1
+[re-exec through /tmp/y_exact_nospace so torch.compile can link]
+
+Qwen2.5-7B-Instruct  batch 32  64 new tokens  compile=on (BOTH arms)  loop=greedy (ALL arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+Loading weights:   0%|          | 0/339 [00:00<?, ?it/s]Loading weights:  28%|██▊       | 94/339 [00:00<00:00, 909.51it/s]Loading weights:  55%|█████▍    | 185/339 [00:00<00:00, 736.11it/s]Loading weights:  77%|███████▋  | 261/339 [00:00<00:00, 684.51it/s]Loading weights: 100%|██████████| 339/339 [00:00<00:00, 798.90it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1118 16:05:33.692000 105554 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/triton/language/semantic.py:1680: UserWarning: tl.where with a non-boolean condition is deprecated and will error out in a future triton release. Got int8
+  warnings.warn(
+  sanity exact        canary ok, 49 distinct tokens in reference
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+exact  int8, order-independent           1.290        49.6       1587.4     0.3%
