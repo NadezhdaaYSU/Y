@@ -122,8 +122,9 @@ and graphed == greedy, on all 32 rows). Files: `t4_job_e/`, `t4_job_f/`.
   guess: stock's step on the T4 waits on its GPU work, not on the host, so
   the graph saves little, while the graphed step attends over every row of
   its buffer (prompt plus 64, rounded up to 32) under a mask, and greedy
-  only over the rows so far. On the RTX 4070 Ti SUPER those spare rows cost
-  little (next section); job h repeats that sweep on the T4.
+  only over the rows so far. Job h (next section) supports this: on the T4
+  each spare row costs stock about 20 us a step, which accounts for most of
+  the gap.
 - Against stock's fastest loop, graphed exact is 1.13x faster at its
   defaults (105.7 against 93.5) and 1.44x faster with every switch (129.4
   against 90.0). Each pair is two processes on one machine. Job g times
@@ -168,7 +169,29 @@ Each arm gave the same tokens at every size (stock too, here). Going from
 96 to 128 rows costs 2% to 4%, and 96 to 256 costs 12% (every switch) to
 46% (stock). So at 64 new tokens, one graph per 32-row length bucket would
 save a few percent at most on this GPU, and is not built. It would matter
-more for long outputs. The first try of this sweep failed to link
+more for long outputs.
+
+The same sweep on the T4 (job h, `t4_job_h/`, stock in float16, another
+Kaggle machine of the same kind):
+
+| Buffer rows | Stock fp16 | Exact, defaults | Exact, every switch |
+|---|---|---|---|
+| 92 | 11.373 | 9.186 | 6.701 |
+| 96 | 11.419 | 8.968 | 6.720 |
+| 128 | 12.078 | 9.307 | 6.843 |
+| 256 | 15.666 | 12.485 | 7.438 |
+
+Same tokens at every size, each arm. From 92 to 128 rows a row costs stock
+about 20 us a step, the exact default about 11 us and every switch about
+4 us. The greedy loop attends over 29 to 92 rows (60 on average) where the
+graphed step attends over 96, so for stock the spare rows come to about
+0.6 ms a step if that cost holds below 92 rows (not measured). That is
+about the gap between stock's graphed and greedy loops on the T4: 11.3
+against 10.7 ms a token in job e, 11.9 against 11.1 in job f (prefill
+included). So most of stock's loss under the graph is attention over the
+spare rows (PyTorch's mem-efficient SDPA on the T4), and one graph per
+length bucket would mostly help stock. For every switch it would save
+about 2%. Not built: the T4 comparison already uses stock's faster loop. The first try of this sweep failed to link
 (`torch.compile` reached torch through the path with a space); the command
 in the script's docstring is the one that works.
 
@@ -259,7 +282,7 @@ tokens per second per sequence):
 
 - `run.sh`: the timing runs. `runs/`, `runs_console.txt`: the graphed loop.
   `runs_greedy/`, `runs_greedy_console.txt`: the greedy loop.
-- `t4_job_e/`, `t4_job_f/`, `t4_job_g/`: the T4 logs (each loop's log, and the
+- `t4_job_e/` to `t4_job_h/`: the T4 logs (each loop's log, and the
   notebook's console as `job_*_console.log`). `make_t4_graphed_job.py`
   writes those Kaggle jobs.
 - `capacity_sweep.py`, `capacity_sweep/`: the buffer-size sweep.

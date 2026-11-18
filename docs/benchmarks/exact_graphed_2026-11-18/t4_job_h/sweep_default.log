@@ -1,0 +1,24 @@
+Tesla T4, stock float16; prompt 28 tokens, batch 32, 64 new tokens; switches: none
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:25,  3.40it/s]
+Loading weights:  80%|███████▉  | 231/290 [00:00<00:00, 747.84it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 636.61it/s]
+W1118 16:52:07.465000 152 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:47,  2.69it/s]
+Loading weights:  80%|███████▉  | 231/290 [00:00<00:00, 624.38it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 529.34it/s]
+
+stock: tokens the same at every size: True
+    92 rows   11.373 ms a step  1.000x of 92 rows
+    96 rows   11.419 ms a step  1.004x of 92 rows
+   128 rows   12.078 ms a step  1.062x of 92 rows
+   256 rows   15.666 ms a step  1.377x of 92 rows
+
+exact: tokens the same at every size: True
+    92 rows    9.186 ms a step  1.000x of 92 rows
+    96 rows    8.968 ms a step  0.976x of 92 rows
+   128 rows    9.307 ms a step  1.013x of 92 rows
+   256 rows   12.485 ms a step  1.359x of 92 rows

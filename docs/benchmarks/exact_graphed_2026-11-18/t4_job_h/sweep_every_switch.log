@@ -1,0 +1,16 @@
+Tesla T4, stock float16; prompt 28 tokens, batch 32, 64 new tokens; switches: Y_EXACT_ATTN=y Y_EXACT_KV_PACK=inplace Y_EXACT_NORM=triton Y_EXACT_V_INT8=1
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:32,  3.11it/s]
+Loading weights:  78%|███████▊  | 225/290 [00:00<00:00, 691.38it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 582.14it/s]
+W1118 17:16:29.311000 634 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+
+exact: tokens the same at every size: True
+    92 rows    6.701 ms a step  1.000x of 92 rows
+    96 rows    6.720 ms a step  1.003x of 92 rows
+   128 rows    6.843 ms a step  1.021x of 92 rows
+   256 rows    7.438 ms a step  1.110x of 92 rows

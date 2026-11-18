@@ -7,6 +7,12 @@ PART e: exact at its defaults, --loop graphed then --loop greedy.
 PART f: exact with every switch, --loop greedy then --loop graphed.
 PART g: exact --loop graphed against stock --stock-loop greedy (stock's
 faster loop on the T4, job e) in one process: defaults, then every switch.
+PART h: docs/benchmarks/exact_graphed_2026-11-18/capacity_sweep.py, the
+graphed step's time for buffers of 92 to 256 rows: stock fp16 and exact at
+its defaults, then exact with every switch.
+PART i: docs/benchmarks/exact_graphed_2026-11-18/profile_step.py, the
+graphed step's GPU time kernel by kernel: stock fp16 and exact at its
+defaults, then exact with every switch.
 Stock is float16 in each process. Both loops of a setup run on one machine,
 so graphed against greedy is not a comparison across two Kaggle machines.
 Y's source comes from the y-lang-src dataset, liby.so from y-lang-wheel.
@@ -77,7 +83,15 @@ print(p.stdout[-4000:]); print('exit', p.returncode, f'{{time.time() - t0:.0f}} 
 
 EVERY = "Y_EXACT_V_INT8=1 Y_EXACT_NORM=triton Y_EXACT_ATTN=y Y_EXACT_KV_PACK=inplace "
 TP = "Y_THR_ARMS=stock,exact {sys.executable} exact_throughput.py --batch 32 --tokens 64 --reps 5 --compile --stock-dtype float16 --model {MODEL} --loop "
-if PART == "g":
+SWEEP = "{sys.executable} {REPO}/docs/benchmarks/exact_graphed_2026-11-18/capacity_sweep.py --stock-dtype float16 --model {MODEL}"
+PROF = "{sys.executable} {REPO}/docs/benchmarks/exact_graphed_2026-11-18/profile_step.py --stock-dtype float16 --model {MODEL}"
+if PART == "i":
+    run("profile_default", PROF)
+    run("profile_every_switch", EVERY + "Y_THR_ARMS=exact " + PROF)
+elif PART == "h":
+    run("sweep_default", SWEEP)
+    run("sweep_every_switch", EVERY + "Y_THR_ARMS=exact " + SWEEP)
+elif PART == "g":
     run("mixed_default", TP + "graphed --stock-loop greedy")
     run("mixed_every_switch", EVERY + TP + "graphed --stock-loop greedy")
 else:
