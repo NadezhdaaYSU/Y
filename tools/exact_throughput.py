@@ -282,7 +282,11 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
 
     The MINIMUM of the reps is reported, not the mean: a slower run had
     interference in it and the fastest is the least contaminated one.
+
+    `loop` is one loop for every arm, or a dict {arm: loop}, so that each
+    arm can run its own fastest loop; each arm passes its own loop's checks.
     """
+    loops = loop if isinstance(loop, dict) else {name: loop for name in models}
     ids = tok(PROMPT, return_tensors="pt").to(device)
     inp = ids.input_ids.repeat(batch, 1)
     att = ids.attention_mask.repeat(batch, 1)
@@ -298,9 +302,10 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
         with torch.no_grad():
             m.generate(input_ids=inp, attention_mask=att,
                        **dict(kw, max_new_tokens=min(8, tokens)))
-        if loop in ("greedy", "graphed"):
+        lp = loops[name]
+        if lp in ("greedy", "graphed"):
             if graphs or static_cache:
-                raise SystemExit(f"--loop {loop} keeps its own cache; it does not "
+                raise SystemExit(f"--loop {lp} keeps its own cache; it does not "
                                  f"combine with --graphs or --static-cache")
             differs = greedy_matches_generate(m, inp, att, kw)
             if differs:
@@ -308,7 +313,7 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
                                  f"generate's ({differs}); refusing to time it")
             print(f"  loop {name:<13} greedy == generate(repetition_penalty=1.0) "
                   f"on all {batch} rows")
-        if loop == "graphed":
+        if lp == "graphed":
             with torch.no_grad():
                 want = greedy(m, inp, att, kw["max_new_tokens"])
                 got = graphed(m, inp, att, kw["max_new_tokens"])
@@ -317,11 +322,11 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
                 raise SystemExit(f"*** arm {name!r}: the graphed loop's tokens are not "
                                  f"greedy's (rows {rows}); refusing to time it")
             print(f"  loop {name:<13} graphed == greedy on all {batch} rows")
-        one_run(m, inp, att, kw, loop)
+        one_run(m, inp, att, kw, lp)
     times = {k: [] for k in models}
     for _ in range(reps):
         for name, m in models.items():
-            times[name].append(one_run(m, inp, att, kw, loop))
+            times[name].append(one_run(m, inp, att, kw, loops[name]))
     return {k: (min(v), statistics.median(v)) for k, v in times.items()}
 
 
@@ -340,7 +345,12 @@ def main():
                     help="time Hugging Face's generate (the default), "
                          "y_lang.exact.greedy, which has no per-step host sync "
                          "and no logits processors, or y_lang.exact.graphed, "
-                         "greedy with each decode step one CUDA graph; ALL arms")
+                         "greedy with each decode step one CUDA graph; ALL arms "
+                         "unless --stock-loop")
+    ap.add_argument("--stock-loop", choices=("generate", "greedy", "graphed"), default=None,
+                    help="the stock arm's loop, if not --loop's: so each arm can run "
+                         "its fastest loop in one process (on a T4 stock is slower "
+                         "graphed than greedy)")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--stock-dtype", choices=("bfloat16", "float16"), default="bfloat16",
@@ -355,11 +365,16 @@ def main():
     torch.backends.cudnn.allow_tf32 = False
     tok = AutoTokenizer.from_pretrained(MODEL)
 
+    stock_loop = a.stock_loop or a.loop
+    if stock_loop == a.loop:
+        loop_text = f"  loop={a.loop} (ALL arms)" if a.loop != "generate" else ""
+    else:
+        loop_text = f"  loop={a.loop}, stock loop={stock_loop}"
     print(f"\n{MODEL.split('/')[-1]}  batch {a.batch}  {a.tokens} new tokens  "
           f"compile={'on (BOTH arms)' if a.compile else 'off'}"
           f"{'  cuda-graphs=on (BOTH arms)' if a.graphs else ''}"
           f"{'  static-cache=on (BOTH arms)' if a.static_cache else ''}"
-          f"{f'  loop={a.loop} (ALL arms)' if a.loop != 'generate' else ''}  "
+          f"{loop_text}  "
           f"best of {a.reps}")
     print(f"{'arm':<38}{'s':>8}{'tok/s/seq':>12}{'tok/s total':>13}{'spread':>9}")
     # Every model is built BEFORE anything is timed, so the arms can be
@@ -380,8 +395,9 @@ def main():
     if not gate(models, tok, a.device, static_cache=a.graphs or a.static_cache):
         qwen2.eager_attention_forward = D._orig
         return 1
+    loops = {n: stock_loop if n == "stock" else a.loop for n in arms}
     res = run_interleaved(models, tok, a.batch, a.tokens, a.device, a.reps,
-                          a.graphs, a.static_cache, a.loop)
+                          a.graphs, a.static_cache, loops)
     LABELS = {"stock": f"stock  {'bf16' if STOCK_DTYPE == torch.bfloat16 else 'fp16'} + SDPA (what ships)",
               "exact": "exact  int8, order-independent",
               "fixedfloat": "fixedfloat  fp32, reduction order pinned"}
