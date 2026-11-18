@@ -234,6 +234,39 @@ attention may hold more than 0.393 ms, in fused kernels not listed.
   this GPU. The T4 does not run this kernel (its int8 GEMM is
   `torch._int_mm`); job i (`y-t4-graphed-i`) profiles the T4's step.
 
+### The same profile on the T4 (job i)
+
+`t4_job_i/`, stock in float16, another Kaggle machine of the same kind.
+The logs already use the fixed grouping. Milliseconds a step:
+
+| | Stock fp16 | Exact, defaults | Exact, every switch |
+|---|---|---|---|
+| Graphed step, wall | 10.744 | 8.495 | 6.476 |
+| GPU kernels | 10.057 (470) | 7.740 (508) | 5.705 (502) |
+| Linear layers | 6.199 | 3.843 | 3.746 |
+| Attention | 3.503 | 1.112 | 0.763 |
+| Inductor's fused kernels | 0.347 | 2.776 | 0.889 |
+| Other (Triton norm) | 0.008 | 0.008 | 0.307 |
+
+- Wall time is 0.69 to 0.77 ms above GPU time on the T4, about 1.5 us for
+  each of the step's 500 kernels: the gaps between kernels inside the
+  graph.
+- Stock's attention is 3.5 ms, a third of its step: PyTorch's
+  mem-efficient SDPA (2.2 ms) and the fused kernels around it (1.3 ms),
+  over 96 rows a step (see job h).
+- Every int8 linear runs one cuBLAS kernel,
+  `cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16` (121 launches a step).
+  494 MB in 3.746 ms is 132 GB/s, 41% of the T4's 320 GB/s; stock's fp16
+  linears reach 50%. A likely cause, not measured shape by shape: at batch
+  32 the 64x64 tile is half empty, and the 896-wide layers (q/k/v, o, down)
+  launch 14 to 18 blocks on 40 SMs. If the layer GEMMs reached 70% (with
+  `lm_head` taken as about 0.6 ms, also not measured), the every-switch
+  step would lose about 1.5 ms of its 6.5, close to a quarter.
+- Neither int8 GEMM the exact path has on Ada can take that work on the T4:
+  Triton's int8 dot and Y's GEMM (`mma.m16n8k32`) both need sm_80. Turing
+  has `mma.m8n8k16` for int8. A Y GEMM on that instruction, or a cuBLASLt
+  call with split-K, would be the way in.
+
 ## What this means
 
 - With every switch, the exact path is now faster than stock on both GPUs:
@@ -283,7 +316,7 @@ tokens per second per sequence):
 
 - `run.sh`: the timing runs. `runs/`, `runs_console.txt`: the graphed loop.
   `runs_greedy/`, `runs_greedy_console.txt`: the greedy loop.
-- `t4_job_e/` to `t4_job_h/`: the T4 logs (each loop's log, and the
+- `t4_job_e/` to `t4_job_i/`: the T4 logs (each loop's log, and the
   notebook's console as `job_*_console.log`). `make_t4_graphed_job.py`
   writes those Kaggle jobs.
 - `capacity_sweep.py`, `capacity_sweep/`: the buffer-size sweep.

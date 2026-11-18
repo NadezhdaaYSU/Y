@@ -1,0 +1,33 @@
+Tesla T4, stock float16, batch 32; switches: Y_EXACT_ATTN=y Y_EXACT_KV_PACK=inplace Y_EXACT_NORM=triton Y_EXACT_V_INT8=1
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:32,  3.11it/s]
+Loading weights:  72%|███████▏  | 209/290 [00:00<00:00, 613.45it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 550.25it/s]
+W1118 17:53:45.633000 471 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+USDT:2026-11-18 18:03:35 471:471 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-18 18:03:36 471:471 SyncActivityProfilerHandler.cpp:59] profiler_stop
+
+exact: graphed step 6.476 ms wall (best of 5); GPU kernels 5.705 ms a step, 502 kernels
+  GEMM              3.746 ms   65.7%
+  Inductor fused    0.889 ms   15.6%
+  attention         0.763 ms   13.4%
+  other             0.307 ms    5.4%
+  top kernels (us a step, launches a step):
+      3745.9  121.0  [GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x6
+       619.8   24.0  [attention] exact_decode_attention
+       299.3   49.0  [other] _rms_norm_kernel
+       296.4   24.0  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_nu
+       123.1   49.0  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1
+       122.5   24.0  [attention] triton_per_fused__to_copy_abs_add_amax_bitwise_and_cat_clamp_div_eq_exact_decode_attention_index_le_lt_mul_neg
+       107.9   48.0  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_9
+        83.1    1.0  [Inductor fused] triton_red_fused__to_copy_argmax_div_eq_mul_ones_like_select_unsqueeze_view_where_12
+        60.7   24.0  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_10
+        51.0   24.0  [Inductor fused] triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq_index_cop
+        45.9   24.0  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_uns
+        41.7   24.0  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_2
+        41.0   24.0  [Inductor fused] triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_index_copy_lt_mul_ones_
+        35.8   24.0  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_6

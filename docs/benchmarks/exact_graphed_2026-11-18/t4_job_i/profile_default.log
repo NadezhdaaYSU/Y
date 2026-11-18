@@ -1,0 +1,58 @@
+Tesla T4, stock float16, batch 32; switches: none
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:38,  2.94it/s]
+Loading weights:  92%|█████████▏| 267/290 [00:00<00:00, 785.09it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 629.61it/s]
+W1118 17:37:35.405000 153 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-18 17:38:21 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-18 17:38:22 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+
+stock: graphed step 10.744 ms wall (best of 5); GPU kernels 10.057 ms a step, 470 kernels
+  GEMM              6.199 ms   61.6%
+  attention         3.503 ms   34.8%
+  Inductor fused    0.347 ms    3.4%
+  other             0.008 ms    0.1%
+  top kernels (us a step, launches a step):
+      3950.3   49.0  [GEMM] turing_fp16_s1688gemm_fp16_128x64_sliced1x2_ldg8_f2f_tn
+      2218.4   24.0  [attention] fmha_cutlassF_f16_aligned_64x64_rf_sm75(PyTorchMemEffAttention::AttentionKernel<cutlass::half_t, cutlass::arch
+      1316.1   24.0  [GEMM] turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn
+      1227.7   48.0  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_bitwise_and_bmm_cat_clone_c
+       721.8   96.0  [GEMM] void cutlass::Kernel2<cutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8>(cutlass_75_wmma_tens
+       126.3   48.0  [GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half, true, tr
+        84.9   24.0  [GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __half, __half, float, false, __half, __half, __half, true, fa
+        84.8   24.0  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_7
+        48.1    1.0  [Inductor fused] triton_red_fused__to_copy__unsafe_view_argmax_select_15
+        47.2   24.0  [Inductor fused] triton_poi_fused__to_copy_add_bmm_cat_cos_expand_index_copy_mul_neg_sin_slice_transpose_unsqueeze_view_1
+        45.1   24.0  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_bitwise_and_bmm_cat_clone_c
+        33.9   11.0  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_13
+        31.6   11.0  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_12
+        30.7   24.0  [Inductor fused] triton_poi_fused_index_copy_transpose_view_2
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:46,  2.72it/s]
+Loading weights:  80%|████████  | 232/290 [00:00<00:00, 623.81it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 527.77it/s]
+USDT:2026-11-18 17:49:45 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-18 17:49:45 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop
+
+exact: graphed step 8.495 ms wall (best of 5); GPU kernels 7.740 ms a step, 508 kernels
+  GEMM              3.843 ms   49.7%
+  Inductor fused    2.776 ms   35.9%
+  attention         1.112 ms   14.4%
+  other             0.008 ms    0.1%
+  top kernels (us a step, launches a step):
+      3843.0  120.3  [GEMM] void cutlass::Kernel2<cutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16>(cutlass_75_tensorop_i8816gemm_s8_64x6
+       696.9   23.8  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_gt
+       649.0   95.2  [attention] void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGem
+       463.2   23.8  [attention] void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGe
+       325.9   22.9  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_on
+       325.5   22.9  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_on
+       305.0   23.9  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_nu
+       303.1   23.8  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_clamp_div_eq_gt_mul_ones_like_round_transpose_view_where_8
+       252.6   23.8  [Inductor fused] triton_per_fused_abs_amax_clamp_div_eq_ones_like_round_where_6
+       250.6   23.8  [Inductor fused] triton_per_fused_abs_amax_clamp_div_eq_ones_like_round_where_4
+        83.3    1.0  [Inductor fused] triton_red_fused__to_copy_argmax_div_eq_mul_ones_like_select_unsqueeze_view_where_14
+        70.6   23.8  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_with_sizes_t
+        46.3   23.8  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_1
+        45.1   23.8  [Inductor fused] triton_poi_fused__to_copy_add_cat_div_eq_index_index_copy_mul_neg_ones_like_slice_split_with_sizes_transpose_u

@@ -1,0 +1,122 @@
+[{"stream_name":"stderr","time":7.863123989,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":7.863177848,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":7.863183922,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":7.863187703,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":8.442562035,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":8.442596272,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":8.442599937,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":8.442602369,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":9.596387119,"data":"index, name, compute_cap, driver_version, clocks.max.sm [MHz]\r\n"}
+,{"stream_name":"stdout","time":9.596421403,"data":"0, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":9.596424721,"data":"1, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":9.713950528,"data":"CPU(s):                                  4\r\n"}
+,{"stream_name":"stdout","time":9.713977423,"data":"Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz\r\n"}
+,{"stream_name":"stdout","time":183.615085205,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":183.615118154,"data":"easyocr 1.7.2 requires torchvision\u003e=0.5, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":183.615124203,"data":"fastai 2.8.12 requires torchvision\u003e=0.11, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":183.615129093,"data":"timm 1.0.30 requires torchvision, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":183.615133791,"data":"libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":183.615138613,"data":"cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":183.615143545,"data":"cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":183.615148378,"data":"libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":183.615153161,"data":"cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":183.615157801,"data":"libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":183.615162639,"data":"libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":253.1943498,"data":"\u001b[0mliby.so sha256 5c26fe725eb35a5d\n"}
+,{"stream_name":"stdout","time":253.194380976,"data":"exact_throughput has --stock-dtype: True\n"}
+,{"stream_name":"stdout","time":253.194401166,"data":"exact_throughput has with_attention: True\n"}
+,{"stream_name":"stderr","time":254.142362285,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":254.142399313,"data":"\n"}
+,{"stream_name":"stderr","time":254.14240391,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":269.836674006,"data":"torch 2.13.0+cu126 transformers 5.15.0 Tesla T4\n"}
+,{"stream_name":"stdout","time":1086.143656507,"data":"s::arch\n"}
+,{"stream_name":"stdout","time":1086.143715533,"data":"      1316.1   24.0  [GEMM] turing_fp16_s1688gemm_fp16_256x64_ldg8_f2f_stages_32x1_tn\n"}
+,{"stream_name":"stdout","time":1086.143721639,"data":"      1227.7   48.0  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_bitwise_and_bmm_cat_clone_c\n"}
+,{"stream_name":"stdout","time":1086.14373203,"data":"       721.8   96.0  [GEMM] void cutlass::Kernel2\u003ccutlass_75_wmma_tensorop_f16_s161616gemm_f16_32x32_128x2_tn_align8\u003e(cutlass_75_wmma_tens\n"}
+,{"stream_name":"stdout","time":1086.143737274,"data":"       126.3   48.0  [GEMM] void cublasLt::splitKreduce_kernel\u003c32, 16, int, __half, __half, float, false, __half, __half, __half, true, tr\n"}
+,{"stream_name":"stdout","time":1086.143742152,"data":"        84.9   24.0  [GEMM] void cublasLt::splitKreduce_kernel\u003c32, 16, int, __half, __half, float, false, __half, __half, __half, true, fa\n"}
+,{"stream_name":"stdout","time":1086.143748785,"data":"        84.8   24.0  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_7\n"}
+,{"stream_name":"stdout","time":1086.14375603,"data":"        48.1    1.0  [Inductor fused] triton_red_fused__to_copy__unsafe_view_argmax_select_15\n"}
+,{"stream_name":"stdout","time":1086.143759064,"data":"        47.2   24.0  [Inductor fused] triton_poi_fused__to_copy_add_bmm_cat_cos_expand_index_copy_mul_neg_sin_slice_transpose_unsqueeze_view_1\n"}
+,{"stream_name":"stdout","time":1086.143762293,"data":"        45.1   24.0  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_bitwise_and_bmm_cat_clone_c\n"}
+,{"stream_name":"stdout","time":1086.143765416,"data":"        33.9   11.0  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_13\n"}
+,{"stream_name":"stdout","time":1086.143768537,"data":"        31.6   11.0  [Inductor fused] triton_per_fused__to_copy__unsafe_view_add_mean_mul_pow_rsqrt_12\n"}
+,{"stream_name":"stdout","time":1086.143771638,"data":"        30.7   24.0  [Inductor fused] triton_poi_fused_index_copy_transpose_view_2\n"}
+,{"stream_name":"stdout","time":1086.143774641,"data":"\n"}
+,{"stream_name":"stdout","time":1086.14377739,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":1086.143780497,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:46,  2.72it/s]\n"}
+,{"stream_name":"stdout","time":1086.143783427,"data":"Loading weights:  80%|████████  | 232/290 [00:00\u003c00:00, 623.81it/s]\n"}
+,{"stream_name":"stdout","time":1086.143787186,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 527.77it/s]\n"}
+,{"stream_name":"stdout","time":1086.14379017,"data":"USDT:2026-11-18 17:49:45 153:153 SyncActivityProfilerHandler.cpp:52] profiler_start\n"}
+,{"stream_name":"stdout","time":1086.143793066,"data":"USDT:2026-11-18 17:49:45 153:153 SyncActivityProfilerHandler.cpp:59] profiler_stop\n"}
+,{"stream_name":"stdout","time":1086.143795943,"data":"\n"}
+,{"stream_name":"stdout","time":1086.143806502,"data":"exact: graphed step 8.495 ms wall (best of 5); GPU kernels 7.740 ms a step, 508 kernels\n"}
+,{"stream_name":"stdout","time":1086.143809341,"data":"  GEMM              3.843 ms   49.7%\n"}
+,{"stream_name":"stdout","time":1086.143811711,"data":"  Inductor fused    2.776 ms   35.9%\n"}
+,{"stream_name":"stdout","time":1086.143815922,"data":"  attention         1.112 ms   14.4%\n"}
+,{"stream_name":"stdout","time":1086.143818243,"data":"  other             0.008 ms    0.1%\n"}
+,{"stream_name":"stdout","time":1086.143820416,"data":"  top kernels (us a step, launches a step):\n"}
+,{"stream_name":"stdout","time":1086.143822768,"data":"      3843.0  120.3  [GEMM] void cutlass::Kernel2\u003ccutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16\u003e(cutlass_75_tensorop_i8816gemm_s8_64x6\n"}
+,{"stream_name":"stdout","time":1086.143825218,"data":"       696.9   23.8  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_gt\n"}
+,{"stream_name":"stdout","time":1086.143827608,"data":"       649.0   95.2  [attention] void gemmSN_NN_kernel\u003cfloat, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched\u003cfloat const\u003e, cublasGem\n"}
+,{"stream_name":"stdout","time":1086.143830125,"data":"       463.2   23.8  [attention] void gemmSN_TN_kernel\u003cfloat, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched\u003cfloat const\u003e, cublasGe\n"}
+,{"stream_name":"stdout","time":1086.14383268,"data":"       325.9   22.9  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_on\n"}
+,{"stream_name":"stdout","time":1086.143835054,"data":"       325.5   22.9  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_on\n"}
+,{"stream_name":"stdout","time":1086.143837423,"data":"       305.0   23.9  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_nu\n"}
+,{"stream_name":"stdout","time":1086.143839795,"data":"       303.1   23.8  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_clamp_div_eq_gt_mul_ones_like_round_transpose_view_where_8\n"}
+,{"stream_name":"stdout","time":1086.143842215,"data":"       252.6   23.8  [Inductor fused] triton_per_fused_abs_amax_clamp_div_eq_ones_like_round_where_6\n"}
+,{"stream_name":"stdout","time":1086.14384451,"data":"       250.6   23.8  [Inductor fused] triton_per_fused_abs_amax_clamp_div_eq_ones_like_round_where_4\n"}
+,{"stream_name":"stdout","time":1086.143846811,"data":"        83.3    1.0  [Inductor fused] triton_red_fused__to_copy_argmax_div_eq_mul_ones_like_select_unsqueeze_view_where_14\n"}
+,{"stream_name":"stdout","time":1086.14384916,"data":"        70.6   23.8  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_with_sizes_t\n"}
+,{"stream_name":"stdout","time":1086.143851615,"data":"        46.3   23.8  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_1\n"}
+,{"stream_name":"stdout","time":1086.14385393,"data":"        45.1   23.8  [Inductor fused] triton_poi_fused__to_copy_add_cat_div_eq_index_index_copy_mul_neg_ones_like_slice_split_with_sizes_transpose_u\n"}
+,{"stream_name":"stdout","time":1086.1438563,"data":"\n"}
+,{"stream_name":"stdout","time":1086.143858539,"data":"exit 0 816 s\n"}
+,{"stream_name":"stdout","time":1086.143860699,"data":"585 MHz, 30.68 W, 63\r\n"}
+,{"stream_name":"stdout","time":1086.143862914,"data":"300 MHz, 9.56 W, 37\r\n"}
+,{"stream_name":"stdout","time":1915.98193906,"data":"Tesla T4, stock float16, batch 32; switches: Y_EXACT_ATTN=y Y_EXACT_KV_PACK=inplace Y_EXACT_NORM=triton Y_EXACT_V_INT8=1\n"}
+,{"stream_name":"stdout","time":1915.981986461,"data":"\n"}
+,{"stream_name":"stdout","time":1915.981990423,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":1915.981993538,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:32,  3.11it/s]\n"}
+,{"stream_name":"stdout","time":1915.981996195,"data":"Loading weights:  72%|███████▏  | 209/290 [00:00\u003c00:00, 613.45it/s]\n"}
+,{"stream_name":"stdout","time":1915.981999552,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 550.25it/s]\n"}
+,{"stream_name":"stdout","time":1915.982002435,"data":"W1118 17:53:45.633000 471 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode\n"}
+,{"stream_name":"stdout","time":1915.982005183,"data":"y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there\n"}
+,{"stream_name":"stdout","time":1915.982007906,"data":"    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.\n"}
+,{"stream_name":"stdout","time":1915.98201082,"data":"    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.\n"}
+,{"stream_name":"stdout","time":1915.982013549,"data":"USDT:2026-11-18 18:03:35 471:471 SyncActivityProfilerHandler.cpp:52] profiler_start\n"}
+,{"stream_name":"stdout","time":1915.982016227,"data":"USDT:2026-11-18 18:03:36 471:471 SyncActivityProfilerHandler.cpp:59] profiler_stop\n"}
+,{"stream_name":"stdout","time":1915.982018824,"data":"\n"}
+,{"stream_name":"stdout","time":1915.982021248,"data":"exact: graphed step 6.476 ms wall (best of 5); GPU kernels 5.705 ms a step, 502 kernels\n"}
+,{"stream_name":"stdout","time":1915.982023903,"data":"  GEMM              3.746 ms   65.7%\n"}
+,{"stream_name":"stdout","time":1915.982026491,"data":"  Inductor fused    0.889 ms   15.6%\n"}
+,{"stream_name":"stdout","time":1915.982028962,"data":"  attention         0.763 ms   13.4%\n"}
+,{"stream_name":"stdout","time":1915.982031448,"data":"  other             0.307 ms    5.4%\n"}
+,{"stream_name":"stdout","time":1915.982033953,"data":"  top kernels (us a step, launches a step):\n"}
+,{"stream_name":"stdout","time":1915.982036611,"data":"      3745.9  121.0  [GEMM] void cutlass::Kernel2\u003ccutlass_75_tensorop_i8816gemm_s8_64x64_tn_align16\u003e(cutlass_75_tensorop_i8816gemm_s8_64x6\n"}
+,{"stream_name":"stdout","time":1915.982039455,"data":"       619.8   24.0  [attention] exact_decode_attention\n"}
+,{"stream_name":"stdout","time":1915.982041999,"data":"       299.3   49.0  [other] _rms_norm_kernel\n"}
+,{"stream_name":"stdout","time":1915.982044555,"data":"       296.4   24.0  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_nu\n"}
+,{"stream_name":"stdout","time":1915.98204742,"data":"       123.1   49.0  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1\n"}
+,{"stream_name":"stdout","time":1915.982050118,"data":"       122.5   24.0  [attention] triton_per_fused__to_copy_abs_add_amax_bitwise_and_cat_clamp_div_eq_exact_decode_attention_index_le_lt_mul_neg\n"}
+,{"stream_name":"stdout","time":1915.982053918,"data":"       107.9   48.0  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_9\n"}
+,{"stream_name":"stdout","time":1915.982056689,"data":"        83.1    1.0  [Inductor fused] triton_red_fused__to_copy_argmax_div_eq_mul_ones_like_select_unsqueeze_view_where_12\n"}
+,{"stream_name":"stdout","time":1915.982059378,"data":"        60.7   24.0  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_10\n"}
+,{"stream_name":"stdout","time":1915.982064479,"data":"        51.0   24.0  [Inductor fused] triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq_index_cop\n"}
+,{"stream_name":"stdout","time":1915.982067359,"data":"        45.9   24.0  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_cat_div_eq_index_mul_neg_ones_like_slice_split_with_sizes_transpose_uns\n"}
+,{"stream_name":"stdout","time":1915.982070129,"data":"        41.7   24.0  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_where_2\n"}
+,{"stream_name":"stdout","time":1915.982072798,"data":"        41.0   24.0  [Inductor fused] triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_index_copy_lt_mul_ones_\n"}
+,{"stream_name":"stdout","time":1915.982075734,"data":"        35.8   24.0  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_div_eq_mul_ones_like_split_with_sizes_transpose_unsqueeze_view_where_6\n"}
+,{"stream_name":"stdout","time":1915.982078598,"data":"\n"}
+,{"stream_name":"stdout","time":1915.982081008,"data":"exit 0 830 s\n"}
+,{"stream_name":"stdout","time":1915.982083573,"data":"585 MHz, 30.96 W, 63\r\n"}
+,{"stream_name":"stdout","time":1915.982086163,"data":"300 MHz, 9.76 W, 37\r\n"}
+,{"stream_name":"stderr","time":1919.240619787,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":1919.240650553,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":1919.421294943,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":1919.421324627,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":1920.188117642,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":1920.269055327,"data":"[NbConvertApp] Writing 53722 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":1922.778360588,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":1923.281729423,"data":"[NbConvertApp] Writing 332088 bytes to __results__.html\n"}
+]
