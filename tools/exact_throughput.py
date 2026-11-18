@@ -57,6 +57,13 @@ PROMPT = ("Explain, step by step and in detail, how a suspension bridge carries 
           "the load of the traffic crossing it down into the ground. ")
 
 
+def time_ratio(t, base):
+    """`t / base` as text: "1.07x slower", or for a shorter time
+    "0.79x the time (1.26x faster)"."""
+    r = t / base
+    return f"{r:.2f}x slower" if round(r, 2) >= 1.0 else f"{r:.2f}x the time ({1 / r:.2f}x faster)"
+
+
 def keeps_signature(inner):
     """`functools.wraps` for a wrapper around a model's `forward`.
 
@@ -175,6 +182,10 @@ def build(arm, device, compile_it, graphs=False, low_memory=False):
 
             m.forward = stock_defaults
     m = with_attention(m, attention) if attention is not None else m
+    # What `--loop graphed` needs to trace this arm's decode step the way
+    # its forward runs: its attention, and stock's Inductor defaults.
+    m._y_attention = attention
+    m._y_inductor_patch = exact_model.INDUCTOR_DEFAULTS if arm == "stock" else None
     if not m._supports_logits_to_keep():
         raise SystemExit(f"*** arm {arm!r}: generate() cannot see `logits_to_keep` in its "
                          f"forward, so its prefill would compute every position's logits")
@@ -204,12 +215,27 @@ def gate(models, tok, device, static_cache=False):
     return True
 
 
+def graphed(model, inp, att, new):
+    """`y_lang.exact.graphed.GraphedGreedy` for this model and shape, recorded
+    on first use and kept on the model."""
+    from y_lang.exact.graphed import GraphedGreedy
+    runs = model.__dict__.setdefault("_y_graphed", {})
+    key = (inp.shape[0], inp.shape[1], new)
+    if key not in runs:
+        runs[key] = GraphedGreedy(model, inp.shape[0], inp.shape[1], new,
+                                  attention=getattr(model, "_y_attention", None),
+                                  inductor_patch=getattr(model, "_y_inductor_patch", None))
+    return runs[key](inp, att)
+
+
 def one_run(model, inp, att, kw, loop="generate"):
     torch.cuda.synchronize()
     t = time.perf_counter()
     with torch.no_grad():
         if loop == "greedy":
             out = greedy(model, inp, att, kw["max_new_tokens"])
+        elif loop == "graphed":
+            out = graphed(model, inp, att, kw["max_new_tokens"])
         else:
             out = model.generate(input_ids=inp, attention_mask=att, **kw)
     torch.cuda.synchronize()
@@ -217,7 +243,7 @@ def one_run(model, inp, att, kw, loop="generate"):
     # tok/s divides by max_new_tokens, so an arm that hit EOS early would be
     # credited with work it did not do. Rows that finish early are still
     # computed (padded) until every row has, so the shape is the work done.
-    new = out.shape[1] - (0 if loop == "greedy" else inp.shape[1])
+    new = out.shape[1] - (0 if loop in ("greedy", "graphed") else inp.shape[1])
     if new != kw["max_new_tokens"]:
         raise RuntimeError(
             f"generate stopped after {new} of {kw['max_new_tokens']} tokens; "
@@ -272,16 +298,25 @@ def run_interleaved(models, tok, batch, tokens, device, reps, graphs=False,
         with torch.no_grad():
             m.generate(input_ids=inp, attention_mask=att,
                        **dict(kw, max_new_tokens=min(8, tokens)))
-        if loop == "greedy":
+        if loop in ("greedy", "graphed"):
             if graphs or static_cache:
-                raise SystemExit("--loop greedy drives a dynamic cache; it does not "
-                                 "combine with --graphs or --static-cache")
+                raise SystemExit(f"--loop {loop} keeps its own cache; it does not "
+                                 f"combine with --graphs or --static-cache")
             differs = greedy_matches_generate(m, inp, att, kw)
             if differs:
                 raise SystemExit(f"*** arm {name!r}: greedy's tokens are not "
                                  f"generate's ({differs}); refusing to time it")
             print(f"  loop {name:<13} greedy == generate(repetition_penalty=1.0) "
                   f"on all {batch} rows")
+        if loop == "graphed":
+            with torch.no_grad():
+                want = greedy(m, inp, att, kw["max_new_tokens"])
+                got = graphed(m, inp, att, kw["max_new_tokens"])
+            rows = (want != got).any(dim=1).nonzero().flatten().tolist()
+            if rows:
+                raise SystemExit(f"*** arm {name!r}: the graphed loop's tokens are not "
+                                 f"greedy's (rows {rows}); refusing to time it")
+            print(f"  loop {name:<13} graphed == greedy on all {batch} rows")
         one_run(m, inp, att, kw, loop)
     times = {k: [] for k in models}
     for _ in range(reps):
@@ -301,10 +336,11 @@ def main():
                     help="CUDA graphs via static cache + reduce-overhead, BOTH arms")
     ap.add_argument("--static-cache", action="store_true",
                     help="static cache WITHOUT graphs: prices the padding alone")
-    ap.add_argument("--loop", choices=("generate", "greedy"), default="generate",
-                    help="time Hugging Face's generate (the default), or "
+    ap.add_argument("--loop", choices=("generate", "greedy", "graphed"), default="generate",
+                    help="time Hugging Face's generate (the default), "
                          "y_lang.exact.greedy, which has no per-step host sync "
-                         "and no logits processors; BOTH arms")
+                         "and no logits processors, or y_lang.exact.graphed, "
+                         "greedy with each decode step one CUDA graph; ALL arms")
     ap.add_argument("--device", default="cuda")
     ap.add_argument("--model", default=MODEL)
     ap.add_argument("--stock-dtype", choices=("bfloat16", "float16"), default="bfloat16",
@@ -323,7 +359,7 @@ def main():
           f"compile={'on (BOTH arms)' if a.compile else 'off'}"
           f"{'  cuda-graphs=on (BOTH arms)' if a.graphs else ''}"
           f"{'  static-cache=on (BOTH arms)' if a.static_cache else ''}"
-          f"{'  loop=greedy (BOTH arms)' if a.loop == 'greedy' else ''}  "
+          f"{f'  loop={a.loop} (ALL arms)' if a.loop != 'generate' else ''}  "
           f"best of {a.reps}")
     print(f"{'arm':<38}{'s':>8}{'tok/s/seq':>12}{'tok/s total':>13}{'spread':>9}")
     # Every model is built BEFORE anything is timed, so the arms can be
@@ -356,10 +392,9 @@ def main():
     qwen2.eager_attention_forward = D._orig
     for n in arms:
         if n != "stock" and "stock" in res:
-            print(f"\n  {n} / stock = {res[n][0] / res['stock'][0]:.2f}x slower")
+            print(f"\n  {n} / stock = {time_ratio(res[n][0], res['stock'][0])}")
     if "exact" in res and "fixedfloat" in res:
-        print(f"  fixedfloat / exact = "
-              f"{res['fixedfloat'][0] / res['exact'][0]:.2f}x slower")
+        print(f"  fixedfloat / exact = {time_ratio(res['fixedfloat'][0], res['exact'][0])}")
     worst = max(100 * (m - b) / b for b, m in res.values())
     if worst > 5.0:
         print(f"  NOTE: median is {worst:.1f}% above the minimum on one arm - the "
