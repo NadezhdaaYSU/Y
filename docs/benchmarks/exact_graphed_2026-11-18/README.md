@@ -122,7 +122,8 @@ and graphed == greedy, on all 32 rows). Files: `t4_job_e/`, `t4_job_f/`.
   guess: stock's step on the T4 waits on its GPU work, not on the host, so
   the graph saves little, while the graphed step attends over every row of
   its buffer (prompt plus 64, rounded up to 32) under a mask, and greedy
-  only over the rows so far.
+  only over the rows so far. On the RTX 4070 Ti SUPER those spare rows cost
+  little (next section); job h repeats that sweep on the T4.
 - Against stock's fastest loop, graphed exact is 1.13x faster at its
   defaults (105.7 against 93.5) and 1.44x faster with every switch (129.4
   against 90.0). Each pair is two processes on one machine. Job g times
@@ -146,6 +147,30 @@ of the same kind (T4, 4-core Xeon at 2.00 GHz). Files: `t4_job_g/`.
 Both processes passed the token checks: stock greedy == `generate()`, exact
 greedy == `generate()` and exact graphed == exact greedy, on all 32 rows.
 This matches the estimates from jobs e and f (1.13x and 1.44x).
+
+## What the spare rows of the buffer cost
+
+`capacity_sweep.py` times the graphed decode steps alone (graph replays,
+no prefill) with the buffer at 92 rows (the prompt's 28 plus 64, no
+rounding), 96 (what `GraphedGreedy` uses), 128 and 256. A step sees 60 rows
+on average. RTX 4070 Ti SUPER, 182668c, batch 32, 64 new tokens, compiled,
+best of 5 rounds, the sizes and arms in turns, no game running before or
+after. Milliseconds per decode step (`capacity_sweep/`):
+
+| Buffer rows | Stock bf16 | Exact, defaults | Exact, every switch |
+|---|---|---|---|
+| 92 | 3.084 | 3.087 | 2.251 |
+| 96 | 3.106 | 2.986 | 2.251 |
+| 128 | 3.229 | 3.115 | 2.304 |
+| 256 | 4.524 | 3.700 | 2.521 |
+
+Each arm gave the same tokens at every size (stock too, here). Going from
+96 to 128 rows costs 2% to 4%, and 96 to 256 costs 12% (every switch) to
+46% (stock). So at 64 new tokens, one graph per 32-row length bucket would
+save a few percent at most on this GPU, and is not built. It would matter
+more for long outputs. The first try of this sweep failed to link
+(`torch.compile` reached torch through the path with a space); the command
+in the script's docstring is the one that works.
 
 ## What this means
 
@@ -199,4 +224,5 @@ tokens per second per sequence):
 - `t4_job_e/`, `t4_job_f/`, `t4_job_g/`: the T4 logs (each loop's log, and the
   notebook's console as `job_*_console.log`). `make_t4_graphed_job.py`
   writes those Kaggle jobs.
+- `capacity_sweep.py`, `capacity_sweep/`: the buffer-size sweep.
 - `prototype/`: the first scripts.

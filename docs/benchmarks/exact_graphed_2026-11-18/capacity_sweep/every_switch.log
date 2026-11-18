@@ -1,0 +1,13 @@
+prompt 28 tokens, batch 32, 64 new tokens; switches: Y_EXACT_ATTN=y Y_EXACT_KV_PACK=inplace Y_EXACT_NORM=triton Y_EXACT_V_INT8=1
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  75%|███████▌  | 218/290 [00:00<00:00, 2150.39it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2191.16it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1118 19:29:53.237000 393063 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+
+exact: tokens the same at every size: True
+    92 rows    2.251 ms a step  1.000x of 92 rows
+    96 rows    2.251 ms a step  1.000x of 92 rows
+   128 rows    2.304 ms a step  1.024x of 92 rows
+   256 rows    2.521 ms a step  1.120x of 92 rows

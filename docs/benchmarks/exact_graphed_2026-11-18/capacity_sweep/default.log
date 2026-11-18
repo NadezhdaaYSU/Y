@@ -1,0 +1,18 @@
+prompt 28 tokens, batch 32, 64 new tokens; switches: none
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 37126.80it/s]
+W1118 19:21:55.000000 388964 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [1/1] Not enough SMs to use max_autotune_gemm mode
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  67%|██████▋   | 195/290 [00:00<00:00, 1904.87it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2266.94it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+
+stock: tokens the same at every size: True
+    92 rows    3.084 ms a step  1.000x of 92 rows
+    96 rows    3.106 ms a step  1.007x of 92 rows
+   128 rows    3.229 ms a step  1.047x of 92 rows
+   256 rows    4.524 ms a step  1.467x of 92 rows
+
+exact: tokens the same at every size: True
+    92 rows    3.087 ms a step  1.000x of 92 rows
+    96 rows    2.986 ms a step  0.967x of 92 rows
+   128 rows    3.115 ms a step  1.009x of 92 rows
+   256 rows    3.700 ms a step  1.199x of 92 rows
