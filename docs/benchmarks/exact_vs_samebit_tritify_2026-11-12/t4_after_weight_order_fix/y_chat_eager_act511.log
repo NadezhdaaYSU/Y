@@ -1,0 +1,15 @@
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+  Y exact cuda           tokens   7 (steps 8)  logits_hash 92efa93ea9f61c1a
+  Y exact cuda           text: 'The capital of France is Paris.'
+  Y exact cuda           GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda           BENCH total ms: min 1476.27 median 1495.23 mean 1497.03 sd 21.91 (n=7)
+  Y exact cuda           BENCH first token ms (batched prompt + first choice): min 187.12 median 190.07 mean 195.60 sd 12.66 (n=7)
+  Y exact cuda           BENCH decode ms/token (after the first): min 183.62 median 185.19 mean 185.84 sd 2.21 (n=7)
+  Y exact cpu            tokens   7 (steps 8)  logits_hash 92efa93ea9f61c1a
+  Y exact cpu            text: 'The capital of France is Paris.'
+  Y exact cpu            GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cpu            BENCH total ms: min 20270.07 median 20553.85 mean 20502.92 sd 157.19 (n=7)
+  Y exact cpu            BENCH first token ms (batched prompt + first choice): min 14440.28 median 14655.45 mean 14638.45 sd 108.11 (n=7)
+  Y exact cpu            BENCH decode ms/token (after the first): min 814.57 median 841.33 mean 837.74 sd 10.49 (n=7)
+VERDICT: every step's logits and the tokens identical on every device

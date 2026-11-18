@@ -1,0 +1,9 @@
+prompt 31 tokens, max 32, eos [151645, 151643]
+PROMPT_IDS [151644, 8948, 198, 2610, 525, 264, 63594, 17847, 13, 151645, 198, 151644, 872, 198, 3838, 374, 279, 6722, 315, 9625, 30, 21806, 304, 825, 11652, 13, 151645, 198, 151644, 77091, 198]
+W1117 22:55:14.816000 1160 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  Y exact cuda compiled  tokens   7 (steps 8)  logits_hash 92efa93ea9f61c1a
+  Y exact cuda compiled  text: 'The capital of France is Paris.'
+  Y exact cuda compiled  GEN_IDS [785, 6722, 315, 9625, 374, 12095, 13]
+  Y exact cuda compiled  BENCH total ms: min 137.44 median 144.55 mean 143.71 sd 4.47 (n=7)
+  Y exact cuda compiled  BENCH first token ms (batched prompt + first choice): min 16.78 median 18.02 mean 18.35 sd 1.43 (n=7)
+  Y exact cuda compiled  BENCH decode ms/token (after the first): min 17.09 median 18.14 mean 17.84 sd 0.69 (n=7)

@@ -1,0 +1,46 @@
+/usr/local/lib/python3.13/dist-packages/cupy/_environment.py:677: UserWarning: 
+--------------------------------------------------------------------------------
+
+  CuPy may not function correctly because multiple CuPy packages are installed
+  in your environment:
+
+    cupy-cuda12x, cupy-cuda13x
+
+  Follow these steps to resolve this issue:
+
+    1. For all packages listed above, run the following command to remove all
+       existing CuPy installations:
+
+         $ pip uninstall <package_name>
+
+      If you previously installed CuPy via conda, also run the following:
+
+         $ conda uninstall cupy
+
+    2. Install the appropriate CuPy package.
+       Refer to the Installation Guide for detailed instructions.
+
+         https://docs.cupy.dev/en/stable/install.html
+
+--------------------------------------------------------------------------------
+
+  warnings.warn(f'''
+[transformers] Token indices sequence length is longer than the specified maximum sequence length for this model (298938 > 131072). Running this sequence through the model will result in indexing errors
+samebit window 0: GPU e7061c1c1979950f CPU e7061c1c1979950f IDENTICAL
+samebit window 1: GPU 7753ca7472af5e45 CPU 7753ca7472af5e45 IDENTICAL
+Y exact window 0: GPU 1af9a52c603e3a04 CPU 1af9a52c603e3a04 IDENTICAL
+Y exact window 1: GPU e3fd99f19242f86f CPU e3fd99f19242f86f IDENTICAL
+W1117 21:51:08.498000 263 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+Y exact compiled window 0: 1af9a52c603e3a04 (eager 1af9a52c603e3a04)
+
+Tesla T4, 256-token prompt, batch 1, 11 shuffled rounds x 5 forwards
+                         min ms   median  tok/s (min)
+samebit integers         540.19   559.62          474
+Y exact, eager           202.16   205.31         1266
+PyTorch float16           37.26    38.12         6871
+PyTorch bfloat16         126.41   132.47         2025
+Y exact, compiled         40.01    43.54         6399
+
+Y exact eager vs samebit: 2.67x faster
+Y exact compiled vs samebit: 13.50x faster
+bits: samebit GPU == CPU: True;  Y GPU == CPU (and compiled == eager): True

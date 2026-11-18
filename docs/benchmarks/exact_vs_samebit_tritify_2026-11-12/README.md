@@ -149,7 +149,51 @@ What this says, including where Y loses:
 - **511 levels cost little on sm_89 and a lot on the T4.** Compiled decode is
   3.4 ms per token either way on the 4070 Ti, but 17.0 against 29.9 on the T4,
   where the linear layers run on `torch._int_mm` and the wider activation is
-  two of them.
+  two of them. (After the weight-order fix, 12.75 against 16.7; see below.)
+
+## T4 again, after the weight-order fix (2026-11-18)
+
+On the T4 Y's linear layers run on `torch._int_mm`, and their int8 weights
+were stored in the order that keeps cuBLAS off the tensor cores
+(`docs/benchmarks/exact_t4_profile_2026-11-17`; fixed in 56847c5). The same
+notebook ran again on 2026-11-18 with Y at 366bed6 (version 2 of the
+Kaggle job, another T4 machine of the same type). Logs and the printed
+output are in `t4_after_weight_order_fix/`.
+
+The fix changes no bits. Every logits hash in the new run equals the old
+one, on the GPU and on the CPU, and both accuracy JSON files are identical
+to the old ones, all 53 values.
+
+Prefill, 256 tokens, batch 1, milliseconds:
+
+| Tesla T4 | median before | median after | min after |
+|---|---|---|---|
+| samebit | 524.83 | 559.62 | 540.19 |
+| Y exact, eager | 212.14 | 205.31 | 202.16 |
+| Y exact, compiled | 50.10 | 43.54 | 40.01 |
+| PyTorch float16 | 38.42 | 38.12 | 37.26 |
+| Y exact at 511, eager | 243.55 | 229.49 | 226.66 |
+| Y exact at 511, compiled | 72.75 | 59.34 | 54.55 |
+
+By medians Y eager is now 2.7x samebit's speed on the T4 (2.5x before), and
+compiled 12.9x (10.5x). samebit itself ran 7% slower on this machine.
+
+Decode, batch 1, medians, milliseconds:
+
+| T4 machine | first token | decode per token | total, 128 tokens |
+|---|---|---|---|
+| tritify, AVX-512 (Xeon, 4 cores) | 4517 | 175.8 | 26,979 |
+| tritify, AVX2 | 4669 | 179.0 | 27,407 |
+| Y GPU, eager | 171.4 | 166.7 | 21,349 |
+| Y GPU, compiled | 13.8 | **12.75** (17.0 before) | 1633 |
+| Y CPU (Xeon, 4 cores) | 7297 | 453.2 | 64,685 |
+| Y GPU at 511, eager / compiled | 200.4 / 16.7 | 194.2 / **16.71** (29.9 before) | 24,856 / 2140 |
+| Y CPU at 511 | 15,060 | 853.7 | 123,643 |
+
+Width 511 now costs 1.3x in compiled decode on the T4 (16.7 against 12.75
+ms per token), where it cost 1.8x before. The CPU rows do not use the
+fix, and they moved by under 1% (Y) and 5% to 7% (tritify) with the
+machine. tritify's CUDA backend again did not appear on the T4.
 
 ## Provenance
 
