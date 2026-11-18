@@ -518,6 +518,13 @@ position (fixed in 328c6aa). With that fixed, compiled: stock 241.3 and
 column above still has the bug. Its size there was not measured; for the
 compiled arms it was 1% to 2%.
 
+With each decode step one CUDA graph for both arms (2026-11-18,
+`exact_graphed_2026-11-18/`), exact at its defaults takes 1.00x of stock's
+time and with every switch 0.79x (1.26x to 1.27x faster), with the same
+tokens as the ungraphed loop on all 32 rows. On the T4 every switch takes
+0.65x of graphed stock's time and 0.70x of ungraphed stock's, its faster
+loop there.
+
 Compiling does not just fail to help the fixed-order arm: it makes it about
 twice as slow. We did not find out why. Run at its fastest (eager), the
 control is 6.5x slower than compiled stock and 6.2x slower than compiled

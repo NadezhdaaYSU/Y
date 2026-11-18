@@ -2021,7 +2021,12 @@ the code of 2026-11-17, timed with the tool fixed on 2026-11-18, it is
 1.07x, 1.10x at width 511, and 0.99-1.00x with every Y kernel switch on
 (`docs/benchmarks/exact_speed_05b_2026-11-17/`). On a Tesla T4 it is 1.03x
 on one machine and 0.98x on another, after a fix to how the int8 weights
-are stored (`docs/benchmarks/exact_t4_profile_2026-11-17/`). From 9f0c685
+are stored (`docs/benchmarks/exact_t4_profile_2026-11-17/`). With each
+decode step one CUDA graph for both arms (`y_lang.exact.graphed`,
+2026-11-18), every switch takes 0.79x of stock's time on the RTX 4070 Ti
+SUPER and 0.65x on the T4 (0.70x against the T4's faster ungraphed stock,
+in one process), and the defaults 1.00x and 0.84x, with the same tokens
+(`docs/benchmarks/exact_graphed_2026-11-18/`). From 9f0c685
 (2026-11-04) to 328c6aa the timing tool made the compiled stock arm compute
 every prompt position's logits in the prefill, which flattered exact by 1%
 to 2% at 0.5B. Its size in the 7B stock comparisons below was not measured. At
