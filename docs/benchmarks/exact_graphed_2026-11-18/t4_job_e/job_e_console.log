@@ -1,0 +1,94 @@
+[{"stream_name":"stderr","time":11.515088647,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":11.515132297,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":11.515151308,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":11.515155458,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":12.255209299,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":12.255241111,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":12.255246755,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":12.255251225,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":13.711798619,"data":"index, name, compute_cap, driver_version, clocks.max.sm [MHz]\r\n"}
+,{"stream_name":"stdout","time":13.711828759,"data":"0, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":13.711853857,"data":"1, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":13.831560438,"data":"CPU(s):                                  4\r\n"}
+,{"stream_name":"stdout","time":13.831587074,"data":"Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz\r\n"}
+,{"stream_name":"stdout","time":264.209107087,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":264.209140297,"data":"easyocr 1.7.2 requires torchvision\u003e=0.5, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":264.209147903,"data":"fastai 2.8.12 requires torchvision\u003e=0.11, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":264.209153912,"data":"timm 1.0.30 requires torchvision, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":264.20915933,"data":"libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":264.209164912,"data":"cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":264.209170593,"data":"cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":264.209175924,"data":"libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":264.209181314,"data":"cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":264.209186696,"data":"libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":264.209192014,"data":"libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":360.974443501,"data":"\u001b[0mliby.so sha256 5c26fe725eb35a5d\n"}
+,{"stream_name":"stdout","time":360.974473946,"data":"exact_throughput has --stock-dtype: True\n"}
+,{"stream_name":"stdout","time":360.974757721,"data":"exact_throughput has with_attention: True\n"}
+,{"stream_name":"stderr","time":362.251644896,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":362.251670983,"data":"\n"}
+,{"stream_name":"stderr","time":362.251675679,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":385.099764714,"data":"torch 2.13.0+cu126 transformers 5.15.0 Tesla T4\n"}
+,{"stream_name":"stdout","time":2659.251328386,"data":"\n"}
+,{"stream_name":"stdout","time":2659.251377283,"data":"qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  loop=graphed (ALL arms)  best of 5\n"}
+,{"stream_name":"stdout","time":2659.251383653,"data":"arm                                          s   tok/s/seq  tok/s total   spread\n"}
+,{"stream_name":"stdout","time":2659.251388893,"data":"\n"}
+,{"stream_name":"stdout","time":2659.251393426,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":2659.25139856,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:20,  3.59it/s]\n"}
+,{"stream_name":"stdout","time":2659.251403238,"data":"Loading weights:  84%|████████▍ | 244/290 [00:00\u003c00:00, 814.29it/s]\n"}
+,{"stream_name":"stdout","time":2659.251408582,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 685.60it/s]\n"}
+,{"stream_name":"stdout","time":2659.251413339,"data":"\n"}
+,{"stream_name":"stdout","time":2659.251418185,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":2659.251423513,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:52,  2.58it/s]\n"}
+,{"stream_name":"stdout","time":2659.251428398,"data":"Loading weights:  85%|████████▌ | 247/290 [00:00\u003c00:00, 663.99it/s]\n"}
+,{"stream_name":"stdout","time":2659.251433727,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 544.00it/s]\n"}
+,{"stream_name":"stdout","time":2659.251438376,"data":"W1118 12:50:28.157000 153 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode\n"}
+,{"stream_name":"stdout","time":2659.251443484,"data":"  sanity stock        canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":2659.2514478,"data":"  sanity exact        canary ok, 40 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":2659.25145202,"data":"  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows\n"}
+,{"stream_name":"stdout","time":2659.251456798,"data":"  loop stock         graphed == greedy on all 32 rows\n"}
+,{"stream_name":"stdout","time":2659.25146126,"data":"  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows\n"}
+,{"stream_name":"stdout","time":2659.251465731,"data":"  loop exact         graphed == greedy on all 32 rows\n"}
+,{"stream_name":"stdout","time":2659.251470258,"data":"stock  fp16 + SDPA (what ships)          0.722        88.6       2834.7     0.3%\n"}
+,{"stream_name":"stdout","time":2659.251474936,"data":"exact  int8, order-independent           0.605       105.7       3383.0     0.5%\n"}
+,{"stream_name":"stdout","time":2659.251479603,"data":"\n"}
+,{"stream_name":"stdout","time":2659.251483729,"data":"  exact / stock = 0.84x the time (1.19x faster)\n"}
+,{"stream_name":"stdout","time":2659.251488401,"data":"\n"}
+,{"stream_name":"stdout","time":2659.251492748,"data":"exit 0 2274 s\n"}
+,{"stream_name":"stdout","time":2659.251517978,"data":"585 MHz, 31.19 W, 66\r\n"}
+,{"stream_name":"stdout","time":2659.251521574,"data":"300 MHz, 9.66 W, 35\r\n"}
+,{"stream_name":"stdout","time":3769.115562859,"data":"\n"}
+,{"stream_name":"stdout","time":3769.115598705,"data":"qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  loop=greedy (ALL arms)  best of 5\n"}
+,{"stream_name":"stdout","time":3769.115616394,"data":"arm                                          s   tok/s/seq  tok/s total   spread\n"}
+,{"stream_name":"stdout","time":3769.115621821,"data":"\n"}
+,{"stream_name":"stdout","time":3769.115625858,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":3769.115631267,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:07,  4.28it/s]\n"}
+,{"stream_name":"stdout","time":3769.115636224,"data":"Loading weights:  76%|███████▌  | 220/290 [00:00\u003c00:00, 830.69it/s]\n"}
+,{"stream_name":"stdout","time":3769.115641164,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 717.25it/s]\n"}
+,{"stream_name":"stdout","time":3769.115645625,"data":"\n"}
+,{"stream_name":"stdout","time":3769.115649568,"data":"Loading weights:   0%|          | 0/290 [00:00\u003c?, ?it/s]\n"}
+,{"stream_name":"stdout","time":3769.11565393,"data":"Loading weights:   0%|          | 1/290 [00:00\u003c01:39,  2.90it/s]\n"}
+,{"stream_name":"stdout","time":3769.115660019,"data":"Loading weights:  76%|███████▌  | 219/290 [00:00\u003c00:00, 629.75it/s]\n"}
+,{"stream_name":"stdout","time":3769.115667354,"data":"Loading weights: 100%|██████████| 290/290 [00:00\u003c00:00, 552.31it/s]\n"}
+,{"stream_name":"stdout","time":3769.115670414,"data":"W1118 13:30:33.571000 871 torch/_inductor/utils.py:1953] [0/3] Not enough SMs to use max_autotune_gemm mode\n"}
+,{"stream_name":"stdout","time":3769.115673389,"data":"  sanity stock        canary ok, 45 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":3769.115676171,"data":"  sanity exact        canary ok, 40 distinct tokens in reference\n"}
+,{"stream_name":"stdout","time":3769.115678997,"data":"  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows\n"}
+,{"stream_name":"stdout","time":3769.11568181,"data":"  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows\n"}
+,{"stream_name":"stdout","time":3769.115684578,"data":"stock  fp16 + SDPA (what ships)          0.685        93.5       2991.7     0.6%\n"}
+,{"stream_name":"stdout","time":3769.115687368,"data":"exact  int8, order-independent           0.686        93.4       2987.2     0.6%\n"}
+,{"stream_name":"stdout","time":3769.115690216,"data":"\n"}
+,{"stream_name":"stdout","time":3769.11569283,"data":"  exact / stock = 1.00x slower\n"}
+,{"stream_name":"stdout","time":3769.115695632,"data":"\n"}
+,{"stream_name":"stdout","time":3769.115710931,"data":"exit 0 1110 s\n"}
+,{"stream_name":"stdout","time":3769.115716014,"data":"585 MHz, 31.09 W, 66\r\n"}
+,{"stream_name":"stdout","time":3769.115720923,"data":"300 MHz, 9.86 W, 35\r\n"}
+,{"stream_name":"stderr","time":3772.75370791,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":3772.753736165,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":3772.994261117,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":3772.994285205,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":3773.834135405,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":3773.914786632,"data":"[NbConvertApp] Writing 48919 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":3776.410453044,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":3776.953091793,"data":"[NbConvertApp] Writing 327019 bytes to __results__.html\n"}
+]

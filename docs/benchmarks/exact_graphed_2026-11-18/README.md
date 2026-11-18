@@ -97,19 +97,57 @@ runs; 274.2 to 295.3 and 282.8 in the D runs), exact at its defaults 10 to
 (294.6 to 356.1 and 378.1). The exact path gains more because more
 of its step was host time.
 
+## Tesla T4 (Kaggle)
+
+`make_t4_graphed_job.py` (copied here), Tesla T4 with a 4-core Intel Xeon
+at 2.00 GHz, torch 2.13.0+cu126, transformers 5.15.0, stock in float16,
+liby.so from the y-lang-wheel dataset (sha256 `5c26fe725eb35a5d...`).
+Source: the files of 6abf6cc (uploaded just before that commit), through
+the y-lang-src dataset. Each job ran on one Kaggle machine, one process per
+loop. Same settings as above.
+
+| Job, setup, loop | Stock fp16 | Exact | Exact time / stock time |
+|---|---|---|---|
+| e, defaults, graphed | 88.6 | 105.7 | 0.84 (1.19x faster) |
+| e, defaults, greedy | 93.5 | 93.4 | 1.00 |
+| f, every switch, greedy | 90.0 | 69.2 | 1.30 |
+| f, every switch, graphed | 83.8 | 129.4 | 0.65 (1.54x faster) |
+
+Every process passed the token checks for both arms (greedy == `generate()`,
+and graphed == greedy, on all 32 rows). Files: `t4_job_e/`, `t4_job_f/`.
+
+- On the T4 the graph makes stock slower, by 5% (93.5 to 88.6) and 7% (90.0
+  to 83.8). So stock's fastest loop there is greedy, and graphed exact
+  against graphed stock flatters exact. Why stock loses was not measured. A
+  guess: stock's step on the T4 waits on its GPU work, not on the host, so
+  the graph saves little, while the graphed step attends over every row of
+  its buffer (prompt plus 64, rounded up to 32) under a mask, and greedy
+  only over the rows so far.
+- Against stock's fastest loop, graphed exact is 1.13x faster at its
+  defaults (105.7 against 93.5) and 1.44x faster with every switch (129.4
+  against 90.0). Each pair is two processes on one machine. Job g
+  (`y-t4-graphed-g`, `--loop graphed --stock-loop greedy`) times them in one
+  process.
+- With every switch, the graph makes the exact path 1.87x faster on the T4
+  (69.2 to 129.4). Its `torch.library` ops cost 50 to 92 us of host time a
+  call on this Xeon (`../exact_t4_profile_2026-11-17/`, job 2c), and the
+  graph replays them without the host.
+
 ## What this means
 
-- With every switch, the exact path is now faster than stock, both with
-  graphs, by 1.26x to 1.27x, and its tokens are the greedy loop's tokens
-  bit for bit. The host cost that hid its smaller GPU work is gone.
-- At its defaults, the exact path ties stock with graphs (1.00x). Its GPU
-  work a step is about stock's, so removing the host cost helps both alike.
-- Every switch stays opt-in for now. On the T4 every switch was 1.36x slower
-  than stock with the old loop, because its `torch.library` ops cost 50 to
-  92 us of host time a call on Kaggle's 2 GHz Xeon. A graph removes that host
-  cost, so the T4 jobs `y-t4-graphed-e` (defaults) and `y-t4-graphed-f`
-  (every switch) test it, each with the graphed and the greedy loop on one
-  machine.
+- With every switch, the exact path is now faster than stock on both GPUs:
+  with both arms graphed, 1.26x to 1.27x on the RTX 4070 Ti SUPER and 1.54x
+  on the T4; against stock's fastest loop on the T4, 1.44x. Its tokens are
+  the greedy loop's tokens bit for bit. The host cost that hid its smaller
+  GPU work is gone.
+- At its defaults, the exact path ties stock with graphs on the 4070 Ti
+  (1.00x) and is faster on the T4 (1.19x against graphed stock, 1.13x
+  against greedy stock).
+- Every switch is still opt-in. With graphs it is the faster setting on
+  both GPUs; without graphs it is slower on the T4 (1.30x). Turning it on by
+  default would also change what the exact path computes (the int8 V cache
+  rounds V), so its recorded token digests would have to be checked or made
+  again. Not done here.
 
 ## Limits
 
@@ -120,8 +158,9 @@ of its step was host time.
 - The prefill is not graphed. It runs as before and is included in the times.
 - The first call for a shape compiles and records; that time is not in the
   table (each arm is warmed up before timing).
-- Only 0.5B on one GPU so far. A 7B run against vLLM (which also uses CUDA
-  graphs) has not been done.
+- Only 0.5B so far, on two GPUs. A 7B run against vLLM (which also uses
+  CUDA graphs) has not been done: the local one was stopped after two
+  processes (`../exact_graphed_7b_2026-11-18/`, partial).
 
 ## Prototype
 
@@ -141,4 +180,7 @@ tokens per second per sequence):
 
 - `run.sh`: the timing runs. `runs/`, `runs_console.txt`: the graphed loop.
   `runs_greedy/`, `runs_greedy_console.txt`: the greedy loop.
+- `t4_job_e/`, `t4_job_f/`: the T4 logs (each loop's log, and the
+  notebook's console as `job_*_console.log`). `make_t4_graphed_job.py`
+  writes those Kaggle jobs.
 - `prototype/`: the first scripts.

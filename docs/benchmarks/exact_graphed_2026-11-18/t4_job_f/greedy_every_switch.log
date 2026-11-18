@@ -1,0 +1,25 @@
+
+qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  loop=greedy (ALL arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:11,  4.02it/s]
+Loading weights:  76%|███████▌  | 219/290 [00:00<00:00, 789.77it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 691.22it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:43,  2.79it/s]
+Loading weights:  84%|████████▍ | 243/290 [00:00<00:00, 679.57it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 565.19it/s]
+W1118 12:49:11.264000 153 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+stock  fp16 + SDPA (what ships)          0.711        90.0       2879.5     0.7%
+exact  int8, order-independent           0.925        69.2       2213.1     0.8%
+
+  exact / stock = 1.30x slower

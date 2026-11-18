@@ -1,0 +1,22 @@
+
+qwen05  batch 32  64 new tokens  compile=on (BOTH arms)  loop=greedy (ALL arms)  best of 5
+arm                                          s   tok/s/seq  tok/s total   spread
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:07,  4.28it/s]
+Loading weights:  76%|███████▌  | 220/290 [00:00<00:00, 830.69it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 717.25it/s]
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<01:39,  2.90it/s]
+Loading weights:  76%|███████▌  | 219/290 [00:00<00:00, 629.75it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 552.31it/s]
+W1118 13:30:33.571000 871 torch/_inductor/utils.py:1953] [0/3] Not enough SMs to use max_autotune_gemm mode
+  sanity stock        canary ok, 45 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+stock  fp16 + SDPA (what ships)          0.685        93.5       2991.7     0.6%
+exact  int8, order-independent           0.686        93.4       2987.2     0.6%
+
+  exact / stock = 1.00x slower
