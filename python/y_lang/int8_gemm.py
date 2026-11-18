@@ -34,6 +34,16 @@ proofs cover the split for any factor and an integer add lands the same in
 any order, so the factor - which depends on the SM count - changes the time,
 not the bits.
 
+On sm_75 (Turing: a Tesla T4, RTX 20xx) the kernel is the same, with two
+substitutions, since cp.async and the m16n8k32 int8 mma are sm_80: each
+m16n8k32 is four mma.m8n8k16 on the same registers, and a K tile is loaded
+into registers and stored into its shared stage before the barrier that
+publishes it (src/ptx_emitter/int8_staged_gemm.rs). The proofs are about the
+m16n8k32 form's schedule; that four m8n8k16 compute one m16n8k32's product is
+the PTX ISA's fragment tables, checked on a T4 against a CPU matmul and with
+a control that must fail (docs/benchmarks/int8_turing_2026-11-18/), not
+proved. Below sm_75 the compiler refuses the kernel.
+
 The PTX targets the tensor's device (`sm_XY` from its compute capability). The
 compile still reads the hardware profile, as every `y_lang` compile does
 (`YCompilerLib.hw_profile_path`: the working directory's `.ysu_hw_profile`,

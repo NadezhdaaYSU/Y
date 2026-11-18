@@ -35,6 +35,12 @@
 //! B fits in L2), 512 x 11008 x 4096, and 512 x 1024 x 4096 from DRAM.
 //! 0.93-0.95x where K % 64 == 32 (every second row starts 32 bytes into a
 //! 64-byte segment). docs/benchmarks/int8_gemm_2026-11-06/.
+//!
+//! For sm_75 (Turing) the same kernel is emitted with four `mma.m8n8k16`
+//! for each m16n8k32 and K tiles loaded through registers, since `cp.async`
+//! and the m16n8k32 int8 mma are sm_80 (see `emit_int8_staged_gemm_kernel`;
+//! docs/benchmarks/int8_turing_2026-11-18/). For sm_80 and later the PTX is
+//! byte for byte what it was before that form was added.
 
 use super::*;
 
@@ -74,6 +80,29 @@ pub(crate) const INT8_TILE_MID: Int8Tile =
 pub(crate) const INT8_TILE_SMALL: Int8Tile =
     Int8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 64, stages: 4, ctas_per_sm: 4, group_m: 16 };
 
+/// The most dynamic shared memory one CTA can opt into on sm_75 (64 KB).
+pub(crate) const TURING_MAX_SMEM: u32 = 64 * 1024;
+
+// sm_75's tiles. Without cp.async a CTA has one K tile of loads in flight, so
+// what pays is bytes in flight per thread (cta_k 128: six 16-byte loads a
+// thread at 32x64) and CTAs per SM (two stages, 24-32 KB of the T4's 64 KB),
+// not stages. Measured on a Tesla T4 against torch._int_mm, weights cold
+// (docs/benchmarks/int8_turing_2026-11-18/, gemm_t4.py round 2), at
+// Qwen2.5-0.5B's shapes: at M = 32, 1.03-1.53x on the decode tile where the
+// sm_80 rule's 64x64x64 four-stage tile gave 0.85-1.33x; at M = 128,
+// 1.09-1.28x on the mid tile; at M = 2048, 0.88-1.02x on the large one, where
+// the sm_80 rule's three-stage 128x128x64 gave 0.71-0.82x. Measured at those
+// three row counts only.
+/// 32x64 outputs, 128 bytes of K a stage, 2 stages (24 KB): M <= 32.
+pub(crate) const INT8_TURING_TILE_DECODE: Int8Tile =
+    Int8Tile { cta_m: 32, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 128, stages: 2, ctas_per_sm: 4, group_m: 16 };
+/// 64x64x128, 2 stages (32 KB): M <= 128, and where the large tile does not fit.
+pub(crate) const INT8_TURING_TILE_MID: Int8Tile =
+    Int8Tile { cta_m: 64, cta_n: 64, warps_m: 2, warps_n: 2, cta_k: 128, stages: 2, ctas_per_sm: 4, group_m: 16 };
+/// 128x128x64, 2 stages (32 KB): M > 128 where it leaves [`INT8_MIN_TILES`].
+pub(crate) const INT8_TURING_TILE_LARGE: Int8Tile =
+    Int8Tile { cta_m: 128, cta_n: 128, warps_m: 2, warps_n: 2, cta_k: 64, stages: 2, ctas_per_sm: 2, group_m: 32 };
+
 /// A tile is taken when it leaves at least this many output tiles: about one
 /// CTA for each SM of a mid-range card (this one has 66). A fixed number,
 /// not the local SM count, so the PTX does not depend on the machine that
@@ -85,12 +114,16 @@ pub(crate) const INT8_MIN_TILES: u32 = 64;
 /// than N, and leaves [`INT8_MIN_TILES`] output tiles; else
 /// [`INT8_TILE_SMALL`]. Without the first two conditions 32 x 11008 x 4096
 /// took the 128x128 tile, three quarters of it past M, and ran at 0.60x
-/// cuBLASLt against 1.13x on a 64-row tile. The tile is a function of the
-/// shape, never of the machine; `docs/benchmarks/int8_gemm_2026-11-06/`
+/// cuBLASLt against 1.13x on a 64-row tile. For a target below sm_80 (`sm_level`,
+/// the PTX target's) the Turing tiles instead: [`INT8_TURING_TILE_DECODE`] for
+/// M <= 32, [`INT8_TURING_TILE_MID`] to M = 128, above it
+/// [`INT8_TURING_TILE_LARGE`] where it fits in N and leaves [`INT8_MIN_TILES`],
+/// else the mid tile. The tile is a function of the shape and the target,
+/// never of the machine; `docs/benchmarks/int8_gemm_2026-11-06/`
 /// has every tile at every shape swept, and where the rule's is not the
 /// fastest. `Y_INT8_TILE=cta_m,cta_n,cta_k,warps_m,warps_n,stages,ctas_per_sm,group_m`
 /// names another (for sweeps and tests; a malformed value is an error).
-pub(crate) fn int8_staged_tile(m: u32, n: u32, _k: u32) -> Result<Int8Tile, String> {
+pub(crate) fn int8_staged_tile(m: u32, n: u32, _k: u32, sm_level: u32) -> Result<Int8Tile, String> {
     if let Ok(v) = std::env::var("Y_INT8_TILE") {
         let f: Result<Vec<u32>, _> = v.split(',').map(|x| x.trim().parse::<u32>()).collect();
         return match f.as_deref() {
@@ -104,6 +137,17 @@ pub(crate) fn int8_staged_tile(m: u32, n: u32, _k: u32) -> Result<Int8Tile, Stri
         };
     }
     let tiles = |t: &Int8Tile| u64::from(m.div_ceil(t.cta_m)) * u64::from(n.div_ceil(t.cta_n));
+    if sm_level < 80 {
+        return Ok(if m <= 32 {
+            INT8_TURING_TILE_DECODE
+        } else if m <= 128 {
+            INT8_TURING_TILE_MID
+        } else if INT8_TURING_TILE_LARGE.cta_n <= n && tiles(&INT8_TURING_TILE_LARGE) >= u64::from(INT8_MIN_TILES) {
+            INT8_TURING_TILE_LARGE
+        } else {
+            INT8_TURING_TILE_MID
+        });
+    }
     Ok([INT8_TILE_LARGE, INT8_TILE_MID]
         .into_iter()
         .find(|t| t.cta_m <= m && t.cta_n <= n && tiles(t) >= u64::from(INT8_MIN_TILES))
@@ -205,15 +249,53 @@ impl PtxEmitter {
             return 32;
         }
 
+        // Turing (sm_75) has neither `cp.async` nor the m16n8k32 int8 mma
+        // (both sm_80). Its kernel is this one with two substitutions, so the
+        // tiles, the shared layout, the `ldmatrix` fragments, the K striping
+        // and the epilogue are the same:
+        // - each m16n8k32 is four `mma.m8n8k16` on the same registers. The
+        //   PTX ISA's tables put m16n8k32's a0..a3 at (rows 0-7, k 0-15),
+        //   (rows 8-15, k 0-15), (rows 0-7, k 16-31), (rows 8-15, k 16-31),
+        //   b0/b1 at k 0-15 / 16-31, and d0,d1 / d2,d3 at rows 0-7 / 8-15:
+        //   each is an m8n8k16 fragment, so {d0,d1} += a0.b0 + a2.b1 and
+        //   {d2,d3} += a1.b0 + a3.b1. An integer sum is exact in any order.
+        //   Checked on a T4 against a CPU matmul before this was written
+        //   (docs/benchmarks/int8_turing_2026-11-18/probe_m8n8k16.py);
+        // - a K tile is loaded into registers (`ld.global.v4`, zero where the
+        //   cp.async would have been zero-sized) when its cp.async would have
+        //   been issued, and stored into its stage (`st.shared.v4`) just
+        //   before the barrier that the cp.async.wait_group came before.
+        //   That stage is the one tile it-1 used, whose last fragments were
+        //   loaded before the previous iteration's barrier.
+        let turing = self.sm_level() < 80;
+        // A Turing CTA can opt into 64 KB of dynamic shared memory, not the
+        // 99 KB of sm_89 that the geometry check holds a tile to: a larger
+        // tile assembles and then fails at launch.
+        if turing && smem_bytes > TURING_MAX_SMEM {
+            self.emit_errors.push(format!(
+                "[PTX] `{}`: the {}x{}x{} int8 tile's {} stages take {} bytes of shared memory, past the {} a CTA can have on {}",
+                kernel_name, cta_m, cta_n, cta_k, stages, smem_bytes, TURING_MAX_SMEM, self.sm_target
+            ));
+            return 32;
+        }
         let w = |e: &mut Self, line: String| {
             writeln!(&mut e.ptx_buffer, "    {}", line).unwrap();
         };
         w(self, "// ========================================================".to_string());
         w(self, format!(
-            "// [Y INT8 TENSOR CORE GEMM] staged | M={} N={} K={} | CTA {}x{}x{} | {}x{} warps of {}x{} | {} stages | mma.sync.m16n8k32.row.col.s32.s8.s8.s32",
-            m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n, per_warp_m, per_warp_n, stages
+            "// [Y INT8 TENSOR CORE GEMM] staged | M={} N={} K={} | CTA {}x{}x{} | {}x{} warps of {}x{} | {} stages | {}",
+            m, n, k, cta_m, cta_n, cta_k, warps_m, warps_n, per_warp_m, per_warp_n, stages,
+            if turing {
+                "mma.sync.m8n8k16.row.col.s32.s8.s8.s32, four per m16n8k32 step (sm_75)"
+            } else {
+                "mma.sync.m16n8k32.row.col.s32.s8.s8.s32"
+            }
         ));
-        w(self, "// A [M][K] and B [N][K] int8, copied by cp.async into swizzled shared stages; every output is the exact int32 sum.".to_string());
+        w(self, if turing {
+            "// A [M][K] and B [N][K] int8, loaded into registers and stored into swizzled shared stages (sm_75 has no cp.async); every output is the exact int32 sum.".to_string()
+        } else {
+            "// A [M][K] and B [N][K] int8, copied by cp.async into swizzled shared stages; every output is the exact int32 sum.".to_string()
+        });
         w(self, format!(
             "// Launch: block ({},1,1); any other block traps. Grid: any; ({}, 1, z) is one {}x{} tile per CTA.",
             threads, tiles, cta_m, cta_n
@@ -223,7 +305,12 @@ impl PtxEmitter {
         } else {
             w(self, "// nctaid.z = 1: each output is stored. K split over z: CTA z takes K tiles z, z + nctaid.z, ... and adds its partial sums into C by red.global.add.s32, so C must then be zeroed by the caller.".to_string());
         }
-        w(self, format!("// {} cp.async stages of int8 K tiles. Dynamic shared memory required: {} bytes.", stages, smem_bytes));
+        w(self, format!(
+            "// {} {} stages of int8 K tiles. Dynamic shared memory required: {} bytes.",
+            stages,
+            if turing { "shared" } else { "cp.async" },
+            smem_bytes
+        ));
         w(self, "// ========================================================".to_string());
         let smem_sym = format!("smem_int8_{}", kernel_name);
         self.pending_extern_decls.push(format!(".extern .shared .align 128 .b8 {}[];", smem_sym));
@@ -408,8 +495,13 @@ impl PtxEmitter {
             w(self, format!("mad.lo.u32 {}, {}, {}, {};", k0, k_stride, s, k_base));
             let slot = self.alloc_reg32();
             w(self, format!("add.u32 {}, {}, {};", slot, s_thread, s * stage_bytes));
-            self.emit_fp8_e4m3_copy_tile(&copy, &k0, &slot, Some(&p));
-            w(self, "cp.async.commit_group;".to_string());
+            if turing {
+                let loads = self.emit_int8_turing_load_tile(&copy, &k0, Some(&p));
+                self.emit_int8_turing_store_tile(&loads, &slot);
+            } else {
+                self.emit_fp8_e4m3_copy_tile(&copy, &k0, &slot, Some(&p));
+                w(self, "cp.async.commit_group;".to_string());
+            }
         }
 
         // ---- the K loop, its fragment loads one substep ahead ----
@@ -447,6 +539,20 @@ impl PtxEmitter {
                 for j in 0..num_j as usize {
                     let d = acc[i][j].join(",");
                     let b = &fb[j / 2][(j % 2) * 2..(j % 2) * 2 + 2];
+                    if turing {
+                        // {d0,d1} += a0.b0 + a2.b1; {d2,d3} += a1.b0 + a3.b1
+                        let (a, dd) = (&fa[i], &acc[i][j]);
+                        for (lo, ai, bi) in [(0usize, 0usize, 0usize), (0, 2, 1), (2, 1, 0), (2, 3, 1)] {
+                            let dp = format!("{},{}", dd[lo], dd[lo + 1]);
+                            writeln!(
+                                &mut this.ptx_buffer,
+                                "    mma.sync.aligned.m8n8k16.row.col.s32.s8.s8.s32 {{{dp}}}, {{{}}}, {{{}}}, {{{dp}}};",
+                                a[ai], b[bi],
+                            )
+                            .unwrap();
+                        }
+                        continue;
+                    }
                     writeln!(
                         &mut this.ptx_buffer,
                         "    mma.sync.aligned.m16n8k32.row.col.s32.s8.s8.s32 {{{d}}}, {{{}}}, {{{}}}, {{{d}}};",
@@ -458,7 +564,9 @@ impl PtxEmitter {
             }
         };
 
-        w(self, format!("cp.async.wait_group {};", stages - 2));
+        if !turing {
+            w(self, format!("cp.async.wait_group {};", stages - 2));
+        }
         w(self, "bar.sync 0;".to_string());
         load_frags(self, &smem, 0, &carried_a, &carried_b);
 
@@ -490,6 +598,9 @@ impl PtxEmitter {
         let next_stage = self.alloc_reg32();
         w(self, format!("add.u32 {}, {}, {};", next_stage, smem, read_next));
         let (mut cur_a, mut cur_b) = (carried_a.clone(), carried_b.clone());
+        // Turing: tile it+S-1's registers and stage address, from substep 0
+        // to the barrier.
+        let mut pending: Option<(Vec<(u32, [String; 4])>, String)> = None;
         for s in 0..k_substeps {
             let last = s + 1 == k_substeps;
             let (nxt_a, nxt_b) = if last {
@@ -508,8 +619,13 @@ impl PtxEmitter {
                 w(self, format!("mad.lo.u32 {}, {}, {}, {};", k0, next, k_stride, k_base));
                 let slot = self.alloc_reg32();
                 w(self, format!("add.u32 {}, {}, {};", slot, s_thread, write_off));
-                self.emit_fp8_e4m3_copy_tile(&copy, &k0, &slot, Some(&p_next));
-                w(self, "cp.async.commit_group;".to_string());
+                if turing {
+                    let loads = self.emit_int8_turing_load_tile(&copy, &k0, Some(&p_next));
+                    pending = Some((loads, slot));
+                } else {
+                    self.emit_fp8_e4m3_copy_tile(&copy, &k0, &slot, Some(&p_next));
+                    w(self, "cp.async.commit_group;".to_string());
+                }
             }
             if last && k_substeps > 1 {
                 // Tile it+1's first fragments (published by the barrier one
@@ -518,7 +634,12 @@ impl PtxEmitter {
             }
             mmas(self, &cur_a, &cur_b);
             if s + 2 == k_substeps || k_substeps == 1 {
-                w(self, format!("cp.async.wait_group {};", stages - 2));
+                if turing {
+                    let (loads, slot) = pending.take().expect("the loads are issued at substep 0");
+                    self.emit_int8_turing_store_tile(&loads, &slot);
+                } else {
+                    w(self, format!("cp.async.wait_group {};", stages - 2));
+                }
                 w(self, "bar.sync 0;".to_string());
             }
             if last && k_substeps == 1 {
@@ -535,8 +656,11 @@ impl PtxEmitter {
         w(self, format!("bra {};", k_top));
         writeln!(&mut self.ptx_buffer, "{}:", k_done).unwrap();
         // Every copy has landed and every warp is past its last ldmatrix
-        // before the next tile's prologue writes the stages again.
-        w(self, "cp.async.wait_all;".to_string());
+        // before the next tile's prologue writes the stages again. (Turing's
+        // stores were all made before the loop's last barrier.)
+        if !turing {
+            w(self, "cp.async.wait_all;".to_string());
+        }
         w(self, "bar.sync 0;".to_string());
 
         // ---- epilogue ----
@@ -713,6 +837,75 @@ impl PtxEmitter {
         writeln!(&mut self.ptx_buffer, "{}:", done).unwrap();
         w(self, "ret;".to_string());
         threads
+    }
+
+    /// sm_75's half of `emit_fp8_e4m3_copy_tile` (which issues `cp.async`):
+    /// one K tile's chunks of A and B at K offset `k0`, loaded into
+    /// registers by `ld.global.v4.u32`. A chunk the cp.async would copy with
+    /// size 0 (`valid` false past the last tile, a row past the matrix, a
+    /// chunk past K) is not loaded and its registers stay zero, as that copy
+    /// writes zeros. Returns each chunk's offset in the stage and its four
+    /// registers, for `emit_int8_turing_store_tile`.
+    fn emit_int8_turing_load_tile(&mut self, c: &Fp8E4m3Copies, k0: &str, valid: Option<&str>) -> Vec<(u32, [String; 4])> {
+        let k0_wide = self.alloc_reg64();
+        writeln!(&mut self.ptx_buffer, "    cvt.u64.u32 {}, {};", k0_wide, k0).unwrap();
+        let mut tile_ok = valid.map(str::to_string);
+        if c.k_ragged {
+            let kc = self.alloc_reg32();
+            writeln!(&mut self.ptx_buffer, "    add.u32 {}, {}, {};", kc, k0, c.k_byte).unwrap();
+            let p = self.alloc_pred();
+            writeln!(&mut self.ptx_buffer, "    setp.lt.u32 {}, {}, {};", p, kc, c.k).unwrap();
+            tile_ok = Some(match tile_ok {
+                Some(v) => {
+                    let q = self.alloc_pred();
+                    writeln!(&mut self.ptx_buffer, "    and.pred {}, {}, {};", q, v, p).unwrap();
+                    q
+                }
+                None => p,
+            });
+        }
+        let mut out = Vec::new();
+        for (g, preds, chunks, s_base) in [(&c.ga, &c.pa, c.chunks_a, 0u32), (&c.gb, &c.pb, c.chunks_b, c.stage_a_bytes)] {
+            let gaddr = self.alloc_reg64();
+            writeln!(&mut self.ptx_buffer, "    add.s64 {}, {}, {};", gaddr, g, k0_wide).unwrap();
+            for u in 0..chunks {
+                let guard = match (&tile_ok, &preds[u as usize]) {
+                    (None, None) => None,
+                    (Some(p), None) | (None, Some(p)) => Some(p.clone()),
+                    (Some(a), Some(b)) => {
+                        let q = self.alloc_pred();
+                        writeln!(&mut self.ptx_buffer, "    and.pred {}, {}, {};", q, a, b).unwrap();
+                        Some(q)
+                    }
+                };
+                let r: [String; 4] = std::array::from_fn(|_| self.alloc_reg32());
+                if guard.is_some() {
+                    for x in &r {
+                        writeln!(&mut self.ptx_buffer, "    mov.b32 {}, 0;", x).unwrap();
+                    }
+                }
+                let g_off = u64::from(u) * u64::from(c.rows_per_pass) * u64::from(c.k);
+                writeln!(
+                    &mut self.ptx_buffer,
+                    "    {}ld.global.v4.u32 {{{}}}, [{}+{}];",
+                    guard.map(|p| format!("@{} ", p)).unwrap_or_default(),
+                    r.join(","),
+                    gaddr,
+                    g_off
+                )
+                .unwrap();
+                out.push((s_base + u * c.rows_per_pass * c.cta_k, r));
+            }
+        }
+        out
+    }
+
+    /// The registers `emit_int8_turing_load_tile` filled, stored into the
+    /// stage at `slot` (the thread's own shared address in it).
+    fn emit_int8_turing_store_tile(&mut self, loads: &[(u32, [String; 4])], slot: &str) {
+        for (s_off, r) in loads {
+            writeln!(&mut self.ptx_buffer, "    st.shared.v4.u32 [{}+{}], {{{}}};", slot, s_off, r.join(",")).unwrap();
+        }
     }
 
     /// The output tile a linear tile id names, in grouped raster order:

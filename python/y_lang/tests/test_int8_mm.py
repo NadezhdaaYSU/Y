@@ -175,10 +175,78 @@ class ThePtx(unittest.TestCase):
 
 
 def gpu_ok():
-    return torch.cuda.is_available() and torch.cuda.get_device_capability() >= (8, 0)
+    # sm_75 (Turing) since 2026-11-18: the kernel is emitted there with four
+    # mma.m8n8k16 for each m16n8k32 and no cp.async.
+    return torch.cuda.is_available() and torch.cuda.get_device_capability() >= (7, 5)
 
 
-@unittest.skipUnless(gpu_ok(), "needs an sm_80 or later GPU")
+class TheKernelOnTheInterpreter(unittest.TestCase):
+    """The kernel's PTX for sm_80 and for sm_75, run on the CPU PTX
+    interpreter (`y_lang.interpreter`) against an int64 product: no GPU.
+
+    The sm_80 kernel's bits are established on GPUs, so its runs here check
+    the interpreter's `ldmatrix`, `cp.async` and m16n8k32 models; the sm_75
+    runs then check the Turing form's indexing, predicates and register
+    loads. Shapes cover rows, columns and K past the tile, K split over
+    gridDim.z, two stages, one 32-wide substep a tile and the large tile.
+    Some (K 224 on two stages, K 288 on four, K 416 on sm_75's decode tile)
+    load a full K tile into
+    the loop's registers before a ragged one, so a skipped load that is not
+    zeroed leaves the previous tile's bytes there; the interpreter's
+    registers start at zero, which hides that anywhere else (that mutation
+    passed every other shape). The interpreter runs a block's warps in
+    lockstep, so it cannot see a race across a barrier."""
+
+    CASES = [  # (M, N, K, gridDim.z, Y_INT8_TILE or None)
+        (16, 64, 64, 1, None), (32, 72, 96, 1, None), (48, 128, 64, 2, None), (32, 64, 256, 3, None),
+        (32, 64, 32, 1, None), (48, 72, 288, 1, None),
+        (48, 72, 160, 2, "64,64,64,2,2,2,4,16"), (32, 64, 224, 1, "64,64,64,2,2,2,4,16"),
+        (48, 72, 96, 2, "64,64,32,2,2,2,4,16"), (128, 128, 192, 1, "128,128,64,2,2,3,2,32"),
+        (32, 64, 128, 1, "32,64,64,2,2,2,8,16"),
+        # sm_75's own defaults: the decode tile (cta_k 128) with a ragged K
+        # tile after full ones in the loop, and the large tile at 64 tiles.
+        (32, 72, 416, 1, None), (256, 4096, 64, 1, None),
+    ]
+
+    def run_case(self, target, m, n, k, z, tile):
+        from y_lang.interpreter import CPUInterpreter
+        with pinned():
+            if tile:
+                os.environ["Y_INT8_TILE"] = tile
+            ptx = compile_to_ptx(G.source(m, n, k), target_sm=target, name=G.KERNEL_NAME)
+        threads, ctas = G.launch_geometry(ptx, m, n, k)
+        gen = torch.Generator().manual_seed(m * n + k)
+        a, b = int8((m, k), gen), int8((n, k), gen)
+        a[0, 0], b[0, 0], a[-1, -1], b[-1, -1] = -128, -128, 127, 127
+        c = torch.zeros((m, n), dtype=torch.int32) if z > 1 else torch.full((m, n), 12345, dtype=torch.int32)
+        CPUInterpreter(G.KERNEL_NAME, ptx=ptx).run((ctas, 1, z), (threads, 1, 1), [a, b, c])
+        want = a.to(torch.int64) @ b.to(torch.int64).t()
+        wrong = int((c.to(torch.int64) != want).sum())
+        self.assertEqual(wrong, 0, f"{target} {m}x{n}x{k} z={z} tile {tile}: {wrong} of {m * n} outputs wrong")
+        return ptx
+
+    def test_sm80(self):
+        for case in self.CASES:
+            ptx = self.run_case("sm_80", *case)
+            self.assertIn("mma.sync.aligned.m16n8k32", ptx)
+
+    def test_sm75(self):
+        for case in self.CASES:
+            ptx = self.run_case("sm_75", *case)
+            body = "\n".join(l.split("//")[0] for l in ptx.splitlines())
+            self.assertIn("mma.sync.aligned.m8n8k16.row.col.s32.s8.s8.s32", body)
+            self.assertNotIn("m16n8k32", body)
+            self.assertNotIn("cp.async", body)
+            self.assertIn(".version 6.5", ptx)
+
+    def test_below_sm75_is_refused(self):
+        with pinned():
+            with self.assertRaises(Exception) as e:
+                compile_to_ptx(G.source(32, 64, 64), target_sm="sm_70", name=G.KERNEL_NAME)
+        self.assertRegex(str(e.exception), "ldmatrix|m8n8k16")
+
+
+@unittest.skipUnless(gpu_ok(), "needs an sm_75 or later GPU")
 class OnTheGpu(unittest.TestCase):
     def setUp(self):
         self.gen = torch.Generator().manual_seed(11)

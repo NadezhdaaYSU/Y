@@ -685,8 +685,12 @@ const ARCH_FEATURES: &[ArchFeature] = &[
     ArchFeature { what: "`mma.sync` m16n8k8 on bf16 or tf32", min_sm: 80, min_ptx: "7.0", matches: |op| is_mma(op) && op.contains(".m16n8k8.") && names_bf16_or_tf32(op) },
     ArchFeature { what: "`mma.sync` m16n8k8", min_sm: 75, min_ptx: "6.5", matches: |op| is_mma(op) && op.contains(".m16n8k8.") && !names_bf16_or_tf32(op) },
     ArchFeature { what: "`mma.sync` m8n8k4", min_sm: 70, min_ptx: "6.4", matches: |op| is_mma(op) && op.contains(".m8n8k4.") },
+    // The int8 GEMM's Turing form. Measured 2026-11-18 with ptxas 13.4 and
+    // Triton's 12.8: "Feature '.m8n8k16' requires .target sm_75 or higher"
+    // at sm_72, "requires PTX ISA .version 6.5 or later" at 6.4.
+    ArchFeature { what: "integer `mma.sync` m8n8k16", min_sm: 75, min_ptx: "6.5", matches: |op| is_mma(op) && op.contains(".m8n8k16.") },
     // m16n8k16 and m16n8k32, measured; any other shape conservatively with them.
-    ArchFeature { what: "`mma.sync` m16n8k16 / m16n8k32", min_sm: 80, min_ptx: "7.0", matches: |op| is_mma(op) && !names_fp8(op) && !op.contains(".m16n8k8.") && !op.contains(".m8n8k4.") },
+    ArchFeature { what: "`mma.sync` m16n8k16 / m16n8k32", min_sm: 80, min_ptx: "7.0", matches: |op| is_mma(op) && !names_fp8(op) && !op.contains(".m16n8k8.") && !op.contains(".m8n8k4.") && !op.contains(".m8n8k16.") },
     ArchFeature { what: "`wmma` on bf16 or tf32", min_sm: 80, min_ptx: "7.0", matches: |op| op.starts_with("wmma.") && names_bf16_or_tf32(op) },
     // Conservative: int8 `wmma` is sm_72.
     ArchFeature { what: "integer `wmma`", min_sm: 75, min_ptx: "6.3", matches: |op| op.starts_with("wmma.") && names_sub_byte_int(op) && !names_bf16_or_tf32(op) },
@@ -10653,7 +10657,7 @@ declare it as a Q format.\n{}",
             return 32;
         }
 
-        match int8_staged_gemm::int8_staged_tile(m, n, k) {
+        match int8_staged_gemm::int8_staged_tile(m, n, k, self.sm_level()) {
             Ok(t) => self.emit_int8_staged_gemm_kernel(m, n, k, a_ptr, b_ptr, c_ptr, kernel_name, epi, t),
             Err(why) => {
                 self.emit_errors.push(format!("[PTX] `{}`: {}", kernel_name, why));

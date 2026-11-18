@@ -36,6 +36,7 @@ const PROBES: &[(&str, &str, bool)] = &[
     ("`mma.sync` m16n8k8 on bf16 or tf32", "mma.sync.aligned.m16n8k8.row.col.f32.tf32.tf32.f32 {%f0,%f1,%f2,%f3}, {%r1,%r2,%r3,%r4}, {%r5,%r6}, {%f0,%f1,%f2,%f3};", true),
     ("`mma.sync` m16n8k8", "mma.sync.aligned.m16n8k8.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r1,%r2}, {%r3}, {%f0,%f1,%f2,%f3};", true),
     ("`mma.sync` m8n8k4", "mma.sync.aligned.m8n8k4.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3,%f4,%f5,%f6,%f7}, {%r1,%r2}, {%r3,%r4}, {%f0,%f1,%f2,%f3,%f4,%f5,%f6,%f7};", true),
+    ("integer `mma.sync` m8n8k16", "mma.sync.aligned.m8n8k16.row.col.s32.s8.s8.s32 {%r1,%r2}, {%r3}, {%r4}, {%r1,%r2};", true),
     ("`mma.sync` m16n8k16 / m16n8k32", "mma.sync.aligned.m16n8k16.row.col.f32.f16.f16.f32 {%f0,%f1,%f2,%f3}, {%r1,%r2,%r3,%r4}, {%r5,%r6}, {%f0,%f1,%f2,%f3};", true),
     ("`wmma` on bf16 or tf32", "wmma.load.a.sync.aligned.row.m16n16k16.global.bf16 {%r1,%r2,%r3,%r4}, [%rd1];", true),
     ("integer `wmma`", "wmma.load.a.sync.aligned.row.m16n16k16.global.s8 {%r1,%r2}, [%rd1];", false),
