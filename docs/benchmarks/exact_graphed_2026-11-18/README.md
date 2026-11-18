@@ -172,6 +172,44 @@ more for long outputs. The first try of this sweep failed to link
 (`torch.compile` reached torch through the path with a space); the command
 in the script's docstring is the one that works.
 
+## Where a graphed step's GPU time goes
+
+`profile_step.py` records a `GraphedGreedy` and profiles 16 decode steps run
+through the compiled step directly (the kernels the graph replays). RTX 4070
+Ti SUPER, aa7a8b8, batch 32, no game before or after (`profile_step/`).
+Milliseconds a step:
+
+| | Stock bf16 | Exact, defaults | Exact, every switch |
+|---|---|---|---|
+| Graphed step, wall | 3.251 | 3.144 | 2.427 |
+| GPU kernels | 3.223 (470) | 3.030 (512) | 2.364 (502) |
+| Linear layers | 2.274 | 1.303 | 1.313 |
+| Attention | 0.771 | 0.393 or more | 0.369 |
+| Inductor's fused kernels | 0.173 | 1.328 | 0.515 |
+| Other (Triton norm) | 0.006 | 0.006 | 0.167 |
+
+(Kernel counts in brackets.) The logs' own group totals put three
+kernels under GEMM that belong to attention: PyTorch's mem-efficient SDPA
+(`fmha_cutlassF`, 489 us, stock) and two cuBLAS strided-batched float
+kernels (263 and 130 us, the exact default's Q.K^T and P.V). The table
+moves them; the script now groups them as attention. The exact default's
+attention may hold more than 0.393 ms, in fused kernels not listed.
+
+- The wall time is within 4% of the GPU time: the graph left the GPU no
+  idle time to speak of.
+- Every switch saves the exact default's fused quantise kernels (1.328 to
+  0.515 ms) and its float attention (0.393 to 0.369 ms, now Y's
+  `exact_decode_attention`), and pays 0.167 ms for the Triton norm.
+- The int8 linear layers move about 494 MB of weights a step (358 MB in
+  the layers, 136 MB in `lm_head`). At 1.313 ms that is 376 GB/s, 56% of
+  the card's 672 GB/s; `lm_head` alone reaches about 78%
+  (`profile_step/w8a8_shape_sweep_m32.log`, `tools/w8a8_shape_sweep.py`),
+  so the per-layer GEMMs run near 51% in place. Stock's bf16 linears move
+  988 MB in 2.274 ms, 65%. If the layer GEMMs reached `lm_head`'s 78%, the
+  step would lose about 0.37 ms (16%). That is the largest lever left on
+  this GPU. The T4 does not run this kernel (its int8 GEMM is
+  `torch._int_mm`); job i (`y-t4-graphed-i`) profiles the T4's step.
+
 ## What this means
 
 - With every switch, the exact path is now faster than stock on both GPUs:
@@ -225,4 +263,6 @@ tokens per second per sequence):
   notebook's console as `job_*_console.log`). `make_t4_graphed_job.py`
   writes those Kaggle jobs.
 - `capacity_sweep.py`, `capacity_sweep/`: the buffer-size sweep.
+- `profile_step.py`, `profile_step/`: the per-kernel profile of a graphed
+  step, and the GEMM shape sweep's output.
 - `prototype/`: the first scripts.

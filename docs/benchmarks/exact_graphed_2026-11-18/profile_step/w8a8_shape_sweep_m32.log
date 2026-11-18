@@ -1,0 +1,17 @@
+# tools/w8a8_shape_sweep.py --m 32, RTX 4070 Ti SUPER, 2026-11-18 20:30, HEAD aa7a8b8.
+# Console tail (profiler start/stop lines dropped). No game before or after.
+
+W8A8 decode GEMMs at M=32   SM clock 2685/3120 MHz   peak 672 GB/s over 66 SMs
+  weights are COLD (rotated over >L2 of distinct copies), which is the regime a decode step is in
+
+shape            N     K     MB  hot-tuned      us  %pk  blk     best cold      us  %pk  blk   gain
+q_proj         896   896   0.80      32x64     4.8  25%   28        64x128     4.4  27%   14  1.08x
+k/v_proj       128   896   0.11      32x64     3.4   5%    4         32x64     3.4   5%    4  1.00x
+o_proj         896   896   0.80      32x64     4.4  27%   28         32x64     4.4  27%   28  1.00x
+gate/up       4864   896   4.36     128x64    17.5  37%   38        128x64    17.5  37%   38  1.00x
+down_proj      896  4864   4.36     split4    30.7  21%   56        32x128    26.4  25%   28  1.16x
+lm_head     151936   896 136.13     128x32   258.7  78% 1187        256x32   258.4  78%  594  1.00x
+
+  per decode step: hot-tuned 2217 us, cold-tuned 2105 us  ->  1.05x on the GEMM alone
+  both columns are measured COLD; only the TUNING regime differs, so this is the A/B for the whole finding
+  the cold choice differs from the hot one on: q_proj (32x64->64x128, 1.08x), down_proj (split4->32x128, 1.16x), lm_head (128x32->256x32, 1.00x)

@@ -1,0 +1,28 @@
+NVIDIA GeForce RTX 4070 Ti SUPER, stock bfloat16, batch 32; switches: Y_EXACT_ATTN=y Y_EXACT_KV_PACK=inplace Y_EXACT_NORM=triton Y_EXACT_V_INT8=1
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  47%|████▋     | 135/290 [00:00<00:00, 1339.10it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1650.06it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+W1118 20:26:41.832000 430597 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-18 20:29:10 430597:430597 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-18 20:29:10 430597:430597 SyncActivityProfilerHandler.cpp:59] profiler_stop
+
+exact: graphed step 2.427 ms wall (best of 5); GPU kernels 2.364 ms a step, 502 kernels
+  GEMM              1.313 ms   55.6%
+  Inductor fused    0.515 ms   21.8%
+  attention         0.369 ms   15.6%
+  other             0.167 ms    7.1%
+  top kernels (us a step, launches a step):
+       976.5   97.0  [GEMM] _w8a8_gemm
+       336.7   24.0  [GEMM] _w8a8_gemm_splitk
+       308.0   24.0  [attention] exact_decode_attention
+       161.4   49.0  [other] _rms_norm_kernel
+       140.5   24.0  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_nu
+        77.8   49.0  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_1
+        62.3   24.0  [Inductor fused] triton_per_fused_abs_add_amax_cat_index_mul_neg_slice_split_with_sizes_transpose_unsqueeze_view_3
+        48.8   24.0  [attention] triton_per_fused__to_copy_abs_add_amax_bitwise_and_cat_clamp_div_eq_exact_decode_attention_index_le_lt_mul_neg
+        39.2   24.0  [Inductor fused] triton_per_fused__to_copy_abs_amax_clamp_div_eq_ones_like_round_view_where_9
+        35.3   24.0  [Inductor fused] triton_poi_fused___rshift____to_copy_add_arange_bitwise_and_bitwise_xor_clamp_constant_pad_nd_div_eq_index_cop
+        31.3    1.0  [Inductor fused] triton_red_fused_argmax_select_view_13
+        28.6   24.0  [Inductor fused] triton_poi_fused__to_copy_add_div_eq_mul_ones_like_unsqueeze_view_where_12
+        27.8   24.0  [Inductor fused] triton_poi_fused___rshift____to_copy_arange_bitwise_and_bitwise_xor_clamp_div_eq_index_index_copy_lt_mul_ones_
+        27.2   24.0  [Inductor fused] triton_per_fused_abs_add_amax_split_with_sizes_transpose_view_5

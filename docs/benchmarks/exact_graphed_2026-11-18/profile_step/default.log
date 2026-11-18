@@ -1,0 +1,51 @@
+NVIDIA GeForce RTX 4070 Ti SUPER, stock bfloat16, batch 32; switches: none
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 29719.22it/s]
+W1118 20:21:49.914000 428186 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [1/0] Not enough SMs to use max_autotune_gemm mode
+USDT:2026-11-18 20:21:55 428186:428186 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-18 20:21:55 428186:428186 SyncActivityProfilerHandler.cpp:59] profiler_stop
+
+stock: graphed step 3.251 ms wall (best of 5); GPU kernels 3.223 ms a step, 470 kernels
+  GEMM              2.763 ms   85.7%
+  attention         0.282 ms    8.8%
+  Inductor fused    0.173 ms    5.4%
+  other             0.006 ms    0.2%
+  top kernels (us a step, launches a step):
+       799.3   48.0  [GEMM] void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_64x2_tn_align8>(cutlass_80_wmma_ten
+       600.6   48.0  [GEMM] void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x2_tn_align8>(cutlass_80_wmma_te
+       489.0   24.0  [GEMM] fmha_cutlassF_bf16_aligned_64x64_rf_sm80(PyTorchMemEffAttention::AttentionKernel<cutlass::bfloat16_t, cutlass:
+       482.5    1.0  [GEMM] void cutlass::Kernel2<cutlass_80_tensorop_bf16_s16816gemm_relu_bf16_128x64_64x4_tn_align8>(cutlass_80_tensorop
+       246.7   48.0  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_bitwise_and_bmm_cat_clone_c
+       166.8   24.0  [GEMM] void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_16x16_128x2_tn_align8>(cutlass_80_wmma_te
+       112.1   48.0  [GEMM] void cutlass::Kernel2<cutlass_80_wmma_tensorop_bf16_s161616gemm_bf16_32x32_128x1_tn_align8>(cutlass_80_wmma_te
+        82.4   48.0  [GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __n
+        30.8   24.0  [Inductor fused] triton_poi_fused__unsafe_view_mul_silu_7
+        30.0   24.0  [GEMM] void cublasLt::splitKreduce_kernel<32, 16, int, __nv_bfloat16, __nv_bfloat16, float, __nv_bfloat16, false, __n
+        28.8   24.0  [attention] triton_poi_fused__scaled_dot_product_efficient_attention__to_copy__unsafe_view_add_bitwise_and_bmm_cat_clone_c
+        28.6    1.0  [Inductor fused] triton_red_fused__to_copy__unsafe_view_argmax_select_15
+        26.6   24.0  [Inductor fused] triton_poi_fused__to_copy_add_bmm_cat_cos_expand_index_copy_mul_neg_sin_slice_transpose_unsqueeze_view_1
+        21.8   24.0  [Inductor fused] triton_poi_fused_index_copy_transpose_view_2
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  52%|█████▏    | 151/290 [00:00<00:00, 1464.00it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1787.36it/s]
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+USDT:2026-11-18 20:24:53 428186:428186 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-18 20:24:53 428186:428186 SyncActivityProfilerHandler.cpp:59] profiler_stop
+
+exact: graphed step 3.144 ms wall (best of 5); GPU kernels 3.030 ms a step, 512 kernels
+  GEMM              1.696 ms   56.0%
+  Inductor fused    1.328 ms   43.8%
+  other             0.006 ms    0.2%
+  top kernels (us a step, launches a step):
+       964.9   97.0  [GEMM] _w8a8_gemm
+       338.2   24.0  [GEMM] _w8a8_gemm_splitk
+       263.3   96.0  [GEMM] void gemmSN_NN_kernel<float, 256, 4, 2, 8, 4, 4, false, cublasGemvTensorStridedBatched<float const>, cublasGem
+       243.3   24.0  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_gt
+       175.6   24.0  [Inductor fused] triton_per_fused__to_copy_abs_add_amax_clamp_div_eq_gt_mul_ones_like_round_transpose_view_where_7
+       173.0   22.0  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_on
+       171.5   23.0  [Inductor fused] triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_on
+       140.6   24.0  [Inductor fused] triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_clamp_clamp_max_div_eq_ge_index_le_mul_nan_to_nu
+       129.8   24.0  [GEMM] void gemmSN_TN_kernel<float, 128, 16, 2, 4, 8, 9, false, cublasGemvTensorStridedBatched<float const>, cublasGe
+       123.9   24.0  [Inductor fused] triton_per_fused_abs_amax_clamp_div_eq_ones_like_round_where_5
+       121.7   24.0  [Inductor fused] triton_per_fused_abs_amax_clamp_div_eq_ones_like_round_where_3
+        44.1   24.0  [Inductor fused] triton_per_fused_abs_add_amax_cat_clamp_div_eq_index_mul_neg_ones_like_round_slice_split_with_sizes_transpose_
+        31.5    1.0  [Inductor fused] triton_red_fused_argmax_select_view_15
+        25.6   24.0  [Inductor fused] triton_poi_fused_add_cat_index_index_copy_mul_neg_slice_split_with_sizes_transpose_unsqueeze_view_2
