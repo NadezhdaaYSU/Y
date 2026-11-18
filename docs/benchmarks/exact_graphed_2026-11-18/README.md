@@ -181,9 +181,10 @@ Kaggle machine of the same kind):
 | 128 | 12.078 | 9.307 | 6.843 |
 | 256 | 15.666 | 12.485 | 7.438 |
 
-Same tokens at every size, each arm. From 92 to 128 rows a row costs stock
-about 20 us a step, the exact default about 11 us and every switch about
-4 us. The greedy loop attends over 29 to 92 rows (60 on average) where the
+Same tokens at every size, each arm. From 96 to 128 rows a row costs stock
+about 21 us a step, the exact default about 11 us and every switch about
+4 us (the exact default at 92 rows was slower than at 96, so 96 is the
+start). The greedy loop attends over 29 to 92 rows (60 on average) where the
 graphed step attends over 96, so for stock the spare rows come to about
 0.6 ms a step if that cost holds below 92 rows (not measured). That is
 about the gap between stock's graphed and greedy loops on the T4: 11.3
