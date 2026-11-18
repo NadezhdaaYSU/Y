@@ -159,10 +159,11 @@ This matches the estimates from jobs e and f (1.13x and 1.44x).
   (1.00x) and is faster on the T4 (1.19x against graphed stock, 1.13x
   against greedy stock in one process).
 - Every switch is still opt-in. With graphs it is the faster setting on
-  both GPUs; without graphs it is slower on the T4 (1.30x). Turning it on by
-  default would also change what the exact path computes (the int8 V cache
-  rounds V), so its recorded token digests would have to be checked or made
-  again. Not done here.
+  both GPUs; without graphs it is slower on the T4 (1.30x). The switches do
+  not change the tokens (same 64-token reference and hash, each alone and
+  all together, eager and compiled:
+  `../exact_speed_05b_2026-11-17/`), so turning them on when decoding is
+  graphed would be a choice about speed only. Not done here.
 
 ## Limits
 
