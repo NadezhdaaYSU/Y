@@ -2026,7 +2026,11 @@ decode step one CUDA graph for both arms (`y_lang.exact.graphed`,
 2026-11-18), every switch takes 0.79x of stock's time on the RTX 4070 Ti
 SUPER and 0.65x on the T4 (0.70x against the T4's faster ungraphed stock,
 in one process), and the defaults 1.00x and 0.84x, with the same tokens
-(`docs/benchmarks/exact_graphed_2026-11-18/`). From 9f0c685
+(`docs/benchmarks/exact_graphed_2026-11-18/`). On the T4 with Y's int8 GEMM
+in its Turing form (four mma.m8n8k16 for each m16n8k32, no cp.async;
+2026-11-18), every switch graphed is 1.61x faster than ungraphed stock in
+one process, 1.25x at the defaults
+(`docs/benchmarks/int8_turing_2026-11-18/`). From 9f0c685
 (2026-11-04) to 328c6aa the timing tool made the compiled stock arm compute
 every prompt position's logits in the prefill, which flattered exact by 1%
 to 2% at 0.5B. Its size in the 7B stock comparisons below was not measured. At

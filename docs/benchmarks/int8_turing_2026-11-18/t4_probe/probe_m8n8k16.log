@@ -1,0 +1,11 @@
+Tesla T4 sm_75, torch 2.13.0+cu126
+  m8n8k16, seed 1: 64/64 outputs exact
+  four m8n8k16 as one m16n8k32, seed 1: 128/128 outputs exact
+  control (a1 and a2 swapped), seed 1: 128/128 outputs wrong (must be > 0)
+  m8n8k16, seed 2: 64/64 outputs exact
+  four m8n8k16 as one m16n8k32, seed 2: 128/128 outputs exact
+  control (a1 and a2 swapped), seed 2: 128/128 outputs wrong (must be > 0)
+  m8n8k16, seed 3: 64/64 outputs exact
+  four m8n8k16 as one m16n8k32, seed 3: 128/128 outputs exact
+  control (a1 and a2 swapped), seed 3: 128/128 outputs wrong (must be > 0)
+PROBE PASSED

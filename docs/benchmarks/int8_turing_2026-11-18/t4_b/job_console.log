@@ -1,0 +1,180 @@
+[{"stream_name":"stderr","time":11.241331555,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":11.241384574,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":11.241389514,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":11.241392422,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":11.959111524,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":11.959144193,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":11.959147273,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":11.959149681,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":13.390670442,"data":"index, name, compute_cap, driver_version, clocks.max.sm [MHz]\r\n"}
+,{"stream_name":"stdout","time":13.390701105,"data":"0, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":13.390705446,"data":"1, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":13.514384798,"data":"CPU(s):                                  4\r\n"}
+,{"stream_name":"stdout","time":13.514412172,"data":"Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz\r\n"}
+,{"stream_name":"stdout","time":212.456625582,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":212.456663128,"data":"easyocr 1.7.2 requires torchvision\u003e=0.5, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":212.456669745,"data":"fastai 2.8.12 requires torchvision\u003e=0.11, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":212.456674919,"data":"timm 1.0.30 requires torchvision, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":212.456679795,"data":"libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":212.456684575,"data":"cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":212.456689275,"data":"cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":212.456693744,"data":"libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":212.45669824,"data":"cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":212.456703141,"data":"libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":212.456708665,"data":"libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":266.043876127,"data":"\u001b[0mliby.so sha256 5c26fe725eb35a5d\n"}
+,{"stream_name":"stdout","time":266.043912763,"data":"exact_throughput has --stock-dtype: True\n"}
+,{"stream_name":"stdout","time":266.043931008,"data":"exact_throughput has with_attention: True\n"}
+,{"stream_name":"stderr","time":267.435511215,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":267.435557105,"data":"\n"}
+,{"stream_name":"stderr","time":267.435562064,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":291.071101858,"data":"torch 2.13.0+cu126 transformers 5.15.0 Tesla T4\n"}
+,{"stream_name":"stdout","time":303.181868165,"data":"\r\n"}
+,{"stream_name":"stdout","time":303.181898534,"data":"  \u001b[1m\u001b[92m1.97.1-x86_64-unknown-linux-gnu installed\u001b[0m - rustc 1.97.1 (8bab26f4f 2026-07-14)\r\n"}
+,{"stream_name":"stdout","time":303.181905363,"data":"\r\n"}
+,{"stream_name":"stdout","time":303.181909639,"data":"\u001b[0m\u001b[1m\r\n"}
+,{"stream_name":"stdout","time":303.181913832,"data":"Rust is installed now. Great!\r\n"}
+,{"stream_name":"stdout","time":303.181918115,"data":"\u001b[0m\r\n"}
+,{"stream_name":"stdout","time":303.181927976,"data":"To get started you may need to restart your current shell.\r\n"}
+,{"stream_name":"stdout","time":303.18193133,"data":"This would reload your \u001b[0m\u001b[1mPATH\u001b[0m environment variable to include\r\n"}
+,{"stream_name":"stdout","time":303.181934527,"data":"Cargo's bin directory ($HOME/.cargo/bin).\r\n"}
+,{"stream_name":"stdout","time":303.181937473,"data":"\r\n"}
+,{"stream_name":"stdout","time":303.181940165,"data":"To configure your current shell, you need to source the\r\n"}
+,{"stream_name":"stdout","time":303.181947192,"data":"corresponding \u001b[0m\u001b[1menv\u001b[0m file under $HOME/.cargo.\r\n"}
+,{"stream_name":"stdout","time":303.181950524,"data":"\r\n"}
+,{"stream_name":"stdout","time":303.181953326,"data":"Consider running the right command for your shell (note the leading DOT):\r\n"}
+,{"stream_name":"stdout","time":303.18195774,"data":". \"$HOME/.cargo/env\" # For sh/ash/dash/pdksh/bash\r\n"}
+,{"stream_name":"stdout","time":303.181989826,"data":"cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu\r\n"}
+,{"stream_name":"stdout","time":303.181996992,"data":"CC_x86_64-unknown-linux-gnu = None\r\n"}
+,{"stream_name":"stdout","time":303.182001669,"data":"cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu\r\n"}
+,{"stream_name":"stdout","time":303.182005961,"data":"CC_x86_64_unknown_linux_gnu = None\r\n"}
+,{"stream_name":"stdout","time":303.182010107,"data":"cargo:rerun-if-env-changed=HOST_CC\r\n"}
+,{"stream_name":"stdout","time":303.1820143,"data":"HOST_CC = None\r\n"}
+,{"stream_name":"stdout","time":303.182018448,"data":"cargo:rerun-if-env-changed=CC\r\n"}
+,{"stream_name":"stdout","time":303.182022851,"data":"CC = None\r\n"}
+,{"stream_name":"stdout","time":303.182032145,"data":"cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT\r\n"}
+,{"stream_name":"stdout","time":303.357070858,"data":"cargo:rerun-if-env-changed=CPATH\r\n"}
+,{"stream_name":"stdout","time":303.357092834,"data":"cargo:rerun-if-env-changed=C_INCLUDE_PATH\r\n"}
+,{"stream_name":"stdout","time":303.357113123,"data":"cargo:rerun-if-env-changed=CPLUS_INCLUDE_PATH\r\n"}
+,{"stream_name":"stdout","time":303.357118738,"data":"cargo:rerun-if-env-changed=OBJC_INCLUDE_PATH\r\n"}
+,{"stream_name":"stdout","time":303.357123551,"data":"cargo:rerun-if-env-changed=OBJCPLUS_INCLUDE_PATH\r\n"}
+,{"stream_name":"stdout","time":303.357128442,"data":"cargo:rerun-if-env-changed=COMPILER_PATH\r\n"}
+,{"stream_name":"stdout","time":303.357142564,"data":"cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH\r\n"}
+,{"stream_name":"stdout","time":303.357146382,"data":"cargo:rerun-if-env-changed=GCC_EXEC_PREFIX\r\n"}
+,{"stream_name":"stdout","time":303.357149681,"data":"cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS\r\n"}
+,{"stream_name":"stdout","time":303.357153018,"data":"CRATE_CC_NO_DEFAULTS = None\r\n"}
+,{"stream_name":"stdout","time":303.357156264,"data":"cargo:rerun-if-env-changed=CFLAGS\r\n"}
+,{"stream_name":"stdout","time":303.357159543,"data":"CFLAGS = None\r\n"}
+,{"stream_name":"stdout","time":303.357162726,"data":"cargo:rerun-if-env-changed=HOST_CFLAGS\r\n"}
+,{"stream_name":"stdout","time":303.357165965,"data":"HOST_CFLAGS = None\r\n"}
+,{"stream_name":"stdout","time":303.357169156,"data":"cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu\r\n"}
+,{"stream_name":"stdout","time":303.357172489,"data":"CFLAGS_x86_64_unknown_linux_gnu = None\r\n"}
+,{"stream_name":"stdout","time":303.357176162,"data":"cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu\r\n"}
+,{"stream_name":"stdout","time":303.3571844,"data":"CFLAGS_x86_64-unknown-linux-gnu = None\r\n"}
+,{"stream_name":"stdout","time":303.505199101,"data":"rustc 1.97.1 (8bab26f4f 2026-07-14)\r\n"}
+,{"stream_name":"stdout","time":303.505224266,"data":"ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39\r\n"}
+,{"stream_name":"stdout","time":366.131702772,"data":"    Updating crates.io index\n"}
+,{"stream_name":"stdout","time":366.131753648,"data":" Downloading crates ...\n"}
+,{"stream_name":"stdout","time":366.131759777,"data":"  Downloaded cfg-if v1.0.4\n"}
+,{"stream_name":"stdout","time":366.131764358,"data":"  Downloaded block-buffer v0.10.4\n"}
+,{"stream_name":"stdout","time":366.131768977,"data":"  Downloaded crypto-common v0.1.7\n"}
+,{"stream_name":"stdout","time":366.131773516,"data":"  Downloaded const-oid v0.9.6\n"}
+,{"stream_name":"stdout","time":366.131777891,"data":"  Downloaded zeroize_derive v1.5.0\n"}
+,{"stream_name":"stdout","time":366.131782244,"data":"  Downloaded digest v0.10.7\n"}
+,{"stream_name":"stdout","time":366.131786691,"data":"  Downloaded subtle v2.6.1\n"}
+,{"stream_name":"stdout","time":366.131791154,"data":"  Downloaded generic-array v0.14.7\n"}
+,{"stream_name":"stdout","time":366.131806878,"data":"  Downloaded cpufeatures v0.2.17\n"}
+,{"stream_name":"stdout","time":366.131810459,"data":"  Downloaded version_check v0.9.5\n"}
+,{"stream_name":"stdout","time":366.13182861,"data":"  Downloaded sha2 v0.10.9\n"}
+,{"stream_name":"stdout","time":366.131834345,"data":"  Downloaded quote v1.0.47\n"}
+,{"stream_name":"stdout","time":366.131839523,"data":"  Downloaded unicode-ident v1.0.24\n"}
+,{"stream_name":"stdout","time":366.131844602,"data":"  Downloaded zeroize v1.9.0\n"}
+,{"stream_name":"stdout","time":366.131849529,"data":"  Downloaded proc-macro2 v1.0.107\n"}
+,{"stream_name":"stdout","time":366.131854006,"data":"  Downloaded typenum v1.20.1\n"}
+,{"stream_name":"stdout","time":366.131858417,"data":"  Downloaded syn v2.0.119\n"}
+,{"stream_name":"stdout","time":366.131862816,"data":"   Compiling version_check v0.9.5\n"}
+,{"stream_name":"stdout","time":366.131867192,"data":"   Compiling typenum v1.20.1\n"}
+,{"stream_name":"stdout","time":366.13187147,"data":"   Compiling cpufeatures v0.2.17\n"}
+,{"stream_name":"stdout","time":366.131875931,"data":"   Compiling cfg-if v1.0.4\n"}
+,{"stream_name":"stdout","time":366.131880552,"data":"   Compiling generic-array v0.14.7\n"}
+,{"stream_name":"stdout","time":366.131885003,"data":"   Compiling block-buffer v0.10.4\n"}
+,{"stream_name":"stdout","time":366.131889309,"data":"   Compiling crypto-common v0.1.7\n"}
+,{"stream_name":"stdout","time":366.131901713,"data":"   Compiling digest v0.10.7\n"}
+,{"stream_name":"stdout","time":366.131911176,"data":"   Compiling sha2 v0.10.9\n"}
+,{"stream_name":"stdout","time":366.131927287,"data":"   Compiling Y-compiler v1.0.0 (/kaggle/working/Y)\n"}
+,{"stream_name":"stdout","time":366.131931713,"data":"    Finished `release` profile [optimized] target(s) in 1m 02s\n"}
+,{"stream_name":"stdout","time":366.131935881,"data":"\n"}
+,{"stream_name":"stdout","time":366.131939696,"data":"cargo build exit 0 1.0 min\n"}
+,{"stream_name":"stdout","time":366.131943609,"data":"liby.so now 43570cabb1c793bd\n"}
+,{"stream_name":"stdout","time":382.25555782,"data":"    22.4 us    46.1 GB/s    14%   0.96x _int_mm  [CTA 64x64x64, 4 stages, 18 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255610823,"data":"    Y 32,64,64,2,2,2,8,16                24.0 us    43.1 GB/s    13%   0.90x _int_mm  [CTA 32x64x64, 2 stages, 18 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255614621,"data":"    Y 32,128,64,2,2,2,4,16               27.2 us    38.0 GB/s    12%   0.79x _int_mm  [CTA 32x128x64, 2 stages, 9 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.25561745,"data":"\n"}
+,{"stream_name":"stdout","time":382.255619867,"data":"  o  N=896 K=896  (0.80 MB of weights, 84 copies)\n"}
+,{"stream_name":"stdout","time":382.255622503,"data":"    Y 32,64,128,2,2,2,4,16               15.3 us    52.5 GB/s    16%   1.39x _int_mm  [CTA 32x64x128, 2 stages, 14 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255625098,"data":"    Y 32,32,64,2,2,2,8,16                18.7 us    42.9 GB/s    13%   1.14x _int_mm  [CTA 32x32x64, 2 stages, 28 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255627789,"data":"    torch._int_mm                        21.3 us    37.8 GB/s    12%   1.00x _int_mm  [cuBLASLt]\n"}
+,{"stream_name":"stdout","time":382.255630268,"data":"    Y 64,64,64,2,2,2,4,16                21.6 us    37.2 GB/s    12%   0.98x _int_mm  [CTA 64x64x64, 2 stages, 14 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255632806,"data":"    Y default                            22.0 us    36.4 GB/s    11%   0.97x _int_mm  [CTA 64x64x64, 4 stages, 14 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255635339,"data":"    Y 32,64,64,2,2,2,8,16                23.7 us    33.9 GB/s    11%   0.90x _int_mm  [CTA 32x64x64, 2 stages, 14 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255637964,"data":"    Y 32,128,64,2,2,2,4,16               26.9 us    29.8 GB/s     9%   0.79x _int_mm  [CTA 32x128x64, 2 stages, 7 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255640512,"data":"\n"}
+,{"stream_name":"stdout","time":382.255642839,"data":"  gate or up  N=4864 K=896  (4.36 MB of weights, 16 copies)\n"}
+,{"stream_name":"stdout","time":382.255645271,"data":"    Y 32,64,128,2,2,2,4,16               27.8 us   156.7 GB/s    49%   1.10x _int_mm  [CTA 32x64x128, 2 stages, 76 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255647896,"data":"    torch._int_mm                        30.6 us   142.4 GB/s    45%   1.00x _int_mm  [cuBLASLt]\n"}
+,{"stream_name":"stdout","time":382.255650365,"data":"    Y 32,32,64,2,2,2,8,16                33.9 us   128.6 GB/s    40%   0.90x _int_mm  [CTA 32x32x64, 2 stages, 152 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255652928,"data":"    Y 64,64,64,2,2,2,4,16                34.1 us   127.7 GB/s    40%   0.90x _int_mm  [CTA 64x64x64, 2 stages, 76 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255655549,"data":"    Y 32,128,64,2,2,2,4,16               34.9 us   124.8 GB/s    39%   0.88x _int_mm  [CTA 32x128x64, 2 stages, 38 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.25565814,"data":"    Y default                            35.1 us   124.0 GB/s    39%   0.87x _int_mm  [CTA 64x64x64, 4 stages, 76 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255672072,"data":"    Y 32,64,64,2,2,2,8,16                35.8 us   121.9 GB/s    38%   0.86x _int_mm  [CTA 32x64x64, 2 stages, 76 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255674914,"data":"\n"}
+,{"stream_name":"stdout","time":382.255677189,"data":"  down  N=896 K=4864  (4.36 MB of weights, 16 copies)\n"}
+,{"stream_name":"stdout","time":382.255679588,"data":"    Y 32,64,128,2,2,2,4,16               28.1 us   155.1 GB/s    48%   1.66x _int_mm  [CTA 32x64x128, 2 stages, 14 CTAs x z=2]\n"}
+,{"stream_name":"stdout","time":382.255682142,"data":"    Y 32,128,64,2,2,2,4,16               31.1 us   140.1 GB/s    44%   1.50x _int_mm  [CTA 32x128x64, 2 stages, 7 CTAs x z=5]\n"}
+,{"stream_name":"stdout","time":382.255684658,"data":"    Y 64,64,64,2,2,2,4,16                31.7 us   137.5 GB/s    43%   1.47x _int_mm  [CTA 64x64x64, 2 stages, 14 CTAs x z=5]\n"}
+,{"stream_name":"stdout","time":382.255687178,"data":"    Y default                            33.0 us   131.9 GB/s    41%   1.41x _int_mm  [CTA 64x64x64, 4 stages, 14 CTAs x z=5]\n"}
+,{"stream_name":"stdout","time":382.255689791,"data":"    Y 32,64,64,2,2,2,8,16                36.7 us   118.6 GB/s    37%   1.27x _int_mm  [CTA 32x64x64, 2 stages, 14 CTAs x z=5]\n"}
+,{"stream_name":"stdout","time":382.255692288,"data":"    torch._int_mm                        46.7 us    93.3 GB/s    29%   1.00x _int_mm  [cuBLASLt]\n"}
+,{"stream_name":"stdout","time":382.255694766,"data":"    Y 32,32,64,2,2,2,8,16                56.6 us    77.0 GB/s    24%   0.83x _int_mm  [CTA 32x32x64, 2 stages, 28 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255697282,"data":"\n"}
+,{"stream_name":"stdout","time":382.255699598,"data":"  lm_head  N=151936 K=896  (136.13 MB of weights, 2 copies)\n"}
+,{"stream_name":"stdout","time":382.25570203,"data":"    Y 32,64,128,2,2,2,4,16              786.7 us   173.0 GB/s    54%   1.02x _int_mm  [CTA 32x64x128, 2 stages, 2374 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255704598,"data":"    torch._int_mm                       802.4 us   169.6 GB/s    53%   1.00x _int_mm  [cuBLASLt]\n"}
+,{"stream_name":"stdout","time":382.255707076,"data":"    Y default                           961.8 us   141.5 GB/s    44%   0.83x _int_mm  [CTA 64x64x64, 4 stages, 2374 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255709683,"data":"    Y 32,128,64,2,2,2,4,16              982.4 us   138.6 GB/s    43%   0.82x _int_mm  [CTA 32x128x64, 2 stages, 1187 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255712197,"data":"    Y 64,64,64,2,2,2,4,16               996.8 us   136.6 GB/s    43%   0.81x _int_mm  [CTA 64x64x64, 2 stages, 2374 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255714894,"data":"    Y 32,64,64,2,2,2,8,16              1006.1 us   135.3 GB/s    42%   0.80x _int_mm  [CTA 32x64x64, 2 stages, 2374 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.25571745,"data":"    Y 32,32,64,2,2,2,8,16              1035.4 us   131.5 GB/s    41%   0.78x _int_mm  [CTA 32x32x64, 2 stages, 4748 CTAs x z=1]\n"}
+,{"stream_name":"stdout","time":382.255720057,"data":"\n"}
+,{"stream_name":"stdout","time":382.255722675,"data":"exit 0 16 s\n"}
+,{"stream_name":"stdout","time":382.25572507,"data":"1590 MHz, 35.21 W, 46\r\n"}
+,{"stream_name":"stdout","time":382.255727511,"data":"300 MHz, 11.15 W, 43\r\n"}
+,{"stream_name":"stdout","time":382.577440319,"data":"/kaggle/working/Y/python/y_lang/tests/test_int8_mm (unittest.loader._FailedTest./kaggle/working/Y/python/y_lang/tests/test_int8_mm) ... ERROR\n"}
+,{"stream_name":"stdout","time":382.577472362,"data":"\n"}
+,{"stream_name":"stdout","time":382.57747804,"data":"======================================================================\n"}
+,{"stream_name":"stdout","time":382.577497787,"data":"ERROR: /kaggle/working/Y/python/y_lang/tests/test_int8_mm (unittest.loader._FailedTest./kaggle/working/Y/python/y_lang/tests/test_int8_mm)\n"}
+,{"stream_name":"stdout","time":382.577500644,"data":"----------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":382.577502894,"data":"ImportError: Failed to import test module: /kaggle/working/Y/python/y_lang/tests/test_int8_mm\n"}
+,{"stream_name":"stdout","time":382.57750528,"data":"Traceback (most recent call last):\n"}
+,{"stream_name":"stdout","time":382.5775075,"data":"  File \"/usr/lib/python3.13/unittest/loader.py\", line 141, in loadTestsFromName\n"}
+,{"stream_name":"stdout","time":382.577509929,"data":"    module = __import__(module_name)\n"}
+,{"stream_name":"stdout","time":382.577512141,"data":"ModuleNotFoundError: No module named '/kaggle/working/Y/python/y_lang/tests/test_int8_mm'\n"}
+,{"stream_name":"stdout","time":382.577514534,"data":"\n"}
+,{"stream_name":"stdout","time":382.577516637,"data":"\n"}
+,{"stream_name":"stdout","time":382.577518765,"data":"----------------------------------------------------------------------\n"}
+,{"stream_name":"stdout","time":382.577521031,"data":"Ran 1 test in 0.000s\n"}
+,{"stream_name":"stdout","time":382.577523308,"data":"\n"}
+,{"stream_name":"stdout","time":382.577525481,"data":"FAILED (errors=1)\n"}
+,{"stream_name":"stdout","time":382.577527673,"data":"\n"}
+,{"stream_name":"stdout","time":382.577529797,"data":"exit 1 0 s\n"}
+,{"stream_name":"stdout","time":382.577532284,"data":"1590 MHz, 33.33 W, 46\r\n"}
+,{"stream_name":"stdout","time":382.577534597,"data":"300 MHz, 9.46 W, 43\r\n"}
+,{"stream_name":"stderr","time":386.353060669,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":386.353095451,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":386.551454497,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":386.551479958,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":387.366854515,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":387.452945773,"data":"[NbConvertApp] Writing 56855 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":389.986426698,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":390.546627836,"data":"[NbConvertApp] Writing 340360 bytes to __results__.html\n"}
+]

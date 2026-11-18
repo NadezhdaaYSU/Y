@@ -1,0 +1,27 @@
+test_a_split_launch_is_exact (test_int8_mm.OnTheGpu.test_a_split_launch_is_exact) ... ok
+test_compiled_with_no_graph_break (test_int8_mm.OnTheGpu.test_compiled_with_no_graph_break) ... /usr/local/lib/python3.13/dist-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+ok
+test_device_layout_refusals (test_int8_mm.OnTheGpu.test_device_layout_refusals) ... ok
+test_exact_across_the_row_buckets (test_int8_mm.OnTheGpu.test_exact_across_the_row_buckets) ... ok
+test_exact_at_the_licensed_k_with_full_range_products (test_int8_mm.OnTheGpu.test_exact_at_the_licensed_k_with_full_range_products) ... ok
+test_on_the_callers_stream (test_int8_mm.OnTheGpu.test_on_the_callers_stream) ... ok
+test_the_same_bits_as_cublaslt (test_int8_mm.OnTheGpu.test_the_same_bits_as_cublaslt) ... ok
+test_zero_rows (test_int8_mm.OnTheGpu.test_zero_rows) ... ok
+test_below_sm75_is_refused (test_int8_mm.TheKernelOnTheInterpreter.test_below_sm75_is_refused) ... ok
+test_sm75 (test_int8_mm.TheKernelOnTheInterpreter.test_sm75) ... ok
+test_sm80 (test_int8_mm.TheKernelOnTheInterpreter.test_sm80) ... ok
+test_the_launch_is_read_from_the_header_and_checked_against_it (test_int8_mm.ThePtx.test_the_launch_is_read_from_the_header_and_checked_against_it) ... ok
+test_the_ptx_depends_on_the_target_and_shape_only (test_int8_mm.ThePtx.test_the_ptx_depends_on_the_target_and_shape_only) ... ok
+test_a_reload_keeps_the_registration (test_int8_mm.TheRefusals.test_a_reload_keeps_the_registration) ... ok
+test_host_operands_of_a_legal_shape (test_int8_mm.TheRefusals.test_host_operands_of_a_legal_shape) ... ok
+test_shapes_and_types (test_int8_mm.TheRefusals.test_shapes_and_types) ... ok
+test_the_registered_op_refuses_with_the_same_messages (test_int8_mm.TheRefusals.test_the_registered_op_refuses_with_the_same_messages) ... ok
+test_every_row_count_has_a_bucket_at_most_one_step_above_it (test_int8_mm.TheRowBucket.test_every_row_count_has_a_bucket_at_most_one_step_above_it) ... ok
+test_never_more_splits_than_k_tiles_and_never_zero (test_int8_mm.TheSplitPolicy.test_never_more_splits_than_k_tiles_and_never_zero) ... ok
+test_the_factor_for_the_measured_shapes (test_int8_mm.TheSplitPolicy.test_the_factor_for_the_measured_shapes) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 33.442s
+
+OK

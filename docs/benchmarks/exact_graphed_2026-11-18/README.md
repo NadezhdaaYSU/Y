@@ -265,7 +265,10 @@ The logs already use the fixed grouping. Milliseconds a step:
 - Neither int8 GEMM the exact path has on Ada can take that work on the T4:
   Triton's int8 dot and Y's GEMM (`mma.m16n8k32`) both need sm_80. Turing
   has `mma.m8n8k16` for int8. A Y GEMM on that instruction, or a cuBLASLt
-  call with split-K, would be the way in.
+  call with split-K, would be the way in. (Done the next day, the first way:
+  `../int8_turing_2026-11-18/`. Y's GEMM on Turing is 1.02x to 1.62x
+  cuBLAS's speed at the decode shapes, and with every switch the exact path
+  is 1.61x faster than stock's faster loop on the T4.)
 
 ## What this means
 

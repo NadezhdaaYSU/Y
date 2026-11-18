@@ -1,0 +1,55 @@
+[{"stream_name":"stderr","time":9.135463508,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":9.13549719,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":9.13550106,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":9.135505357,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stderr","time":9.75500797,"data":"0.00s - Debugger warning: It seems that frozen modules are being used, which may\n"}
+,{"stream_name":"stderr","time":9.755035715,"data":"0.00s - make the debugger miss breakpoints. Please pass -Xfrozen_modules=off\n"}
+,{"stream_name":"stderr","time":9.755040636,"data":"0.00s - to python to disable frozen modules.\n"}
+,{"stream_name":"stderr","time":9.755044326,"data":"0.00s - Note: Debugging will proceed. Set PYDEVD_DISABLE_FILE_VALIDATION=1 to disable this validation.\n"}
+,{"stream_name":"stdout","time":10.974443865,"data":"index, name, compute_cap, driver_version, clocks.max.sm [MHz]\r\n"}
+,{"stream_name":"stdout","time":10.974476915,"data":"0, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":10.974480083,"data":"1, Tesla T4, 7.5, 580.178.04, 1590 MHz\r\n"}
+,{"stream_name":"stdout","time":11.093370063,"data":"CPU(s):                                  4\r\n"}
+,{"stream_name":"stdout","time":11.093414748,"data":"Model name:                              Intel(R) Xeon(R) CPU @ 2.00GHz\r\n"}
+,{"stream_name":"stdout","time":200.791022949,"data":"\u001b[31mERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.\r\n"}
+,{"stream_name":"stdout","time":200.791055403,"data":"easyocr 1.7.2 requires torchvision\u003e=0.5, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":200.791062045,"data":"fastai 2.8.12 requires torchvision\u003e=0.11, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":200.791067092,"data":"timm 1.0.30 requires torchvision, which is not installed.\r\n"}
+,{"stream_name":"stdout","time":200.79107154,"data":"libcuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":200.791076481,"data":"cuml-cu13 26.6.0 requires cuda-toolkit[cublas,cufft,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":200.791081693,"data":"cudf-cu13 26.6.0 requires cuda-toolkit[nvcc,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":200.791085964,"data":"libcugraph-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":200.791090572,"data":"cuda-python 13.0.3 requires cuda-bindings~=13.0.3, but you have cuda-bindings 12.9.7 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":200.791094943,"data":"libcuvs-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse,nvrtc]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\r\n"}
+,{"stream_name":"stdout","time":200.791099648,"data":"libraft-cu13 26.6.0 requires cuda-toolkit[cublas,curand,cusolver,cusparse]==13.*, but you have cuda-toolkit 12.6.3 which is incompatible.\u001b[0m\u001b[31m\r\n"}
+,{"stream_name":"stdout","time":344.943774911,"data":"\u001b[0mliby.so sha256 5c26fe725eb35a5d\n"}
+,{"stream_name":"stdout","time":344.943835252,"data":"exact_throughput has --stock-dtype: True\n"}
+,{"stream_name":"stdout","time":344.943852918,"data":"exact_throughput has with_attention: True\n"}
+,{"stream_name":"stderr","time":346.072294843,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stderr","time":346.072319721,"data":"\n"}
+,{"stream_name":"stderr","time":346.072324757,"data":"Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.\n"}
+,{"stream_name":"stdout","time":364.55404064,"data":"torch 2.13.0+cu126 transformers 5.15.0 Tesla T4\n"}
+,{"stream_name":"stdout","time":368.055121979,"data":"Tesla T4 sm_75, torch 2.13.0+cu126\n"}
+,{"stream_name":"stdout","time":368.055175283,"data":"  m8n8k16, seed 1: 64/64 outputs exact\n"}
+,{"stream_name":"stdout","time":368.055181553,"data":"  four m8n8k16 as one m16n8k32, seed 1: 128/128 outputs exact\n"}
+,{"stream_name":"stdout","time":368.055186279,"data":"  control (a1 and a2 swapped), seed 1: 128/128 outputs wrong (must be \u003e 0)\n"}
+,{"stream_name":"stdout","time":368.055191023,"data":"  m8n8k16, seed 2: 64/64 outputs exact\n"}
+,{"stream_name":"stdout","time":368.055194671,"data":"  four m8n8k16 as one m16n8k32, seed 2: 128/128 outputs exact\n"}
+,{"stream_name":"stdout","time":368.055198265,"data":"  control (a1 and a2 swapped), seed 2: 128/128 outputs wrong (must be \u003e 0)\n"}
+,{"stream_name":"stdout","time":368.055201978,"data":"  m8n8k16, seed 3: 64/64 outputs exact\n"}
+,{"stream_name":"stdout","time":368.055205378,"data":"  four m8n8k16 as one m16n8k32, seed 3: 128/128 outputs exact\n"}
+,{"stream_name":"stdout","time":368.055208917,"data":"  control (a1 and a2 swapped), seed 3: 128/128 outputs wrong (must be \u003e 0)\n"}
+,{"stream_name":"stdout","time":368.055212723,"data":"PROBE PASSED\n"}
+,{"stream_name":"stdout","time":368.055221273,"data":"\n"}
+,{"stream_name":"stdout","time":368.05522404,"data":"exit 0 3 s\n"}
+,{"stream_name":"stdout","time":368.055226367,"data":"585 MHz, 27.76 W, 38\r\n"}
+,{"stream_name":"stdout","time":368.055229153,"data":"300 MHz, 9.47 W, 36\r\n"}
+,{"stream_name":"stderr","time":371.539921188,"data":"/usr/local/lib/python3.13/dist-packages/mistune.py:435: SyntaxWarning: invalid escape sequence '\\|'\n"}
+,{"stream_name":"stderr","time":371.539965839,"data":"  cells[i][c] = re.sub('\\\\\\\\\\|', '|', cell)\n"}
+,{"stream_name":"stderr","time":371.700221119,"data":"/usr/local/lib/python3.13/dist-packages/nbconvert/filters/filter_links.py:36: SyntaxWarning: invalid escape sequence '\\_'\n"}
+,{"stream_name":"stderr","time":371.700253989,"data":"  text = re.sub(r'_', '\\_', text) # Escape underscores in display text\n"}
+,{"stream_name":"stderr","time":372.468440593,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to notebook\n"}
+,{"stream_name":"stderr","time":372.547191973,"data":"[NbConvertApp] Writing 45206 bytes to __notebook__.ipynb\n"}
+,{"stream_name":"stderr","time":375.050380254,"data":"[NbConvertApp] Converting notebook __notebook__.ipynb to html\n"}
+,{"stream_name":"stderr","time":375.579697406,"data":"[NbConvertApp] Writing 322212 bytes to __results__.html\n"}
+]

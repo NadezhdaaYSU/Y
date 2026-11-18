@@ -1,0 +1,161 @@
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+Tesla T4 sm_75, 40 SMs, torch 2.13.0+cu126
+round 2, same bits: all
+
+weights cold (copies rotated past the 4 MB L2), min of 9 rounds of 50 calls; peak 320.0 GB/s
+
+  q/k/v  M=32 N=1152 K=896  (1.03 MB of weights, 66 copies)
+    Y 32,64,128,2,2,2,4,16               15.1 us    68.5 GB/s    21%   1.38x _int_mm  [CTA 32x64x128, 2 stages, 18 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16               15.4 us    66.8 GB/s    21%   1.35x _int_mm  [CTA 32x64x128, 2 stages, 18 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16               16.0 us    64.5 GB/s    20%   1.30x _int_mm  [CTA 32x64x128, 3 stages, 18 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16               16.7 us    62.0 GB/s    19%   1.25x _int_mm  [CTA 64x64x128, 2 stages, 18 CTAs x z=1]
+    torch._int_mm                        20.8 us    49.6 GB/s    16%   1.00x _int_mm  [cuBLASLt]
+    Y 32,128,128,2,4,2,2,16              21.0 us    49.2 GB/s    15%   0.99x _int_mm  [CTA 32x128x128, 2 stages, 9 CTAs x z=1]
+    Y default                            21.7 us    47.5 GB/s    15%   0.96x _int_mm  [CTA 64x64x64, 4 stages, 18 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16              25.6 us    40.3 GB/s    13%   0.81x _int_mm  [CTA 64x128x128, 2 stages, 9 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32              36.1 us    28.6 GB/s     9%   0.58x _int_mm  [CTA 128x128x64, 2 stages, 9 CTAs x z=1]
+    Y 128,128,128,2,2,2,1,32             43.7 us    23.6 GB/s     7%   0.48x _int_mm  [CTA 128x128x128, 2 stages, 9 CTAs x z=1]
+
+  o  M=32 N=896 K=896  (0.80 MB of weights, 84 copies)
+    Y 32,64,128,2,2,2,4,16               11.6 us    69.3 GB/s    22%   1.34x _int_mm  [CTA 32x64x128, 2 stages, 14 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16               12.2 us    65.8 GB/s    21%   1.27x _int_mm  [CTA 64x64x128, 2 stages, 14 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16               12.3 us    65.2 GB/s    20%   1.26x _int_mm  [CTA 32x64x128, 3 stages, 14 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16               12.7 us    63.1 GB/s    20%   1.22x _int_mm  [CTA 32x64x128, 2 stages, 14 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16              15.1 us    53.1 GB/s    17%   1.03x _int_mm  [CTA 32x128x128, 2 stages, 7 CTAs x z=1]
+    torch._int_mm                        15.5 us    51.7 GB/s    16%   1.00x _int_mm  [cuBLASLt]
+    Y default                            16.1 us    49.9 GB/s    16%   0.96x _int_mm  [CTA 64x64x64, 4 stages, 14 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16              21.3 us    37.8 GB/s    12%   0.73x _int_mm  [CTA 64x128x128, 2 stages, 7 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32              25.4 us    31.6 GB/s    10%   0.61x _int_mm  [CTA 128x128x64, 2 stages, 7 CTAs x z=1]
+    Y 128,128,128,2,2,2,1,32             29.9 us    26.9 GB/s     8%   0.52x _int_mm  [CTA 128x128x128, 2 stages, 7 CTAs x z=1]
+
+  gate or up  M=32 N=4864 K=896  (4.36 MB of weights, 16 copies)
+    Y 32,64,128,1,4,2,4,16               27.7 us   157.5 GB/s    49%   1.11x _int_mm  [CTA 32x64x128, 2 stages, 76 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16               27.9 us   156.3 GB/s    49%   1.10x _int_mm  [CTA 64x64x128, 2 stages, 76 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16               27.9 us   156.3 GB/s    49%   1.10x _int_mm  [CTA 32x64x128, 2 stages, 76 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16              28.5 us   153.1 GB/s    48%   1.08x _int_mm  [CTA 32x128x128, 2 stages, 38 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16              28.6 us   152.4 GB/s    48%   1.07x _int_mm  [CTA 64x128x128, 2 stages, 38 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16               29.2 us   149.0 GB/s    47%   1.05x _int_mm  [CTA 32x64x128, 3 stages, 76 CTAs x z=1]
+    torch._int_mm                        30.7 us   142.0 GB/s    44%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,128,2,2,2,1,32             32.8 us   132.7 GB/s    41%   0.93x _int_mm  [CTA 128x128x128, 2 stages, 38 CTAs x z=1]
+    Y default                            34.8 us   125.2 GB/s    39%   0.88x _int_mm  [CTA 64x64x64, 4 stages, 76 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32              35.3 us   123.6 GB/s    39%   0.87x _int_mm  [CTA 128x128x64, 2 stages, 38 CTAs x z=1]
+
+  down  M=32 N=896 K=4864  (4.36 MB of weights, 16 copies)
+    Y 32,64,128,2,2,2,4,16               26.8 us   162.9 GB/s    51%   1.53x _int_mm  [CTA 32x64x128, 2 stages, 14 CTAs x z=2]
+    Y 32,64,128,1,4,2,4,16               26.8 us   162.6 GB/s    51%   1.53x _int_mm  [CTA 32x64x128, 2 stages, 14 CTAs x z=2]
+    Y 32,128,128,2,4,2,2,16              27.0 us   161.7 GB/s    51%   1.52x _int_mm  [CTA 32x128x128, 2 stages, 7 CTAs x z=4]
+    Y 64,64,128,2,2,2,4,16               27.1 us   160.9 GB/s    50%   1.52x _int_mm  [CTA 64x64x128, 2 stages, 14 CTAs x z=2]
+    Y 32,64,128,2,2,3,2,16               27.5 us   158.4 GB/s    49%   1.49x _int_mm  [CTA 32x64x128, 3 stages, 14 CTAs x z=2]
+    Y 64,128,128,2,2,2,2,16              27.6 us   158.1 GB/s    49%   1.49x _int_mm  [CTA 64x128x128, 2 stages, 7 CTAs x z=4]
+    Y default                            30.8 us   141.3 GB/s    44%   1.33x _int_mm  [CTA 64x64x64, 4 stages, 14 CTAs x z=5]
+    Y 128,128,64,2,2,2,2,32              31.6 us   138.1 GB/s    43%   1.30x _int_mm  [CTA 128x128x64, 2 stages, 7 CTAs x z=5]
+    Y 128,128,128,2,2,2,1,32             35.2 us   123.7 GB/s    39%   1.17x _int_mm  [CTA 128x128x128, 2 stages, 7 CTAs x z=4]
+    torch._int_mm                        41.1 us   106.1 GB/s    33%   1.00x _int_mm  [cuBLASLt]
+
+  lm_head  M=32 N=151936 K=896  (136.13 MB of weights, 2 copies)
+    Y 32,64,128,2,2,3,2,16              763.9 us   178.2 GB/s    56%   1.04x _int_mm  [CTA 32x64x128, 3 stages, 2374 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16             774.0 us   175.9 GB/s    55%   1.03x _int_mm  [CTA 64x128x128, 2 stages, 1187 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16              777.3 us   175.1 GB/s    55%   1.03x _int_mm  [CTA 32x64x128, 2 stages, 2374 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16              777.9 us   175.0 GB/s    55%   1.02x _int_mm  [CTA 32x64x128, 2 stages, 2374 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16              778.9 us   174.8 GB/s    55%   1.02x _int_mm  [CTA 64x64x128, 2 stages, 2374 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16             783.1 us   173.8 GB/s    54%   1.02x _int_mm  [CTA 32x128x128, 2 stages, 1187 CTAs x z=1]
+    torch._int_mm                       797.1 us   170.8 GB/s    53%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,128,2,2,2,1,32            810.3 us   168.0 GB/s    53%   0.98x _int_mm  [CTA 128x128x128, 2 stages, 1187 CTAs x z=1]
+    Y default                           941.5 us   144.6 GB/s    45%   0.85x _int_mm  [CTA 64x64x64, 4 stages, 2374 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32             975.8 us   139.5 GB/s    44%   0.82x _int_mm  [CTA 128x128x64, 2 stages, 1187 CTAs x z=1]
+
+  q/k/v  M=128 N=1152 K=896  (1.03 MB of weights, 66 copies)
+    Y 32,64,128,2,2,2,4,16               11.4 us    90.3 GB/s    28%   1.31x _int_mm  [CTA 32x64x128, 2 stages, 72 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16               11.5 us    89.7 GB/s    28%   1.30x _int_mm  [CTA 32x64x128, 2 stages, 72 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16               11.7 us    88.4 GB/s    28%   1.28x _int_mm  [CTA 64x64x128, 2 stages, 36 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16              11.7 us    88.0 GB/s    27%   1.28x _int_mm  [CTA 32x128x128, 2 stages, 36 CTAs x z=1]
+    Y default                            13.1 us    78.8 GB/s    25%   1.14x _int_mm  [CTA 64x64x64, 4 stages, 36 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16              13.6 us    76.0 GB/s    24%   1.10x _int_mm  [CTA 64x128x128, 2 stages, 18 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16               14.4 us    71.8 GB/s    22%   1.04x _int_mm  [CTA 32x64x128, 3 stages, 72 CTAs x z=1]
+    torch._int_mm                        15.0 us    68.8 GB/s    22%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,128,2,2,2,1,32             19.4 us    53.3 GB/s    17%   0.77x _int_mm  [CTA 128x128x128, 2 stages, 9 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32              20.9 us    49.3 GB/s    15%   0.72x _int_mm  [CTA 128x128x64, 2 stages, 9 CTAs x z=1]
+
+  o  M=128 N=896 K=896  (0.80 MB of weights, 84 copies)
+    Y 64,64,128,2,2,2,4,16               10.8 us    74.4 GB/s    23%   1.28x _int_mm  [CTA 64x64x128, 2 stages, 28 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16              10.8 us    74.0 GB/s    23%   1.28x _int_mm  [CTA 32x128x128, 2 stages, 28 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16               10.9 us    73.7 GB/s    23%   1.27x _int_mm  [CTA 32x64x128, 2 stages, 56 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16               11.0 us    72.8 GB/s    23%   1.25x _int_mm  [CTA 32x64x128, 2 stages, 56 CTAs x z=1]
+    Y default                            12.4 us    64.7 GB/s    20%   1.11x _int_mm  [CTA 64x64x64, 4 stages, 28 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16              13.0 us    61.9 GB/s    19%   1.07x _int_mm  [CTA 64x128x128, 2 stages, 14 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16               13.7 us    58.6 GB/s    18%   1.01x _int_mm  [CTA 32x64x128, 3 stages, 56 CTAs x z=1]
+    torch._int_mm                        13.8 us    58.1 GB/s    18%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,128,2,2,2,1,32             18.6 us    43.1 GB/s    13%   0.74x _int_mm  [CTA 128x128x128, 2 stages, 7 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32              20.1 us    40.0 GB/s    12%   0.69x _int_mm  [CTA 128x128x64, 2 stages, 7 CTAs x z=1]
+
+  gate or up  M=128 N=4864 K=896  (4.36 MB of weights, 16 copies)
+    Y 128,128,128,2,2,2,1,32             35.1 us   124.0 GB/s    39%   1.14x _int_mm  [CTA 128x128x128, 2 stages, 38 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16               36.7 us   118.7 GB/s    37%   1.09x _int_mm  [CTA 64x64x128, 2 stages, 152 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16              38.0 us   114.8 GB/s    36%   1.06x _int_mm  [CTA 64x128x128, 2 stages, 76 CTAs x z=1]
+    torch._int_mm                        40.1 us   108.6 GB/s    34%   1.00x _int_mm  [cuBLASLt]
+    Y 32,64,128,2,2,2,4,16               41.7 us   104.5 GB/s    33%   0.96x _int_mm  [CTA 32x64x128, 2 stages, 304 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16               41.9 us   104.1 GB/s    33%   0.96x _int_mm  [CTA 32x64x128, 2 stages, 304 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16              42.6 us   102.2 GB/s    32%   0.94x _int_mm  [CTA 32x128x128, 2 stages, 152 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32              42.8 us   101.8 GB/s    32%   0.94x _int_mm  [CTA 128x128x64, 2 stages, 38 CTAs x z=1]
+    Y default                            47.3 us    92.2 GB/s    29%   0.85x _int_mm  [CTA 64x128x64, 3 stages, 76 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16               55.9 us    78.0 GB/s    24%   0.72x _int_mm  [CTA 32x64x128, 3 stages, 304 CTAs x z=1]
+
+  down  M=128 N=896 K=4864  (4.36 MB of weights, 16 copies)
+    Y 64,64,128,2,2,2,4,16               38.1 us   114.5 GB/s    36%   1.26x _int_mm  [CTA 64x64x128, 2 stages, 28 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16              41.6 us   104.9 GB/s    33%   1.15x _int_mm  [CTA 64x128x128, 2 stages, 14 CTAs x z=2]
+    Y 32,64,128,1,4,2,4,16               42.9 us   101.7 GB/s    32%   1.12x _int_mm  [CTA 32x64x128, 2 stages, 56 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16               42.9 us   101.5 GB/s    32%   1.12x _int_mm  [CTA 32x64x128, 2 stages, 56 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16              44.4 us    98.2 GB/s    31%   1.08x _int_mm  [CTA 32x128x128, 2 stages, 28 CTAs x z=1]
+    Y 128,128,128,2,2,2,1,32             45.5 us    95.8 GB/s    30%   1.05x _int_mm  [CTA 128x128x128, 2 stages, 7 CTAs x z=4]
+    torch._int_mm                        48.0 us    90.9 GB/s    28%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,64,2,2,2,2,32              50.2 us    86.8 GB/s    27%   0.96x _int_mm  [CTA 128x128x64, 2 stages, 7 CTAs x z=5]
+    Y 32,64,128,2,2,3,2,16               58.9 us    74.0 GB/s    23%   0.81x _int_mm  [CTA 32x64x128, 3 stages, 56 CTAs x z=1]
+    Y default                            65.5 us    66.6 GB/s    21%   0.73x _int_mm  [CTA 64x64x64, 4 stages, 28 CTAs x z=1]
+
+  q/k/v  M=2048 N=1152 K=896  (1.03 MB of weights, 66 copies)
+    torch._int_mm                        94.2 us    11.0 GB/s     3%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,64,2,2,2,2,32             102.0 us    10.1 GB/s     3%   0.92x _int_mm  [CTA 128x128x64, 2 stages, 144 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16              131.4 us     7.9 GB/s     2%   0.72x _int_mm  [CTA 64x64x128, 2 stages, 576 CTAs x z=1]
+    Y default                           132.8 us     7.8 GB/s     2%   0.71x _int_mm  [CTA 128x128x64, 3 stages, 144 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16             137.6 us     7.5 GB/s     2%   0.68x _int_mm  [CTA 64x128x128, 2 stages, 288 CTAs x z=1]
+    Y 128,128,128,2,2,2,1,32            138.7 us     7.4 GB/s     2%   0.68x _int_mm  [CTA 128x128x128, 2 stages, 144 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16             143.4 us     7.2 GB/s     2%   0.66x _int_mm  [CTA 32x128x128, 2 stages, 576 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16              151.2 us     6.8 GB/s     2%   0.62x _int_mm  [CTA 32x64x128, 2 stages, 1152 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16              171.4 us     6.0 GB/s     2%   0.55x _int_mm  [CTA 32x64x128, 3 stages, 1152 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16              192.7 us     5.4 GB/s     2%   0.49x _int_mm  [CTA 32x64x128, 2 stages, 1152 CTAs x z=1]
+
+  o  M=2048 N=896 K=896  (0.80 MB of weights, 84 copies)
+    torch._int_mm                        79.8 us    10.1 GB/s     3%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,128,2,2,2,1,32             86.6 us     9.3 GB/s     3%   0.92x _int_mm  [CTA 128x128x128, 2 stages, 112 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32              90.2 us     8.9 GB/s     3%   0.88x _int_mm  [CTA 128x128x64, 2 stages, 112 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16               92.4 us     8.7 GB/s     3%   0.86x _int_mm  [CTA 64x64x128, 2 stages, 448 CTAs x z=1]
+    Y default                           101.5 us     7.9 GB/s     2%   0.79x _int_mm  [CTA 128x128x64, 3 stages, 112 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16             103.8 us     7.7 GB/s     2%   0.77x _int_mm  [CTA 64x128x128, 2 stages, 224 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16             106.0 us     7.6 GB/s     2%   0.75x _int_mm  [CTA 32x128x128, 2 stages, 448 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16              126.0 us     6.4 GB/s     2%   0.63x _int_mm  [CTA 32x64x128, 2 stages, 896 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16              142.1 us     5.7 GB/s     2%   0.56x _int_mm  [CTA 32x64x128, 2 stages, 896 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16              151.8 us     5.3 GB/s     2%   0.53x _int_mm  [CTA 32x64x128, 3 stages, 896 CTAs x z=1]
+
+  gate or up  M=2048 N=4864 K=896  (4.36 MB of weights, 16 copies)
+    torch._int_mm                       428.4 us    10.2 GB/s     3%   1.00x _int_mm  [cuBLASLt]
+    Y 128,128,64,2,2,2,2,32             471.2 us     9.2 GB/s     3%   0.91x _int_mm  [CTA 128x128x64, 2 stages, 608 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16             517.7 us     8.4 GB/s     3%   0.83x _int_mm  [CTA 64x128x128, 2 stages, 1216 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16              523.6 us     8.3 GB/s     3%   0.82x _int_mm  [CTA 64x64x128, 2 stages, 2432 CTAs x z=1]
+    Y 128,128,128,2,2,2,1,32            541.6 us     8.0 GB/s     3%   0.79x _int_mm  [CTA 128x128x128, 2 stages, 608 CTAs x z=1]
+    Y default                           549.3 us     7.9 GB/s     2%   0.78x _int_mm  [CTA 128x128x64, 3 stages, 608 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16             733.7 us     5.9 GB/s     2%   0.58x _int_mm  [CTA 32x128x128, 2 stages, 2432 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16              759.2 us     5.7 GB/s     2%   0.56x _int_mm  [CTA 32x64x128, 2 stages, 4864 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16              809.3 us     5.4 GB/s     2%   0.53x _int_mm  [CTA 32x64x128, 2 stages, 4864 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16             1015.3 us     4.3 GB/s     1%   0.42x _int_mm  [CTA 32x64x128, 3 stages, 4864 CTAs x z=1]
+
+  down  M=2048 N=896 K=4864  (4.36 MB of weights, 16 copies)
+    Y 128,128,128,2,2,2,1,32            335.5 us    13.0 GB/s     4%   1.23x _int_mm  [CTA 128x128x128, 2 stages, 112 CTAs x z=1]
+    Y 128,128,64,2,2,2,2,32             405.5 us    10.7 GB/s     3%   1.02x _int_mm  [CTA 128x128x64, 2 stages, 112 CTAs x z=1]
+    torch._int_mm                       413.0 us    10.6 GB/s     3%   1.00x _int_mm  [cuBLASLt]
+    Y default                           501.7 us     8.7 GB/s     3%   0.82x _int_mm  [CTA 128x128x64, 3 stages, 112 CTAs x z=1]
+    Y 64,64,128,2,2,2,4,16              513.0 us     8.5 GB/s     3%   0.80x _int_mm  [CTA 64x64x128, 2 stages, 448 CTAs x z=1]
+    Y 64,128,128,2,2,2,2,16             532.9 us     8.2 GB/s     3%   0.77x _int_mm  [CTA 64x128x128, 2 stages, 224 CTAs x z=1]
+    Y 32,128,128,2,4,2,2,16             730.4 us     6.0 GB/s     2%   0.57x _int_mm  [CTA 32x128x128, 2 stages, 448 CTAs x z=1]
+    Y 32,64,128,1,4,2,4,16              757.3 us     5.8 GB/s     2%   0.55x _int_mm  [CTA 32x64x128, 2 stages, 896 CTAs x z=1]
+    Y 32,64,128,2,2,2,4,16              770.4 us     5.7 GB/s     2%   0.54x _int_mm  [CTA 32x64x128, 2 stages, 896 CTAs x z=1]
+    Y 32,64,128,2,2,3,2,16              914.6 us     4.8 GB/s     1%   0.45x _int_mm  [CTA 32x64x128, 3 stages, 896 CTAs x z=1]
