@@ -1,0 +1,55 @@
+start 2026-11-18 15:02:50
+commit 47913a71f20ec67df06e4599c9e9fb126ff0dd6f
+ M tools/exact_throughput.py
+?? python/y_lang/exact/graphed.py
+?? python/y_lang/tests/test_exact_graphed.py
+713be562a3f6f9ca923f35753a60b2aa8e4914610bc63faeddfaf72f68a96837  /tmp/y_exact_nospace/target/release/liby.so
+== D_default 150250  util 15%  others: Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop stock         graphed == greedy on all 32 rows
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop exact         graphed == greedy on all 32 rows
+stock  bf16 + SDPA (what ships)          0.217       295.3       9450.6     0.5%
+exact  int8, order-independent           0.216       296.0       9471.3     0.2%
+  exact / stock = 1.00x slower
+== E_every_switch 151107  util 32%  others: Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop stock         graphed == greedy on all 32 rows
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop exact         graphed == greedy on all 32 rows
+stock  bf16 + SDPA (what ships)          0.227       281.8       9016.6     0.2%
+exact  int8, order-independent           0.180       356.1      11394.4     0.3%
+  exact / stock = 0.79x slower
+== E_every_switch 152145  util 33%  others: Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop stock         graphed == greedy on all 32 rows
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop exact         graphed == greedy on all 32 rows
+stock  bf16 + SDPA (what ships)          0.215       297.5       9518.7     0.5%
+exact  int8, order-independent           0.169       378.1      12097.8     0.4%
+  exact / stock = 0.79x slower
+== D_default 153213  util 28%  others: Discord chromium 
+exit 0
+arm                                          s   tok/s/seq  tok/s total   spread
+  sanity stock        canary ok, 49 distinct tokens in reference
+  sanity exact        canary ok, 40 distinct tokens in reference
+  loop stock         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop stock         graphed == greedy on all 32 rows
+  loop exact         greedy == generate(repetition_penalty=1.0) on all 32 rows
+  loop exact         graphed == greedy on all 32 rows
+stock  bf16 + SDPA (what ships)          0.226       282.8       9050.9     0.2%
+exact  int8, order-independent           0.226       283.4       9067.7     0.2%
+  exact / stock = 1.00x slower
+done 15:40:07
