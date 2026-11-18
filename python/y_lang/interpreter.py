@@ -16,8 +16,17 @@ the thread, the buffer and the PTX line when a kernel
 - writes two different values to one address in one instruction;
 - divides an integer by zero; or
 - runs an instruction, or a modifier of one, that this interpreter does not
-  model - the tensor-core instructions, `.relu`, `bar.arrive` among them.
-  Those are refused by name, never approximated.
+  model - the tensor-core instructions other than the two below, `.relu`,
+  `bar.arrive` among them. Those are refused by name, never approximated.
+
+Of the tensor-core instructions, `ldmatrix.sync.aligned.m8n8.x{1,2,4}.shared.b16`
+(not `.trans`) and the int8 `mma.sync.aligned.{m8n8k16,m16n8k32}.row.col.s32`
+(not `.satfinite`; a sum past int32 is refused) are modelled, for Y's int8
+GEMM: each warp must reach them whole, and the fragments follow the PTX ISA's
+tables. They are not in tests/test_interpreter_ops.py. They were checked
+instead by running the sm_80 GEMM, whose bits are established on GPUs, and
+the m8n8k16 probe that passed on a Tesla T4
+(docs/benchmarks/int8_turing_2026-11-18/), on this interpreter.
 
 Every instruction form it models gives the GPU's result bit for bit -
 compared on an RTX 4070 Ti SUPER over edge values and random bits by
@@ -547,7 +556,34 @@ _MODIFIERS = {
     "red": {"global", "shared", "noftz"} | _ATOM_OPS | _ORDER,
     "cp": {"async", "ca", "cg", "shared", "global", "commit_group", "wait_group", "wait_all"},
     "shfl": {"sync", "bfly", "idx", "up", "down"},
+    # Not `.trans`, `.satfinite`, or another mma shape: refused by name.
+    "ldmatrix": {"sync", "aligned", "m8n8", "x1", "x2", "x4", "shared"},
+    "mma": {"sync", "aligned", "m8n8k16", "m16n8k32", "row", "col"},
 }
+
+
+def _mma_layout(shape):
+    """For an int8 `mma.sync` shape, the (row, col) each lane's elements
+    sit at, from the PTX ISA's fragment tables (g = laneid >> 2,
+    t = laneid & 3): A as [32 lanes][elements] of (row m, col k), B of
+    (row k, col n), C/D of (row m, col n). Four int8 elements fill each A or
+    B register, low byte first; each C/D register holds one int32."""
+    lane = np.arange(32)
+    g, t = lane[:, None] >> 2, lane[:, None] & 3
+    if shape == "m8n8k16":
+        i4, i2 = np.arange(4)[None, :], np.arange(2)[None, :]
+        a = (np.broadcast_to(g, (32, 4)), 4 * t + i4)
+        b = (4 * t + i4, np.broadcast_to(g, (32, 4)))
+        c = (np.broadcast_to(g, (32, 2)), 2 * t + i2)
+        return (8, 8, 16), a, b, c
+    if shape == "m16n8k32":
+        i16, i8, i4 = np.arange(16)[None, :], np.arange(8)[None, :], np.arange(4)[None, :]
+        a_row = g + 8 * (((i16 >= 4) & (i16 < 8)) | (i16 >= 12))
+        a = (a_row, 4 * t + (i16 & 3) + 16 * (i16 >= 8))
+        b = (4 * t + (i8 & 3) + 16 * (i8 >= 4), np.broadcast_to(g, (32, 8)))
+        c = (g + 8 * (i4 >= 2), 2 * t + (i4 & 1))
+        return (16, 8, 32), a, b, c
+    return None
 _HINTS = ("L1::", "L2::")      # cache hints: performance only
 
 
@@ -1761,6 +1797,94 @@ class CPUInterpreter:
         self._write_bits(frame, dreg, lanes, val[src])
         if preg:
             self._write(frame, preg, "pred", lanes, pval)
+
+    def _whole_warps(self, frame, ins, lanes):
+        """{warp: positions in `lanes` of its 32 lanes, by lane id} for a
+        `.sync.aligned` warp instruction, which every lane of the warp must
+        reach together; a lane elsewhere, exited, or past a partial block's
+        last thread is undefined on the GPU."""
+        glanes = frame.lanes[lanes]
+        keys = self.warp_key[glanes]
+        ids = self.thread_in_block[glanes] % 32
+        warps = {}
+        for k in np.unique(keys):
+            sel = np.nonzero(keys == k)[0]
+            have = set(ids[sel].tolist())
+            if len(have) != 32:
+                missing = sorted(set(range(32)) - have)
+                self._fail(frame, int(lanes[sel[0]]), ins,
+                           f"`{ins.op}` with lane(s) {missing[:4]}{'...' if len(missing) > 4 else ''} of this warp "
+                           "not at this instruction (diverged, exited, or past the block's last thread): "
+                           "undefined on the GPU")
+            warps[int(k)] = sel[np.argsort(ids[sel])]
+        return warps
+
+    def _op_ldmatrix(self, frame, ins, lanes, *_):
+        """ldmatrix.sync.aligned.m8n8.x{1,2,4}.shared.b16 {d..}, [addr]: lanes
+        8i..8i+7 give the addresses of matrix i's 8 rows of 16 bytes; lane L
+        receives bytes 4(L%4)..4(L%4)+3 of row L/4 of matrix i in d_i (the
+        PTX ISA's layout, without `.trans`, which is refused)."""
+        parts = ins.parts
+        if "m8n8" not in parts or "b16" not in parts or "shared" not in [("shared" if p == "shared::cta" else p) for p in parts]:
+            self._fail(frame, int(lanes[0]), ins, f"`{ins.op}` is not modelled by the CPU interpreter")
+        n = next((int(p[1:]) for p in parts if p in ("x1", "x2", "x4")), None)
+        dests = _split_top(ins.args[0][1:-1]) if ins.args[0].startswith("{") else [ins.args[0]]
+        if n is None or len(dests) != n:
+            self._fail(frame, int(lanes[0]), ins, f"`{ins.op}` names {len(dests)} destination registers")
+        _, addr = self._address(frame, ins.args[1], lanes)
+        for idx in self._whole_warps(frame, ins, lanes).values():
+            words = np.empty((n, 32), np.uint64)
+            for i in range(n):
+                src = idx[8 * i:8 * i + 8]
+                a = self._locate_shared(frame, ins, lanes[src], addr[src], 16, False)
+                blk = self.blk[frame.lanes[lanes[src]]]
+                rows = self.shared[blk[:, None], a[:, None] + np.arange(16)]          # [8 rows][16 bytes]
+                quad = np.stack([rows[lane // 4, 4 * (lane % 4):4 * (lane % 4) + 4] for lane in range(32)])
+                words[i] = np.ascontiguousarray(quad).view(np.uint32).reshape(32).astype(np.uint64)
+            for i, d in enumerate(dests):
+                self._write_bits(frame, d, lanes[idx], words[i])
+
+    def _op_mma(self, frame, ins, lanes, *_):
+        """mma.sync.aligned.{m8n8k16,m16n8k32}.row.col.s32.{s8,u8}.{s8,u8}.s32
+        d, a, b, c: per warp, D = A.B + C exactly, gathered from and
+        scattered to the lanes by the PTX ISA's fragment layout
+        (`_mma_layout`). A sum outside int32 is refused: the wrap without
+        `.satfinite` is not modelled. Other shapes and types are refused by
+        name."""
+        parts = ins.parts
+        shape = next((p for p in parts if p in ("m8n8k16", "m16n8k32")), None)
+        types = [p for p in parts[1:] if p in _TYPE_NAMES]
+        if (shape is None or "row" not in parts or "col" not in parts or len(types) != 4
+                or types[0] != "s32" or types[3] != "s32" or types[1] not in ("s8", "u8")
+                or types[2] not in ("s8", "u8")):
+            self._fail(frame, int(lanes[0]), ins, f"`{ins.op}` is not modelled by the CPU interpreter")
+        (m, n, k), (ar, ac), (br, bc), (cr, cc) = _mma_layout(shape)
+        regs = [_split_top(x[1:-1]) for x in ins.args]
+        want = {"m8n8k16": (2, 1, 1, 2), "m16n8k32": (4, 4, 2, 4)}[shape]
+        if len(regs) != 4 or tuple(len(r) for r in regs) != want:
+            self._fail(frame, int(lanes[0]), ins, f"`{ins.op}` needs {want} registers for d, a, b, c")
+        d_regs, a_regs, b_regs, c_regs = regs
+        a_t, b_t = (np.int8 if types[1] == "s8" else np.uint8), (np.int8 if types[2] == "s8" else np.uint8)
+        for idx in self._whole_warps(frame, ins, lanes).values():
+            sub = lanes[idx]
+
+            def elems(rs, dt):
+                w = np.stack([self._read(frame, r, "u32", sub).astype(np.uint32) for r in rs], axis=1)
+                return np.ascontiguousarray(w).view(np.uint8).view(dt).reshape(32, 4 * len(rs)).astype(np.int64)
+
+            A = np.zeros((m, k), np.int64)
+            B = np.zeros((k, n), np.int64)
+            C = np.zeros((m, n), np.int64)
+            A[ar, ac] = elems(a_regs, a_t)
+            B[br, bc] = elems(b_regs, b_t)
+            C[cr, cc] = np.stack([self._read(frame, r, "s32", sub).astype(np.int64) for r in c_regs], axis=1)
+            D = A @ B + C
+            if (D < -(1 << 31)).any() or (D >= (1 << 31)).any():
+                self._fail(frame, int(sub[0]), ins, f"`{ins.op}` sums past int32; the wrap without .satfinite "
+                           "is not modelled by the CPU interpreter")
+            out = D[cr, cc]
+            for j, r in enumerate(d_regs):
+                self._write(frame, r, "s32", sub, out[:, j].astype(np.int32))
 
     def _op_vote(self, frame, ins, lanes, *_):
         self._fail(frame, int(lanes[0]), ins, f"`{ins.op}` is not modelled by the CPU interpreter")
