@@ -115,6 +115,23 @@ class TestLoad(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "'llama' model; y_lang.exact supports qwen2 only"):
             load(str(d))
 
+    def test_convert_refuses_another_architecture_before_touching_it(self):
+        # `convert` matches layers by class name, so on a Llama or Gemma it
+        # would run and give another model (float attention, Qwen2's norm and
+        # rotary embedding). It must refuse first and leave the model as it was.
+        import torch
+        from transformers import LlamaConfig, LlamaForCausalLM
+        from y_lang.exact import model as em
+        m = LlamaForCausalLM(LlamaConfig(vocab_size=64, hidden_size=32, intermediate_size=64,
+                                         num_hidden_layers=1, num_attention_heads=4,
+                                         num_key_value_heads=2)).eval()
+        before = [type(x).__name__ for x in m.modules()]
+        with self.assertRaisesRegex(ValueError, "model_type 'llama'.*supports qwen2 only"):
+            em.convert(m)
+        self.assertEqual([type(x).__name__ for x in m.modules()], before)
+        with self.assertRaisesRegex(ValueError, "model_type None"):
+            em.convert(torch.nn.Sequential(torch.nn.Linear(4, 4)))
+
     def test_a_tiny_qwen2_is_converted_close_and_batch_invariant(self):
         import torch
         from transformers import AutoTokenizer, Qwen2Config, Qwen2ForCausalLM

@@ -952,7 +952,23 @@ def convert(model, linears=True, norms=True, floats=None, merge=None):
     `merge` (default: `Y_EXACT_MERGE`, which defaults to q/k/v only) then
     merges projections (`merge_projections`), which changes no bits: True
     (q/k/v and gate/up), False (none), or the groups to merge.
+
+    Only a transformers model of a type in `y_lang.exact.SUPPORTED_MODEL_TYPES`
+    (Qwen2) is converted; anything else is refused before a layer is touched.
+    The swaps above match on class names, so on another architecture they
+    would run and be wrong: its attention would stay float (the exact
+    attention replaces Qwen2's), Gemma's `(1 + weight)` RMSNorm would become
+    Qwen2's `weight` one, and a scaled rotary embedding (Llama 3) would lose
+    its scaling. `load` already refused other types; this did not (2026-11-19).
     """
+    from . import SUPPORTED_MODEL_TYPES
+    model_type = getattr(getattr(model, "config", None), "model_type", None)
+    if model_type not in SUPPORTED_MODEL_TYPES:
+        raise ValueError(
+            f"y_lang.exact convert: a {type(model).__name__} with model_type {model_type!r}; "
+            f"the exact path supports {', '.join(SUPPORTED_MODEL_TYPES)} only. Another "
+            f"architecture's attention, norms or rotary embedding would be left float or "
+            f"swapped for Qwen2's, a different model under the same name")
     floats = norms if floats is None else floats
     n_lin = n_norm = 0
     shapes, dev = [], None
