@@ -6,6 +6,10 @@ docs/benchmarks/int8_turing_2026-11-18/.
 PART p: probe_m8n8k16.py, the int8 m8n8k16 fragment layout on the T4.
 PART b: liby.so built here, then gemm_t4.py (same bits and time against
         torch._int_mm) and python/y_lang/tests/test_int8_mm.py.
+PART x: liby.so built here, then exact_cross_device.py records with Y_EXACT_GEMM=y
+        (0.5B eager both arms, 0.5B and 1.5B compiled with every switch).
+PART s: liby.so built here, then exact_throughput at batch 1 and 8, every switch on
+        Y's GEMM, graphed against stock greedy.
 PART t: liby.so built here, then test_int8_mm.py and gemm_t4.py (round 1, the
         default now the Turing tile rule).
 PART b2: liby.so built here, then gemm_t4.py round2 (tiles near round 1's best,
@@ -119,6 +123,21 @@ elif PART == "b":
     build_liby()
     run("gemm_t4", "{sys.executable} " + D + "/gemm_t4.py")
     run("test_int8_mm", TESTS)
+elif PART == "x":
+    # Same tokens as the CPU with Y's Turing GEMM: tools/exact_cross_device.py
+    # records, as exact_cross_gpu_t4_2026-11-11 made them (hub model ids, so the
+    # workload hashes match the reference records); compared on the
+    # development machine against them.
+    build_liby()
+    REC = "{sys.executable} exact_cross_device.py --device cuda --record {OUT}/"
+    run("t4_ygemm_eager", "Y_EXACT_GEMM=y " + REC + "t4_ygemm_eager.json --arms stock,exact --model Qwen/Qwen2.5-0.5B-Instruct")
+    run("t4_ygemm_all_compiled", EVERY + "Y_EXACT_GEMM=y " + REC + "t4_ygemm_all_compiled.json --arms exact --compile --model Qwen/Qwen2.5-0.5B-Instruct")
+    run("t4_ygemm_1p5b_all_compiled", EVERY + "Y_EXACT_GEMM=y " + REC + "t4_ygemm_1p5b_all_compiled.json --arms exact --compile --model Qwen/Qwen2.5-1.5B-Instruct")
+elif PART == "s":
+    # Small batches, every switch on Y's GEMM, graphed against stock greedy.
+    build_liby()
+    for bs in (1, 8):
+        run(f"every_switch_y_gemm_batch{bs}", EVERY + "Y_EXACT_GEMM=y " + TP.replace("--batch 32", f"--batch {bs}"))
 elif PART == "t":
     build_liby()
     run("test_int8_mm", TESTS)

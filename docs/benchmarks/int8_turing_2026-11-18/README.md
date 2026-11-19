@@ -141,6 +141,27 @@ Every process passed the token checks: exact graphed == exact greedy ==
 - The first T4 runs of this work (2026-11-17) had the exact path 1.48x
   slower than stock there.
 
+## The same tokens as the CPU
+
+Job x (`t4_x/`, 2026-11-19): `tools/exact_cross_device.py` records on the T4
+with `Y_EXACT_GEMM=y`, so every linear layer ran Y's Turing kernel, compared
+on the development machine against the records of
+`../exact_cross_gpu_t4_2026-11-11/` (`t4_x/compare.txt`). 5 cases x 160
+tokens, the reference records' workload hashes.
+
+| T4 record, Y's GEMM | Against | Exact | Stock (control) |
+|---|---|---|---|
+| 0.5B, eager | Zen 5 CPU (`exact_norm_sum_2026-11-10/cpu_0p5b.json`) | 0/5 changed | |
+| 0.5B, eager | RTX 4070 Ti SUPER (`exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json`) | 0/5 changed | 5/5 changed |
+| 0.5B, compiled, every switch | Zen 5 CPU | 0/5 changed | |
+| 1.5B, compiled, every switch | Zen 5 CPU (`exact_cross_gpu_t4_2026-11-11/cpu_zen5_1p5b.json`) | 0/5 changed | |
+
+Exact token digests: 0.5B `30eec169d2f38da4`, the same as the CPU's and the
+earlier T4 records' (on `torch._int_mm`); 1.5B `22178ff4d2aede57`, the same as
+the Zen 5 CPU's. The integer exp's domain digest is the CPU's
+(`0x7170cd39b442d506`). The 1.5B run takes the Turing tiles at other shapes
+(hidden 1536, MLP 8960).
+
 ## Files
 
 - `probe_m8n8k16.py`, `t4_probe/`: the layout probe and its T4 run.
@@ -148,6 +169,7 @@ Every process passed the token checks: exact graphed == exact greedy ==
   (round 1), `t4_b2/` (round 2), `t4_t/` (the rule, and the T4 test run).
 - `t4_e/`, `t4_e2/`: end to end with the sm_80 rule's tile and with the
   Turing tiles.
+- `t4_x/`: the same-tokens records with Y's GEMM and their comparison.
 - `make_t4_turing_job.py`: writes the Kaggle jobs. Each builds liby.so and
   ysu_gpu_probe on the Kaggle machine and copies them over the installed
   wheel's.

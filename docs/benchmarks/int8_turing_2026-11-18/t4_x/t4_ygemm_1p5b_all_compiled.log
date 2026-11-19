@@ -1,0 +1,31 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Recording on Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  5 cases x 160 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- exact ---
+
+Loading weights:   0%|          | 0/338 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/338 [00:00<02:57,  1.90it/s]
+Loading weights:  30%|██▉       | 101/338 [00:00<00:01, 215.02it/s]
+Loading weights:  47%|████▋     | 160/338 [00:00<00:00, 227.69it/s]
+Loading weights:  60%|██████    | 204/338 [00:01<00:00, 225.65it/s]
+Loading weights:  71%|███████   | 239/338 [00:01<00:00, 221.94it/s]
+Loading weights:  80%|███████▉  | 269/338 [00:01<00:00, 211.34it/s]
+Loading weights:  88%|████████▊ | 296/338 [00:01<00:00, 215.36it/s]
+Loading weights:  95%|█████████▌| 322/338 [00:01<00:00, 214.91it/s]
+Loading weights: 100%|██████████| 338/338 [00:01<00:00, 203.06it/s]
+W1119 01:42:49.651000 1179 torch/_inductor/utils.py:1953] [0/0_1] Not enough SMs to use max_autotune_gemm mode
+  gate: ok -- canary ok, 107 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 726c7a06603488d6, tokens 22178ff4d2aede57
+  self-check (same card, twice): identical
+
+  written to /kaggle/working/t4_ygemm_1p5b_all_compiled.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /kaggle/working/t4_ygemm_1p5b_all_compiled.json other.json

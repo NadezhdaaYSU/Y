@@ -1,0 +1,83 @@
+### ../docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+    ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_eager.json
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.exec_prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+
+Cross-device bit-identity
+  ../docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json  vs  ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_eager.json
+  A: cpu:x86_64 (model not recorded, 32 CPUs)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+
+### ../docs/benchmarks/exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json
+    ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_eager.json
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.exec_prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+
+Cross-device bit-identity
+  ../docs/benchmarks/exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json  vs  ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_eager.json
+  A: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 13
+                 '+3 long, middle' first differs at token 13
+                 'mixed 8, pos 5' first differs at token 20
+                 'mixed 32, pos 17' first differs at token 108
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================
+
+### ../docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+    ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_all_compiled.json
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.exec_prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+
+Cross-device bit-identity
+  ../docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json  vs  ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_all_compiled.json
+  A: cpu:x86_64 (model not recorded, 32 CPUs)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+
+### ../docs/benchmarks/exact_cross_gpu_t4_2026-11-11/cpu_zen5_1p5b.json
+    ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_1p5b_all_compiled.json
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+<frozen site>:101: RuntimeWarning: Unexpected value in sys.exec_prefix, expected /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv, got /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../venv
+
+Cross-device bit-identity
+  ../docs/benchmarks/exact_cross_gpu_t4_2026-11-11/cpu_zen5_1p5b.json  vs  ../docs/benchmarks/int8_turing_2026-11-18/t4_x/t4_ygemm_1p5b_all_compiled.json
+  A: cpu:x86_64 (AMD Ryzen 9 9950X 16-Core Processor, 32 CPUs)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-1.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+
