@@ -141,6 +141,18 @@ Every process passed the token checks: exact graphed == exact greedy ==
 - The first T4 runs of this work (2026-11-17) had the exact path 1.48x
   slower than stock there.
 
+Smaller batches (job s, `t4_s/`, another machine), every switch on Y's GEMM,
+the same setup otherwise:
+
+| Batch | Stock greedy | Exact graphed | Exact's speed over stock's |
+|---|---|---|---|
+| 1 | 118.8 | 180.9 | 1.52x |
+| 8 | 111.0 | 178.3 | 1.61x |
+
+Tokens per second per sequence. Both passed the same token checks. Stock
+ran its greedy loop because that was its faster loop at batch 32; which of
+its loops is faster at batch 1 and 8 was not measured.
+
 ## The same tokens as the CPU
 
 Job x (`t4_x/`, 2026-11-19): `tools/exact_cross_device.py` records on the T4
@@ -168,7 +180,7 @@ the Zen 5 CPU's. The integer exp's domain digest is the CPU's
 - `gemm_t4.py`: same bits and timing against `torch._int_mm`; `t4_b/`
   (round 1), `t4_b2/` (round 2), `t4_t/` (the rule, and the T4 test run).
 - `t4_e/`, `t4_e2/`: end to end with the sm_80 rule's tile and with the
-  Turing tiles.
+  Turing tiles; `t4_s/`: at batch 1 and 8.
 - `t4_x/`: the same-tokens records with Y's GEMM and their comparison.
 - `make_t4_turing_job.py`: writes the Kaggle jobs. Each builds liby.so and
   ysu_gpu_probe on the Kaggle machine and copies them over the installed
