@@ -6,8 +6,9 @@ CPU, T4 and RTX 4070 Ti records.
     Y_SRC_TAR=/abs/y_src.tar.gz modal run modal_same_tokens.py --stage eager --out DIR
 
 Stage `eager`: 0.5B eager, both arms (stock is the control: it must change
-across cards), then 0.5B eager with every switch on Y's int8 GEMM. Stage
-`compiled`: 0.5B and 1.5B compiled, every switch on Y's GEMM.
+across cards), then 0.5B eager with every switch on Y's int8 GEMM. Stages
+`compiled_0p5b` and `compiled_1p5b` (run with `--gpus h100`): compiled, every
+switch on Y's GEMM.
 
 Y is built from the tarball in the image (Rust 1.97.1, on Modal's CPU
 builder), and both models are downloaded there too, so the GPU is rented only
@@ -59,8 +60,10 @@ STAGES = {
         ("eager", {}, "--arms stock,exact --model Qwen/Qwen2.5-0.5B-Instruct"),
         ("ygemm_every_eager", EVERY, "--arms exact --model Qwen/Qwen2.5-0.5B-Instruct"),
     ],
-    "compiled": [
+    "compiled_0p5b": [
         ("ygemm_every_compiled", EVERY, "--arms exact --compile --model Qwen/Qwen2.5-0.5B-Instruct"),
+    ],
+    "compiled_1p5b": [
         ("ygemm_1p5b_every_compiled", EVERY, "--arms exact --compile --model Qwen/Qwen2.5-1.5B-Instruct"),
     ],
 }
@@ -108,11 +111,18 @@ def on_h100(stage: str):
     return _record("h100", stage)
 
 
+# Compiling is CPU work (Inductor); on the T4's 4 cores the compiled records
+# took 36 and 41 minutes. More cores cost little next to the GPU.
+@app.function(gpu="H100!", timeout=40 * 60, cpu=16.0, memory=32768)
+def on_h100_long(stage: str):
+    return _record("h100", stage)
+
+
 @app.local_entrypoint()
 def main(stage: str = "eager", out: str = "results", gpus: str = "a100,h100"):
     if stage not in STAGES:
         raise SystemExit(f"unknown stage {stage!r}")
-    fns = {"a100": on_a100, "h100": on_h100}
+    fns = {"a100": on_a100, "h100": on_h100_long if stage.startswith("compiled") else on_h100}
     calls = [(g, fns[g].spawn(stage)) for g in gpus.split(",")]
     for g, call in calls:
         d = pathlib.Path(out) / f"{g}_{stage}"

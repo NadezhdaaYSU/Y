@@ -68,7 +68,8 @@ image ran on Modal's CPUs.
 
 ## Files
 
-- `modal_same_tokens.py`: the job (`--stage eager` here; `--stage compiled`
-  for the compiled records).
+- `modal_same_tokens.py`: the job (`--stage eager` here; `--stage
+  compiled_0p5b` and `compiled_1p5b` with `--gpus h100` for the compiled
+  records).
 - `a100_eager/`, `h100_eager/`: the records, their logs and `machine.txt`.
 - `compare.txt`: `exact_cross_device.py --compare` on each pair.
