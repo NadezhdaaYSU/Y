@@ -85,6 +85,38 @@ class Pieces(unittest.TestCase):
         with self.assertRaises(OverflowError):      # refused, not wrong
             L.det_sqrt(torch.tensor([1e-300], dtype=torch.float64))
 
+    def test_digits_rebuild_the_value(self):
+        g = torch.Generator().manual_seed(9)
+        for bits in (8, 12, 16):
+            top = (1 << (bits - 1)) - 1
+            q = torch.randint(-top, top + 1, (5000,), generator=g).to(torch.float64)
+            q[:3] = torch.tensor([-top, top, 0], dtype=torch.float64)
+            ds = L.digits(q, bits)
+            self.assertEqual(len(ds), 1 if bits <= 8 else -(-(bits - 1) // 7))
+            back = sum(d * float(128 ** i) for i, d in enumerate(ds))
+            self.assertTrue(torch.equal(back, q))
+            if bits > 8:
+                for d in ds:
+                    self.assertGreaterEqual(float(d.min()), -64)
+                    self.assertLessEqual(float(d.max()), 63)
+        with self.assertRaises(OverflowError):
+            L.digits(torch.tensor([20000.0], dtype=torch.float64), 12)   # two digits hold |q| <= 8256
+
+    def test_wide_matmul_is_the_exact_product(self):
+        g = torch.Generator().manual_seed(10)
+        a = torch.randn(16, 96, generator=g, dtype=torch.float64)
+        b = torch.randn(24, 96, generator=g, dtype=torch.float64)
+        ops = L.Ops(exact=True, grad_bits=12, bwd_bits=8)
+        c = ops.matmul(a, b, grad="a")
+        qa, sa = L.q8(a, bits=12)
+        qb, sb = L.q8(b, bits=8)
+        ref = (qa @ qb.t()) * L.pow2(sa + sb.t())     # exact: integers far below 2^53
+        self.assertTrue(torch.equal(c, ref))
+        # Wider gradients are closer to the float product.
+        f = a @ b.t()
+        narrow = L.Ops(exact=True, grad_bits=8).matmul(a, b, grad="a")
+        self.assertLess(float((c - f).abs().max()), float((narrow - f).abs().max()))
+
     def test_exact_sum_ignores_order(self):
         g = torch.Generator().manual_seed(2)
         x = torch.randn(7, 1000, generator=g, dtype=torch.float64) * torch.logspace(-8, 8, 1000, dtype=torch.float64)
@@ -161,6 +193,19 @@ class OnTheGpu(unittest.TestCase):
         a, _ = run(L.Ops(exact=False), "cpu", torch.float32)
         b, _ = run(L.Ops(exact=False), "cuda", torch.float32)
         self.assertNotEqual(L.digest(a), L.digest(b))
+
+    def test_int8_gradients_on_y_gemm_give_the_cpu_weights(self):
+        ref, losses = run(L.Ops(exact=True, grad_bits=8), "cpu", torch.float64)
+        params, gl = run(L.Ops(exact=True, mm=L.mm_y, grad_bits=8), "cuda", torch.float64)
+        self.assertEqual(gl, losses)
+        self.assertEqual(L.digest(params), L.digest(ref))
+        self.assertNotEqual(L.digest(ref), L.digest(self.ref))   # the width did change training
+
+    def test_wide_operands_on_both_sides_give_the_cpu_weights(self):
+        ref, losses = run(L.Ops(exact=True, grad_bits=16, bwd_bits=12), "cpu", torch.float64)
+        params, gl = run(L.Ops(exact=True, mm=L.mm_torch, grad_bits=16, bwd_bits=12), "cuda", torch.float64)
+        self.assertEqual(gl, losses)
+        self.assertEqual(L.digest(params), L.digest(ref))
 
     def test_det_sqrt_same_bits_on_both(self):
         # torch.sqrt's float64 differs between this CPU and CUDA (2026-11-21);

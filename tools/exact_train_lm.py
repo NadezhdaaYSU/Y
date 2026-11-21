@@ -48,7 +48,7 @@ def record(a):
     cfg = L.Config()
     if a.arm == "exact":
         mm = {"f64": L.mm_f64, "y": L.mm_y, "torch": L.mm_torch}[a.mm]
-        ops, dtype = L.Ops(exact=True, mm=mm, bwd_bits=a.bwd_bits), torch.float64
+        ops, dtype = L.Ops(exact=True, mm=mm, grad_bits=a.grad_bits, bwd_bits=a.bwd_bits), torch.float64
     else:
         ops, dtype = L.Ops(exact=False), torch.float32
     digests = []
@@ -76,7 +76,7 @@ def record(a):
                 f"  {time.time() - t0:.0f} s")
     rec = {"device": device_name(a.device), "arm": a.arm, "mm": a.mm if a.arm == "exact" else None,
            "torch": torch.__version__, "config": vars(cfg), "seed": a.seed, "lr": a.lr, "batch": a.batch,
-           "steps": a.steps, "bwd_bits": a.bwd_bits, "text_sha256": hashlib.sha256(raw).hexdigest(),
+           "steps": a.steps, "grad_bits": a.grad_bits, "bwd_bits": a.bwd_bits, "text_sha256": hashlib.sha256(raw).hexdigest(),
            "losses": losses, "target_probs": pts, "evals": evals, "digests": digests, "seconds": time.time() - t0}
     with open(a.record, "w") as f:
         json.dump(rec, f)
@@ -87,7 +87,8 @@ def compare(pa, pb):
     A, B = (json.load(open(p)) for p in (pa, pb))
     print(f"A: {A['device']}  arm {A['arm']}  mm {A['mm']}\nB: {B['device']}  arm {B['arm']}  mm {B['mm']}")
     same_work = (all(A[k] == B[k] for k in ("arm", "config", "seed", "lr", "batch", "steps", "text_sha256"))
-                 and A.get("bwd_bits", 8) == B.get("bwd_bits", 8))
+                 and A.get("bwd_bits", 8) == B.get("bwd_bits", 8)
+                 and A.get("grad_bits", A.get("bwd_bits", 8)) == B.get("grad_bits", B.get("bwd_bits", 8)))
     if not same_work:
         print("  *** not the same workload (arm, config, seed, lr, batch, steps, text or "
               "backward width differ)")
@@ -115,8 +116,10 @@ def main():
     ap.add_argument("--mm", choices=("f64", "y", "torch"), default="f64",
                     help="the exact arm's linear-layer GEMM: float64 BLAS (exact for int8 "
                          "operands), Y's int8 kernel, or torch._int_mm")
+    ap.add_argument("--grad-bits", type=int, default=12,
+                    help="width of the backward pass's gradient operands (exact arm)")
     ap.add_argument("--bwd-bits", type=int, default=8,
-                    help="width of the backward pass's product operands (exact arm; >8 needs --mm f64)")
+                    help="width of the activations and weights the gradients meet in the backward pass")
     ap.add_argument("--steps", type=int, default=5000)
     ap.add_argument("--eval-every", type=int, default=500)
     ap.add_argument("--eval-batches", type=int, default=8)

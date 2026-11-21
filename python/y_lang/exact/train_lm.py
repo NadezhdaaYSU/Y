@@ -100,6 +100,24 @@ def det_sqrt(v: torch.Tensor) -> torch.Tensor:
     return isqrt(n).to(torch.float64) * pow2(torch.div(k, 2, rounding_mode="floor"))
 
 
+def digits(q: torch.Tensor, bits: int):
+    """Integer-valued float64 q with |q| < 2^(bits-1) as int8-valued digits
+    d_i in [-64, 63] with q = sum_i d_i * 128^i (one digit, q itself, for 8
+    bits or fewer). A product of wide operands is then a sum of int8
+    products, each exact on an int8 GEMM. All arithmetic here is on small
+    integers, exact in float64."""
+    if bits <= 8:
+        return [q]
+    out, r = [], q
+    for _ in range(-(-(bits - 1) // 7)):
+        hi = torch.floor((r + 64) * (1.0 / 128))
+        out.append(r - hi * 128)
+        r = hi
+    if bool((r != 0).any()):
+        raise OverflowError(f"exact train: a value the {len(out)} digits for {bits} bits cannot hold")
+    return out
+
+
 def _ceil_log2(n: int) -> int:
     return max(0, (n - 1).bit_length())
 
@@ -140,29 +158,36 @@ class Ops:
     """The model's sums and softmax, exact (`exact=True`) or ordinary float
     (`exact=False`: the float twin and the autograd reference)."""
 
-    def __init__(self, exact=True, mm=mm_f64, bwd_bits=8):
-        """`bwd_bits`: the width of the backward pass's product operands
-        (gradients and the activations and weights they meet); the forward
-        pass is always int8, the format the model is served in. Past 8 bits
-        only the CPU's float64 products are exact here (`mm_f64`)."""
-        self.exact, self.mm, self.bwd_bits = exact, mm, bwd_bits
-        if exact and bwd_bits > 8 and mm is not mm_f64:
-            raise NotImplementedError("exact train: backward operands wider than int8 need "
-                                      "mm_f64 (a digit split for the int8 GEMMs is not written)")
+    def __init__(self, exact=True, mm=mm_f64, grad_bits=12, bwd_bits=8):
+        """Widths of the backward pass's product operands: `grad_bits` for the
+        gradient, `bwd_bits` for the activation or weight it meets. The
+        forward pass is always int8, the format the model is served in. Past
+        8 bits an operand is split into int8 digits (`digits`), so every
+        product still runs on an int8 GEMM and is still exact. The default,
+        12-bit gradients against int8 activations and weights, is the
+        narrowest setting measured to train as well as float32: with int8
+        gradients the held-out loss stalled at 2.01 against float32's 1.71
+        (docs/benchmarks/exact_train_lm_2026-11-21/)."""
+        self.exact, self.mm, self.grad_bits, self.bwd_bits = exact, mm, grad_bits, bwd_bits
         self._tables = {}
 
-    def matmul(self, a, b, batched=False, bwd=False):
-        """a @ b^T, summed over the last dimension of both; `bwd` for the
-        backward pass's products."""
+    def matmul(self, a, b, batched=False, grad=None):
+        """a @ b^T, summed over the last dimension of both. `grad` names the
+        backward pass's gradient operand, "a" or "b" (None: forward)."""
         if not self.exact:
             return a @ b.transpose(-1, -2)
-        bits = self.bwd_bits if bwd else 8
-        qa, sa = q8(a, bits=bits)
-        qb, sb = q8(b, bits=bits)
-        if bits > 8:
-            c = mm_f64(qa, qb, bits)
-        else:
-            c = _exact_fp32_bmm(qa, qb) if batched else self.mm(qa, qb)
+        bits_a = 8 if grad is None else self.grad_bits if grad == "a" else self.bwd_bits
+        bits_b = 8 if grad is None else self.grad_bits if grad == "b" else self.bwd_bits
+        qa, sa = q8(a, bits=bits_a)
+        qb, sb = q8(b, bits=bits_b)
+        c = None
+        for i, da in enumerate(digits(qa, bits_a)):
+            for j, db in enumerate(digits(qb, bits_b)):
+                part = _exact_fp32_bmm(da, db) if batched else self.mm(da, db)
+                part = part * float(128 ** (i + j)) if i + j else part
+                c = part if c is None else c + part      # integers below 2^53: exact
+        if (abs(qa).amax() * abs(qb).amax() * a.shape[-1]) >= F64_EXACT:
+            raise OverflowError("exact train: a product sum past float64's exact integers")
         return c * pow2(sa + sb.transpose(-1, -2))
 
     def sum(self, x, dim):
@@ -281,7 +306,7 @@ def forward(ops, cfg, p, idx, targets=None):
 
 def _linear_bwd(ops, dy, x, w):
     """dX = dy W and dW = dy^T x, each an exact sum."""
-    return ops.matmul(dy, w.t(), bwd=True), ops.matmul(dy.t(), x.t(), bwd=True)
+    return ops.matmul(dy, w.t(), grad="a"), ops.matmul(dy.t(), x.t(), grad="a")
 
 
 def backward(ops, cfg, p, probs, targets, saved):
@@ -306,11 +331,11 @@ def backward(ops, cfg, p, probs, targets, saved):
         dx = dx + dx2
         do2, g[f"o.{i}"] = _linear_bwd(ops, dx, o2, p[f"o.{i}"])
         do = do2.reshape(B, T, H, Dh).transpose(1, 2)                 # [B][H][T][Dh]
-        dP = ops.matmul(do, v, batched=True, bwd=True)                 # [B][H][T][Tk]
-        dv = ops.matmul(P.transpose(-1, -2), do.transpose(-1, -2), batched=True, bwd=True)
+        dP = ops.matmul(do, v, batched=True, grad="a")                 # [B][H][T][Tk]
+        dv = ops.matmul(P.transpose(-1, -2), do.transpose(-1, -2), batched=True, grad="b")
         dS = P * (dP - ops.sum(P * dP, -1)) * scale
-        dq = ops.matmul(dS, k.transpose(-1, -2), batched=True, bwd=True)
-        dk = ops.matmul(dS.transpose(-1, -2), q.transpose(-1, -2), batched=True, bwd=True)
+        dq = ops.matmul(dS, k.transpose(-1, -2), batched=True, grad="a")
+        dk = ops.matmul(dS.transpose(-1, -2), q.transpose(-1, -2), batched=True, grad="a")
         dqkv = torch.cat([t.transpose(1, 2).reshape(B * T, cfg.d) for t in (dq, dk, dv)], dim=1)
         dhn, g[f"qkv.{i}"] = _linear_bwd(ops, dqkv, hn, p[f"qkv.{i}"])
         dx1, g[f"n1.{i}"] = _norm_bwd(ops, dhn, c_n1)
