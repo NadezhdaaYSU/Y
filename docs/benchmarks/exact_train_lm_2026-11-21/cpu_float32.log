@@ -1,0 +1,11 @@
+step   500  train 2.0933  held-out 2.1278  weights 3608cab000bc06c1  4 s
+step  1000  train 1.8482  held-out 1.9666  weights 20d109940d5f1e92  8 s
+step  1500  train 1.7778  held-out 1.8754  weights 808d0e2629b56b95  12 s
+step  2000  train 1.6762  held-out 1.8546  weights 7719287f303486ec  17 s
+step  2500  train 1.6326  held-out 1.7943  weights 34862a0096c3bee4  21 s
+step  3000  train 1.6310  held-out 1.7674  weights 099fb0c56c9facda  25 s
+step  3500  train 1.4255  held-out 1.7379  weights 4effc4552615d9a1  29 s
+step  4000  train 1.5235  held-out 1.7181  weights 8475a4b97590b8b2  33 s
+step  4500  train 1.5515  held-out 1.7009  weights f03b5c3b8946bc11  37 s
+step  5000  train 1.5195  held-out 1.7060  weights 33a1a9763f65c217  41 s
+written to ../docs/benchmarks/exact_train_lm_2026-11-21/cpu_float32.json

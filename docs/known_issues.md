@@ -436,6 +436,21 @@ source; each entry there now carries its status. What is still open:
   once a chunk, not once a row, and takes 0.64-0.94x its old time either
   way; DRAM still costs it 1.16-1.29x
   (`docs/benchmarks/exact_attention_staging_2026-11-11/`).
+- `ExactRMSNorm.forward`'s float64 path (`model.py`, the CPU and the
+  default) rests on "sqrt ... correctly rounded on every IEEE device".
+  PyTorch's CPU float64 `torch.sqrt` is not, on this repository's AVX-512
+  build (torch 2.13.0): 226 of 20,000 inputs in [0.01, 10] differ from
+  `math.sqrt`, and each of 200 checked exactly was the CPU's error; CUDA's
+  matched all 20,000 (2026-11-21, found by `y_lang.exact.train_lm`'s CPU ==
+  GPU test). The norm casts its float64 quotient to float32 at once, which
+  hides a one-ulp float64 difference unless it straddles a float32 rounding
+  boundary, so no CPU == GPU record has shown a changed token, but the
+  stated reason does not hold. `train_lm.det_sqrt` (integer square root,
+  the same bits on CPU and CUDA) is a candidate fix; not yet applied here.
+  Also measured there: PyTorch's CUDA divide by a Python scalar multiplies
+  by its reciprocal (65% of float64 quotients differ from the CPU's), so a
+  constant divisor must be a multiply by a reciprocal computed once; the
+  exact path's `divisor()` already exists for that reason.
 
 ### Python packaging
 

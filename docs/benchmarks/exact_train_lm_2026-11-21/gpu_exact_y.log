@@ -1,0 +1,11 @@
+step   500  train 2.0913  held-out 2.1526  weights 2d4d9540dc7965c2  13 s
+step  1000  train 1.8989  held-out 2.0007  weights 17068ad1de305b90  25 s
+step  1500  train 1.7980  held-out 1.9480  weights 8d58a00dffda3d54  36 s
+step  2000  train 1.7756  held-out 1.9499  weights 1e2779d7cff4a9e2  47 s
+step  2500  train 1.6946  held-out 1.8993  weights 0330299d4618a2a7  60 s
+step  3000  train 1.7720  held-out 1.9074  weights cf571042c1b6f649  72 s
+step  3500  train 1.4871  held-out 1.8955  weights 93982868a7dc8dc7  83 s
+step  4000  train 1.6845  held-out 1.9441  weights 2040922a8d752547  95 s
+step  4500  train 1.7302  held-out 1.9077  weights d4d787eeea21f868  106 s
+step  5000  train 1.6754  held-out 2.0083  weights 6febd608d3a93ae7  117 s
+written to ../docs/benchmarks/exact_train_lm_2026-11-21/gpu_exact_y.json

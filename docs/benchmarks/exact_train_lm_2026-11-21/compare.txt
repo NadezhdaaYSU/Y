@@ -1,0 +1,19 @@
+################ cpu_exact vs gpu_exact_y
+A: cpu:x86_64  arm exact  mm f64
+B: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89)  arm exact  mm y
+  weights identical at 10/10 checkpoints
+  p(target) identical at every step
+  final held-out loss: A 2.008263  B 2.008263
+exit 0
+################ cpu_float32 vs gpu_float32
+A: cpu:x86_64  arm float32  mm None
+B: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89)  arm float32  mm None
+  weights identical at 0/10 checkpoints; first differ at step 500
+  p(target) first differs at step 1
+  final held-out loss: A 1.705956  B 1.705496
+exit 1
+################ cpu_exact vs cpu_float32
+A: cpu:x86_64  arm exact  mm f64
+B: cpu:x86_64  arm float32  mm None
+  *** not the same workload (arm, config, seed, lr, batch, steps or text differ)
+exit 2
