@@ -451,6 +451,19 @@ source; each entry there now carries its status. What is still open:
   by its reciprocal (65% of float64 quotients differ from the CPU's), so a
   constant divisor must be a multiply by a reciprocal computed once; the
   exact path's `divisor()` already exists for that reason.
+- The fix for Inductor's store-then-reload race (`model._barrier_before_reloads`,
+  2026-11-21, see Fixed) wraps `TritonKernel.load`, an Inductor internal:
+  a torch upgrade that renames it fails at import, but one that loads a
+  stored buffer through another path (a template or combo kernel's own
+  `load`, which none of the exact training or decode graphs was seen to
+  use) would not get the barrier. `test_exact_train_lm`'s static check of
+  the generated source finds an unguarded reload in the training step's
+  kernels, and finds one with the fix removed; nothing checks the decode
+  graphs' source the same way. Re-run that test and a width-512 CPU == GPU
+  step after any torch or Triton upgrade.
+- Not checked: whether the inference path's activation quantizers refuse a
+  NaN or an inf, as `train_lm`'s now do (a NaN converts to the integer 0 on
+  CUDA and to a different integer on the CPU).
 
 ### Python packaging
 
@@ -669,6 +682,8 @@ The wheel builds and installs outside the repository since e94e29a
 
 | Issue | Fix and regression gate |
 | --- | --- |
+| Inductor (torch 2.13.0, Triton 3.7.1) wrote a Triton kernel with a data race: it stored a buffer in one loop and loaded it back in a later loop with no barrier, assuming the storing thread is the loading one, while Triton gave the store layout [1, 2] per thread and the load [1, 4]. Exact training compiled at width 512 lost the CPU's bits after one step (786,357 of 2,097,152 values of one gradient wrong), every check passing; found 2026-11-21 | `y_lang.exact.model` makes Inductor emit `tl.debug_barrier()` before any load of a buffer the same kernel stored (361 such loads in the width-512 training step), and adds a tag to Inductor's cache key so a graph compiled without it is not reused. `python/tests/test_exact_train_lm.py`: the compiled step's generated source has no unguarded reload and has one with the fix removed (the control); a width-512 compiled step has the CPU's weights, target probabilities and Adam state, and with the fix removed it does not. The 5000-step T2 record, compiled and graphed, matches the CPU record at every checkpoint and step (`docs/benchmarks/exact_train_lm_2026-11-21/fast/`). |
+| `train_lm`'s quantizers and `det_sqrt` took a NaN or inf without error (`det_sqrt(NaN)` gave 0 on CUDA, which converts NaN to the integer 0), and its digit split gave two digits to 14- and 15-bit values, which two digits cannot hold (refused at run time, not wrong) | The quantizers work on the floats' bits and refuse an exponent field of all ones; `ndigits` counts what the digits reach. Tests: `test_non_finite_values_are_refused`, `test_digits_rebuild_the_value` (8 to 22 bits). |
 | `y_lang.exact` could not run on a GPU older than sm_80: on a Tesla T4 (sm_75, Kaggle, 2026-11-11) Triton 3.7 failed to build `w8a8_gemv`'s int8 `tl.dot`, which the exact path picked on every CUDA device, and the model died before its first token | `378dc9f`: `convert` asks `triton_int8_dot_ok(device)`; below sm_80 the layers take `torch._int_mm` (or float64), which give the same bits, and a `Y_EXACT_GEMM=triton` named explicitly is refused there. `python/y_lang/tests/test_exact_gemm_choice.py` (sm_89 and a patched sm_75 on the same card, logits equal bit for bit; 6 of 6 mutants fail it). On the T4 the exact path then gave the CPU's tokens (`docs/benchmarks/exact_cross_gpu_t4_2026-11-11/`). |
 | The wheel did not bring Z3, and a `z3` pip installed was found only in an activated environment, so outside one (a Kaggle notebook) the compiler refused `y_lang.exact`'s `@invariant` kernels as unverifiable | `84a4429`: the wheel depends on `z3-solver`, and `y_lang` sets `Y_Z3_PATH` to the interpreter's scripts directory's `z3` when nothing names one and none is on `PATH`; without any Z3 the kernels are still refused. `python/tests/test_solver_lookup.py` (a stub found and run there, the refusal without it, a preset `Y_Z3_PATH` kept). |
 | `w8a8_gemv._quant_rows` (the quantiser of `w8a8_linear`: benchmarks and `exact_selftest`) divided the scale with Triton's approximate `/` and the values with `libdevice.div_rn`, which Triton compiles with flush-to-zero; and its self-test compared it with torch's `amax / 127.0`, itself a reciprocal multiply on CUDA, not the model's tensor divide. The scale differed from the model's (`model._q_per_row`) in 112 of 2048 rows of randn, and a row whose largest \|x\| is below 127 * 2^-126 got scale 1 and all-zero integers | Both divides are `tl.div_rn` (2026-11-10): correctly rounded, subnormals kept. `python/y_lang/tests/test_exact_quant_rows.py` compares it with `_q_per_row` bit for bit at volume and on subnormal scales and values, and checks the PTX's divides are `div.rn.f32` (no `.ftz`, no approximate divide); the old kernel fails all three tests, and 4 of 4 mutants fail it. `check_quantiser_at_volume` now compares with `_q_per_row`. |

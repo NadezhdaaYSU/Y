@@ -113,6 +113,53 @@ INDUCTOR_DEFAULTS = {
 }
 _inductor_config.eager_numerics.division_rounding = True
 _inductor_config.emulate_precision_casts = True
+
+
+# A fourth way, which is not rounding but a data race (torch 2.13.0, Triton
+# 3.7.1, found 2026-11-21 by exact training's CPU == GPU check): a Triton
+# kernel that STORES a buffer in one loop and LOADS it back in a later loop
+# (Inductor's multi-loop reductions do this with a buffer it calls an
+# invalidated store) gets no barrier between the two. Inductor assumes the
+# thread that stored an element is the one that loads it, since the index is
+# the same; Triton gives the two operations different thread layouts when
+# their neighbours want different ones, so a thread loads elements that
+# another thread may not have stored yet. In the case found, a kernel
+# quantized a weight for the forward pass and wrote its transposed int8 copy
+# for the backward pass: stored in layout [1, 2] per thread and loaded in
+# layout [1, 4], and half the copy's rows were read before they were written,
+# 786,357 of 2,097,152 of one gradient's values wrong, every check passing.
+# The fix is a CTA barrier (`tl.debug_barrier()`, which makes the block's
+# earlier global writes visible to all its threads) before any load of a
+# buffer the same kernel has stored; the rows such a kernel reads back are
+# its own program's. Applied to every Triton kernel Inductor writes in this
+# process, like the flags above; a kernel without such a load is unchanged.
+def _barrier_before_reloads():
+    from torch._inductor.codegen import triton as _triton_codegen
+
+    kernel_cls = _triton_codegen.TritonKernel
+    if getattr(kernel_cls.load, "_y_barrier", False):
+        return
+    load = kernel_cls.load
+
+    def load_after_barrier(self, name, index):
+        if name in self.store_buffer_names:
+            self.loads.writeline("tl.debug_barrier()")
+            RELOAD_BARRIERS.append(name)
+        return load(self, name, index)
+
+    load_after_barrier._y_barrier = True
+    kernel_cls.load = load_after_barrier
+    # Inductor's on-disk cache keys a compiled graph by its own sources and
+    # config, which a patch made here does not change: without a tag, a graph
+    # compiled before the fix would be loaded with the race in it.
+    import torch.compiler.config as _compiler_config
+    tag = "y_lang.exact:barrier-before-reload-1"
+    if tag not in _compiler_config.cache_key_tag:
+        _compiler_config.cache_key_tag = "+".join(t for t in (_compiler_config.cache_key_tag, tag) if t)
+
+
+RELOAD_BARRIERS = []    # buffer names given a barrier, for tests
+_barrier_before_reloads()
 _DIVISORS = {}
 
 

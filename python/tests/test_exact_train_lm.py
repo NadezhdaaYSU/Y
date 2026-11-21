@@ -17,6 +17,30 @@ def _cuda_ok():
     return torch.cuda.is_available() and torch.cuda.get_device_capability() >= (7, 5)
 
 
+def unguarded_reloads(source):
+    """(kernel, pointer) for every Triton kernel in Inductor's generated
+    `source` that loads a pointer it stored earlier with no
+    `tl.debug_barrier()` in between: the store-then-load race of torch
+    2.13.0 (y_lang.exact.model)."""
+    import re
+    found = []
+    for kern in re.split(r"@triton\.jit\s*\n", source)[1:]:
+        body = kern.split("''', device_str")[0]
+        name = re.match(r"\s*def (\w+)", body).group(1)
+        guarded = {}                      # pointer -> a barrier since its last store
+        for line in body.splitlines():
+            s = line.strip()
+            if s.startswith("tl.debug_barrier()"):
+                guarded = {p: True for p in guarded}
+            for p in re.findall(r"tl\.load\((\w+)", s):
+                if guarded.get(p) is False:
+                    found.append((name, p))
+            m = re.match(r"tl\.store\((\w+)", s)
+            if m:
+                guarded[m.group(1)] = False
+    return found
+
+
 def run(ops, device, dtype, steps=12, permute=False, cfg=CFG, B=4):
     """Training as `train_lm.train` does it; with `permute`, each batch's
     rows are reversed, which reorders every sum over tokens."""
@@ -87,20 +111,79 @@ class Pieces(unittest.TestCase):
 
     def test_digits_rebuild_the_value(self):
         g = torch.Generator().manual_seed(9)
-        for bits in (8, 12, 16):
+        for bits in (8, 12, 13, 14, 15, 16, 21, 22):
             top = (1 << (bits - 1)) - 1
-            q = torch.randint(-top, top + 1, (5000,), generator=g).to(torch.float64)
-            q[:3] = torch.tensor([-top, top, 0], dtype=torch.float64)
+            q = torch.randint(-top, top + 1, (5000,), generator=g, dtype=torch.int32)
+            q[:3] = torch.tensor([-top, top, 0], dtype=torch.int32)
             ds = L.digits(q, bits)
-            self.assertEqual(len(ds), 1 if bits <= 8 else -(-(bits - 1) // 7))
-            back = sum(d * float(128 ** i) for i, d in enumerate(ds))
+            self.assertEqual(len(ds), L.ndigits(bits))
+            back = sum(d * 128 ** i for i, d in enumerate(ds))
             self.assertTrue(torch.equal(back, q))
             if bits > 8:
                 for d in ds:
-                    self.assertGreaterEqual(float(d.min()), -64)
-                    self.assertLessEqual(float(d.max()), 63)
+                    self.assertGreaterEqual(int(d.min()), -64)
+                    self.assertLessEqual(int(d.max()), 63)
+            self.assertGreaterEqual(L.capacity(bits), top)
         with self.assertRaises(OverflowError):
-            L.digits(torch.tensor([20000.0], dtype=torch.float64), 12)   # two digits hold |q| <= 8256
+            L.digits(torch.tensor([20000], dtype=torch.int32), 12)   # two digits hold |q| <= 8256
+
+    def test_integer_quantizer_is_round_half_even(self):
+        # q8 works on the integers inside the floats; it must be the float64
+        # formula round(x * 2^-s), clamped, exactly. Ties at .5 of both
+        # parities and signs, zeros of both signs, subnormal entries, rows
+        # spanning many binades.
+        def by_floats(x, bits):
+            top = (1 << (bits - 1)) - 1
+            e = torch.frexp(x.abs().amax(-1, keepdim=True))[1].to(torch.int64)
+            s = e - (bits - 1)
+            return torch.round(x * L.pow2(-s)).clamp(-top, top), s
+        g = torch.Generator().manual_seed(11)
+        rows = [torch.randn(64, 300, generator=g, dtype=torch.float64)
+                * torch.logspace(-30, 30, 300, dtype=torch.float64)]
+        ties = (torch.arange(-200, 200, dtype=torch.float64) + 0.5).reshape(2, 200)
+        rows.append(torch.cat([ties, torch.full((2, 100), 0.0, dtype=torch.float64)], 1))
+        z = torch.zeros(3, 300, dtype=torch.float64)
+        z[0, :5] = torch.tensor([-0.0, 0.0, 5e-324, -2.0 ** -1060, 1.0], dtype=torch.float64)
+        z[1, 0] = 1e150                  # scales stay within 2^+-511
+        z[1, 1] = -1e-300
+        rows.append(z)
+        x = torch.cat(rows)
+        for bits in (8, 12, 16):
+            for scale in (1.0, 2.0 ** -7, 2.0 ** -3):
+                xs = x * scale
+                q, s = L.q8(xs, bits=bits)
+                rq, rs = by_floats(xs, bits)
+                self.assertTrue(torch.equal(s, rs))
+                self.assertTrue(torch.equal(q.to(torch.float64), rq), (bits, scale))
+        # The wide rounding behind the exact sums, including left shifts.
+        for sh in (-70, -61, -20, 0, 9):
+            s = torch.full((x.shape[0], 1), sh, dtype=torch.int64) + L.exponent(x, -1)
+            ok = (x * L.pow2(-s)).abs() < 2.0 ** 62
+            ref = torch.round(x * L.pow2(-s)).to(torch.int64)
+            self.assertTrue(torch.equal(L.scaled_round(x, s)[ok], ref[ok]), sh)
+
+    def test_non_finite_values_are_refused(self):
+        # A NaN used to pass the quantizer, and det_sqrt(NaN) gave 0 on CUDA.
+        for bad in (float("nan"), float("inf"), -float("inf")):
+            x = torch.ones(2, 8, dtype=torch.float64)
+            x[1, 3] = bad
+            with self.assertRaises(OverflowError):
+                L.q8(x)
+            with self.assertRaises(OverflowError):
+                L.Ops(exact=True).sum(x, -1)
+            with self.assertRaises(OverflowError):
+                L.det_sqrt(x.reshape(-1))
+            with self.assertRaises(OverflowError):
+                L.Ops(exact=True).softmax(x, torch.zeros_like(x, dtype=torch.bool))
+        with self.assertRaises(OverflowError):
+            L.det_sqrt(torch.tensor([-1.0], dtype=torch.float64))
+        # A quantizer scale past 2^+-511 is refused, so a product's scale
+        # 2^(sa + sb) is always a normal float64.
+        for big in (1e160, 1e-160):
+            with self.assertRaises(OverflowError):
+                L.q8(torch.tensor([[big, 1e-170]], dtype=torch.float64))
+        L.q8(torch.tensor([[1e150, 1e-140]], dtype=torch.float64))
+        self.assertEqual(L.det_sqrt(torch.tensor([-0.0, 0.0], dtype=torch.float64)).tolist(), [0.0, 0.0])
 
     def test_wide_matmul_is_the_exact_product(self):
         g = torch.Generator().manual_seed(10)
@@ -110,7 +193,7 @@ class Pieces(unittest.TestCase):
         c = ops.matmul(a, b, grad="a")
         qa, sa = L.q8(a, bits=12)
         qb, sb = L.q8(b, bits=8)
-        ref = (qa @ qb.t()) * L.pow2(sa + sb.t())     # exact: integers far below 2^53
+        ref = (qa.double() @ qb.double().t()) * L.pow2(sa + sb.t())     # exact: integers far below 2^53
         self.assertTrue(torch.equal(c, ref))
         # Wider gradients are closer to the float product.
         f = a @ b.t()
@@ -165,6 +248,24 @@ class Training(unittest.TestCase):
         self.assertEqual(L.digest(params), L.digest(self.params))
         self.assertEqual(losses, self.losses)
 
+    def test_trainer_gives_the_same_weights(self):
+        # The Trainer (flat Adam, deferred checks) against the dict API above.
+        data = L.CharData(TEXT)
+        tr = L.Trainer(L.Ops(exact=True), CFG, "cpu", torch.float64)
+        gen = torch.Generator().manual_seed(1)
+        tps = [tr.step(*data.batch(gen, 4, CFG.ctx)) for _ in range(12)]
+        tr.verify()
+        self.assertEqual(L.digest(tr.params), L.digest(self.params))
+        self.assertEqual([L.nll_on_host(t) for t in tps], self.losses)
+
+    def test_a_deferred_refusal_still_raises(self):
+        data = L.CharData(TEXT)
+        tr = L.Trainer(L.Ops(exact=True), CFG, "cpu", torch.float64)
+        tr.params["up.0"][3, 5] = float("nan")       # a view of the flat buffer
+        tr.step(*data.batch(torch.Generator().manual_seed(1), 4, CFG.ctx))
+        with self.assertRaises(OverflowError):
+            tr.verify()
+
     def test_float_twin_depends_on_row_order(self):
         a, _ = run(L.Ops(exact=False), "cpu", torch.float32)
         b, _ = run(L.Ops(exact=False), "cpu", torch.float32, permute=True)
@@ -206,6 +307,86 @@ class OnTheGpu(unittest.TestCase):
         params, gl = run(L.Ops(exact=True, mm=L.mm_torch, grad_bits=16, bwd_bits=12), "cuda", torch.float64)
         self.assertEqual(gl, losses)
         self.assertEqual(L.digest(params), L.digest(ref))
+
+    def test_compiled_graph_gives_the_cpu_weights(self):
+        # torch.compile fuses the step and one CUDA graph replays it: the
+        # fast path, which must still give the CPU's bits.
+        data = L.CharData(TEXT)
+        gen = torch.Generator().manual_seed(1)
+        bs = [data.batch(gen, 4, CFG.ctx) for _ in range(12)]
+        for graph, comp in ((True, False), (True, True)):
+            tr = L.Trainer(L.Ops(exact=True, mm=L.mm_y), CFG, "cuda", torch.float64,
+                           graph=graph, compile=comp)
+            tps = [tr.step(x.cuda(), y.cuda()) for x, y in bs]
+            tr.verify()
+            self.assertEqual([L.nll_on_host(t) for t in tps], self.losses, (graph, comp))
+            self.assertEqual(L.digest(tr.params), L.digest(self.ref), (graph, comp))
+
+    def test_compiled_kernels_reload_only_after_a_barrier(self):
+        # Inductor's multi-loop kernels store a buffer and load it back in a
+        # later loop; Triton may give the two different thread layouts, so
+        # without a barrier a thread loads what another has not stored yet
+        # (it corrupted a third of one gradient at width 512). Every such
+        # reload in the compiled step must follow a barrier; the control,
+        # with the fix removed, must find one that does not.
+        import torch._inductor.config as ic
+        from torch._inductor.codegen import triton as tc
+        from torch._inductor.utils import run_and_get_code
+        data = L.CharData(TEXT)
+        x, y = (t.cuda() for t in data.batch(torch.Generator().manual_seed(1), 4, CFG.ctx))
+        fixed = tc.TritonKernel.load
+        self.assertTrue(getattr(fixed, "_y_barrier", False))
+        unfixed = fixed.__closure__[0].cell_contents
+        found, barriers = {}, {}
+        try:
+            for name, load in (("fixed", fixed), ("unfixed", unfixed)):
+                tc.TritonKernel.load = load
+                torch._dynamo.reset()
+                with ic.patch(fx_graph_cache=False):
+                    tr = L.Trainer(L.Ops(exact=True, mm=L.mm_y), CFG, "cuda", torch.float64, compile=True)
+                    _, code = run_and_get_code(tr.step, x, y)
+                tr.verify()
+                src = "\n".join(code)
+                found[name], barriers[name] = unguarded_reloads(src), src.count("tl.debug_barrier()")
+        finally:
+            tc.TritonKernel.load = fixed
+            torch._dynamo.reset()
+        self.assertEqual(found["fixed"], [])
+        self.assertGreater(barriers["fixed"], 0)          # there was a reload: not vacuous
+        self.assertNotEqual(found["unfixed"], [])         # the control
+
+    def test_compiled_step_at_width_512_gives_the_cpu_weights(self):
+        # The size at which the race showed (4 layers, width 512, 4096
+        # tokens): one compiled step against the CPU's. About two minutes,
+        # most of it compiling.
+        import torch._inductor.config as ic
+        cfg = L.Config(d=512, heads=8, layers=4, ff=2048, ctx=256)
+        data = L.CharData(TEXT * 40)
+        x, y = data.batch(torch.Generator().manual_seed(1), 16, cfg.ctx)
+        ref = L.Trainer(L.Ops(exact=True), cfg, "cpu", torch.float64)
+        ref_tp = ref.step(x, y)
+        ref.verify()
+        torch._dynamo.reset()
+        with ic.patch(fx_graph_cache=False):
+            tr = L.Trainer(L.Ops(exact=True, mm=L.mm_y), cfg, "cuda", torch.float64, compile=True)
+            tp = tr.step(x.cuda(), y.cuda())
+        tr.verify()
+        torch._dynamo.reset()
+        self.assertEqual(L.tp_digest(tp), L.tp_digest(ref_tp))
+        self.assertEqual(L.digest(tr.params), L.digest(ref.params))
+        self.assertTrue(torch.equal(tr.opt.v.cpu(), ref.opt.v))
+
+    def test_a_deferred_refusal_raises_from_a_graph(self):
+        data = L.CharData(TEXT)
+        gen = torch.Generator().manual_seed(1)
+        tr = L.Trainer(L.Ops(exact=True, mm=L.mm_y), CFG, "cuda", torch.float64, graph=True)
+        x, y = (t.cuda() for t in data.batch(gen, 4, CFG.ctx))
+        tr.step(x, y)
+        tr.verify()                                   # clean so far
+        tr.params["up.0"][3, 5] = float("nan")
+        tr.step(x, y)
+        with self.assertRaises(OverflowError):
+            tr.verify()
 
     def test_det_sqrt_same_bits_on_both(self):
         # torch.sqrt's float64 differs between this CPU and CUDA (2026-11-21);

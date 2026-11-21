@@ -33,8 +33,9 @@ names:
   any device (`python/tests/test_exact_train.py`).
 - `train_lm`: exact training of a tiny GPT from scratch: integer sums
   throughout, int8 forward, 12-bit gradients as int8 digits; the same weights
-  on a CPU and a GPU after 5000 steps, and float32's loss
-  (`docs/benchmarks/exact_train_lm_2026-11-21/`).
+  on a CPU and a GPU after 5000 steps, and float32's loss. `Trainer(graph=True,
+  compile=True)` runs a step as one compiled CUDA graph, 2.5x float32's time
+  given the same treatment (`docs/benchmarks/exact_train_lm_2026-11-21/`).
 
 On a GPU the linear layers' int8 products run on Triton's kernel by default,
 on cuBLASLt with `Y_EXACT_GEMM=torch`, or on Y's own kernel, whose schedule and

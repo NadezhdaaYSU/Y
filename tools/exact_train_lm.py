@@ -3,13 +3,15 @@ so two machines' runs can be compared bit for bit.
 
     python3 tools/exact_train_lm.py --record cpu.json --device cpu
     python3 tools/exact_train_lm.py --record gpu.json --device cuda --mm y
+    python3 tools/exact_train_lm.py --record fast.json --device cuda --mm y --graph --compile
     python3 tools/exact_train_lm.py --record f32.json --arm float32
     python3 tools/exact_train_lm.py --compare cpu.json gpu.json
 
 A record holds every step's training loss (read on the host) and a digest of
 the probabilities it gave each target token, the held-out
-loss every `--eval-every` steps, and a digest of all weights at each of those
-points. `--compare` reports the first checkpoint whose weights differ and the
+loss every `--eval-every` steps, a digest of all weights at each of those
+points, and the steady-state time per step (`ms_per_step`; the first step,
+which compiles and captures, is timed apart). `--compare` reports the first checkpoint whose weights differ and the
 first step whose target probabilities differ. For the exact arm, two devices must agree
 everywhere; the float32 arm is the control, which should not.
 
@@ -51,33 +53,47 @@ def record(a):
         ops, dtype = L.Ops(exact=True, mm=mm, grad_bits=a.grad_bits, bwd_bits=a.bwd_bits), torch.float64
     else:
         ops, dtype = L.Ops(exact=False), torch.float32
-    digests = []
-
-    def log(msg):
-        print(msg, flush=True)
-
-    t0 = time.time()
-    params = L.init_params(cfg, a.seed, dtype, a.device)
-    opt = L.Adam(params, lr=a.lr, exact=ops.exact)
+    tr = L.Trainer(ops, cfg, a.device, dtype, a.seed, a.lr, graph=a.graph, compile=a.compile)
     gen = torch.Generator().manual_seed(a.seed + 1)
-    losses, evals, pts = [], [], []
-    for step in range(a.steps):
-        x, y = data.batch(gen, a.batch, cfg.ctx)
-        x, y = x.to(a.device), y.to(a.device)
-        _, probs, saved = L.forward(ops, cfg, params, x, y)
-        losses.append(L.cross_entropy_on_host(probs, y))
-        pts.append(L.target_prob_digest(probs, y))
-        opt.step(params, L.backward(ops, cfg, params, probs, y, saved))
-        if (step + 1) % a.eval_every == 0 or step + 1 == a.steps:
-            ev = L.evaluate(ops, cfg, params, data, a.device, a.eval_batches, a.batch)
-            evals.append([step + 1, ev])
-            digests.append([step + 1, L.digest(params)])
-            log(f"step {step + 1:5d}  train {losses[-1]:.4f}  held-out {ev:.4f}  weights {digests[-1][1]}"
-                f"  {time.time() - t0:.0f} s")
+    losses, evals, pts, digests = [], [], [], []
+    sync = torch.cuda.synchronize if a.device == "cuda" else (lambda: None)
+    t0 = time.time()
+    step_s, first_s, done = 0.0, None, 0
+    while done < a.steps:
+        # One segment, to the next checkpoint: its batches drawn in order from
+        # the one generator (the same batches as one draw per step) and moved
+        # to the device in one copy.
+        n = min(a.eval_every - done % a.eval_every, a.steps - done)
+        xs, ys = zip(*(data.batch(gen, a.batch, cfg.ctx) for _ in range(n)))
+        xs, ys = torch.stack(xs).to(a.device), torch.stack(ys).to(a.device)
+        sync()
+        t = time.perf_counter()
+        tps = []
+        for i in range(n):
+            tps.append(tr.step(xs[i], ys[i]))
+            if first_s is None:
+                sync()
+                first_s = time.perf_counter() - t
+        tr.verify()                       # fail closed before reading the segment
+        step_s += time.perf_counter() - t
+        for tp in torch.stack(tps).cpu():
+            losses.append(L.nll_on_host(tp))
+            pts.append(L.tp_digest(tp))
+        done += n
+        ev = L.evaluate(ops, cfg, tr.params, data, a.device, a.eval_batches, a.batch)
+        evals.append([done, ev])
+        digests.append([done, L.digest(tr.params)])
+        print(f"step {done:5d}  train {losses[-1]:.4f}  held-out {ev:.4f}  weights {digests[-1][1]}"
+              f"  {time.time() - t0:.0f} s", flush=True)
+    steady = (step_s - first_s) / max(1, a.steps - 1)
+    print(f"steps: {step_s:.1f} s, the first {first_s:.1f} s (compile, capture), then "
+          f"{steady * 1e3:.2f} ms/step", flush=True)
     rec = {"device": device_name(a.device), "arm": a.arm, "mm": a.mm if a.arm == "exact" else None,
            "torch": torch.__version__, "config": vars(cfg), "seed": a.seed, "lr": a.lr, "batch": a.batch,
            "steps": a.steps, "grad_bits": a.grad_bits, "bwd_bits": a.bwd_bits, "text_sha256": hashlib.sha256(raw).hexdigest(),
-           "losses": losses, "target_probs": pts, "evals": evals, "digests": digests, "seconds": time.time() - t0}
+           "losses": losses, "target_probs": pts, "evals": evals, "digests": digests, "seconds": time.time() - t0,
+           "graph": a.graph, "compile": a.compile, "step_seconds": step_s, "first_step_seconds": first_s,
+           "ms_per_step": steady * 1e3}
     with open(a.record, "w") as f:
         json.dump(rec, f)
     print(f"written to {a.record}")
@@ -120,6 +136,8 @@ def main():
                     help="width of the backward pass's gradient operands (exact arm)")
     ap.add_argument("--bwd-bits", type=int, default=8,
                     help="width of the activations and weights the gradients meet in the backward pass")
+    ap.add_argument("--graph", action="store_true", help="replay each step as one CUDA graph")
+    ap.add_argument("--compile", action="store_true", help="fuse the step with torch.compile")
     ap.add_argument("--steps", type=int, default=5000)
     ap.add_argument("--eval-every", type=int, default=500)
     ap.add_argument("--eval-batches", type=int, default=8)
@@ -132,8 +150,8 @@ def main():
         sys.exit(compare(*a.compare))
     if not a.record:
         ap.error("--record or --compare")
-    if a.device == "cpu" and a.mm != "f64":
-        ap.error("--mm y/torch need --device cuda")
+    if a.device == "cpu" and (a.mm != "f64" or a.graph or a.compile):
+        ap.error("--mm y/torch, --graph and --compile need --device cuda")
     record(a)
 
 

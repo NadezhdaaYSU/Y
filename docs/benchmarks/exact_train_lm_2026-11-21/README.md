@@ -117,12 +117,93 @@ norm's integer square root made `torch.sqrt` (3); Adam's reciprocal multiply
 made a scalar divide (3). The last two are caught only by the GPU tests, so
 a run of the suite on a machine without a GPU cannot see them.
 
+## Speed (later the same day)
+
+The first runs above took 164 s for 5000 GPU steps against float32's 16 s.
+`Trainer(graph=True, compile=True)` (harness: `--graph --compile`) now runs
+the same training at 0.99 ms a step, and gives the same bits:
+`fast/gpu_exact_y_g12b8_fast.json` has the CPU record's weights at all 10
+checkpoints and its target probabilities at all 5000 steps (`fast/compare.txt`),
+final weights `8a7018b19d9b7a00`.
+
+Steady-state ms per step, RTX 4070 Ti SUPER, Y's int8 GEMM, 12 / 8 bits.
+Both arms get the same treatment; float32 is PyTorch's default (no TF32).
+
+| Model | exact, eager (before) | exact, compiled + graphed | float32, eager | float32, compiled + graphed | ratio, same treatment |
+|---|---|---|---|---|---|
+| T2 (width 128, 2 layers, 1,024 tokens) | 22.4 | 0.99 | 1.08 | 0.40 | 2.5x |
+| width 512, 4 layers, 4,096 tokens, 12.8M parameters | (not run) | 43.8 | 24.6 | 18.5 | 2.4x |
+
+What changed, each measured on its own:
+
+1. **Checks read once per step.** Every fail-closed check used to read the
+   device (about 1,000 host waits a step). They now record a flag on the
+   device and `Trainer.verify` reads them all in one transfer and raises
+   before any value of the steps is read. Eager: 22.4 to 11.8 ms.
+2. **Adam over one flat buffer**, updated in place: the same arithmetic per
+   element in a few dozen kernels, and replayable by a CUDA graph.
+3. **One CUDA graph per step** (eager kernels): 6.8 ms.
+4. **`torch.compile`** with the flags under which Inductor rounds as eager
+   PyTorch does: 3.2 ms.
+5. **Quantizers on the integers inside the floats.** frexp, round, clamp
+   and the digit split were float64 arithmetic, which this GPU runs at 1/64
+   of float32's rate. They are now integer operations on the float64's bits
+   (the max of |x| is an integer max of the bit patterns; rounding is an
+   integer shift with round-half-even): the same function, checked on ties,
+   zeros, subnormals and the 5000-step record above. 16.6 against 133 us for
+   one [1024][512] 12-bit quantizer: 1.47 ms a step.
+6. **Fewer kernels**: the checks reduced once per message instead of once
+   per check, a 12-bit product as one GEMM over stacked digits, quantizer
+   scales bounded so a product's scale needs no check: 1.02 ms.
+
+At width 512 the GEMMs are not the gap: the exact step's GEMMs (Y's int8
+GEMM 2.5 ms, attention's fp32 products 3.3 ms) take 5.8 ms against
+float32's 14.3 ms. The other kernels take 38.4 ms against 4.4 ms, 14 ms of
+it in four kernels over the attention tensors (32768 rows of 256), int64
+work on 53-bit mantissas and float64 arithmetic. Activations in float32
+(still integer sums, IEEE float32 elementwise, 24-bit mantissas in int32)
+would be the next step; it would change the model's numbers, so it needs
+new reference runs.
+
+## Found while making it fast
+
+1. **Inductor generated a data race** (torch 2.13.0, Triton 3.7.1). At width
+   512 the compiled step's weights differed from the CPU's after one step,
+   with every check passing; eager and graphed eager matched. Bisected to
+   one gradient (the output layer's input gradient), wrong in 786,357 of
+   2,097,152 values, then to one kernel. It quantized the output weight for
+   the forward pass and wrote its transposed int8 copy for the backward
+   pass. It stored the copy's int64 values in one loop and loaded them back
+   in a later loop with no barrier between. Inductor assumes the thread
+   that stored an element loads it, since the index is the same, but
+   Triton gave the store the layout [1, 2] per thread and the load [1, 4]
+   (its GPU IR), so threads loaded values other threads had not stored yet.
+   The fix (`y_lang.exact.model`, applied to every Triton kernel Inductor
+   writes in the process, and keyed into Inductor's cache) puts
+   `tl.debug_barrier()` before any load of a buffer the same kernel stored.
+   The width-512 model has 361 such loads, T2 one. Tests: the generated
+   source of T2's compiled step has no unguarded reload, and does with the
+   fix removed; one width-512 compiled step has the CPU's weights, and with
+   the fix removed it does not. The compiled inference path imports the same
+   module, so it has the fix too.
+2. **A NaN or inf was not refused.** The quantizers and `det_sqrt` took a
+   non-finite value without error, and CUDA converts a NaN to the integer
+   0, so `det_sqrt(NaN)` gave 0 on the GPU. The integer forms read the
+   exponent field and refuse them (test).
+3. **The digit count was one short for 14, 15, 21, 22, ... bits.**
+   ceil((bits - 1) / 7) gave two digits for 14 and 15 bits, but two digits
+   in [-64, 63] reach 8,127, not 8,191. It was refused at run time, not
+   wrong; now `ndigits` counts what the digits reach (test for 8 to 22
+   bits).
+4. **float32 is not reproducible between code paths either.** The float32
+   twin gave held-out 1.6933 eager, 1.6974 compiled and 1.7060 with the
+   first code, on one GPU; the exact arm gave 1.6883 every time.
+
 ## Not covered
 
-- Speed. The exact step is unoptimised Python over many small kernels:
-  5000 steps took 164 s on the GPU with 12-bit gradients
-  (117 s with int8 ones) against float32's 16 s, and 823 s on the CPU
-  (sharing it with another run) against 41 s. No kernel work has been done for training.
+- Speed past the two models above, and on other GPUs. The eager exact step
+  is now slower than before (24 ms, many small integer kernels): eager is
+  for the CPU and for checking, the fast path is compiled.
 - One small model, one dataset, one seed. Other GPUs (T4, A100, H100) not yet
   run. The order freedom across data-parallel GPUs is shown by reversing a
   batch's rows, not by a multi-GPU run.
@@ -134,3 +215,5 @@ a run of the suite on a machine without a GPU cannot see them.
   a digest of the target probabilities per step, held-out losses and weight
   digests every 500 steps. `*.log`: the runs' output.
 - `compare.txt`: `tools/exact_train_lm.py --compare` on each pair.
+- `fast/`: the compiled, graphed runs (`--graph --compile`), with
+  `ms_per_step` in each record, and their `compare.txt`.

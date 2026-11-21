@@ -35,6 +35,12 @@ float64, the reference the hand-written backward is checked against
 
 The loss printed is computed on the host from the probabilities, for
 reading only; nothing in training depends on it.
+
+`Trainer` holds a run. On a GPU, `Trainer(..., graph=True, compile=True)`
+compiles the step with `torch.compile` and replays it as one CUDA graph,
+with the same bits as the eager step and the CPU (the tests, and the
+5000-step records in docs/benchmarks/exact_train_lm_2026-11-21/fast/).
+Every check is deferred to `Trainer.verify`, one read of the device.
 """
 
 import hashlib
@@ -52,35 +58,115 @@ F64_EXACT = 1 << 53
 
 # ---- exact building blocks ---------------------------------------------------
 
-def pow2(k: torch.Tensor) -> torch.Tensor:
-    """2^k as float64, built from its bits, for integer k in [-1022, 1023]."""
+def refuse(bad, cond: torch.Tensor, msg: str):
+    """Fail closed where any element of the bool tensor `cond` is True.
+
+    With `bad` None the device is read at once and OverflowError raised here.
+    Otherwise (`cond.any()`, msg) is appended to the list `bad` and nothing is
+    read: `Trainer` reads every flag of a step in one transfer and raises
+    before any value of that step reaches the host. A refused value goes on
+    being computed with until then, as garbage that no later operation can
+    turn into a crash, and is never returned."""
+    if bad is None:
+        if bool(cond.any()):
+            raise OverflowError(msg)
+    else:
+        bad.append((cond, msg))
+
+
+def reduce_checks(bad):
+    """(flags, messages) for the deferred checks in `bad`: one flag per
+    distinct message, any of its conditions, so a step's few hundred checks
+    are a few reductions."""
+    groups = {}
+    for cond, msg in bad:
+        groups.setdefault(msg, []).append(cond.reshape(-1))
+    return torch.stack([torch.cat(c).any() for c in groups.values()]), tuple(groups)
+
+
+# The quantizers work on the integers inside a float64, not with float64
+# arithmetic: a float64 x is mant * 2^E with an integer mant < 2^53, so
+# rounding x * 2^-s to an integer is an integer shift with round-half-even,
+# and comparing |x| is comparing its bits. That is the same function as
+# `torch.round(x * 2^-s)` (python/tests/test_exact_train_lm.py checks it on
+# ties, zeros and subnormals), and on a GeForce GPU, whose float64 units run
+# at 1/64 of float32's rate, eight times faster (2026-11-21: 16.6 against
+# 133 us for a [1024][512] 12-bit quantizer, compiled, RTX 4070 Ti SUPER).
+_ABS = (1 << 63) - 1
+_M52 = (1 << 52) - 1
+_INF_FIELD = 0x7FF
+Q_SCALE_RANGE = 511          # |s| of a quantizer's scale; 2 * 511 <= 1022
+
+
+def check_exp(k: torch.Tensor, bad=None):
+    """Refuse a scale exponent outside float64's normal range [-1022, 1023]."""
+    refuse(bad, (k < -1022) | (k > 1023), "exact train: a scale exponent outside float64's normal range")
+
+
+def pow2(k: torch.Tensor, bad=None, checked=False) -> torch.Tensor:
+    """2^k as float64, built from its bits, for integer k in [-1022, 1023]
+    (`checked`: the caller has refused any other k)."""
     k = k.to(torch.int64)
-    if k.numel() and (int(k.min()) < -1022 or int(k.max()) > 1023):
-        raise OverflowError("exact train: a scale exponent outside float64's normal range")
+    if not checked:
+        check_exp(k, bad)
     return torch.bitwise_left_shift(k + 1023, 52).contiguous().view(torch.float64)
 
 
-def exponent(x: torch.Tensor, dim: int) -> torch.Tensor:
-    """e with max |x| along `dim` below 2^e (0 for an all-zero slice); frexp
-    is exact."""
-    return torch.frexp(x.abs().amax(dim=dim, keepdim=True))[1].to(torch.int64)
+def _fields(x: torch.Tensor):
+    """(bits of |x|, biased exponent field) of float64 x, as int64."""
+    a = x.view(torch.int64) & _ABS
+    return a, a >> 52
 
 
-def q8(x: torch.Tensor, dim: int = -1, bits: int = 8):
-    """Integer-valued float64 q and exponents s with x ~ q * 2^s, one s per
-    slice along `dim` (the summed dimension), |q| <= 2^(bits-1) - 1 (int8:
-    127)."""
+def exponent(x: torch.Tensor, dim: int, bad=None) -> torch.Tensor:
+    """e with max |x| along `dim` below 2^e: frexp's exponent of the max (0
+    for an all-zero slice), read from its bits. A subnormal max gives -1022,
+    an upper bound where frexp's is tight; every caller then refuses the
+    slice, as with frexp, since its scale leaves float64's normal range. A
+    slice holding an inf or a NaN is refused: no scale represents it."""
+    a = x.view(torch.int64) & _ABS          # ordered as |x| is, for finite x
+    amax = a.amax(dim=dim, keepdim=True)
+    field = amax >> 52
+    refuse(bad, field == _INF_FIELD, "exact train: a value that is not finite (inf or NaN)")
+    return torch.where(amax == 0, 0, field - 1022)
+
+
+def scaled_round(x: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
+    """round-half-even(x * 2^-s) as int64, for finite float64 x and integer s
+    (broadcast) with |x * 2^-s| < 2^62; computed in integers, exactly."""
+    a, field = _fields(x)
+    mant = (a & _M52) | ((field > 0).to(torch.int64) << 52)
+    r = s - (torch.clamp(field, min=1) - 1075)          # x * 2^-s = mant / 2^r
+    left = mant << torch.clamp(-r, 0, 62)               # r <= 0: exact
+    rr = torch.clamp(r, 1, 62)      # r > 62 rounds to 0 as r = 62 does: mant < 2^53
+    q0 = mant >> rr
+    one = torch.ones_like(rr)
+    rem = mant & ((one << rr) - 1)
+    half = one << (rr - 1)
+    q = q0 + ((rem > half) | ((rem == half) & ((q0 & 1) == 1))).to(torch.int64)
+    q = torch.where(r <= 0, left, q)
+    return torch.where(x.view(torch.int64) < 0, -q, q)
+
+
+def q8(x: torch.Tensor, dim: int = -1, bits: int = 8, bad=None):
+    """Integers q (int32) and exponents s with x ~ q * 2^s, one s per slice
+    along `dim` (the summed dimension), |q| <= 2^(bits-1) - 1 (int8: 127):
+    q = round-half-even(x * 2^-s), clamped. A slice whose scale is outside
+    2^-511 .. 2^511 is refused, so the scale of a product of two quantized
+    operands, 2^(sa + sb), is always a normal float64 and needs no check of
+    its own (a slice that small or large is not a training value)."""
     top = (1 << (bits - 1)) - 1
-    s = exponent(x, dim) - (bits - 1)
-    return torch.round(x * pow2(-s)).clamp(-top, top), s
+    s = exponent(x, dim, bad) - (bits - 1)
+    refuse(bad, (s < -Q_SCALE_RANGE) | (s > Q_SCALE_RANGE),
+           f"exact train: a quantizer scale outside 2^-{Q_SCALE_RANGE} .. 2^{Q_SCALE_RANGE}")
+    return scaled_round(x, s).clamp(-top, top).to(torch.int32), s
 
 
-def isqrt(n: torch.Tensor) -> torch.Tensor:
+def isqrt(n: torch.Tensor, bad=None) -> torch.Tensor:
     """floor(sqrt(n)) for int64 0 <= n < 2^62: a float estimate (any
     device's, within 1 of the answer), then integer corrections, so the
     result is the one integer it must be."""
-    if n.numel() and (int(n.min()) < 0 or int(n.max()) >= 1 << 62):
-        raise OverflowError("exact train: isqrt takes 0 <= n < 2^62")
+    refuse(bad, (n < 0) | (n >= 1 << 62), "exact train: isqrt takes 0 <= n < 2^62")
     x = torch.sqrt(n.to(torch.float64)).to(torch.int64)
     for _ in range(2):
         x = x - (x * x > n).to(torch.int64)
@@ -88,70 +174,102 @@ def isqrt(n: torch.Tensor) -> torch.Tensor:
     return x
 
 
-def det_sqrt(v: torch.Tensor) -> torch.Tensor:
+def det_sqrt(v: torch.Tensor, bad=None) -> torch.Tensor:
     """sqrt of float64 v >= 0, to within 2^-30 relative, the same bits on
     every device: v scaled by an even power of two to an integer in
-    [2^59, 2^61), its integer square root, scaled back. Takes 0 and
+    [2^60, 2^62), its integer square root, scaled back. Takes 0 and
     2^-962 <= v < 2^1024; below that the scaling leaves float64's normal
-    range and `pow2` refuses."""
-    k = torch.frexp(v)[1].to(torch.int64) - 61
+    range and `pow2` refuses. A negative v, an inf or a NaN is refused (a NaN
+    used to become 0 on CUDA, which converts NaN to the integer 0)."""
+    a, field = _fields(v)
+    refuse(bad, (field == _INF_FIELD) | (v < 0), "exact train: det_sqrt takes a finite v >= 0")
+    k = torch.where(a == 0, 0, field - 1022) - 61       # frexp's exponent - 61
     k = k - (k & 1)                                    # even, so 2^(k/2) is exact
-    n = (v * pow2(-k)).to(torch.int64)                 # an integer: v has 53 bits
-    return isqrt(n).to(torch.float64) * pow2(torch.div(k, 2, rounding_mode="floor"))
+    check_exp(-k, bad)
+    n = scaled_round(v, k)                             # exact: a left shift of v's 53 bits
+    return isqrt(n, bad).to(torch.float64) * pow2(torch.div(k, 2, rounding_mode="floor"), bad)
 
 
-def digits(q: torch.Tensor, bits: int):
-    """Integer-valued float64 q with |q| < 2^(bits-1) as int8-valued digits
-    d_i in [-64, 63] with q = sum_i d_i * 128^i (one digit, q itself, for 8
-    bits or fewer). A product of wide operands is then a sum of int8
-    products, each exact on an int8 GEMM. All arithmetic here is on small
-    integers, exact in float64."""
+def ndigits(bits: int) -> int:
+    """How many digits in [-64, 63] hold every |q| <= 2^(bits-1) - 1: one
+    (q itself) for 8 bits or fewer, else the fewest n with
+    sum_{i<n} 63 * 128^i >= 2^(bits-1) - 1, the largest positive value n
+    digits reach. (ceil((bits - 1) / 7), used until 2026-11-21, is one short
+    for 14, 15, 21, 22, ... bits, which it refused at run time: two digits
+    reach 8,127, not 8,191.)"""
+    if bits <= 8:
+        return 1
+    n, top = 1, (1 << (bits - 1)) - 1
+    while 63 * (128 ** n - 1) // 127 < top:
+        n += 1
+    return n
+
+
+def digits(q: torch.Tensor, bits: int, bad=None, bounded=False):
+    """Integers q (an integer tensor) with |q| < 2^(bits-1) as `ndigits(bits)`
+    digits d_i in [-64, 63], q's dtype, with q = sum_i d_i * 128^i (one
+    digit, q itself, for 8 bits or fewer). A product of wide operands is then
+    a sum of int8 products, each exact on an int8 GEMM. d = r - 128 *
+    floor((r + 64) / 128), the floor an arithmetic shift. A q the digits
+    cannot hold is refused, unless `bounded` (the caller clamped |q| to
+    2^(bits-1) - 1, which `ndigits` guarantees they hold)."""
     if bits <= 8:
         return [q]
     out, r = [], q
-    for _ in range(-(-(bits - 1) // 7)):
-        hi = torch.floor((r + 64) * (1.0 / 128))
-        out.append(r - hi * 128)
+    for _ in range(ndigits(bits)):
+        hi = (r + 64) >> 7
+        out.append(r - (hi << 7))
         r = hi
-    if bool((r != 0).any()):
-        raise OverflowError(f"exact train: a value the {len(out)} digits for {bits} bits cannot hold")
+    if not bounded:
+        refuse(bad, r != 0, f"exact train: a value the {len(out)} digits for {bits} bits cannot hold")
     return out
+
+
+def capacity(bits: int) -> int:
+    """The largest |value| `digits(q, bits)` can represent, digit by digit:
+    127 for one int8 digit, sum 64 * 128^i for several."""
+    if bits <= 8:
+        return 127
+    return sum(64 * 128 ** i for i in range(ndigits(bits)))
 
 
 def _ceil_log2(n: int) -> int:
     return max(0, (n - 1).bit_length())
 
 
-def mm_f64(a: torch.Tensor, b: torch.Tensor, bits: int = 8) -> torch.Tensor:
-    """sum_k a[i][k] * b[j][k] for integer-valued float64 a, b of `bits` bits:
-    exact, since every partial sum is an integer below 2^53."""
-    top = (1 << (bits - 1)) - 1
-    if a.shape[-1] * top * top >= F64_EXACT:
+# Each `mm` takes integer tensors a [M][K], b [N][K] with entries in
+# [-127, 127] and returns the exact integers sum_k a[i][k] * b[j][k] as an
+# integer tensor.
+
+def mm_f64(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """On float64 BLAS (any device): exact, since every partial sum is an
+    integer below 2^53."""
+    if a.shape[-1] * 127 * 127 >= F64_EXACT:
         raise OverflowError("exact train: K too large for an exact float64 sum")
-    return a @ b.transpose(-1, -2)
+    return (a.to(torch.float64) @ b.to(torch.float64).transpose(-1, -2)).to(torch.int64)
 
 
 def mm_y(a, b):
-    """The same product on Y's int8 GEMM."""
+    """On Y's int8 GEMM."""
     from ..int8_gemm import int8_mm
-    return int8_mm(a.to(torch.int8).contiguous(), b.to(torch.int8).contiguous()).to(torch.float64)
+    return int8_mm(a.to(torch.int8).contiguous(), b.to(torch.int8).contiguous())
 
 
 def mm_torch(a, b):
-    """The same product on `torch._int_mm` (cuBLASLt)."""
-    return torch._int_mm(a.to(torch.int8).contiguous(),
-                         b.to(torch.int8).contiguous().t()).to(torch.float64)
+    """On `torch._int_mm` (cuBLASLt)."""
+    return torch._int_mm(a.to(torch.int8).contiguous(), b.to(torch.int8).contiguous().t())
 
 
 def _exact_fp32_bmm(a, b):
-    """Batched sum_k a[..i][k] * b[..j][k] for int8-valued a, b in float32:
-    exact because every partial sum is an integer below 2^24 (TF32 off)."""
+    """Batched sum_k a[..i][k] * b[..j][k] for integers in [-127, 127] in
+    float32: exact because every partial sum is an integer below 2^24 (TF32
+    off)."""
     if a.shape[-1] * 127 * 127 >= FP32_EXACT:
         raise OverflowError(f"exact train: K = {a.shape[-1]} leaves fp32's exact range")
     if a.is_cuda and torch.backends.cuda.matmul.allow_tf32:
         raise RuntimeError("exact train: TF32 rounds the products; set "
                            "torch.backends.cuda.matmul.allow_tf32 = False")
-    return (a.to(torch.float32) @ b.to(torch.float32).transpose(-1, -2)).to(torch.float64)
+    return (a.to(torch.float32) @ b.to(torch.float32).transpose(-1, -2)).to(torch.int64)
 
 
 class Ops:
@@ -170,6 +288,9 @@ class Ops:
         (docs/benchmarks/exact_train_lm_2026-11-21/)."""
         self.exact, self.mm, self.grad_bits, self.bwd_bits = exact, mm, grad_bits, bwd_bits
         self._tables = {}
+        # None: each check reads the device and raises at once. A list: the
+        # checks are appended to it for one read per step (`refuse`).
+        self.bad = None
 
     def matmul(self, a, b, batched=False, grad=None):
         """a @ b^T, summed over the last dimension of both. `grad` names the
@@ -178,35 +299,55 @@ class Ops:
             return a @ b.transpose(-1, -2)
         bits_a = 8 if grad is None else self.grad_bits if grad == "a" else self.bwd_bits
         bits_b = 8 if grad is None else self.grad_bits if grad == "b" else self.bwd_bits
-        qa, sa = q8(a, bits=bits_a)
-        qb, sb = q8(b, bits=bits_b)
+        # Every partial sum below, of digit products, is at most K times the
+        # digits' capacities: below 2^53, so float64 holds it exactly. Known
+        # from the widths alone, so refused before anything runs.
+        if a.shape[-1] * capacity(bits_a) * capacity(bits_b) >= F64_EXACT:
+            raise OverflowError("exact train: a product sum could pass float64's exact integers")
+        qa, sa = q8(a, bits=bits_a, bad=self.bad)
+        qb, sb = q8(b, bits=bits_b, bad=self.bad)
+        da = digits(qa, bits_a, bounded=True)
+        db = digits(qb, bits_b, bounded=True)
+        # Every digit of a against every digit of b in ONE product: the
+        # digits stacked along the rows of each operand, block (i, j) of the
+        # result the product of digit i of a and digit j of b.
+        M, N = a.shape[-2], b.shape[-2]
+        A = da[0] if len(da) == 1 else torch.cat(da, dim=-2)
+        B = db[0] if len(db) == 1 else torch.cat(db, dim=-2)
+        P = (_exact_fp32_bmm(A, B) if batched else self.mm(A, B)).to(torch.int64)
         c = None
-        for i, da in enumerate(digits(qa, bits_a)):
-            for j, db in enumerate(digits(qb, bits_b)):
-                part = _exact_fp32_bmm(da, db) if batched else self.mm(da, db)
-                part = part * float(128 ** (i + j)) if i + j else part
-                c = part if c is None else c + part      # integers below 2^53: exact
-        if (abs(qa).amax() * abs(qb).amax() * a.shape[-1]) >= F64_EXACT:
-            raise OverflowError("exact train: a product sum past float64's exact integers")
-        return c * pow2(sa + sb.transpose(-1, -2))
+        for i in range(len(da)):
+            for j in range(len(db)):
+                part = P[..., i * M:(i + 1) * M, j * N:(j + 1) * N]
+                part = part << (7 * (i + j)) if i + j else part
+                c = part if c is None else c + part
+        # c below 2^53 (the bound above): its float64 is exact, and so is the
+        # power-of-two scale: |sa|, |sb| <= 511 (q8), so sa + sb is in range.
+        return c.to(torch.float64) * pow2(sa + sb.transpose(-1, -2), checked=True)
 
     def sum(self, x, dim):
         """The sum along `dim` (kept), of x rounded to one fixed-point scale
         per sum chosen so the int64 total cannot overflow."""
         if not self.exact:
             return x.sum(dim=dim, keepdim=True)
-        s = exponent(x, dim) - 61 + _ceil_log2(x.shape[dim])
-        q = torch.round(x * pow2(-s)).to(torch.int64)
-        return q.sum(dim=dim, keepdim=True).to(torch.float64) * pow2(s)
+        s = exponent(x, dim, self.bad) - 61 + _ceil_log2(x.shape[dim])
+        check_exp(-s, self.bad)                     # and so s in [-1023, 1022]:
+        refuse(self.bad, s == -1023, "exact train: a scale exponent outside float64's normal range")
+        q = scaled_round(x, s)
+        return q.sum(dim=dim, keepdim=True).to(torch.float64) * pow2(s, checked=True)
 
     def scatter_rows(self, idx, src, rows):
         """out[idx[t]] += src[t]: an embedding's gradient."""
         if not self.exact:
             return torch.zeros(rows, src.shape[1], dtype=src.dtype, device=src.device).index_add(0, idx, src)
-        s = exponent(src, 0) - 61 + _ceil_log2(src.shape[0])
-        q = torch.round(src * pow2(-s)).to(torch.int64)
-        out = torch.zeros(rows, src.shape[1], dtype=torch.int64, device=src.device).index_add(0, idx, q)
-        return out.to(torch.float64) * pow2(s)
+        s = exponent(src, 0, self.bad) - 61 + _ceil_log2(src.shape[0])
+        check_exp(-s, self.bad)
+        refuse(self.bad, s == -1023, "exact train: a scale exponent outside float64's normal range")
+        q = scaled_round(src, s)
+        # Integer adds, so the order the device applies them in cannot matter.
+        out = torch.zeros(rows, src.shape[1], dtype=torch.int64, device=src.device).scatter_add_(
+            0, idx.reshape(-1, 1).expand(-1, src.shape[1]), q)
+        return out.to(torch.float64) * pow2(s, checked=True)
 
     def softmax(self, z, blocked):
         """softmax over the last dimension, `blocked` entries excluded."""
@@ -215,6 +356,8 @@ class Ops:
         table = self._tables.get(z.device)
         if table is None:
             table = self._tables[z.device] = _table(z.device)
+        refuse(self.bad, (z.view(torch.int64) & _ABS) >> 52 == _INF_FIELD,
+               "exact train: a softmax input that is not finite (inf or NaN)")
         logit = z * LOG2E_Q16                                  # log2 units, Q16.16
         m = logit.masked_fill(blocked, float("-inf")).amax(dim=-1, keepdim=True)
         t = torch.round(m - logit).clamp(0, 1 << 30).masked_fill(blocked, 1 << 30)
@@ -259,7 +402,7 @@ def init_params(cfg: Config, seed=0, dtype=torch.float64, device="cpu"):
 def _norm_fwd(ops, x, g, eps):
     d = x.shape[-1]
     ms = ops.sum(x * x, -1) * (1.0 / d) + eps
-    r = torch.ones_like(ms) / (det_sqrt(ms) if ops.exact else torch.sqrt(ms))
+    r = torch.ones_like(ms) / (det_sqrt(ms, ops.bad) if ops.exact else torch.sqrt(ms))
     xh = x * r
     return xh * g, (xh, r, g)
 
@@ -317,8 +460,7 @@ def backward(ops, cfg, p, probs, targets, saved):
     H, Dh = cfg.heads, cfg.d // cfg.heads
     scale = 1.0 / math.sqrt(Dh)
     g = {}
-    onehot = torch.zeros_like(probs)
-    onehot[torch.arange(n, device=probs.device), targets.reshape(-1)] = 1.0
+    onehot = torch.zeros_like(probs).scatter_(1, targets.reshape(-1, 1), 1.0)
     dlogits = (probs - onehot) * (1.0 / n)
     dhf, g["out"] = _linear_bwd(ops, dlogits, hf, p["out"])
     dx, g["nf"] = _norm_bwd(ops, dhf, c_nf)
@@ -349,42 +491,85 @@ class Adam:
     """Adam with bias correction, elementwise: multiplies, adds, a
     tensor-by-tensor divide and a square root, each its own operation, so no
     device fuses or reorders them. `exact` takes the square root with
-    `det_sqrt`; the float twin with `torch.sqrt`."""
+    `det_sqrt`; the float twin with `torch.sqrt`.
+
+    All parameters live in one flat buffer, `flat`: the constructor replaces
+    each entry of `params` (the caller's dict) with a view of it, and every
+    update is in place. Elementwise, that is the same arithmetic as one update
+    per tensor, in a few dozen kernels rather than a few hundred, and a CUDA
+    graph can replay it."""
 
     def __init__(self, params, lr=3e-3, b1=0.9, b2=0.99, eps=1e-8, exact=True):
         self.lr, self.b1, self.b2, self.eps, self.t = lr, b1, b2, eps, 0
-        self.sqrt = det_sqrt if exact else torch.sqrt
-        self.m = {k: torch.zeros_like(v) for k, v in params.items()}
-        self.v = {k: torch.zeros_like(v) for k, v in params.items()}
+        self.exact = exact
+        self.keys = list(params)
+        self.flat = torch.cat([params[k].reshape(-1) for k in self.keys])
+        self.layout, o = [], 0
+        for k in self.keys:
+            n = params[k].numel()
+            self.layout.append((k, o, tuple(params[k].shape)))
+            o += n
+        self.bind(params)
+        self.m = torch.zeros_like(self.flat)
+        self.v = torch.zeros_like(self.flat)
 
-    def step(self, params, grads):
+    def bind(self, params):
+        """Point `params[k]` at its slice of `flat`."""
+        for k, o, shape in self.layout:
+            n = math.prod(shape)
+            params[k] = self.flat[o:o + n].view(shape)
+        return params
+
+    def corrections(self):
+        """Advance the step count; the bias corrections' reciprocals, computed
+        on the host (a constant divisor is a multiply, see the module note)."""
         self.t += 1
-        r1, r2 = 1.0 / (1.0 - self.b1 ** self.t), 1.0 / (1.0 - self.b2 ** self.t)
-        for k in params:
-            gk = grads[k]
-            self.m[k] = self.m[k] * self.b1 + gk * (1.0 - self.b1)
-            self.v[k] = self.v[k] * self.b2 + (gk * gk) * (1.0 - self.b2)
-            den = self.sqrt(self.v[k] * r2) + self.eps
-            params[k] = params[k] - (self.m[k] * r1) / den * self.lr
+        return 1.0 / (1.0 - self.b1 ** self.t), 1.0 / (1.0 - self.b2 ** self.t)
+
+    def update(self, grads, r1, r2, bad=None):
+        """One update from `grads` (a dict like `params`), with the
+        corrections `r1`, `r2` as floats or 0-d tensors of `flat`'s dtype
+        (the same products either way)."""
+        g = torch.cat([grads[k].reshape(-1) for k in self.keys])
+        self.m.copy_(self.m * self.b1 + g * (1.0 - self.b1))
+        self.v.copy_(self.v * self.b2 + (g * g) * (1.0 - self.b2))
+        vr = self.v * r2
+        den = (det_sqrt(vr, bad) if self.exact else torch.sqrt(vr)) + self.eps
+        self.flat.copy_(self.flat - (self.m * r1) / den * self.lr)
+
+    def step(self, params, grads, bad=None):
+        r1, r2 = self.corrections()
+        self.update(grads, r1, r2, bad)
 
 
-def _target_probs(probs, targets):
-    return probs.detach().cpu().to(torch.float64)[torch.arange(targets.numel()), targets.reshape(-1).cpu()]
+def target_probs(probs, targets):
+    """p(target) for each token, in token order, as float64 on the device."""
+    flat = targets.reshape(-1)
+    return probs[torch.arange(flat.numel(), device=probs.device), flat].to(torch.float64)
 
 
-def cross_entropy_on_host(probs, targets) -> float:
-    """Mean -log p(target), in float64 on the CPU, for reading only. The mean
-    is `math.fsum` (correctly rounded in any order), so reordering the batch
-    does not move it; `log` is the host's, which another machine's libm may
-    round differently, so records compare `target_prob_digest` instead."""
-    nll = (-torch.log(_target_probs(probs, targets).clamp(min=1e-30))).tolist()
+def nll_on_host(tp) -> float:
+    """Mean -log p(target) from `target_probs`, in float64 on the CPU, for
+    reading only. The mean is `math.fsum` (correctly rounded in any order),
+    so reordering the batch does not move it; `log` is the host's, which
+    another machine's libm may round differently, so records compare
+    `tp_digest` instead."""
+    nll = (-torch.log(tp.detach().cpu().to(torch.float64).clamp(min=1e-30))).tolist()
     return math.fsum(nll) / len(nll)
 
 
+def tp_digest(tp) -> str:
+    """A digest of `target_probs`: the bits of an integer exp's quotient, the
+    same on every device."""
+    return hashlib.sha256(tp.detach().cpu().to(torch.float64).numpy().tobytes()).hexdigest()[:16]
+
+
+def cross_entropy_on_host(probs, targets) -> float:
+    return nll_on_host(target_probs(probs, targets))
+
+
 def target_prob_digest(probs, targets) -> str:
-    """A digest of p(target) for each token, in token order: the bits of an
-    integer exp's quotient, the same on every device."""
-    return hashlib.sha256(_target_probs(probs, targets).numpy().tobytes()).hexdigest()[:16]
+    return tp_digest(target_probs(probs, targets))
 
 
 def digest(params) -> str:
@@ -419,26 +604,131 @@ class CharData:
         return x, y
 
 
+class Trainer:
+    """One training run: the parameters (views of Adam's flat buffer, in
+    `params`), Adam, and `step`.
+
+    `step(x, y)` trains on one batch and returns p(target) for each token,
+    on the device, without reading the device: the step's checks (`refuse`)
+    are or-ed into flags that `verify` reads in one transfer and raises on.
+    Call `verify` before reading anything a step returned.
+
+    `graph=True` (CUDA) captures the step as one CUDA graph on the first call
+    and replays it after: the same kernels, launched in one call.
+    `compile=True` traces the step with `torch.compile`, which fuses its
+    elementwise chains; importing `.model` sets the Inductor flags under
+    which it rounds as eager PyTorch does (no FMA, correctly rounded
+    divides). Neither is meant to change any bits, and the CPU == GPU tests
+    and records check that they do not."""
+
+    def __init__(self, ops, cfg, device="cpu", dtype=torch.float64, seed=0, lr=3e-3,
+                 graph=False, compile=False):
+        self.ops, self.cfg, self.device = ops, cfg, torch.device(device)
+        if (graph or compile) and self.device.type != "cuda":
+            raise ValueError("exact train: graph and compile are for a CUDA device")
+        self.params = init_params(cfg, seed, dtype, self.device)
+        self.opt = Adam(self.params, lr=lr, exact=ops.exact)
+        if compile:
+            from . import model  # noqa: F401  (the Inductor rounding flags)
+        self._fn = torch.compile(self._step, dynamic=False) if compile else self._step
+        self.graph, self.compile = graph, compile
+        self._graph, self._acc, self.messages = None, None, None
+        if graph or compile:   # the corrections as 0-d tensors: no recompiles
+            self._r = torch.ones(2, dtype=dtype, device=self.device)
+
+    def _step(self, x, y, r1, r2):
+        bad = []
+        self.ops.bad = bad
+        params = self.opt.bind({})
+        _, probs, saved = forward(self.ops, self.cfg, params, x, y)
+        grads = backward(self.ops, self.cfg, params, probs, y, saved)
+        self.opt.update(grads, r1, r2, bad)
+        self.ops.bad = None
+        if not bad:
+            bad = [(torch.zeros((), dtype=torch.bool, device=x.device), "(none)")]
+        flags, messages = reduce_checks(bad)
+        return target_probs(probs, y), flags, messages
+
+    def _note(self, flags, messages):
+        if self._acc is None:
+            self._acc, self.messages = torch.zeros_like(flags), messages
+        elif messages != self.messages:
+            raise RuntimeError("exact train: the step's checks changed between steps")
+
+    def step(self, x, y):
+        r1, r2 = self.opt.corrections()
+        if not (self.graph or self.compile):
+            tp, flags, messages = self._fn(x, y, r1, r2)
+            self._note(flags, messages)
+            self._acc |= flags
+            return tp
+        self._r[0].fill_(r1)        # a kernel argument: no transfer, no wait
+        self._r[1].fill_(r2)
+        if not self.graph:
+            tp, flags, messages = self._fn(x, y, self._r[0], self._r[1])
+            self._note(flags, messages)
+            self._acc |= flags
+            return tp
+        if self._graph is None:
+            self._capture(x, y)
+        self._x.copy_(x)
+        self._y.copy_(y)
+        self._graph.replay()
+        return self._tp.clone()
+
+    def _capture(self, x, y):
+        """Warm up (compiling, and loading every kernel) on a side stream,
+        capture, then put back the state the warm-up steps moved."""
+        self._x, self._y = x.clone(), y.clone()
+        saved = [t.clone() for t in (self.opt.flat, self.opt.m, self.opt.v)]
+        r = self._r.clone()
+        side = torch.cuda.Stream()
+        side.wait_stream(torch.cuda.current_stream())
+        with torch.cuda.stream(side):
+            for _ in range(2):
+                _, flags, messages = self._fn(self._x, self._y, self._r[0], self._r[1])
+        torch.cuda.current_stream().wait_stream(side)
+        self._note(flags, messages)
+        g = torch.cuda.CUDAGraph()
+        with torch.cuda.graph(g):
+            self._tp, flags, messages = self._fn(self._x, self._y, self._r[0], self._r[1])
+            self._acc |= flags
+        self._note(flags, messages)
+        for t, c in zip((self.opt.flat, self.opt.m, self.opt.v), saved):
+            t.copy_(c)
+        self._r.copy_(r)
+        self._graph = g
+
+    def verify(self):
+        """Raise OverflowError if any check of any step so far failed: one read
+        of the device. A failure is kept, so every later call raises too."""
+        if self._acc is None:
+            return
+        hit = self._acc.cpu().tolist()
+        if any(hit):
+            raise OverflowError("; ".join(sorted({m for m, h in zip(self.messages, hit) if h})))
+
+
 def train(ops, cfg, data, steps, device, dtype=torch.float64, seed=0, B=16, lr=3e-3,
-          eval_every=0, eval_batches=4, log=None):
+          eval_every=0, eval_batches=4, log=None, graph=False, compile=False):
     """Trains from `init_params(cfg, seed)`; returns (params, train losses,
     [(step, held-out loss)])."""
-    params = init_params(cfg, seed, dtype, device)
-    opt = Adam(params, lr=lr, exact=ops.exact)
+    tr = Trainer(ops, cfg, device, dtype, seed, lr, graph=graph, compile=compile)
     gen = torch.Generator().manual_seed(seed + 1)
-    losses, evals = [], []
+    losses, evals, pending = [], [], []
     for step in range(steps):
         x, y = data.batch(gen, B, cfg.ctx)
-        x, y = x.to(device), y.to(device)
-        _, probs, saved = forward(ops, cfg, params, x, y)
-        losses.append(cross_entropy_on_host(probs, y))
-        grads = backward(ops, cfg, params, probs, y, saved)
-        opt.step(params, grads)
-        if eval_every and ((step + 1) % eval_every == 0 or step + 1 == steps):
-            evals.append((step + 1, evaluate(ops, cfg, params, data, device, eval_batches, B)))
+        pending.append(tr.step(x.to(device), y.to(device)))
+        at_eval = eval_every and (step + 1) % eval_every == 0
+        if at_eval or step + 1 == steps:
+            tr.verify()
+            losses += [nll_on_host(tp) for tp in pending]
+            pending = []
+        if at_eval or (eval_every and step + 1 == steps):
+            evals.append((step + 1, evaluate(ops, cfg, tr.params, data, device, eval_batches, B)))
             if log:
                 log(f"step {step + 1:5d}  train {losses[-1]:.4f}  held-out {evals[-1][1]:.4f}")
-    return params, losses, evals
+    return tr.params, losses, evals
 
 
 def evaluate(ops, cfg, params, data, device, batches=4, B=16):

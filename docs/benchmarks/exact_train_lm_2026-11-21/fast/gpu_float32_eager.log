@@ -1,0 +1,12 @@
+step   500  train 2.1065  held-out 2.1109  weights 06695be8044bc52d  1 s
+step  1000  train 1.8350  held-out 1.9593  weights a02d4c69ce257dfa  1 s
+step  1500  train 1.7691  held-out 1.8662  weights 068ee8fa9291b87b  2 s
+step  2000  train 1.6837  held-out 1.8368  weights 4a989c2147689591  2 s
+step  2500  train 1.6059  held-out 1.7853  weights ea8984b123201710  3 s
+step  3000  train 1.6337  held-out 1.7619  weights f8934a58030b8739  4 s
+step  3500  train 1.3908  held-out 1.7353  weights e76d3c1d82613134  4 s
+step  4000  train 1.5271  held-out 1.7224  weights 7d85a8fbde9d9929  5 s
+step  4500  train 1.5733  held-out 1.7037  weights e3a736d2fefd53fe  5 s
+step  5000  train 1.5049  held-out 1.6933  weights f1343f8211324600  6 s
+steps: 5.5 s, the first 0.1 s (compile, capture), then 1.08 ms/step
+written to /tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/8ed295d8-e66f-4af6-8439-a5fa065fbc5d/scratchpad/fast/gpu_float32_eager.json
