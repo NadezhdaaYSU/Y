@@ -1266,8 +1266,11 @@ with every switch the card can run (Y's attention and `exact_pv` kernels
 compiled by Y for sm_75); stock changed 5/5 against both
 (`docs/benchmarks/exact_cross_gpu_t4_2026-11-11/`). Getting there found two
 bugs: the default Triton int8 GEMM, which Triton cannot build below sm_80, and
-a wheel that did not bring the Z3 its kernels' proofs need. Still one GPU
-vendor and one model family; 7B on the T4 is not yet run.
+a wheel that did not bring the Z3 its kernels' proofs need. Since 2026-11-21
+also an A100 (sm_80) and an H100 (sm_90), eager at 0.5B: 0/5 against the CPU,
+the T4, the 4070 Ti and each other, also with every switch on Y's own int8
+GEMM; stock 5/5 in every GPU pair (`docs/benchmarks/exact_a100_h100_2026-11-21/`).
+Still one GPU vendor and one model family; 7B on the T4 is not yet run.
 `tools/exact_cross_device.py` is the harness for both; `--record` writes a per-device artifact (tokens, the
 integer-exp domain digest, a CPU-side weight fingerprint, the sanity-gate
 verdict, and a same-card re-run check); `--compare` is pure Python and refuses

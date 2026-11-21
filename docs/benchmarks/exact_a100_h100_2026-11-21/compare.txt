@@ -1,0 +1,179 @@
+################ docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+  A: NVIDIA A100-SXM4-40GB (sm_80, 108 SMs, driver 12.6)
+  B: cpu:x86_64 (model not recorded, 32 CPUs)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+exit 1
+################ docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+  A: NVIDIA H100 80GB HBM3 (sm_90, 132 SMs, driver 12.6)
+  B: cpu:x86_64 (model not recorded, 32 CPUs)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+exit 1
+################ docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_ygemm_every_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_ygemm_every_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+  A: NVIDIA A100-SXM4-40GB (sm_80, 108 SMs, driver 12.6)
+  B: cpu:x86_64 (model not recorded, 32 CPUs)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+exit 1
+################ docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_ygemm_every_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_ygemm_every_eager.json  vs  docs/benchmarks/exact_norm_sum_2026-11-10/cpu_0p5b.json
+  A: NVIDIA H100 80GB HBM3 (sm_90, 132 SMs, driver 12.6)
+  B: cpu:x86_64 (model not recorded, 32 CPUs)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+
+==========================================================================
+  *** no usable `stock` arm, so there is no control. Record both arms. ***
+==========================================================================
+exit 1
+################ docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json
+  A: NVIDIA A100-SXM4-40GB (sm_80, 108 SMs, driver 12.6)
+  B: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 42
+                 '+3 long, middle' first differs at token 62
+                 'mixed 8, pos 5' first differs at token 13
+                 'mixed 32, pos 17' first differs at token 42
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================
+exit 0
+################ docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json  vs  docs/benchmarks/exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json  vs  docs/benchmarks/exact_y_gemm_2026-11-07/gpu_sm89_triton_eager.json
+  A: NVIDIA H100 80GB HBM3 (sm_90, 132 SMs, driver 12.6)
+  B: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89, 66 SMs, driver 13.0)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 42
+                 '+3 long, middle' first differs at token 13
+                 'mixed 8, pos 5' first differs at token 20
+                 'mixed 32, pos 17' first differs at token 13
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================
+exit 0
+################ docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_cross_gpu_t4_2026-11-11/t4_eager.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_cross_gpu_t4_2026-11-11/t4_eager.json
+  A: NVIDIA A100-SXM4-40GB (sm_80, 108 SMs, driver 12.6)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 13
+                 '+3 long, middle' first differs at token 13
+                 'mixed 8, pos 5' first differs at token 13
+                 'mixed 32, pos 17' first differs at token 42
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================
+exit 0
+################ docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json  vs  docs/benchmarks/exact_cross_gpu_t4_2026-11-11/t4_eager.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json  vs  docs/benchmarks/exact_cross_gpu_t4_2026-11-11/t4_eager.json
+  A: NVIDIA H100 80GB HBM3 (sm_90, 132 SMs, driver 12.6)
+  B: Tesla T4 (sm_75, 40 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 13
+                 '+3 long, middle' first differs at token 54
+                 'mixed 8, pos 5' first differs at token 54
+                 'mixed 32, pos 17' first differs at token 13
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================
+exit 0
+################ docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json
+
+Cross-device bit-identity
+  docs/benchmarks/exact_a100_h100_2026-11-21/a100_eager/a100_eager.json  vs  docs/benchmarks/exact_a100_h100_2026-11-21/h100_eager/h100_eager.json
+  A: NVIDIA A100-SXM4-40GB (sm_80, 108 SMs, driver 12.6)
+  B: NVIDIA H100 80GB HBM3 (sm_90, 132 SMs, driver 12.6)
+  model Qwen/Qwen2.5-0.5B-Instruct, 160 new tokens, greedy, 5 cases
+
+  integer exp over its whole domain: IDENTICAL (0x7170cd39b442d506 vs 0x7170cd39b442d506)
+
+  exact       0/5 cases changed across the two devices
+  stock       5/5 cases changed across the two devices
+                 'alone (batch 1)' first differs at token 72
+                 '+3 long, middle' first differs at token 13
+                 'mixed 8, pos 5' first differs at token 13
+                 'mixed 32, pos 17' first differs at token 13
+
+==========================================================================
+  control fired: stock bf16 moved on 5/5 cases across these devices
+  exact: 0/5 -- the same prompt decodes to identical tokens
+  on both devices, where bf16 does not. This is the cross-hardware claim.
+==========================================================================
+exit 0

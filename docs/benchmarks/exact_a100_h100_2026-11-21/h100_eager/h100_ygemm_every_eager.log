@@ -1,0 +1,30 @@
+
+Recording on NVIDIA H100 80GB HBM3 (sm_90, 132 SMs, driver 12.6)
+  5 cases x 160 tokens, arms: exact
+  integer exp digest: cpu 0x7170cd39b442d506, device 0x7170cd39b442d506
+
+--- exact ---
+
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/290 [00:00<00:42,  6.79it/s]
+Loading weights:  35%|███▍      | 101/290 [00:00<00:00, 489.88it/s]
+Loading weights:  62%|██████▏   | 179/290 [00:00<00:00, 607.97it/s]
+Loading weights:  85%|████████▌ | 247/290 [00:00<00:00, 630.66it/s]
+Loading weights: 100%|██████████| 290/290 [00:00<00:00, 580.04it/s]
+y: no hardware profile at /root/y_hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+  gate: ok -- canary ok, 83 distinct tokens in reference
+  alone (batch 1)              160 tokens
+  +3 long, middle              160 tokens
+  mixed 8, pos 5               160 tokens
+  mixed 32, pos 17             160 tokens
+  +1 extra-long (new dbits)    160 tokens
+  weights 6ed356ce48583cd0, tokens 30eec169d2f38da4
+  self-check (same card, twice): identical
+
+  written to /root/out/h100_ygemm_every_eager.json
+  now run this on the OTHER card and compare:
+    python3 tools/exact_cross_device.py --compare /root/out/h100_ygemm_every_eager.json other.json
+
+exit 0 65 s

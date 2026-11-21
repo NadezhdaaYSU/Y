@@ -1,0 +1,6 @@
+name, compute_cap, driver_version, clocks.max.sm [MHz], memory.total [MiB]
+NVIDIA A100-SXM4-40GB, 8.0, 620.70.06, 1410 MHz, 40960 MiB
+CPU(s):              20
+Model name:          unknown
+2.13.0+cu126 5.15.0
+b264cfca54401bcfc7389b72e89e426c3bb7951f4c00cdd464d5f0b91d5a646c  /root/Y/target/release/liby.so
