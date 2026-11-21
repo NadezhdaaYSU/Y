@@ -1,0 +1,18 @@
+/usr/local/lib/python3.12/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+step   500  train 2.0914  held-out 2.1214  weights 98801fff065eda5b  11 s
+step  1000  train 1.8282  held-out 1.9496  weights 53a97cd29f445f1c  11 s
+step  1500  train 1.7739  held-out 1.8584  weights 2d3c169460c7593e  11 s
+step  2000  train 1.6831  held-out 1.8295  weights c24d3ab5819b759a  11 s
+step  2500  train 1.6211  held-out 1.7848  weights 4fe9b9991eb994db  12 s
+step  3000  train 1.6239  held-out 1.7621  weights 66e183bf9b3f77ee  12 s
+step  3500  train 1.4224  held-out 1.7410  weights c7af4053225d2539  12 s
+step  4000  train 1.5394  held-out 1.7242  weights 2dc6fe337baea930  12 s
+step  4500  train 1.5619  held-out 1.7032  weights 43ab89813ffbae51  13 s
+step  5000  train 1.5004  held-out 1.6980  weights 85a0c62ab714fcd6  13 s
+steps: 12.1 s, the first 10.3 s (compile, capture), then 0.38 ms/step
+written to /root/out/h100_float32_fast.json
+
+exit 0 21 s

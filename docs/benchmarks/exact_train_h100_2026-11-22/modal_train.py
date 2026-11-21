@@ -27,7 +27,7 @@ image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install("curl", "ca-certificates", "build-essential")
     .pip_install(TORCH, index_url="https://download.pytorch.org/whl/cu126")
-    .pip_install("z3-solver", "mpmath")
+    .pip_install("numpy", "transformers==5.15.0", "tokenizers==0.22.2", "safetensors", "z3-solver", "mpmath")
     .env({"PATH": PATH})
     .run_commands(
         "curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal -q --default-toolchain 1.97.1",

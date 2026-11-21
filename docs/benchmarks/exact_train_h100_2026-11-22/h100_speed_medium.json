@@ -1,0 +1,40 @@
+{
+ "size": "medium",
+ "config": {
+  "vocab": 96,
+  "d": 512,
+  "heads": 8,
+  "layers": 4,
+  "ff": 2048,
+  "ctx": 256,
+  "eps": 1e-05
+ },
+ "batch": 16,
+ "mm": "y",
+ "check": 3,
+ "steady": 50,
+ "gpu": "NVIDIA H100 80GB HBM3 (sm_90)",
+ "cpu": "x86_64",
+ "torch": "2.13.0+cu126",
+ "modes": {
+  "exact:compile+graph": {
+   "ms_per_step": 11.637983660000373,
+   "first_step_s": 539.2646362119999,
+   "digest": "726658118d294e45",
+   "same_as_cpu": true
+  },
+  "f32:eager": {
+   "ms_per_step": 11.590707079999447,
+   "first_step_s": 0.252395330000013,
+   "digest": "b5e957dd708630ad",
+   "same_as_cpu": null
+  },
+  "f32:compile+graph": {
+   "ms_per_step": 8.785444299999199,
+   "first_step_s": 15.73238315399999,
+   "digest": "879635287e804b70",
+   "same_as_cpu": null
+  }
+ },
+ "cpu_digest": "726658118d294e45"
+}

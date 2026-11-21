@@ -1,0 +1,11 @@
+size tiny: Config(vocab=96, d=128, heads=4, layers=2, ff=512, ctx=64, eps=1e-05), batch 16, on NVIDIA H100 80GB HBM3 (sm_90), torch 2.13.0+cu126
+cpu reference: weights@30 d57b6117ec1b0fc7  (20 s)
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:532: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+exact:compile+graph        0.70 ms/step   first step   23.2 s   weights@30 d57b6117ec1b0fc7  same as CPU
+f32:eager                  2.68 ms/step   first step    0.3 s   weights@30 172b7d3f5424f8b1
+f32:compile+graph          0.39 ms/step   first step    2.0 s   weights@30 53abc3983c61685e
+
+exit 0 57 s

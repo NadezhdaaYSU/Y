@@ -1,0 +1,14 @@
+step   500  train 2.0843  held-out 2.1103  weights 96601ef4eaaa0dd8  2 s
+step  1000  train 1.8939  held-out 1.9650  weights 701c2d4f56709ac7  4 s
+step  1500  train 1.7618  held-out 1.8669  weights aeebace2b67666e5  5 s
+step  2000  train 1.6924  held-out 1.8176  weights 2e8e4fffbca93be8  7 s
+step  2500  train 1.6431  held-out 1.7954  weights f923622e017b91c5  8 s
+step  3000  train 1.6172  held-out 1.7578  weights bda29329bb92944d  9 s
+step  3500  train 1.4180  held-out 1.7430  weights 1126e8288b6595e9  11 s
+step  4000  train 1.5447  held-out 1.7178  weights d2e6d605bb1823fe  12 s
+step  4500  train 1.5584  held-out 1.6963  weights 651284311c0a9bdc  14 s
+step  5000  train 1.5116  held-out 1.6887  weights ab7be3fae0c067f7  15 s
+steps: 14.3 s, the first 0.4 s (compile, capture), then 2.78 ms/step
+written to /root/out/h100_float32_eager.json
+
+exit 0 21 s

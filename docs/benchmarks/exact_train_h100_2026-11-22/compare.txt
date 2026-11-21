@@ -1,0 +1,21 @@
+== exact_train_lm_2026-11-21/cpu_exact_g12b8.json vs h100_exact_y_g12b8_fast.json
+A: cpu:x86_64  arm exact  mm f64
+B: NVIDIA H100 80GB HBM3 (sm_90)  arm exact  mm y
+  weights identical at 10/10 checkpoints
+  p(target) identical at every step
+  final held-out loss: A 1.688295  B 1.688295
+
+== fast/gpu_exact_y_g12b8_fast.json vs h100_exact_y_g12b8_fast.json
+A: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89)  arm exact  mm y
+B: NVIDIA H100 80GB HBM3 (sm_90)  arm exact  mm y
+  weights identical at 10/10 checkpoints
+  p(target) identical at every step
+  final held-out loss: A 1.688295  B 1.688295
+
+== fast/gpu_float32_fast.json vs h100_float32_fast.json
+A: NVIDIA GeForce RTX 4070 Ti SUPER (sm_89)  arm float32  mm None
+B: NVIDIA H100 80GB HBM3 (sm_90)  arm float32  mm None
+  weights identical at 0/10 checkpoints; first differ at step 500
+  p(target) first differs at step 1
+  final held-out loss: A 1.697424  B 1.697977
+

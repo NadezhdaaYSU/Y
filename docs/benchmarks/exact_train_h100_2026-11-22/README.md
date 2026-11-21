@@ -1,0 +1,69 @@
+# Exact training (T2) on an H100, 2026-11-22
+
+## What was asked
+
+Does the exact training of `docs/benchmarks/exact_train_lm_2026-11-21/`,
+run on its fast path (compiled, one CUDA graph a step), give the same bits
+on an H100 as on the development machine's CPU and RTX 4070 Ti SUPER, and
+how fast is it there against float32?
+
+## The run
+
+`modal_train.py` on Modal: one H100 80GB HBM3 (sm_90, driver 620.70.06),
+torch 2.13.0+cu126, Triton 3.7.1, Y built from the repository at 7e58f6d
+(`liby.so` sha256 `b264cfca...`, the same library as the 4070 Ti runs).
+`machine.txt` has the details. Five commands, logs and records here:
+
+- `h100_exact_y_g12b8_fast.json`: the 5000-step T2 record, Y's int8 GEMM,
+  12-bit gradients and int8 elsewhere (the default), `--graph --compile`.
+- `h100_float32_fast.json`, `h100_float32_eager.json`: the float32 twin,
+  compiled and graphed, and eager.
+- `h100_speed_tiny.json`, `h100_speed_medium.json`: `tools/exact_train_speed.py`,
+  each exact mode's weights checked against a CPU run made in the same
+  container (Modal's CPU), then the step time.
+
+Cost: $1.34 (and $0.02 for a first try whose image lacked `transformers`).
+
+## Same bits
+
+`compare.txt`: the H100's 5000-step record has the weights of the CPU record
+(AMD Ryzen 9 9950X, float64 BLAS) and of the 4070 Ti record at all 10
+checkpoints, and the same target probabilities at all 5000 steps; final
+weights `8a7018b19d9b7a00`, held-out loss 1.688295 on all three. The float32
+twin, the control, differs between the 4070 Ti and the H100 from step 1.
+
+At width 512 (4 layers, 4,096 tokens, 12.8M parameters), the size at which
+Inductor's store-then-reload race showed on the 4070 Ti, the H100's weights
+after 3 compiled steps are `726658118d294e45`: the digest of Modal's CPU, of
+the development CPU and of the 4070 Ti.
+
+## Speed
+
+Steady-state ms per step. Both arms get the same treatment; float32 is
+PyTorch's default (no TF32).
+
+| Model | GPU | exact, compiled + graphed | float32, eager | float32, compiled + graphed | ratio, same treatment |
+|---|---|---|---|---|---|
+| T2 (width 128, 1,024 tokens) | H100 | 0.71 | 2.78 | 0.38 | 1.9x |
+| T2 | RTX 4070 Ti SUPER | 0.99 | 1.08 | 0.40 | 2.5x |
+| width 512, 4 layers, 4,096 tokens | H100 | 11.64 | 11.59 | 8.79 | 1.32x |
+| width 512, 4 layers, 4,096 tokens | RTX 4070 Ti SUPER | 43.8 | 24.6 | 18.5 | 2.4x |
+
+The H100 runs float64 at half its float32 rate, the 4070 Ti at 1/64, and on
+the 4070 Ti the gap at width 512 was all in the non-GEMM kernels (38.4 ms
+against float32's 4.4, with the exact GEMMs 2.5x faster than float32's). The
+H100 closes most of it, as that predicts; no H100 profile was taken, so the
+split there is not measured. The T2 rows are launch-bound: float32 eager is
+slower than the exact fast path on the H100, because the host behind it
+issues launches more slowly than the development machine.
+
+Compiling is slow on Modal's CPU: the first exact step took 226 s at T2's
+size (23 s when Inductor's cache was warm, in the same container) and 539 s
+at width 512, against 81 and 146 s on the development machine.
+
+## Not covered
+
+- One H100, one run of each. Step times are wall clock over 500 (T2) and 50
+  (width 512) steps after the first 30 and 3, one run each, not a minimum
+  over rounds.
+- Width 512 was checked for 3 steps, not trained.
