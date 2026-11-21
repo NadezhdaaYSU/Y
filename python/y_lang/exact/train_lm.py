@@ -92,8 +92,6 @@ def reduce_checks(bad):
 # ties, zeros and subnormals), and on a GeForce GPU, whose float64 units run
 # at 1/64 of float32's rate, eight times faster (2026-11-21: 16.6 against
 # 133 us for a [1024][512] 12-bit quantizer, compiled, RTX 4070 Ti SUPER).
-_ABS = (1 << 63) - 1
-_M52 = (1 << 52) - 1
 _INF_FIELD = 0x7FF
 Q_SCALE_RANGE = 511          # |s| of a quantizer's scale; 2 * 511 <= 1022
 
@@ -112,53 +110,86 @@ def pow2(k: torch.Tensor, bad=None, checked=False) -> torch.Tensor:
     return torch.bitwise_left_shift(k + 1023, 52).contiguous().view(torch.float64)
 
 
+# The two float formats the quantizers read: (the integer type of the same
+# width, mantissa bits, the all-ones exponent field, frexp's bias, the bias
+# of x = mant * 2^E).
+_FMT = {torch.float64: (torch.int64, 52, 0x7FF, 1022, 1075),
+        torch.float32: (torch.int32, 23, 0xFF, 126, 150)}
+
+
 def _fields(x: torch.Tensor):
-    """(bits of |x|, biased exponent field) of float64 x, as int64."""
-    a = x.view(torch.int64) & _ABS
-    return a, a >> 52
+    """(bits of |x|, biased exponent field) of float64 or float32 x, in the
+    integer type of the same width."""
+    it, mbits = _FMT[x.dtype][:2]
+    a = x.view(it) & torch.iinfo(it).max
+    return a, a >> mbits
 
 
 def exponent(x: torch.Tensor, dim: int, bad=None) -> torch.Tensor:
-    """e with max |x| along `dim` below 2^e: frexp's exponent of the max (0
-    for an all-zero slice), read from its bits. A subnormal max gives -1022,
-    an upper bound where frexp's is tight; every caller then refuses the
-    slice, as with frexp, since its scale leaves float64's normal range. A
-    slice holding an inf or a NaN is refused: no scale represents it."""
-    a = x.view(torch.int64) & _ABS          # ordered as |x| is, for finite x
+    """e (int64) with max |x| along `dim` below 2^e: frexp's exponent of the
+    max (0 for an all-zero slice), read from its bits; float64 or float32 x.
+    A subnormal max gives the format's smallest normal exponent, an upper
+    bound where frexp's is tight (a float64 caller then refuses the slice, as
+    with frexp; a float32 one quantizes it on that coarser scale, the same
+    on every device). A slice holding an inf or a NaN is refused: no scale
+    represents it."""
+    it, mbits, inf, fbias = _FMT[x.dtype][:4]
+    a = x.view(it) & torch.iinfo(it).max    # ordered as |x| is, for finite x
     amax = a.amax(dim=dim, keepdim=True)
-    field = amax >> 52
-    refuse(bad, field == _INF_FIELD, "exact train: a value that is not finite (inf or NaN)")
-    return torch.where(amax == 0, 0, field - 1022)
+    field = amax >> mbits
+    refuse(bad, field == inf, "exact train: a value that is not finite (inf or NaN)")
+    return torch.where(amax == 0, 0, field - fbias).to(torch.int64)
 
 
-def scaled_round(x: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
-    """round-half-even(x * 2^-s) as int64, for finite float64 x and integer s
-    (broadcast) with |x * 2^-s| < 2^62; computed in integers, exactly."""
-    a, field = _fields(x)
-    mant = (a & _M52) | ((field > 0).to(torch.int64) << 52)
-    r = s - (torch.clamp(field, min=1) - 1075)          # x * 2^-s = mant / 2^r
-    left = mant << torch.clamp(-r, 0, 62)               # r <= 0: exact
-    rr = torch.clamp(r, 1, 62)      # r > 62 rounds to 0 as r = 62 does: mant < 2^53
+def _round_shift(mant, r, neg, most):
+    """round-half-even(mant / 2^r), negated where `neg`, in mant's integer
+    type, for mant >= 0 below 2^(most - 8) and shifts clamped to `most`: a
+    shift past it rounds to 0 as `most` does."""
+    left = mant << torch.clamp(-r, 0, most)             # r <= 0: exact
+    rr = torch.clamp(r, 1, most)
     q0 = mant >> rr
     one = torch.ones_like(rr)
     rem = mant & ((one << rr) - 1)
     half = one << (rr - 1)
-    q = q0 + ((rem > half) | ((rem == half) & ((q0 & 1) == 1))).to(torch.int64)
+    q = q0 + ((rem > half) | ((rem == half) & ((q0 & 1) == 1))).to(mant.dtype)
     q = torch.where(r <= 0, left, q)
-    return torch.where(x.view(torch.int64) < 0, -q, q)
+    return torch.where(neg, -q, q)
+
+
+def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
+    """round-half-even(x * 2^-s) for finite float64 or float32 x and integer s
+    (broadcast), computed in integers, exactly: int64, for |x * 2^-s| < 2^62.
+    `wide=False` (float32 x only) works in int32, for a result below 2^30
+    that needs no left shift (q8's, at 16 bits or fewer)."""
+    it, mbits, _, _, ebias = _FMT[x.dtype]
+    a, field = _fields(x)
+    mant = (a & ((1 << mbits) - 1)) | ((field > 0).to(it) << mbits)
+    E = torch.clamp(field, min=1) - ebias                # x = mant * 2^E
+    neg = x.view(it) < 0
+    if wide:
+        r = s.to(torch.int64) - E.to(torch.int64)        # x * 2^-s = mant / 2^r
+        return _round_shift(mant.to(torch.int64), r, neg, 62)
+    if x.dtype != torch.float32:
+        raise TypeError("exact train: the int32 rounding is for float32 values")
+    return _round_shift(mant, s.to(torch.int32) - E, neg, 30)
 
 
 def q8(x: torch.Tensor, dim: int = -1, bits: int = 8, bad=None):
     """Integers q (int32) and exponents s with x ~ q * 2^s, one s per slice
     along `dim` (the summed dimension), |q| <= 2^(bits-1) - 1 (int8: 127):
-    q = round-half-even(x * 2^-s), clamped. A slice whose scale is outside
-    2^-511 .. 2^511 is refused, so the scale of a product of two quantized
-    operands, 2^(sa + sb), is always a normal float64 and needs no check of
-    its own (a slice that small or large is not a training value)."""
+    q = round-half-even(x * 2^-s), clamped; float64 or float32 x. A slice
+    whose scale is outside 2^-511 .. 2^511 is refused, so the scale of a
+    product of two quantized operands, 2^(sa + sb), is always a normal
+    float64 and needs no check of its own (a slice that small or large is
+    not a training value)."""
     top = (1 << (bits - 1)) - 1
     s = exponent(x, dim, bad) - (bits - 1)
     refuse(bad, (s < -Q_SCALE_RANGE) | (s > Q_SCALE_RANGE),
            f"exact train: a quantizer scale outside 2^-{Q_SCALE_RANGE} .. 2^{Q_SCALE_RANGE}")
+    if x.dtype == torch.float32 and bits <= 16:
+        # Every element's shift is at least 24 - bits >= 8 (its exponent is
+        # at most the max's), so the int32 path never shifts left.
+        return scaled_round(x, s, wide=False).clamp(-top, top), s
     return scaled_round(x, s).clamp(-top, top).to(torch.int32), s
 
 
@@ -276,7 +307,7 @@ class Ops:
     """The model's sums and softmax, exact (`exact=True`) or ordinary float
     (`exact=False`: the float twin and the autograd reference)."""
 
-    def __init__(self, exact=True, mm=mm_f64, grad_bits=12, bwd_bits=8):
+    def __init__(self, exact=True, mm=mm_f64, grad_bits=12, bwd_bits=8, act=None, float_mm=None):
         """Widths of the backward pass's product operands: `grad_bits` for the
         gradient, `bwd_bits` for the activation or weight it meets. The
         forward pass is always int8, the format the model is served in. Past
@@ -285,7 +316,26 @@ class Ops:
         12-bit gradients against int8 activations and weights, is the
         narrowest setting measured to train as well as float32: with int8
         gradients the held-out loss stalled at 2.01 against float32's 1.71
-        (docs/benchmarks/exact_train_lm_2026-11-21/)."""
+        (docs/benchmarks/exact_train_lm_2026-11-21/).
+
+        `act` is the activations' and gradients' type: None keeps the
+        parameters' (float64 for the exact runs); `torch.float32` makes every
+        elementwise operation an IEEE float32 one, every product's exact
+        integer is scaled in float64 and rounded once to float32, and the
+        quantizers read 24-bit mantissas in int32. The sums are still exact
+        integer sums and the norms' square roots float64 `det_sqrt`; the
+        parameters and Adam stay float64. A different model from `act=None`
+        (its values round to float32), equally the same on every device.
+
+        `float_mm` (the float twin only) is the type its products run in:
+        `torch.bfloat16` is ordinary mixed-precision training (float32
+        parameters and elementwise operations, bf16 tensor-core products),
+        a speed baseline."""
+        if act not in (None, torch.float32, torch.float64):
+            raise ValueError(f"exact train: act must be None, float32 or float64, not {act}")
+        if float_mm is not None and exact:
+            raise ValueError("exact train: float_mm is for the float twin (exact=False)")
+        self.act, self.float_mm = act, float_mm
         self.exact, self.mm, self.grad_bits, self.bwd_bits = exact, mm, grad_bits, bwd_bits
         self._tables = {}
         # None: each check reads the device and raises at once. A list: the
@@ -296,6 +346,8 @@ class Ops:
         """a @ b^T, summed over the last dimension of both. `grad` names the
         backward pass's gradient operand, "a" or "b" (None: forward)."""
         if not self.exact:
+            if self.float_mm is not None:
+                return (a.to(self.float_mm) @ b.to(self.float_mm).transpose(-1, -2)).to(a.dtype)
             return a @ b.transpose(-1, -2)
         bits_a = 8 if grad is None else self.grad_bits if grad == "a" else self.bwd_bits
         bits_b = 8 if grad is None else self.grad_bits if grad == "b" else self.bwd_bits
@@ -323,7 +375,9 @@ class Ops:
                 c = part if c is None else c + part
         # c below 2^53 (the bound above): its float64 is exact, and so is the
         # power-of-two scale: |sa|, |sb| <= 511 (q8), so sa + sb is in range.
-        return c.to(torch.float64) * pow2(sa + sb.transpose(-1, -2), checked=True)
+        # With float32 activations that exact value is rounded once.
+        out = c.to(torch.float64) * pow2(sa + sb.transpose(-1, -2), checked=True)
+        return out if self.act in (None, torch.float64) else out.to(self.act)
 
     def sum(self, x, dim):
         """The sum along `dim` (kept), of x rounded to one fixed-point scale
@@ -356,13 +410,14 @@ class Ops:
         table = self._tables.get(z.device)
         if table is None:
             table = self._tables[z.device] = _table(z.device)
-        refuse(self.bad, (z.view(torch.int64) & _ABS) >> 52 == _INF_FIELD,
+        refuse(self.bad, _fields(z)[1] == _FMT[z.dtype][2],
                "exact train: a softmax input that is not finite (inf or NaN)")
         logit = z * LOG2E_Q16                                  # log2 units, Q16.16
         m = logit.masked_fill(blocked, float("-inf")).amax(dim=-1, keepdim=True)
         t = torch.round(m - logit).clamp(0, 1 << 30).masked_fill(blocked, 1 << 30)
         p = exp2_neg_q16_16(t, table).masked_fill(blocked, 0)  # Q0.28, int64
-        return p.to(torch.float64) / p.sum(dim=-1, keepdim=True).to(torch.float64)
+        dt = torch.float64 if self.act is None else self.act
+        return p.to(dt) / p.sum(dim=-1, keepdim=True).to(dt)
 
 
 # ---- the model -----------------------------------------------------------------
@@ -403,6 +458,7 @@ def _norm_fwd(ops, x, g, eps):
     d = x.shape[-1]
     ms = ops.sum(x * x, -1) * (1.0 / d) + eps
     r = torch.ones_like(ms) / (det_sqrt(ms, ops.bad) if ops.exact else torch.sqrt(ms))
+    r, g = r.to(x.dtype), g.to(x.dtype)        # no-ops unless act is float32
     xh = x * r
     return xh * g, (xh, r, g)
 
@@ -412,7 +468,7 @@ def _norm_bwd(ops, dy, cache):
     d = xh.shape[-1]
     dg = ops.sum(dy * xh, 0).reshape(-1)
     dxh = dy * g
-    return r * (dxh - xh * (ops.sum(dxh * xh, -1) * (1.0 / d))), dg
+    return r * (dxh - xh * (ops.sum(dxh * xh, -1) * (1.0 / d)).to(dxh.dtype)), dg
 
 
 def forward(ops, cfg, p, idx, targets=None):
@@ -423,6 +479,8 @@ def forward(ops, cfg, p, idx, targets=None):
     scale = 1.0 / math.sqrt(Dh)
     flat = idx.reshape(-1)
     x = p["tok"][flat] + p["pos"][:T].repeat(B, 1)
+    if ops.act is not None:
+        x = x.to(ops.act)
     causal = torch.ones(T, T, dtype=torch.bool, device=idx.device).triu(1)
     caches = []
     for i in range(cfg.layers):
@@ -475,7 +533,7 @@ def backward(ops, cfg, p, probs, targets, saved):
         do = do2.reshape(B, T, H, Dh).transpose(1, 2)                 # [B][H][T][Dh]
         dP = ops.matmul(do, v, batched=True, grad="a")                 # [B][H][T][Tk]
         dv = ops.matmul(P.transpose(-1, -2), do.transpose(-1, -2), batched=True, grad="b")
-        dS = P * (dP - ops.sum(P * dP, -1)) * scale
+        dS = P * (dP - ops.sum(P * dP, -1).to(P.dtype)) * scale
         dq = ops.matmul(dS, k.transpose(-1, -2), batched=True, grad="a")
         dk = ops.matmul(dS.transpose(-1, -2), q.transpose(-1, -2), batched=True, grad="a")
         dqkv = torch.cat([t.transpose(1, 2).reshape(B * T, cfg.d) for t in (dq, dk, dv)], dim=1)
@@ -530,7 +588,7 @@ class Adam:
         """One update from `grads` (a dict like `params`), with the
         corrections `r1`, `r2` as floats or 0-d tensors of `flat`'s dtype
         (the same products either way)."""
-        g = torch.cat([grads[k].reshape(-1) for k in self.keys])
+        g = torch.cat([grads[k].reshape(-1).to(self.flat.dtype) for k in self.keys])
         self.m.copy_(self.m * self.b1 + g * (1.0 - self.b1))
         self.v.copy_(self.v * self.b2 + (g * g) * (1.0 - self.b2))
         vr = self.v * r2

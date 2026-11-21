@@ -3,7 +3,8 @@
     python3 tools/exact_train_speed.py --size tiny --out tiny.json
     python3 tools/exact_train_speed.py --size medium --check 3 --steady 50
 
-For each mode (arm:mode, mode one of eager, graph, compile, compile+graph),
+For each mode (arm:mode; arm exact, exact32 (float32 activations, Ops(act=
+torch.float32)), f32 or bf16 (float32 with bf16 products); mode one of eager, graph, compile, compile+graph),
 trains `--check` steps from the same start and reports the weight digest; an
 exact mode's digest must equal the CPU's (eager, float64 BLAS), and the
 script exits 1 if one does not. Then `--steady` more steps are timed (wall
@@ -35,9 +36,12 @@ MODES = ("exact:compile+graph", "f32:eager", "f32:compile+graph")
 
 
 def make(arm, mode, device, cfg, mm):
-    if arm == "exact":
-        ops = L.Ops(exact=True, mm={"y": L.mm_y, "torch": L.mm_torch, "f64": L.mm_f64}[mm])
+    if arm in ("exact", "exact32"):
+        ops = L.Ops(exact=True, mm={"y": L.mm_y, "torch": L.mm_torch, "f64": L.mm_f64}[mm],
+                    act=torch.float32 if arm == "exact32" else None)
         dtype = torch.float64
+    elif arm == "bf16":                          # mixed precision: bf16 products
+        ops, dtype = L.Ops(exact=False, float_mm=torch.bfloat16), torch.float32
     else:
         ops, dtype = L.Ops(exact=False), torch.float32
     return L.Trainer(ops, cfg, device, dtype, graph="graph" in mode, compile="compile" in mode)
@@ -64,19 +68,20 @@ def main():
            "steady": a.steady, "gpu": f"{torch.cuda.get_device_name()} (sm_{major}{minor})",
            "cpu": platform.processor() or platform.machine(), "torch": torch.__version__, "modes": {}}
     print(f"size {a.size}: {cfg}, batch {B}, on {rec['gpu']}, torch {torch.__version__}", flush=True)
-    cpu = None
+    cpu = {}
     bad = False
     for m in a.modes.split(","):
         arm, mode = m.split(":")
-        if arm == "exact" and cpu is None:
+        if arm.startswith("exact") and arm not in cpu:
             t = time.perf_counter()
-            tr = make("exact", "eager", "cpu", cfg, "f64")
+            tr = make(arm, "eager", "cpu", cfg, "f64")
             for i in range(a.check):
                 tr.step(xs[i], ys[i])
             tr.verify()
-            cpu = L.digest(tr.params)
-            rec["cpu_digest"] = cpu
-            print(f"cpu reference: weights@{a.check} {cpu}  ({time.perf_counter() - t:.0f} s)", flush=True)
+            cpu[arm] = L.digest(tr.params)
+            rec[f"cpu_digest_{arm}"] = cpu[arm]
+            print(f"cpu reference {arm}: weights@{a.check} {cpu[arm]}  ({time.perf_counter() - t:.0f} s)",
+                  flush=True)
         tr = make(arm, mode, "cuda", cfg, a.mm)
         X, Y = xs.cuda(), ys.cuda()
         t = time.perf_counter()
@@ -93,7 +98,7 @@ def main():
             tr.step(X[i], Y[i])
         tr.verify()
         ms = (time.perf_counter() - t) / a.steady * 1e3
-        same = None if arm != "exact" else d == cpu
+        same = None if not arm.startswith("exact") else d == cpu[arm]
         bad |= same is False
         rec["modes"][m] = {"ms_per_step": ms, "first_step_s": first, "digest": d, "same_as_cpu": same}
         note = "" if same is None else ("  same as CPU" if same else "  *** DIFFERS from CPU")

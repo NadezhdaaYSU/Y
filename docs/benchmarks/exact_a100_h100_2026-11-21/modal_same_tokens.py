@@ -139,10 +139,12 @@ def on_h100(stage: str):
 
 
 # Compiling is CPU work (Inductor); on the T4's 4 cores the compiled records
-# took 36 and 41 minutes. More cores cost little next to the GPU.
-@app.function(gpu="H100!", timeout=40 * 60, cpu=16.0, memory=32768)
+# took 36 and 41 minutes. More cores cost little next to the GPU. The first
+# H100 compiled run (2026-11-21) hit a 40-minute timeout with no budget and
+# returned nothing; the budget now keeps what finished.
+@app.function(gpu="H100!", timeout=60 * 60, cpu=16.0, memory=32768)
 def on_h100_long(stage: str):
-    return _record("h100", stage)
+    return _record("h100", stage, budget=57 * 60)
 
 
 # Three timed processes, each compiling both arms.

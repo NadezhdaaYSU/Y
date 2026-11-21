@@ -50,7 +50,9 @@ def record(a):
     cfg = L.Config()
     if a.arm == "exact":
         mm = {"f64": L.mm_f64, "y": L.mm_y, "torch": L.mm_torch}[a.mm]
-        ops, dtype = L.Ops(exact=True, mm=mm, grad_bits=a.grad_bits, bwd_bits=a.bwd_bits), torch.float64
+        act = {"float64": None, "float32": torch.float32}[a.act]
+        ops = L.Ops(exact=True, mm=mm, grad_bits=a.grad_bits, bwd_bits=a.bwd_bits, act=act)
+        dtype = torch.float64
     else:
         ops, dtype = L.Ops(exact=False), torch.float32
     tr = L.Trainer(ops, cfg, a.device, dtype, a.seed, a.lr, graph=a.graph, compile=a.compile)
@@ -90,7 +92,8 @@ def record(a):
           f"{steady * 1e3:.2f} ms/step", flush=True)
     rec = {"device": device_name(a.device), "arm": a.arm, "mm": a.mm if a.arm == "exact" else None,
            "torch": torch.__version__, "config": vars(cfg), "seed": a.seed, "lr": a.lr, "batch": a.batch,
-           "steps": a.steps, "grad_bits": a.grad_bits, "bwd_bits": a.bwd_bits, "text_sha256": hashlib.sha256(raw).hexdigest(),
+           "steps": a.steps, "grad_bits": a.grad_bits, "bwd_bits": a.bwd_bits,
+           "act": a.act if a.arm == "exact" else None, "text_sha256": hashlib.sha256(raw).hexdigest(),
            "losses": losses, "target_probs": pts, "evals": evals, "digests": digests, "seconds": time.time() - t0,
            "graph": a.graph, "compile": a.compile, "step_seconds": step_s, "first_step_seconds": first_s,
            "ms_per_step": steady * 1e3}
@@ -104,10 +107,12 @@ def compare(pa, pb):
     print(f"A: {A['device']}  arm {A['arm']}  mm {A['mm']}\nB: {B['device']}  arm {B['arm']}  mm {B['mm']}")
     same_work = (all(A[k] == B[k] for k in ("arm", "config", "seed", "lr", "batch", "steps", "text_sha256"))
                  and A.get("bwd_bits", 8) == B.get("bwd_bits", 8)
-                 and A.get("grad_bits", A.get("bwd_bits", 8)) == B.get("grad_bits", B.get("bwd_bits", 8)))
+                 and A.get("grad_bits", A.get("bwd_bits", 8)) == B.get("grad_bits", B.get("bwd_bits", 8))
+                 and A.get("act", "float64" if A["arm"] == "exact" else None)
+                 == B.get("act", "float64" if B["arm"] == "exact" else None))
     if not same_work:
-        print("  *** not the same workload (arm, config, seed, lr, batch, steps, text or "
-              "backward width differ)")
+        print("  *** not the same workload (arm, config, seed, lr, batch, steps, text, "
+              "backward width or activation type differ)")
         return 2
     diff_ck = next((sa for (sa, da), (_, db) in zip(A["digests"], B["digests"]) if da != db), None)
     # p(target) bits per step: device-independent if training is. The losses
@@ -134,6 +139,8 @@ def main():
                          "operands), Y's int8 kernel, or torch._int_mm")
     ap.add_argument("--grad-bits", type=int, default=12,
                     help="width of the backward pass's gradient operands (exact arm)")
+    ap.add_argument("--act", choices=("float64", "float32"), default="float64",
+                    help="the exact arm's activation and gradient type (Ops(act=...))")
     ap.add_argument("--bwd-bits", type=int, default=8,
                     help="width of the activations and weights the gradients meet in the backward pass")
     ap.add_argument("--graph", action="store_true", help="replay each step as one CUDA graph")

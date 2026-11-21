@@ -162,6 +162,37 @@ class Pieces(unittest.TestCase):
             ref = torch.round(x * L.pow2(-s)).to(torch.int64)
             self.assertTrue(torch.equal(L.scaled_round(x, s)[ok], ref[ok]), sh)
 
+    def test_float32_quantizer_is_round_half_even(self):
+        # The int32 path for float32 values: round(x * 2^-s), clamped, done
+        # exactly in float64, for the s q8 chose; and that s is frexp's for a
+        # row whose max is normal.
+        g = torch.Generator().manual_seed(12)
+        rows = [torch.randn(64, 300, generator=g) * torch.logspace(-12, 12, 300)]
+        ties = (torch.arange(-200, 200, dtype=torch.float32) + 0.5).reshape(2, 200)
+        rows.append(torch.cat([ties, torch.zeros(2, 100)], 1))
+        z = torch.zeros(3, 300)
+        z[0, :5] = torch.tensor([-0.0, 0.0, 1e-45, -3e-39, 1.0])
+        z[1, :3] = torch.tensor([3e-39, -1e-40, 2e-44])          # all subnormal
+        rows.append(z)
+        x = torch.cat(rows)
+        for bits in (8, 12, 16):
+            for scale in (1.0, 2.0 ** -7, 2.0 ** -3):
+                xs = x * scale
+                q, s = L.q8(xs, bits=bits)
+                self.assertEqual(q.dtype, torch.int32)
+                top = (1 << (bits - 1)) - 1
+                ref = torch.round(xs.double() * L.pow2(-s)).clamp(-top, top)
+                self.assertTrue(torch.equal(q.double(), ref), (bits, scale))
+                normal = xs.abs().amax(-1) >= 2.0 ** -126
+                fr = torch.frexp(xs.abs().amax(-1, keepdim=True).double())[1] - (bits - 1)
+                self.assertTrue(torch.equal(s[normal], fr[normal].to(torch.int64)))
+        # The wide rounding behind the exact sums, float32 values, left shifts too.
+        for sh in (-61, -40, -20, 0, 9):
+            s = torch.full((x.shape[0], 1), sh, dtype=torch.int64) + L.exponent(x, -1)
+            y = x.double() * L.pow2(-s)
+            ok = y.abs() < 2.0 ** 62
+            self.assertTrue(torch.equal(L.scaled_round(x, s)[ok], torch.round(y).to(torch.int64)[ok]), sh)
+
     def test_non_finite_values_are_refused(self):
         # A NaN used to pass the quantizer, and det_sqrt(NaN) gave 0 on CUDA.
         for bad in (float("nan"), float("inf"), -float("inf")):
@@ -175,6 +206,10 @@ class Pieces(unittest.TestCase):
                 L.det_sqrt(x.reshape(-1))
             with self.assertRaises(OverflowError):
                 L.Ops(exact=True).softmax(x, torch.zeros_like(x, dtype=torch.bool))
+            with self.assertRaises(OverflowError):      # and float32 activations
+                L.q8(x.float())
+            with self.assertRaises(OverflowError):
+                L.Ops(exact=True, act=torch.float32).softmax(x.float(), torch.zeros_like(x, dtype=torch.bool))
         with self.assertRaises(OverflowError):
             L.det_sqrt(torch.tensor([-1.0], dtype=torch.float64))
         # A quantizer scale past 2^+-511 is refused, so a product's scale
@@ -257,6 +292,15 @@ class Training(unittest.TestCase):
         tr.verify()
         self.assertEqual(L.digest(tr.params), L.digest(self.params))
         self.assertEqual([L.nll_on_host(t) for t in tps], self.losses)
+
+    def test_float32_activations_train_and_ignore_row_order(self):
+        ops32 = L.Ops(exact=True, act=torch.float32)
+        a, la = run(ops32, "cpu", torch.float64)
+        b, lb = run(L.Ops(exact=True, act=torch.float32), "cpu", torch.float64, permute=True)
+        self.assertLess(la[-1], la[0] - 0.5)
+        self.assertEqual(L.digest(a), L.digest(b))
+        self.assertEqual(la, lb)
+        self.assertNotEqual(L.digest(a), L.digest(self.params))   # a different model
 
     def test_a_deferred_refusal_still_raises(self):
         data = L.CharData(TEXT)
@@ -375,6 +419,22 @@ class OnTheGpu(unittest.TestCase):
         self.assertEqual(L.tp_digest(tp), L.tp_digest(ref_tp))
         self.assertEqual(L.digest(tr.params), L.digest(ref.params))
         self.assertTrue(torch.equal(tr.opt.v.cpu(), ref.opt.v))
+
+    def test_float32_activations_give_the_cpu_weights(self):
+        ref, losses = run(L.Ops(exact=True, act=torch.float32), "cpu", torch.float64)
+        params, gl = run(L.Ops(exact=True, mm=L.mm_y, act=torch.float32), "cuda", torch.float64)
+        self.assertEqual(gl, losses)
+        self.assertEqual(L.digest(params), L.digest(ref))
+        data = L.CharData(TEXT)
+        gen = torch.Generator().manual_seed(1)
+        bs = [data.batch(gen, 4, CFG.ctx) for _ in range(12)]
+        tr = L.Trainer(L.Ops(exact=True, mm=L.mm_y, act=torch.float32), CFG, "cuda", torch.float64,
+                       graph=True, compile=True)
+        tps = [tr.step(x.cuda(), y.cuda()) for x, y in bs]
+        tr.verify()
+        torch._dynamo.reset()
+        self.assertEqual([L.nll_on_host(t) for t in tps], losses)
+        self.assertEqual(L.digest(tr.params), L.digest(ref))
 
     def test_a_deferred_refusal_raises_from_a_graph(self):
         data = L.CharData(TEXT)

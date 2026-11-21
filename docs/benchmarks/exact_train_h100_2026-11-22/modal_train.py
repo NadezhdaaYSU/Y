@@ -3,7 +3,11 @@ on the development machine against the CPU record of
 docs/benchmarks/exact_train_lm_2026-11-21/, and step times against float32.
 
     git archive --format=tar.gz -o /abs/y_src.tar.gz HEAD     # in the repository
-    Y_SRC_TAR=/abs/y_src.tar.gz modal run modal_train.py --out DIR
+    Y_SRC_TAR=/abs/y_src.tar.gz modal run modal_train.py --stage t2 --out DIR
+    Y_SRC_TAR=/abs/y_src.tar.gz modal run modal_train.py --stage act32 --out DIR
+
+Stage `act32` (float32 activations) also runs its CPU reference record on a
+CPU-only container.
 
 Y is built from the tarball in the image (Rust 1.97.1, on Modal's CPU
 builder), so the GPU is rented only for the runs. The function has a hard
@@ -46,7 +50,8 @@ image = (
 app = modal.App("y-exact-train", image=image)
 
 REC = "exact_train_lm.py --device cuda --record {out}/"
-RUNS = [
+SPEED_MODES = "exact32:compile+graph,exact:compile+graph,f32:compile+graph,bf16:compile+graph"
+STAGES = {"t2": [
     ("exact_y_g12b8_fast", REC + "h100_exact_y_g12b8_fast.json --mm y --graph --compile"),
     ("float32_fast", REC + "h100_float32_fast.json --arm float32 --graph --compile"),
     ("float32_eager", REC + "h100_float32_eager.json --arm float32"),
@@ -54,16 +59,26 @@ RUNS = [
                      "--out {out}/h100_speed_medium.json"),
     ("speed_tiny", "exact_train_speed.py --size tiny --check 30 --steady 500 "
                    "--out {out}/h100_speed_tiny.json"),
-]
+],
+# Float32 activations (Ops(act=torch.float32)), with bf16 mixed precision as
+# a second baseline.
+"act32": [
+    ("exact32_y_g12b8_fast", REC + "h100_exact32_y_g12b8_fast.json --mm y --act float32 --graph --compile"),
+    ("speed32_medium", f"exact_train_speed.py --size medium --check 3 --steady 50 --modes {SPEED_MODES} "
+                       "--out {out}/h100_speed32_medium.json"),
+    ("speed32_tiny", f"exact_train_speed.py --size tiny --check 30 --steady 500 --modes {SPEED_MODES} "
+                     "--out {out}/h100_speed32_tiny.json"),
+]}
+# The CPU reference for a stage, on a CPU-only container.
+CPU_RUNS = {"act32": [("cpu_exact32_g12b8", "exact_train_lm.py --device cpu --record "
+                                            "{out}/cpu_exact32_g12b8.json --act float32")]}
 
 
 def _sh(cmd):
     return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout
 
 
-@app.function(gpu="H100!", timeout=35 * 60, cpu=16.0, memory=32768)
-def on_h100():
-    end = time.time() + 32 * 60
+def _run(runs, end):
     out = pathlib.Path("/root/out")
     out.mkdir(exist_ok=True)
     files = {}
@@ -73,7 +88,7 @@ def on_h100():
                f"sha256sum {REPO}/target/release/liby.so")
     files["machine.txt"] = head
     print(head, flush=True)
-    for name, cmd in RUNS:
+    for name, cmd in runs:
         t0 = time.time()
         left = end - time.time()
         if left < 60:
@@ -95,10 +110,24 @@ def on_h100():
     return files
 
 
+@app.function(gpu="H100!", timeout=45 * 60, cpu=16.0, memory=32768)
+def on_h100(stage: str):
+    return _run(STAGES[stage], time.time() + 42 * 60)
+
+
+@app.function(timeout=60 * 60, cpu=8.0, memory=16384)
+def on_cpu(stage: str):
+    return _run(CPU_RUNS[stage], time.time() + 57 * 60)
+
+
 @app.local_entrypoint()
-def main(out: str = "results"):
+def main(stage: str = "t2", out: str = "results"):
     d = pathlib.Path(out)
     d.mkdir(parents=True, exist_ok=True)
-    for name, text in on_h100.remote().items():
-        (d / name).write_text(text)
+    calls = [("gpu", on_h100.spawn(stage))]
+    if stage in CPU_RUNS:
+        calls.append(("cpu", on_cpu.spawn(stage)))
+    for tag, call in calls:
+        for name, text in call.get().items():
+            (d / (f"{tag}_{name}" if name == "machine.txt" else name)).write_text(text)
     print("wrote", d)
