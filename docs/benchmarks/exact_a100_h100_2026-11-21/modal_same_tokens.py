@@ -55,16 +55,29 @@ app = modal.App("y-same-tokens", image=image)
 
 EVERY = {"Y_EXACT_V_INT8": "1", "Y_EXACT_NORM": "triton", "Y_EXACT_ATTN": "y",
          "Y_EXACT_KV_PACK": "inplace", "Y_EXACT_GEMM": "y"}
+NO_Y_GEMM = {k: v for k, v in EVERY.items() if k != "Y_EXACT_GEMM"}
+REC = "exact_cross_device.py --device cuda --record {json} "
+# Speed: stock bf16 (what ships, as on the 4070 Ti) against the exact path,
+# both compiled, in turns inside one process, best of 5. Without Y_EXACT_GEMM
+# the exact path's GEMM on sm_80+ is Triton's int8 dot.
+TP = ("exact_throughput.py --batch 32 --tokens 64 --reps 5 --compile "
+      "--model Qwen/Qwen2.5-0.5B-Instruct --loop graphed --stock-loop ")
+BOTH = {"Y_THR_ARMS": "stock,exact"}
 STAGES = {
     "eager": [
-        ("eager", {}, "--arms stock,exact --model Qwen/Qwen2.5-0.5B-Instruct"),
-        ("ygemm_every_eager", EVERY, "--arms exact --model Qwen/Qwen2.5-0.5B-Instruct"),
+        ("eager", {}, REC + "--arms stock,exact --model Qwen/Qwen2.5-0.5B-Instruct"),
+        ("ygemm_every_eager", EVERY, REC + "--arms exact --model Qwen/Qwen2.5-0.5B-Instruct"),
     ],
     "compiled_0p5b": [
-        ("ygemm_every_compiled", EVERY, "--arms exact --compile --model Qwen/Qwen2.5-0.5B-Instruct"),
+        ("ygemm_every_compiled", EVERY, REC + "--arms exact --compile --model Qwen/Qwen2.5-0.5B-Instruct"),
     ],
     "compiled_1p5b": [
-        ("ygemm_1p5b_every_compiled", EVERY, "--arms exact --compile --model Qwen/Qwen2.5-1.5B-Instruct"),
+        ("ygemm_1p5b_every_compiled", EVERY, REC + "--arms exact --compile --model Qwen/Qwen2.5-1.5B-Instruct"),
+    ],
+    "speed": [
+        ("speed_every_ygemm_stock_graphed", dict(EVERY, **BOTH), TP + "graphed"),
+        ("speed_every_triton_stock_graphed", dict(NO_Y_GEMM, **BOTH), TP + "graphed"),
+        ("speed_every_ygemm_stock_greedy", dict(EVERY, **BOTH), TP + "greedy"),
     ],
 }
 
@@ -73,7 +86,12 @@ def _sh(cmd):
     return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout
 
 
-def _record(tag, stage):
+def _record(tag, stage, budget=None):
+    """Runs the stage's commands in turn. With `budget` (seconds), a command
+    still running when it is spent is killed and its output so far kept, so a
+    stage that runs long still returns its finished logs before the
+    function's hard timeout."""
+    end = time.time() + budget if budget else None
     out = pathlib.Path("/root/out")
     out.mkdir(exist_ok=True)
     files = {}
@@ -83,13 +101,22 @@ def _record(tag, stage):
                f"sha256sum {REPO}/target/release/liby.so")
     files["machine.txt"] = head
     print(head, flush=True)
-    for name, env, args in STAGES[stage]:
+    for name, env, cmd in STAGES[stage]:
         t0 = time.time()
-        p = subprocess.run(f"cd {REPO}/tools && {sys.executable} exact_cross_device.py --device cuda "
-                           f"--record {out}/{tag}_{name}.json {args}",
-                           shell=True, env=dict(os.environ, **env),
-                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        log = p.stdout + f"\nexit {p.returncode} {time.time() - t0:.0f} s\n"
+        cmd = cmd.replace("{json}", f"{out}/{tag}_{name}.json")
+        left = None if end is None else end - time.time()
+        if left is not None and left < 60:
+            files[f"{tag}_{name}.log"] = f"not run: {left:.0f} s of the budget left\n"
+            continue
+        try:
+            # `exec`, so a kill at the budget reaches python, not just the shell.
+            p = subprocess.run(f"cd {REPO}/tools && exec {sys.executable} {cmd}",
+                               shell=True, env=dict(os.environ, **env), timeout=left,
+                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            log = p.stdout + f"\nexit {p.returncode} {time.time() - t0:.0f} s\n"
+        except subprocess.TimeoutExpired as e:
+            got = e.stdout.decode(errors="replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
+            log = got + f"\nKILLED at the budget after {time.time() - t0:.0f} s\n"
         files[f"{tag}_{name}.log"] = log
         print(log[-2500:], flush=True)
         js = out / f"{tag}_{name}.json"
@@ -118,11 +145,18 @@ def on_h100_long(stage: str):
     return _record("h100", stage)
 
 
+# Three timed processes, each compiling both arms.
+@app.function(gpu="H100!", timeout=60 * 60, cpu=16.0, memory=32768)
+def on_h100_speed(stage: str):
+    return _record("h100", stage, budget=57 * 60)
+
+
 @app.local_entrypoint()
 def main(stage: str = "eager", out: str = "results", gpus: str = "a100,h100"):
     if stage not in STAGES:
         raise SystemExit(f"unknown stage {stage!r}")
-    fns = {"a100": on_a100, "h100": on_h100_long if stage.startswith("compiled") else on_h100}
+    h100 = on_h100_speed if stage == "speed" else on_h100_long if stage.startswith("compiled") else on_h100
+    fns = {"a100": on_a100, "h100": h100}
     calls = [(g, fns[g].spawn(stage)) for g in gpus.split(",")]
     for g, call in calls:
         d = pathlib.Path(out) / f"{g}_{stage}"

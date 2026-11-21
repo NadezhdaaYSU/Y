@@ -28,6 +28,9 @@ names:
 - `w8a8_gemv`: the Triton int8 kernels (GPU only).
 - `large_model`: a builder that never holds a float32 copy of a bf16
   checkpoint, for models too large for that.
+- `train`: exact training, first step: one linear layer trained with integer
+  sums and fixed-point weights, the same bits in any reduction order and on
+  any device (`python/tests/test_exact_train.py`).
 
 On a GPU the linear layers' int8 products run on Triton's kernel by default,
 on cuBLASLt with `Y_EXACT_GEMM=torch`, or on Y's own kernel, whose schedule and
