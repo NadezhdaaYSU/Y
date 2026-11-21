@@ -55,10 +55,35 @@ twice and got the same tokens both times.
 
 Stock's own digests: A100 `a706c0d5c5f7ea3a`, H100 `ba8d5ce33b0f8e50`.
 
+## Speed on the H100 (2026-11-22)
+
+`--stage speed --gpus h100`, Y at 7e58f6d: `exact_throughput.py`, 0.5B,
+batch 32, 64 new tokens, both arms compiled and replayed as CUDA graphs,
+best of 5 in turns inside one process (`h100_speed/`):
+
+| arm | s | tok/s per sequence | tok/s total | spread |
+|---|---|---|---|---|
+| stock, bf16 + SDPA (what ships) | 0.113 | 568.8 | 18,200 | 0.4% |
+| exact, every Y switch with Y's int8 GEMM | 0.130 | 491.8 | 15,737 | 0.3% |
+
+The exact path is **1.16x slower** here. With the same comparison it was
+1.26x faster on the RTX 4070 Ti SUPER and 1.54x faster on the T4
+(`docs/benchmarks/int8_turing_2026-11-18/`). Y's int8 GEMM on sm_90 is its
+`mma.sync` kernel, not the H100's `wgmma`, and no H100 profile was taken, so
+where the time goes there is not measured. Both arms' loops were checked
+(greedy against `generate`, graphed against greedy, on all 32 rows).
+
+Only this first of the stage's three processes finished: compiling both arms
+took most of its 2,357 s on Modal's CPUs, the second (the Triton int8 GEMM in
+place of Y's) was killed at the 57-minute budget after 1,059 s, and the
+third (stock without graphs) did not start. Cost $4.72 (`modal billing report`): the
+H100 and 16 CPUs for the whole budget, most of it compiling.
+
 ## Not covered yet
 
-Compiled runs (`torch.compile`), the 1.5B model, and speed. Eager only, one
-model size, one model family.
+Compiled same-token records on the A100 and H100 (the first H100 attempt hit
+its 40-minute timeout with nothing returned; the job now keeps its logs at a
+budget), the 1.5B model. One model size, one model family.
 
 ## Cost
 
