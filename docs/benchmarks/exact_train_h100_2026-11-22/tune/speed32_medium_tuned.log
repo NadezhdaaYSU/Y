@@ -1,0 +1,69 @@
+size medium: Config(vocab=96, d=512, heads=8, layers=4, ff=2048, ctx=256, eps=1e-05), batch 16, on NVIDIA H100 80GB HBM3 (sm_90), torch 2.13.0+cu126
+cpu reference exact32: weights@3 e7714afaa0a4fb6b  (83 s)
+/usr/local/lib/python3.12/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+y: no hardware profile at /root/y_hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+Traceback (most recent call last):
+  File "/root/Y/tools/../python/y_lang/exact/train_lm.py", line 752, in _capture
+    self._tp, flags, messages = self._fn(self._x, self._y, self._r[0], self._r[1])
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py", line 1166, in compile_wrapper
+    result = fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^
+  File "/root/Y/tools/../python/y_lang/exact/train_lm.py", line 697, in _step
+    def _step(self, x, y, r1, r2):
+  File "/usr/local/lib/python3.12/site-packages/torch/_dynamo/eval_frame.py", line 1446, in _fn
+    return fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/_functorch/aot_autograd.py", line 1277, in forward
+    return compiled_fn(full_args)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 1141, in runtime_wrapper
+    result = _codegen_runtime_wrapper(
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/subclass_codegen.py:codegen(runtime_wrapper_orchestration)", line 9, in _runtime_wrapper
+  File "/usr/local/lib/python3.12/site-packages/torch/_functorch/_aot_autograd/runtime_wrappers.py", line 2548, in __call__
+    return self.compiled_fn(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/_inductor/output_code.py", line 763, in __call__
+    return self.current_callable(inputs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/_inductor/utils.py", line 3835, in run
+    out = model(new_inputs)
+          ^^^^^^^^^^^^^^^^^
+  File "/cache/inductor/5o/c5o3z7i4serk5ostgvtq7k5r75int2r6ttzl4bth3t6zmkaocewt.py", line 297639, in call
+    triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_div_eq_ge_gt_int8_mm_le_lt_mul_neg_ones_like_scalar_tensor_slice_sqrt_sub_sum_transpose_view_where_77.run(buf316, buf419, buf402, buf409, arg0_1, buf420, buf435, buf2211, buf2212, buf2303, buf436, buf451, buf2290, buf2039, buf2038, buf2209, buf2210, buf2343, 4096, 512, stream=raw_stream0)
+  File "/usr/local/lib/python3.12/site-packages/torch/_inductor/runtime/triton_heuristics.py", line 2086, in run
+    return fast(*args, stream=stream)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<string>", line 5, in launcher
+  File "/usr/local/lib/python3.12/site-packages/triton/backends/nvidia/driver.py", line 328, in __call__
+    self.launch(gridX, gridY, gridZ, stream, function, self.launch_cooperative_grid, self.launch_pdl,
+RuntimeError: Triton Error [CUDA]: operation failed due to a previous error during capture
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/Y/tools/exact_train_speed.py", line 114, in <module>
+    main()
+  File "/root/Y/tools/exact_train_speed.py", line 88, in main
+    tr.step(X[0], Y[0])
+  File "/root/Y/tools/../python/y_lang/exact/train_lm.py", line 731, in step
+    self._capture(x, y)
+  File "/root/Y/tools/../python/y_lang/exact/train_lm.py", line 751, in _capture
+    with torch.cuda.graph(g):
+         ^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.12/site-packages/torch/cuda/graphs.py", line 477, in __exit__
+    self.cuda_graph.capture_end()
+  File "/usr/local/lib/python3.12/site-packages/torch/cuda/graphs.py", line 169, in capture_end
+    super().capture_end()
+torch.AcceleratorError: CUDA error: operation failed due to a previous error during capture
+Search for `cudaErrorStreamCaptureInvalidated' in https://docs.nvidia.com/cuda/cuda-runtime-api/group__CUDART__TYPES.html for more information.
+For more detailed error information, run with CUDA_LOG_FILE=stderr
+
+
+exit 1 1324 s

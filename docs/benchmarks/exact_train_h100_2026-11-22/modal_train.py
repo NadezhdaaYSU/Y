@@ -91,6 +91,14 @@ STAGES["tune"] = [
     ("profile_medium_exact32", "exact_train_profile.py --size medium --arm exact32 "
                                "--out {out}/h100_profile_medium_exact32.txt"),
 ]
+# The float32 quantizers as float32 arithmetic (5f9d9c1), timed and profiled.
+STAGES["f32formula"] = [
+    ("speed32f_medium", "exact_train_speed.py --size medium --check 3 --steady 50 "
+                        "--modes exact32:compile+graph,f32:compile+graph,bf16:compile+graph "
+                        "--out {out}/h100_speed32f_medium.json"),
+    ("profile32f_medium", "exact_train_profile.py --size medium --arm exact32 "
+                          "--out {out}/h100_profile32f_medium_exact32.txt"),
+]
 # The CPU reference for a stage, on a CPU-only container.
 CPU_RUNS = {"act32": [("cpu_exact32_g12b8", "exact_train_lm.py --device cpu --record "
                                             "{out}/cpu_exact32_g12b8.json --act float32")]}
