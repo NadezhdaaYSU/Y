@@ -127,6 +127,14 @@ class Pieces(unittest.TestCase):
         with self.assertRaises(OverflowError):
             L.digits(torch.tensor([20000], dtype=torch.int32), 12)   # two digits hold |q| <= 8256
 
+    def test_ndigits_is_the_proofs(self):
+        # proofs/ExactTrainArith.v proves its transcription of ndigits enough
+        # and the fewest for 9 to 64 bits, and states this table
+        # (`ndigits_table`): the Python must return it.
+        bits = (8, 9, 12, 13, 14, 15, 16, 20, 21, 22, 28, 29, 64)
+        self.assertEqual([L.ndigits(b) for b in bits], [1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 5, 5, 10])
+        self.assertEqual([L.capacity(b) for b in (12, 16, 22)], [8256, 1056832, 135274560])
+
     def test_integer_quantizer_is_round_half_even(self):
         # q8 works on the integers inside the floats; it must be the float64
         # formula round(x * 2^-s), clamped, exactly. Ties at .5 of both

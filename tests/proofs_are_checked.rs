@@ -1077,6 +1077,38 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // Exact training's arithmetic (`python/y_lang/exact/train_lm.py`):
+            // the balanced base-128 digit split holds exactly the values in
+            // its reach and `ndigits` is enough and the fewest for 9 to 64
+            // bits; the shifted digit-pair blocks of the stacked GEMM are the
+            // dot product of the values, exact in any order inside the bound
+            // the code checks; the rounding shift is round-half-even, its
+            // clamp and sign handling change nothing; the fixed-point sums are
+            // exact in any int64 order. The refutations are each bound being
+            // load-bearing: the old digit count leaves 1 over at 14 bits, round
+            // half up differs on a tie, two terms of 2^62 wrap int64, and a
+            // scale bound of 512 would let a product's scale leave float64.
+            "ExactTrainArith.v",
+            &[
+                "Print Assumptions digits_rebuild",
+                "Print Assumptions nothing_left_iff_in_reach",
+                "Print Assumptions ndigits_hold",
+                "Print Assumptions ndigits_is_the_fewest",
+                "Print Assumptions ndigits_table",
+                "Print Assumptions the_old_count_was_one_short",
+                "Print Assumptions the_shifted_blocks_are_the_dot",
+                "Print Assumptions every_order_of_the_blocks_is_exact",
+                "Print Assumptions t2_widest_product_is_inside_float64",
+                "Print Assumptions shift_round_is_nearest",
+                "Print Assumptions nearest_even_unique",
+                "Print Assumptions a_clamped_shift_rounds_the_same",
+                "Print Assumptions round_half_up_differs_on_a_tie",
+                "Print Assumptions fixed_point_sums_are_exact",
+                "Print Assumptions past_the_int64_cap_the_sum_wraps",
+                "Print Assumptions a_scale_of_512_could_leave_float64",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

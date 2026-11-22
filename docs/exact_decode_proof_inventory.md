@@ -878,6 +878,62 @@ Theorem left_padding_changes_nothing : forall dm T M mw ls P R0 tok pos,
   = step Mref dm mw (map snd (real_ls ls)) (repeat false R0) tok pos.
 ```
 
+## Added for exact training (2026-11-22)
+
+### `proofs/ExactTrainArith.v`
+
+The integer arithmetic of `python/y_lang/exact/train_lm.py` between the
+Python and `ExactReduce.v`: the balanced base-128 digit split that carries
+12-bit gradients through int8 GEMMs (enough digits, the fewest, and exactly
+the values the code's check accepts), the stacked GEMM's shifted digit-pair
+blocks being the dot product of the values in any order inside the bound the
+code checks, the quantizers' rounding shift being round-half-even, and the
+fixed-point sums being exact in any int64 order. Refutations: the digit count
+used until 2026-11-21 leaves 1 over at 14 bits, round half up differs on a
+tie, two terms of 2^62 wrap int64, a scale bound of 512 could leave float64.
+
+- On the training path: every product (`Ops.matmul`), every fixed-point sum
+  (`Ops.sum`, `scatter_rows`) and every quantizer's rounding, as integer
+  arithmetic. Not modelled: that the floats' bit fields are what the
+  rounding is given, the float32 formula of `scaled_round` (tested against
+  the integer one), the elementwise IEEE operations, the int8 GEMM itself
+  (`Int8GemmExact.v`).
+- Theorems and corollaries: 24. Quoted below: 5.
+
+```coq
+Theorem nothing_left_iff_in_reach : forall n r,
+  rest n r = 0 <-> - reach n 64 <= r <= reach n 63.
+```
+
+```coq
+Theorem ndigits_hold : forall bits q,
+  9 <= bits <= 64 -> Z.abs q <= top bits ->
+  rest (ndigits bits) q = 0 /\ value (digits (ndigits bits) q) = q.
+```
+
+```coq
+Theorem every_order_of_the_blocks_is_exact : forall c K na nb A B da db t,
+  0 <= da -> 0 <= db ->
+  (forall k i, (k < K)%nat -> (i < na)%nat -> Z.abs (A k i) <= da) ->
+  (forall k j, (k < K)%nat -> (j < nb)%nat -> Z.abs (B k j) <= db) ->
+  Z.of_nat K * reach na da * reach nb db <= ER.cap c ->
+  ER.covers t (length (blocks K na nb A B)) ->
+  ER.teval (ER.cadd c) (blocks K na nb A B) t = srange K (fun k => wval na (A k) * wval nb (B k)).
+```
+
+```coq
+Theorem shift_round_is_nearest : forall m r, 0 <= m -> 1 <= r ->
+  nearest_even m r (shift_round m r).
+```
+
+```coq
+Theorem fixed_point_sums_are_exact : forall c terms t,
+  0 <= c <= 61 -> Z.of_nat (length terms) <= 2 ^ c ->
+  Forall (fun q => Z.abs q <= 2 ^ (61 - c)) terms ->
+  ER.covers t (length terms) ->
+  ER.teval (ER.cadd ER.I64) terms t = ER.zsum terms.
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.
