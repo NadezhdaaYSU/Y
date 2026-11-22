@@ -160,6 +160,25 @@ interpreter on the CPU before the H100 ran them.
 
 Cost: $6.35 for the four runs since the profile (`modal billing report`).
 
+## float64 quantizers by the float64 formula (`f64formula/`)
+
+Y at 73bdc9a: on GPUs whose float64 runs at half float32's rate (A100,
+H100), the float64 quantizers (the weights, Adam's square root) round in
+float64, the same function as the integers (tested against them, with a
+mutant the test catches). Correct on the H100: the GPU tests pass (the CPU
+keeps the integers, so they compare the two), and the 5000-step record has
+the CPU's weights at every checkpoint and step (`f64formula/compare.txt`).
+**No faster**: 6.79 ms a step at width 512 against 6.76, 7.06 ms of GPU time
+against 6.83. The integer weight quantizers were not what the H100 waited
+on; kept, since it does no harm and may help a GPU with slower integers.
+
+What is left is spread over many kernels of 0.1 to 0.34 ms
+(`f64formula/h100_profilef_medium_exact32.txt`): the attention backward's
+quantizers (dS along keys and along queries, P along queries, the gradient
+digits), the GEMM epilogues fused with the next quantizer, and Adam (0.26 ms,
+about what reading and writing the float64 weights, moments and gradient at
+the H100's memory rate costs).
+
 ## Not covered
 
 - One H100, one run of each. Step times are wall clock over 500 (T2) and 50

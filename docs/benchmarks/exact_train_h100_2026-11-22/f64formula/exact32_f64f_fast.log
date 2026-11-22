@@ -1,0 +1,18 @@
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+step   500  train 2.0822  held-out 2.1305  weights 49bf25ecf00fb04d  203 s
+step  1000  train 1.8664  held-out 1.9674  weights b7fb9ef304d86b55  204 s
+step  1500  train 1.7670  held-out 1.8781  weights 167f3dd88d01276d  204 s
+step  2000  train 1.6989  held-out 1.8453  weights 574586e672aab944  205 s
+step  2500  train 1.6548  held-out 1.7991  weights cebc8a26a8e4cf04  205 s
+step  3000  train 1.6227  held-out 1.7691  weights 5b863dabd0186678  206 s
+step  3500  train 1.4325  held-out 1.7408  weights 91482ce733f60340  207 s
+step  4000  train 1.5318  held-out 1.7137  weights 73fec996fa94fd0d  207 s
+step  4500  train 1.5819  held-out 1.6881  weights 3350c32352901adb  208 s
+step  5000  train 1.4935  held-out 1.6963  weights 502c0f1cba2ee8f4  208 s
+steps: 205.3 s, the first 202.2 s (compile, capture), then 0.63 ms/step
+written to /root/out/h100_exact32_f64f_fast.json
+
+exit 0 223 s

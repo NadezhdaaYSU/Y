@@ -1,0 +1,61 @@
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:532: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+USDT:2026-11-22 03:14:25 2675:2675 SyncActivityProfilerHandler.cpp:52] profiler_start
+USDT:2026-11-22 03:14:25 2675:2675 SyncActivityProfilerHandler.cpp:59] profiler_stop
+exact32 medium on NVIDIA H100 80GB HBM3: 7.06 ms of GPU time a step, 547 kernels
+     5.187 ms   73.5%   457.0 kernels  triton (Inductor)
+     1.233 ms   17.5%    51.0 kernels  Y int8 GEMM
+     0.347 ms    4.9%    24.0 kernels  other: _int8_bmm_kernel
+     0.261 ms    3.7%     4.0 kernels  other: _softmax_q8_kernel
+     0.015 ms    0.2%     1.0 kernels  other: void at::native::_scatter_gather_elementwise_kerne
+     0.010 ms    0.1%     7.0 kernels  other: void at::native::vectorized_elementwise_kernel<4, 
+     0.002 ms    0.0%     1.0 kernels  memcpy/memset
+     0.001 ms    0.0%     1.0 kernels  other: void at::native::vectorized_elementwise_kernel<2, 
+     0.001 ms    0.0%     1.0 kernels  other: void at::native::unrolled_elementwise_kernel<at::n
+slowest 40 kernels (us a step, calls a step, sizes, fused source nodes):
+     1233.3  x51.0                               y_int8_mm
+      347.3  x24.0                               _int8_bmm_kernel
+      339.4  x4.0                                triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_div_eq_gt_lt_mul_ne_neg_round_scalar_tensor_slice_sub_sum_transpose_view_where_133
+      276.4  x4.0                                triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_clone_eq_int8_mm_mul_neg_round_scalar_tensor_sub_t_view_where_80
+      260.6  x4.0                                _softmax_q8_kernel
+      260.0  x1.0                                triton_poi_fused___rshift____to_copy_add_bitwise_and_bitwise_left_shift_bitwise_or_clamp_copy__div_eq_ge_gt_le_lt_mul_neg_round_scalar_tensor_sqrt_sub_view_where_178
+      234.4  x3.0                                triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_eq_gt_lt_mul_ne_neg_scalar_tensor_slice_sub_transpose_view_where_151
+      219.8  x4.0                                triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_mul_neg_round_scalar_tensor_sub_transpose_view_where_135
+      142.7  x4.0                                triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_mul_neg_scalar_tensor_sub_t_view_where_114
+      119.9  x4.0                                triton_red_fused__to_copy_amax_bitwise_and_mul_t_view_112
+      116.6  x4.0                                triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_clone_int8_mm_round_sub_115
+      112.4  x4.0   x=16777216                   triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_clone_int8_mm_round_sub_116
+            nodes: y_75, to_612, qa_25, add_328, hi_8, lshift_13, sub_269, add_329, hi_9, lshift_14, sub_270, A_4, to_618, clamp_211, qb_29, to_619, contiguous_166, int8_mm_21
+      103.6  x4.0                                triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_eq_mul_scalar_tensor_sub_transpose_view_where_67
+       97.5  x8.0                                triton_poi_fused___lshift_____rshift____to_copy_add_bitwise_left_shift_eq_mul_scalar_tensor_slice_sub_transpose_view_where_139
+       96.3  x4.0                                triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_clone_int8_mm_sub_145
+       91.2  x3.0                                triton_red_fused___rshift____to_copy__unsafe_view_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_clone_eq_gt_lt_mul_ne_neg_round_scalar_tensor_sub_transpose_view_where_144
+       90.8  x4.0                                triton_red_fused__to_copy__unsafe_view_amax_bitwise_and_cat_clone_t_transpose_view_141
+       85.2  x3.0                                triton_poi_fused___rshift____to_copy__unsafe_view_add_bitwise_left_shift_cat_clamp_clone_eq_mul_neg_round_scalar_tensor_sub_t_transpose_view_where_143
+       84.1  x4.0   x=16777216                   triton_poi_fused___lshift_____rshift____to_copy__unsafe_view_add_cat_clone_int8_bmm_sub_view_138
+            nodes: add_395, hi_20, lshift_31, sub_328, add_396, hi_21, lshift_32, sub_329, A_9, to_725, reshape_71, to_726, reshape_72, c_20
+       84.0  x3.0                                triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_eq_gt_int8_mm_lt_mul_ne_neg_relu_round_scalar_tensor_sub_transpose_view_where_76
+       83.9  x4.0                                triton_per_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_eq_gt_lt_mul_ne_neg_round_scalar_tensor_split_sub_transpose_view_where_65
+       82.3  x4.0                                triton_red_fused___rshift____to_copy_amax_bitwise_and_bitwise_or_cat_eq_gt_lt_ne_scalar_tensor_sub_view_where_134
+       77.9  x4.0                                triton_poi_fused___lshift_____rshift____to_copy__unsafe_view_add_cat_clone_int8_bmm_sub_view_137
+       65.2  x4.0                                triton_poi_fused__to_copy_clamp_clone_int8_bmm_round_view_136
+       63.3  x1.0                                triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_eq_gt_lt_mul_ne_neg_scalar_tensor_slice_sub_transpose_view_where_111
+       62.0  x4.0                                triton_poi_fused___lshift_____rshift____to_copy_add_cat_clone_int8_mm_sub_146
+       54.2  x4.0                                triton_red_fused_amax_bitwise_and_t_view_77
+       53.1  x4.0                                triton_red_fused___rshift____to_copy_amax_bitwise_and_bitwise_or_cat_eq_gt_lt_ne_scalar_tensor_sub_transpose_view_where_72
+       48.5  x4.0                                triton_poi_fused__to_copy__unsafe_view_clone_int8_bmm_view_68
+       47.8  x7.0                                triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_clone_int8_mm_round_sub_118
+       47.6  x12.0                               triton_poi_fused__to_copy__unsafe_view_clone_int8_bmm_view_60
+       45.8  x4.0                                triton_per_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_eq_gt_lt_mul_ne_neg_round_scalar_tensor_split_sub_transpose_view_where_58
+       45.8  x7.0                                triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_clone_int8_mm_round_sub_123
+       45.4  x10.0                               triton_red_fused_amax_bitwise_and_t_view_55
+       45.2  x1.0                                triton_red_fused___rshift____to_copy__unsafe_view_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_clone_eq_gt_lt_mul_ne_neg_round_scalar_tensor_sub_t_transpose_view_where_167
+       43.6  x8.0                                triton_red_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_mul_neg_round_scalar_tensor_sub_sum_view_where_105
+       43.5  x4.0                                triton_poi_fused___rshift____to_copy_add_bitwise_and_bitwise_left_shift_clamp_eq_mul_neg_round_scalar_tensor_split_sub_transpose_view_where_62
+       39.8  x6.0                                triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_mul_neg_scalar_tensor_sub_t_view_where_122
+       39.8  x4.0                                triton_per_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cat_clamp_eq_gt_lt_mul_ne_neg_scalar_tensor_sub_transpose_view_where_128
+       37.6  x12.0                               triton_red_fused_amax_59
+
+exit 0 72 s
