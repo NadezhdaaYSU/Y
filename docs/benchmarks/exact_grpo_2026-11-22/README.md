@@ -119,7 +119,7 @@ completion, and is slower.
 and 28 s on the CPU; on the H100 2.44 and 1.46 s eager, 1.25 and 1.20 s
 compiled. The H100 samples slower than the 4070 Ti; sampling is mostly
 kernel launches, and the cloud machine's host was not profiled. The H100
-job cost about $0.40.
+job cost $0.35 (H100 $0.30, CPU and memory $0.05).
 
 ## Tests
 
