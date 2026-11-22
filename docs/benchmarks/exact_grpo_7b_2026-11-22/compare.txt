@@ -1,0 +1,13 @@
+== Qwen2.5-7B-Instruct, 20 GRPO steps: H100 80GB HBM3 against A100 80GB
+tokens digests: 20/20 steps the same
+ints digests: 20/20 steps the same
+tp digests: 20/20 steps the same
+NVIDIA H100 80GB HBM3: 0 sampled tokens whose trainer integers differ from the sampler's, over 20 steps
+NVIDIA A100-SXM4-80GB: 0 sampled tokens whose trainer integers differ from the sampler's, over 20 steps
+adapters @5: 3a60b29337cd60b4 3a60b29337cd60b4 same
+adapters @10: d296a58d4d1c91c7 d296a58d4d1c91c7 same
+adapters @15: 95da16225f0255e7 95da16225f0255e7 same
+adapters @20: 7e85ccbd311f0463 7e85ccbd311f0463 same
+eval @0: 83/600 vs 83/600, tokens 166b409b46f59c55 166b409b46f59c55 same
+eval @20: 95/600 vs 95/600, tokens 56a3d2a35a5665b6 56a3d2a35a5665b6 same
+SAME
