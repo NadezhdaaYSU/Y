@@ -41,8 +41,8 @@ agreement; 20 steps are not a training result.
 ## Speed and cost
 
 A step on the H100: 4.86 s sampling, 2.16 s training; on the A100 6.84 and
-3.08 s (steps 4 to 20). Both eager. The job cost $0.93 on Modal's bill
-(H100 $0.41, A100 $0.29, CPU, memory and network $0.23). A first attempt
+3.08 s (steps 4 to 20). Both eager. The job cost $0.97 on Modal's bill
+(H100 $0.41, A100 $0.32, CPU, memory and network $0.24). A first attempt
 cost $0.29 and ran no step: the image had downloaded the model by revision,
 which writes no `main` ref, and the tool loads `main` offline; the script
 now downloads `main` and fails its build unless that is the pinned

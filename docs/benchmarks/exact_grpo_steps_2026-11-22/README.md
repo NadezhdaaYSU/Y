@@ -65,6 +65,14 @@ all wrong at the end.
   eager everything, against the GPU record: the same sampled tokens, sampler
   integers and p(target) at all 3 steps, so the updates after steps 1 and 2
   were the same too (the tokens of steps 2 and 3 are drawn from them).
+- **An H100, the whole run**: `h100/h100_steps150.json` (`modal_steps_h100.py`,
+  Y at fb783a6), all 150 steps on an H100 80GB HBM3 on Modal, with the
+  graphed sampler, compiled products and, on an H100, the quantizers'
+  float64 rounding formula: at all 150 steps the 4070 Ti's sampled tokens,
+  sampler integers and p(target); the same adapters at every 10th step; the
+  same held-out tokens at steps 0, 75 and 150. The H100's trainer also
+  checked all 398,624 sampled tokens, every one the sampler's integers. The
+  RL tests passed there too (`h100/gpu_tests.log`).
 - **The graphed sampler**: `rtx4070tis/timing10_graphed.json`, the first 10
   steps again with `--graphed`: the record's sampled tokens, sampler
   integers and p(target) at all 10 steps, and the same adapters at step 10.
@@ -81,7 +89,11 @@ a browser (steps 4 to 10):
 | graphed | 4.12 s | 4.31 s | 8.4 s |
 
 The graphed sampler's first call compiles and records the step, about 4.5
-minutes, once per batch shape. A profile of eager sampling at 256 rows had
+minutes, once per batch shape. On the H100 a step took 1.49 s to sample and
+7.19 s to train: its sampling is 2.8 times the 4070 Ti's, its eager training
+slower (that path is mostly kernel launches, and the cloud machine's host
+was not profiled). The whole job ran 39 minutes and cost $3.12 on Modal's
+bill (H100 $2.68, CPU and memory $0.43). A profile of eager sampling at 256 rows had
 put 17% of its time in the vocabulary softmax and the rest in the model's
 own elementwise work, which the compiled step fuses.
 
@@ -90,7 +102,7 @@ own elementwise work, which the compiled step fuses.
 - One seed, one learning rate; accuracy flattens after step 100 here too,
   higher than before. The problems never solved in 8 tries are still not
   learned from.
-- The CPU ran 3 of the 150 steps.
+- The CPU ran 3 of the 150 steps; the H100 all of them.
 - Qwen2.5-1.5B-Instruct on three-digit problems (a check of the larger-model
   path, 4 steps, not kept): 11 of 200 right at the start, 31 of 32 groups all
   wrong; the path ran, with no mismatch, but the task is too hard for it.

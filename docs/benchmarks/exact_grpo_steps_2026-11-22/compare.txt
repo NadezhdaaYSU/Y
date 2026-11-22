@@ -23,3 +23,29 @@ NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ
 NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 150 steps
 adapters @10: aff2f8de68b44170 aff2f8de68b44170 same
 SAME
+
+== the H100 (graphed sampler, compiled products, float64 rounding formula), all 150 steps, against the RTX 4070 Ti SUPER's 150-step record (eager sampler)
+tokens digests: 150/150 steps the same
+ints digests: 150/150 steps the same
+tp digests: 150/150 steps the same
+NVIDIA H100 80GB HBM3: 0 sampled tokens whose trainer integers differ from the sampler's, over 150 steps
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 150 steps
+adapters @10: aff2f8de68b44170 aff2f8de68b44170 same
+adapters @20: 89d3b7354b4e35ad 89d3b7354b4e35ad same
+adapters @30: be13ebee56f5864d be13ebee56f5864d same
+adapters @40: fdec274120abaf65 fdec274120abaf65 same
+adapters @50: 06cce1faab9dc315 06cce1faab9dc315 same
+adapters @60: 87429f1f90e4bfed 87429f1f90e4bfed same
+adapters @70: 06315837a68b8580 06315837a68b8580 same
+adapters @80: 5924578d3f448e8c 5924578d3f448e8c same
+adapters @90: 69b0b0f3e75c03cf 69b0b0f3e75c03cf same
+adapters @100: 1515d907a3160ecb 1515d907a3160ecb same
+adapters @110: bc3e103cd191bd5c bc3e103cd191bd5c same
+adapters @120: 3b441cce43440e40 3b441cce43440e40 same
+adapters @130: 75bd7305c73f50ac 75bd7305c73f50ac same
+adapters @140: b3cdb3700f9bbe8b b3cdb3700f9bbe8b same
+adapters @150: f9243dbb731e91f2 f9243dbb731e91f2 same
+eval @0: 294/600 vs 294/600, tokens 9a965588a93444de 9a965588a93444de same
+eval @75: 386/600 vs 386/600, tokens c7110fdc504b73b1 c7110fdc504b73b1 same
+eval @150: 380/600 vs 380/600, tokens 1a390a3f9db0429c 1a390a3f9db0429c same
+SAME
