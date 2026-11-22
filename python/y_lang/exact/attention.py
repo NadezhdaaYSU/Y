@@ -580,16 +580,7 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
     # bought one differing int8 value in 270,336. See exact_kv.quantize_rows.
     k, v, q = key, value, query
 
-    def q8_per_tensor(x, dims):
-        # A tensor divisor: torch-CUDA's `/ python_float` is a reciprocal
-        # multiply, not the CPU's IEEE divide, and so is a compiled divide by
-        # `x.new_tensor(...)` (see exact_model.divisor).
-        s = x.abs().amax(dim=dims, keepdim=True) / exact_model.divisor(Q_LEVELS, x)
-        s = torch.where(s == 0, torch.ones_like(s), s)
-        return torch.round(x / s).clamp(-Q_LEVELS, Q_LEVELS), s
-
-    qi, sq = q8_per_tensor(q, (-1,))          # per query vector (float32)
-    sq = sq.to(torch.float64)
+    qi, sq = quantize_queries(q)
     if k.dtype == torch.int8:
         # The cache's packed rows (kv.PACK: the attention forward quantised
         # each row once, as it arrived). Y's kernel reads them as they are;
@@ -615,6 +606,18 @@ def exact_attention(module, query, key, value, attention_mask, scaling=None,
 
     return exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
                                 table, query.dtype), None
+
+
+def quantize_queries(q):
+    """Each query vector as integers |qi| <= Q_LEVELS (float32) and its scale
+    (float64): `exact_attention`'s query quantiser, also read by exact
+    training's backward (`lora`)."""
+    # A tensor divisor: torch-CUDA's `/ python_float` is a reciprocal
+    # multiply, not the CPU's IEEE divide, and so is a compiled divide by
+    # `x.new_tensor(...)` (see exact_model.divisor).
+    s = q.abs().amax(dim=-1, keepdim=True) / exact_model.divisor(Q_LEVELS, q)
+    s = torch.where(s == 0, torch.ones_like(s), s)
+    return torch.round(q / s).clamp(-Q_LEVELS, Q_LEVELS), s.to(torch.float64)
 
 
 # The attention forward hands this function the cache's packed rows when
@@ -662,6 +665,29 @@ def exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
         # packed rows; operands that arrive unpacked are packed here.
         return _y_decode(qi, sq, sc, pack_k(ki, sk), pack_v(vi, sv), attention_mask,
                          table, out_dtype)
+    p, l, sv = exact_softmax_weights(qi, sq, ki, sk, sv, k_lv, attention_mask, sc, table)
+    # Fold the per-token V scale into the weight and requantise to one common
+    # scale, so the accumulation below is still a sum of INTEGERS. Note the
+    # denominator stays `l` (built from p): only the numerator carries sv.
+    W, wscale = fold_scale_into_weights(p, sv, P_BITS)
+    Wg = W.reshape(b, nkv, rep * q_len, tk)
+    acc = exact_pv(Wg, vi).reshape(b, nh, q_len, d)
+    assert_exact_range(acc, "W*V accumulator",
+                       float(tk) * (1 << P_BITS) * v_lv)
+
+    out = (acc * wscale) / l.to(torch.float64).clamp(min=1.0)
+    return out.to(out_dtype).transpose(1, 2).contiguous()
+
+
+def exact_softmax_weights(qi, sq, ki, sk, sv, k_lv, attention_mask, sc, table):
+    """`exact_attention_core`'s softmax numerators and denominators from the
+    quantised Q and K: `p` [b, nh, q, T] (Q0.28 integers, int64, 0 where
+    blocked), `l` [b, nh, q, 1] (their exact row sums), and the V scales laid
+    out against the key axis, [b, nh, 1, T] float64. Split out so exact
+    training's backward (`lora`) reads the forward's own weights."""
+    b, nh, q_len, d = qi.shape
+    nkv, tk = ki.shape[1], ki.shape[-2]
+    rep = nh // nkv
     # ... and the query group is folded into the row dimension instead of K
     # being broadcast into it, so this is one matmul over `nkv` heads.
     qg = qi.reshape(b, nkv, rep * q_len, d).contiguous()
@@ -702,17 +728,7 @@ def exact_attention_core(qi, sq, ki, sk, vi, sv, k_lv, v_lv, attention_mask, sc,
     l = p.sum(dim=-1, keepdim=True)           # exact: int64, the TRUE denominator
     # p <= 2^28 by construction (exp2_neg_q16_16 returns Q0.28), summed tk times.
     assert_exact_range(l, "softmax denominator", float(tk) * (1 << 28))
-    # Fold the per-token V scale into the weight and requantise to one common
-    # scale, so the accumulation below is still a sum of INTEGERS. Note the
-    # denominator stays `l` (built from p): only the numerator carries sv.
-    W, wscale = fold_scale_into_weights(p, sv, P_BITS)
-    Wg = W.reshape(b, nkv, rep * q_len, tk)
-    acc = exact_pv(Wg, vi).reshape(b, nh, q_len, d)
-    assert_exact_range(acc, "W*V accumulator",
-                       float(tk) * (1 << P_BITS) * v_lv)
-
-    out = (acc * wscale) / l.to(torch.float64).clamp(min=1.0)
-    return out.to(out_dtype).transpose(1, 2).contiguous()
+    return p, l, sv
 
 
 def sanity_verdict(canary, ref_tokens):

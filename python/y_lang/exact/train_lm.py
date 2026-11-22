@@ -442,10 +442,12 @@ class Ops:
         # checks are appended to it for one read per step (`refuse`).
         self.bad = None
 
-    def matmul(self, a, b, batched=False, grad=None, qa=None):
+    def matmul(self, a, b, batched=False, grad=None, qa=None, qb=None):
         """a @ b^T, summed over the last dimension of both. `grad` names the
-        backward pass's gradient operand, "a" or "b" (None: forward). `qa`:
-        a's q8 copy already made, (q, s) as `q8(a, bits)` returns them."""
+        backward pass's gradient operand, "a" or "b" (None: forward). `qa`,
+        `qb`: a's or b's q8 copy already made, (q, s) as `q8(x, bits)` returns
+        them (`b` itself is then not read: `lora` passes a frozen int8 weight
+        this way, with s = 0)."""
         if not self.exact:
             if self.float_mm is not None:
                 return (a.to(self.float_mm) @ b.to(self.float_mm).transpose(-1, -2)).to(a.dtype)
@@ -458,18 +460,26 @@ class Ops:
         if a.shape[-1] * capacity(bits_a) * capacity(bits_b) >= F64_EXACT:
             raise OverflowError("exact train: a product sum could pass float64's exact integers")
         qa, sa = q8(a, bits=bits_a, bad=self.bad) if qa is None else qa
-        qb, sb = q8(b, bits=bits_b, bad=self.bad)
+        qb, sb = q8(b, bits=bits_b, bad=self.bad) if qb is None else qb
         da = digits(qa, bits_a, bounded=True)
         db = digits(qb, bits_b, bounded=True)
         # Every digit of a against every digit of b in ONE product: the
         # digits stacked along the rows of each operand, block (i, j) of the
         # result the product of digit i of a and digit j of b.
-        M, N = a.shape[-2], b.shape[-2]
+        M, N = qa.shape[-2], qb.shape[-2]
         A = da[0] if len(da) == 1 else torch.cat(da, dim=-2)
         B = db[0] if len(db) == 1 else torch.cat(db, dim=-2)
         if batched:
             int8 = self.bmm == "int8" or (self.bmm is None and A.is_cuda and int8_bmm_ok(A.device))
-            P = (_exact_int8_bmm(A, B) if int8 else _exact_fp32_bmm(A, B)).to(torch.int64)
+            if int8:
+                P = _exact_int8_bmm(A, B)
+            elif A.shape[-1] * 127 * 127 >= FP32_EXACT and not A.is_cuda:
+                # A sum too long for float32's exact integers (attention's
+                # backward over a query group): float64's, on the CPU.
+                P = (A.to(torch.float64) @ B.to(torch.float64).transpose(-1, -2))
+            else:
+                P = _exact_fp32_bmm(A, B)
+            P = P.to(torch.int64)
         else:
             P = self.mm(A, B).to(torch.int64)
         c = None

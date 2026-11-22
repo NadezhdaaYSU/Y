@@ -745,7 +745,9 @@ class ExactSiLU(nn.Module):
         self.register_buffer("t", t, persistent=False)
         self.register_buffer("d", d, persistent=False)
 
-    def forward(self, x):
+    def sigmoid(self, x):
+        """The table's sigmoid of x, float32 (what `forward` multiplies x by;
+        exact training's backward reads it, `lora`)."""
         sub = SILU_QX - SILU_KNOT
         # NaN would convert to a device-dependent int32 and index out of range
         # (a trap on a GPU); it is zeroed here and put back by the final multiply.
@@ -756,8 +758,10 @@ class ExactSiLU(nn.Module):
         s = self.t[i] + ((self.d[i] * (q & ((1 << sub) - 1))) >> sub)
         sig = s.to(torch.float32) * (1.0 / (1 << SILU_QS))
         sig = torch.where(xf <= -SILU_LIM, torch.zeros_like(sig), sig)
-        sig = torch.where(xf >= SILU_LIM, torch.ones_like(sig), sig)
-        return (x.to(torch.float32) * sig).to(x.dtype)
+        return torch.where(xf >= SILU_LIM, torch.ones_like(sig), sig)
+
+    def forward(self, x):
+        return (x.to(torch.float32) * self.sigmoid(x)).to(x.dtype)
 
 
 # A float64 cos or sin is not correctly rounded: glibc, SLEEF (torch's CPU
