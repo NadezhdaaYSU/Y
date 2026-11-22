@@ -239,6 +239,38 @@ class Learning(unittest.TestCase):
 
 @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA GPU")
 class OnTheGpu(unittest.TestCase):
+    def test_the_graphed_sampler_is_the_sampler(self):
+        """Each decode step replayed from a CUDA graph (compiled with the
+        draw), against `sample`: the same tokens, p and l, for prompts of
+        three lengths, with eager and compiled products, on the recording
+        call and on a call of replays only; with an early stop, the same
+        length too; and its checks reach ops.bad."""
+        from y_lang.exact import rl
+        torch.backends.cuda.matmul.allow_tf32 = False
+        for compile in (False, True):
+            m, ad, _ = setup("cuda", compile)
+            ids, mask = prompts()
+            ids, mask = ids.cuda(), mask.cuda()
+            ad.ops.bad = []
+            g = rl.graphed_sampler(m, ad.ops, ids.shape[0], ids.shape[1], 12)
+            for seed in (0, 1):
+                rand = rl.uniforms(seed, 0, ids.shape[0], 12)
+                want = rl.sample(m, ad.ops, ids, mask, 12, rand)
+                n = len(ad.ops.bad)
+                got = g.run(ids, mask, rand.cuda())
+                self.assertTrue(all(torch.equal(a, b) for a, b in zip(got, want)), (compile, seed))
+                self.assertGreater(len(ad.ops.bad), n)
+            rand = rl.uniforms(2, 0, 1, 12)
+            want = rl.sample(m, ad.ops, ids[:1], mask[:1], 12, rand)
+            stop = int(want[0][0, 3])
+            if bool((want[0][0, :3] == stop).any()):
+                continue
+            want = rl.sample(m, ad.ops, ids[:1], mask[:1], 12, rand, stop=stop, every=2)
+            g1 = rl.graphed_sampler(m, ad.ops, 1, ids.shape[1], 12, stop=stop, every=2)
+            got = g1.run(ids[:1], mask[:1], rand.cuda())
+            self.assertEqual(got[0].shape[1], 4)
+            self.assertTrue(all(torch.equal(a, b) for a, b in zip(got, want)))
+
     def test_the_cpus_samples_and_adapters_on_the_gpu(self):
         torch.backends.cuda.matmul.allow_tf32 = False
         ref = run_rl("cpu")

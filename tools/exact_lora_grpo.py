@@ -172,6 +172,7 @@ def run(args):
     if args.eval and args.eval_every:
         do_eval(0)
     times = []
+    samplers = {}
     for step in range(1, args.steps + 1):
         rows, ids, mask = prompts_batch(tok, train, step, args.sample_prompts or args.prompts, args.group,
                                         args.seed, task.prompt)
@@ -182,8 +183,15 @@ def run(args):
         bad = []
         ad.ops.bad = bad
         try:
-            sampled = rl.sample(model, ad.ops, ids.to(device), mask.to(device), args.new, rand,
-                                stop=end if args.early_stop else None)
+            if args.graphed:
+                key = tuple(ids.shape)
+                if key not in samplers:
+                    samplers[key] = rl.graphed_sampler(model, ad.ops, *key, args.new,
+                                                       stop=end if args.early_stop else None)
+                sampled = samplers[key].run(ids.to(device), mask.to(device), rand.to(device))
+            else:
+                sampled = rl.sample(model, ad.ops, ids.to(device), mask.to(device), args.new, rand,
+                                    stop=end if args.early_stop else None)
         finally:
             ad.ops.bad = None
         if bad:
@@ -297,6 +305,8 @@ def main():
                     help="problems sampled a step; the first --prompts with mixed rewards are trained on")
     ap.add_argument("--early-stop", action="store_true",
                     help="stop sampling once every row has ended (checked every 16 tokens)")
+    ap.add_argument("--graphed", action="store_true",
+                    help="sample with each decode step replayed from a CUDA graph (the same bits)")
     ap.add_argument("--chunk-tokens", type=int, default=None, help="train in pieces of at most this many tokens")
     ap.add_argument("--compare", nargs=2)
     args = ap.parse_args()

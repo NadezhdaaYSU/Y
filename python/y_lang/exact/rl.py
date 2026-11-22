@@ -67,6 +67,24 @@ def draw(p: torch.Tensor, l: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
     return torch.searchsorted(c, u, right=True).reshape(-1)
 
 
+def draw_rows(ops, logits, r, rows=64):
+    """(token, p of it, l) for each row of float32 `logits` [B][V], drawn
+    with the integers `r` [B]: the exact softmax's integers and the inverse
+    CDF, `rows` rows at a time. Each row's softmax and draw are its own, and
+    the int64 numerators of a whole batch over the vocabulary do not fit
+    (256 rows: about 8 GB at the peak), so any `rows` gives the same bits."""
+    token, pt, lt = [], [], []
+    for i in range(0, logits.shape[0], rows):
+        z = logits[i:i + rows]
+        p, l = ops.softmax_ints(z, torch.zeros_like(z, dtype=torch.bool))
+        tk = draw(p, l, r[i:i + rows])
+        token.append(tk)
+        pt.append(p.gather(1, tk[:, None]).reshape(-1))
+        lt.append(l.reshape(-1))
+        del p, l
+    return torch.cat(token), torch.cat(pt), torch.cat(lt)
+
+
 @torch.no_grad()
 def sample(model, ops, input_ids, attention_mask, new_tokens, rand, rows=64, stop=None, every=16):
     """Sampled continuations: (tokens [B][new], p of each token [B][new]
@@ -89,23 +107,10 @@ def sample(model, ops, input_ids, attention_mask, new_tokens, rand, rows=64, sto
     ones = attention_mask.new_ones((attention_mask.shape[0], 1))
     ended = None
     for t in range(new_tokens):
-        logits = out.logits[:, -1].to(torch.float32)
-        # `rows` at a time: each row's softmax and draw are its own, and the
-        # int64 numerators of a whole batch over the vocabulary do not fit
-        # (256 rows: about 8 GB at the peak).
-        token, pt, lt = [], [], []
-        for i in range(0, logits.shape[0], rows):
-            z = logits[i:i + rows]
-            p, l = ops.softmax_ints(z, torch.zeros_like(z, dtype=torch.bool))
-            tk = draw(p, l, rand[i:i + rows, t])
-            token.append(tk)
-            pt.append(p.gather(1, tk[:, None]).reshape(-1))
-            lt.append(l.reshape(-1))
-            del p, l
-        token = torch.cat(token)
+        token, pt, lt = draw_rows(ops, out.logits[:, -1].to(torch.float32), rand[:, t], rows)
         toks.append(token)
-        ps.append(torch.cat(pt))
-        ls.append(torch.cat(lt))
+        ps.append(pt)
+        ls.append(lt)
         if t + 1 == new_tokens:
             break
         if stop is not None:
@@ -214,3 +219,130 @@ class GRPO(_lora.SFT):
             chunks.append((ids, labels, w, check))
         tp = self.run_chunks(chunks)[0]
         return tp, int(sum(int(d.sum()) for d in differs))
+
+
+def graphed_sampler(model, ops, batch, prompt_len, new_tokens, rows=64, stop=None, every=16):
+    """A `GraphedSampler` (built here so that importing `rl` does not import
+    the graphed decoder)."""
+    from .graphed import GraphedGreedy
+
+    class GraphedSampler(GraphedGreedy):
+        """`sample`, each decode step replayed from one CUDA graph: the
+        model's step and the exact softmax and draw compiled together
+        (`torch.compile`, `dynamic=False`) and recorded once for inputs of
+        one shape, as `GraphedGreedy` records greedy decoding. The prefill
+        and its draw run as in `sample`. The random integers sit in a device
+        buffer the step indexes; the checks of the step (the adapters'
+        products, the softmax's) are or-ed on the device into one flag per
+        message, inside the graph, and handed to `ops.bad` at the end, so a
+        replayed step is checked as an eager one is. The same tokens and
+        integers as `sample` (tests), and the trainer compares every sampled
+        token's integers anyway."""
+
+        def __init__(self):
+            super().__init__(model, batch, prompt_len, new_tokens)
+            dev = self.dev
+            self.ops, self.rows, self.stop, self.every = ops, rows, stop, every
+            self.rand = torch.zeros((batch, new_tokens), dtype=torch.int64, device=dev)
+            self.p_out = torch.zeros((batch, new_tokens), dtype=torch.int64, device=dev)
+            self.l_out = torch.zeros((batch, new_tokens), dtype=torch.int64, device=dev)
+            self.ended = torch.zeros(batch, dtype=torch.bool, device=dev)
+            self.flags = {}
+
+        def _prefill(self, input_ids, attention_mask):
+            """GraphedGreedy's prefill, with the first token drawn as
+            `sample` draws it (its p and l kept for `_load_first`)."""
+            cache = new_cache(self.cfg)
+            position = (attention_mask.long().cumsum(-1) - 1).masked_fill(attention_mask == 0, 0)
+            out = self.model(input_ids=input_ids, attention_mask=attention_mask, position_ids=position,
+                             past_key_values=cache, use_cache=True, logits_to_keep=1, return_dict=True)
+            first, self._p0, self._l0 = draw_rows(self.ops, out.logits[:, -1].to(torch.float32),
+                                                  self.rand[:, 0], self.rows)
+            rows_ = []
+            for layer in cache.layers:
+                k, v = layer._rows() if hasattr(layer, "_rows") else (layer.keys, layer.values)
+                if k.dim() != 4 or k.shape[0] != self.batch or k.shape[2] != self.prompt_len:
+                    raise RuntimeError(f"rl: a prefill cache layer holds {tuple(k.shape)}, not "
+                                       f"[batch {self.batch}, heads, {self.prompt_len}, row]")
+                rows_.append((k, v))
+            return first, position[:, -1:] + 1, rows_
+
+        def _step(self, token, pos, t, r):
+            inner = self.model.model
+            h = inner.embed_tokens(token[:, None])
+            pe = inner.rotary_emb(h, pos)
+            allowed = (self.ar <= t) & self.base
+            if self.sdpa:
+                mask = allowed.view(self.batch, 1, 1, self.cap)
+            else:
+                mask = torch.where(allowed, 0.0, float("-inf")).to(h.dtype)
+                mask = mask.view(self.batch, 1, 1, self.cap)
+            for layer in inner.layers:
+                h = layer(h, attention_mask=mask, position_ids=pos, past_key_values=self.cache,
+                          use_cache=True, position_embeddings=pe)
+            h = inner.norm(h)
+            logits = self.model.lm_head(h)[:, -1].to(dtype=torch.float32)
+            return draw_rows(self.ops, logits, r, self.rows)
+
+        def _advance(self):
+            r = self.rand.index_select(1, (self.step_i + 1).view(1)).view(-1)
+            n0 = len(self.ops.bad)
+            nxt, pt, lt = self._step_compiled(self.token, self.pos, self.t, r)
+            for cond, msg in self.ops.bad[n0:]:
+                if msg not in self.flags:
+                    self.flags[msg] = torch.zeros((), dtype=torch.bool, device=self.dev)
+                self.flags[msg] |= cond.any()
+            del self.ops.bad[n0:]
+            self.token.copy_(nxt)
+            self.pos.add_(1)
+            self.t.add_(1)
+            self.step_i.add_(1)
+            col = self.step_i.view(1)
+            self.out.index_copy_(1, col, nxt.view(self.batch, 1))
+            self.p_out.index_copy_(1, col, pt.view(self.batch, 1))
+            self.l_out.index_copy_(1, col, lt.view(self.batch, 1))
+            if self.stop is not None:
+                self.ended |= nxt == self.stop
+
+        def run(self, input_ids, attention_mask, rand):
+            """(tokens, p, l) as `sample` returns them."""
+            if tuple(input_ids.shape) != (self.batch, self.prompt_len):
+                raise ValueError(f"the graphed sampler was recorded for inputs "
+                                 f"{(self.batch, self.prompt_len)}, not {tuple(input_ids.shape)}")
+            if self.ops.bad is None:
+                raise RuntimeError("rl: the graphed sampler needs ops.bad, a list for its checks")
+            bad, self.ops.bad = self.ops.bad, []
+            try:
+                with torch.no_grad():
+                    self.rand.copy_(rand)
+                    with self._installed():
+                        first, next_pos, rows_ = self._prefill(input_ids, attention_mask)
+                    p0, l0 = self._p0, self._l0
+                    self._load(first, next_pos, rows_, attention_mask)
+                    self._load_first(first, p0, l0)
+                    if self.new > 1 and self.graph is None:
+                        self._record()
+                        self._load(first, next_pos, rows_, attention_mask)
+                        self._load_first(first, p0, l0)
+                    for f in self.flags.values():
+                        f.zero_()
+                    n = 1
+                    while n < self.new:
+                        if self.stop is not None and n % self.every == 0 and bool(self.ended.all()):
+                            break
+                        self.graph.replay()
+                        n += 1
+            finally:
+                for msg, f in self.flags.items():
+                    bad.append((f.clone(), msg))
+                self.ops.bad = bad
+            return self.out[:, :n].clone(), self.p_out[:, :n].clone(), self.l_out[:, :n].clone()
+
+        def _load_first(self, first, p0, l0):
+            self.p_out.zero_()
+            self.l_out.zero_()
+            self.p_out[:, 0] = p0
+            self.l_out[:, 0] = l0
+            self.ended.copy_(first == self.stop if self.stop is not None else torch.zeros_like(self.ended))
+
+    return GraphedSampler()
