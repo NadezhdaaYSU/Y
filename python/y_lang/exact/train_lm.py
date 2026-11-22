@@ -333,11 +333,33 @@ def _exact_fp32_bmm(a, b):
     return (a.to(torch.float32) @ b.to(torch.float32).transpose(-1, -2)).to(torch.int64)
 
 
+_BMM_OK = {}
+
+
+def int8_bmm_ok(device) -> bool:
+    """Whether attention's products run on `int8_bmm` on `device` (CUDA,
+    sm_80 or later), cached so a compiled step reads a constant."""
+    device = torch.device(device)
+    key = (device.type, device.index)
+    if key not in _BMM_OK:
+        from .int8_bmm import available
+        _BMM_OK[key] = available(device)
+    return _BMM_OK[key]
+
+
+def _exact_int8_bmm(a, b):
+    """The same product as `_exact_fp32_bmm`, on int8 tensor cores
+    (`int8_bmm`): the same integers."""
+    from .int8_bmm import int8_bmm
+    return int8_bmm(a.to(torch.int8), b.to(torch.int8)).to(torch.int64)
+
+
 class Ops:
     """The model's sums and softmax, exact (`exact=True`) or ordinary float
     (`exact=False`: the float twin and the autograd reference)."""
 
-    def __init__(self, exact=True, mm=mm_f64, grad_bits=12, bwd_bits=8, act=None, float_mm=None):
+    def __init__(self, exact=True, mm=mm_f64, grad_bits=12, bwd_bits=8, act=None, float_mm=None,
+                 bmm=None, fused_softmax=None):
         """Widths of the backward pass's product operands: `grad_bits` for the
         gradient, `bwd_bits` for the activation or weight it meets. The
         forward pass is always int8, the format the model is served in. Past
@@ -360,7 +382,18 @@ class Ops:
         `float_mm` (the float twin only) is the type its products run in:
         `torch.bfloat16` is ordinary mixed-precision training (float32
         parameters and elementwise operations, bf16 tensor-core products),
-        a speed baseline."""
+        a speed baseline.
+
+        `bmm` picks attention's products: "int8" (`int8_bmm`, tensor cores),
+        "fp32" (`_exact_fp32_bmm`), or None, int8 where `int8_bmm_ok` (a CUDA
+        GPU of sm_80 or later) and fp32 elsewhere. The same integers either
+        way."""
+        if bmm not in (None, "int8", "fp32"):
+            raise ValueError(f"exact train: bmm must be None, 'int8' or 'fp32', not {bmm!r}")
+        self.bmm = bmm
+        # The causal softmax and its quantizer as one kernel (softmax_kernel),
+        # for float32 activations on a GPU: None (where it applies) or False.
+        self.fused_softmax = fused_softmax
         if act not in (None, torch.float32, torch.float64):
             raise ValueError(f"exact train: act must be None, float32 or float64, not {act}")
         if float_mm is not None and exact:
@@ -372,9 +405,10 @@ class Ops:
         # checks are appended to it for one read per step (`refuse`).
         self.bad = None
 
-    def matmul(self, a, b, batched=False, grad=None):
+    def matmul(self, a, b, batched=False, grad=None, qa=None):
         """a @ b^T, summed over the last dimension of both. `grad` names the
-        backward pass's gradient operand, "a" or "b" (None: forward)."""
+        backward pass's gradient operand, "a" or "b" (None: forward). `qa`:
+        a's q8 copy already made, (q, s) as `q8(a, bits)` returns them."""
         if not self.exact:
             if self.float_mm is not None:
                 return (a.to(self.float_mm) @ b.to(self.float_mm).transpose(-1, -2)).to(a.dtype)
@@ -386,7 +420,7 @@ class Ops:
         # from the widths alone, so refused before anything runs.
         if a.shape[-1] * capacity(bits_a) * capacity(bits_b) >= F64_EXACT:
             raise OverflowError("exact train: a product sum could pass float64's exact integers")
-        qa, sa = q8(a, bits=bits_a, bad=self.bad)
+        qa, sa = q8(a, bits=bits_a, bad=self.bad) if qa is None else qa
         qb, sb = q8(b, bits=bits_b, bad=self.bad)
         da = digits(qa, bits_a, bounded=True)
         db = digits(qb, bits_b, bounded=True)
@@ -396,7 +430,11 @@ class Ops:
         M, N = a.shape[-2], b.shape[-2]
         A = da[0] if len(da) == 1 else torch.cat(da, dim=-2)
         B = db[0] if len(db) == 1 else torch.cat(db, dim=-2)
-        P = (_exact_fp32_bmm(A, B) if batched else self.mm(A, B)).to(torch.int64)
+        if batched:
+            int8 = self.bmm == "int8" or (self.bmm is None and A.is_cuda and int8_bmm_ok(A.device))
+            P = (_exact_int8_bmm(A, B) if int8 else _exact_fp32_bmm(A, B)).to(torch.int64)
+        else:
+            P = self.mm(A, B).to(torch.int64)
         c = None
         for i in range(len(da)):
             for j in range(len(db)):
@@ -432,6 +470,24 @@ class Ops:
         out = torch.zeros(rows, src.shape[1], dtype=torch.int64, device=src.device).scatter_add_(
             0, idx.reshape(-1, 1).expand(-1, src.shape[1]), q)
         return out.to(torch.float64) * pow2(s, checked=True)
+
+    def causal_softmax_q8(self, z):
+        """(P, q, s), the causal `softmax(z)` and its `q8(P, bits=8)` from one
+        kernel (`softmax_kernel`, the same bits), or None where it does not
+        apply: the float twin, float64 activations, a CPU, or rows that are
+        not a power of two from 16 to 1024 keys."""
+        if not (self.exact and self.fused_softmax is not False and z.dtype == torch.float32
+                and z.is_cuda and z.shape[-1] == z.shape[-2]):
+            return None
+        from . import softmax_kernel
+        if not softmax_kernel.supported(z.shape[-1]):
+            return None
+        P, q, s, flags = softmax_kernel.softmax_q8(z, z.shape[-1])
+        refuse(self.bad, (flags & 1) != 0, "exact train: a softmax input that is not finite (inf or NaN)")
+        refuse(self.bad, (flags & 2) != 0, "exact train: a value that is not finite (inf or NaN)")
+        refuse(self.bad, (flags & 4) != 0,
+               f"exact train: a quantizer scale outside 2^-{Q_SCALE_RANGE} .. 2^{Q_SCALE_RANGE}")
+        return P, q.to(torch.int32), s
 
     def softmax(self, z, blocked):
         """softmax over the last dimension, `blocked` entries excluded."""
@@ -517,8 +573,14 @@ def forward(ops, cfg, p, idx, targets=None):
         hn, c_n1 = _norm_fwd(ops, x, p[f"n1.{i}"], cfg.eps)
         qkv = ops.matmul(hn, p[f"qkv.{i}"])
         q, k, v = (t.reshape(B, T, H, Dh).transpose(1, 2) for t in qkv.split(cfg.d, dim=1))
-        P = ops.softmax(ops.matmul(q, k, batched=True) * scale, causal)
-        o = ops.matmul(P, v.transpose(-1, -2), batched=True)          # [B][H][T][Dh]
+        S = ops.matmul(q, k, batched=True) * scale
+        fused = ops.causal_softmax_q8(S)
+        if fused is None:
+            P = ops.softmax(S, causal)
+            o = ops.matmul(P, v.transpose(-1, -2), batched=True)      # [B][H][T][Dh]
+        else:
+            P, qP, sP = fused
+            o = ops.matmul(P, v.transpose(-1, -2), batched=True, qa=(qP, sP))
         o2 = o.transpose(1, 2).reshape(B * T, cfg.d)
         x = x + ops.matmul(o2, p[f"o.{i}"])
         hn2, c_n2 = _norm_fwd(ops, x, p[f"n2.{i}"], cfg.eps)
@@ -716,6 +778,8 @@ class Trainer:
             raise ValueError("exact train: graph and compile are for a CUDA device")
         self.params = init_params(cfg, seed, dtype, self.device)
         self.opt = Adam(self.params, lr=lr, exact=ops.exact)
+        if self.device.type == "cuda":
+            int8_bmm_ok(self.device)      # decided before any compile, a constant to it
         if compile:
             from . import model  # noqa: F401  (the Inductor rounding flags)
         self._fn = torch.compile(self._step, dynamic=False) if compile else self._step

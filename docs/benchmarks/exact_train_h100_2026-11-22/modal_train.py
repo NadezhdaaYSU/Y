@@ -99,6 +99,24 @@ STAGES["f32formula"] = [
     ("profile32f_medium", "exact_train_profile.py --size medium --arm exact32 "
                           "--out {out}/h100_profile32f_medium_exact32.txt"),
 ]
+# Attention's products on int8 tensor cores (int8_bmm) and the causal softmax
+# with its quantizer as one kernel (softmax_kernel): the GPU tests, the
+# 5000-step record against the CPU's, speed with Y's and cuBLAS's GEMM.
+TESTS = ("cd {repo} && exec env PYTHONPATH=python:python/tests " + sys.executable + " -m unittest "
+         "python.tests.test_exact_int8_bmm python.tests.test_exact_softmax_kernel "
+         "python.tests.test_exact_train_lm.OnTheGpu.test_float32_activations_give_the_cpu_weights "
+         "python.tests.test_exact_train_lm.OnTheGpu.test_compiled_graph_gives_the_cpu_weights")
+STAGES["kernels"] = [
+    ("gpu_tests", "RAW:" + TESTS),
+    ("exact32_kernels_fast", REC + "h100_exact32_kernels_fast.json --mm y --act float32 --graph --compile"),
+    ("speedk_medium", "exact_train_speed.py --size medium --check 3 --steady 50 "
+                      "--modes exact32:compile+graph,f32:compile+graph,bf16:compile+graph "
+                      "--out {out}/h100_speedk_medium.json"),
+    ("speedk_medium_cublas", "exact_train_speed.py --size medium --check 3 --steady 50 --mm torch "
+                             "--modes exact32:compile+graph --out {out}/h100_speedk_medium_cublas.json"),
+    ("profilek_medium", "exact_train_profile.py --size medium --arm exact32 "
+                        "--out {out}/h100_profilek_medium_exact32.txt"),
+]
 # The CPU reference for a stage, on a CPU-only container.
 CPU_RUNS = {"act32": [("cpu_exact32_g12b8", "exact_train_lm.py --device cpu --record "
                                             "{out}/cpu_exact32_g12b8.json --act float32")]}
@@ -127,7 +145,9 @@ def _run(runs, end):
             continue
         try:
             # `exec`, so a kill at the budget reaches python, not just the shell.
-            p = subprocess.run(f"cd {REPO}/tools && exec {sys.executable} {cmd.format(out=out)}",
+            line = (cmd[4:].format(repo=REPO) if cmd.startswith("RAW:")
+                    else f"cd {REPO}/tools && exec {sys.executable} {cmd.format(out=out)}")
+            p = subprocess.run(line,
                                shell=True, timeout=left, text=True, env=env,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             log = p.stdout + f"\nexit {p.returncode} {time.time() - t0:.0f} s\n"
