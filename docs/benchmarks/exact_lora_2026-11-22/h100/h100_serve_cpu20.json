@@ -1,0 +1,45 @@
+{
+ "config": {
+  "device": "cuda",
+  "steps": 300,
+  "batch": 64,
+  "lr": 0.0003,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 600,
+  "eval_every": 0,
+  "eval_batch": 100,
+  "checkpoint": 10,
+  "log": 10,
+  "record": "/root/out/h100_serve_cpu20.json",
+  "save": null,
+  "load": "/root/cpu_adapters.pt",
+  "eval_only": true,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.12.16",
+  "torch": "2.13.0+cu126",
+  "cpu": "unknown",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cuda": "12.6",
+  "transformers": "5.15.0",
+  "gemm": "triton"
+ },
+ "steps": [],
+ "checkpoints": {},
+ "evals": {
+  "0": {
+   "right": 382,
+   "clean": 382,
+   "n": 600,
+   "acc": 0.6366666666666667,
+   "clean_acc": 0.6366666666666667,
+   "tokens": "56e862b5f39cbe88",
+   "seconds": 10.35
+  }
+ },
+ "init": "46d5ebab8e5370de",
+ "loaded": "ba36215735e33487"
+}

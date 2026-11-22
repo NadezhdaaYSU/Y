@@ -1,0 +1,25 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  66%|██████▌   | 192/290 [00:00<00:00, 1905.64it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2041.88it/s]
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 276/600 right, 276 clean, tokens b449b7c4f779fd53 (75.51 s)
+step 1: nll 0.4460 tp 81bf90cf52985827 32.523 s
+step 2: nll 0.4858 tp 6090d8c3b36ad23d 29.963 s
+step 3: nll 0.3850 tp c683751556ea12ff 29.470 s
+step 4: nll 0.2909 tp 0c8b984d747c784b 29.591 s
+step 5: nll 0.2436 tp 32ef6783370dc265 30.100 s
+step 6: nll 0.3370 tp 0fe6204d9c6da49f 30.353 s
+step 7: nll 0.3340 tp 012441124b13ed0f 29.277 s
+step 8: nll 0.3191 tp 204ceac6032c7b84 30.336 s
+step 9: nll 0.2902 tp 612eb0a97521567c 28.753 s
+step 10: nll 0.2384 tp 4d068f358e020205 29.213 s
+step 11: nll 0.3378 tp b217b88ef871b640 27.817 s
+step 12: nll 0.2181 tp 29f2e89ff86da9d9 28.563 s
+step 13: nll 0.2237 tp cb081f3426f57825 28.531 s
+step 14: nll 0.2448 tp 37bd1c42b0ab6cfd 28.447 s
+step 15: nll 0.2254 tp 3cd6c799aeb536da 29.791 s
+step 16: nll 0.2492 tp 5490f357dfb2ca60 29.267 s
+step 17: nll 0.2950 tp 6da1aaa4af6294fa 28.360 s
+step 18: nll 0.2749 tp 07637246c4d5eda9 27.995 s
+step 19: nll 0.2289 tp 0b47e6d73a792266 28.433 s
+step 20: nll 0.2245 tp 455154b8c6680593 29.138 s
+eval @20: 382/600 right, 382 clean, tokens 56e862b5f39cbe88 (54.84 s)
