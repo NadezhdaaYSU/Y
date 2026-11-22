@@ -89,11 +89,21 @@ a browser (steps 4 to 10):
 | graphed | 4.12 s | 4.31 s | 8.4 s |
 
 The graphed sampler's first call compiles and records the step, about 4.5
-minutes, once per batch shape. On the H100 a step took 1.49 s to sample and
-7.19 s to train: its sampling is 2.8 times the 4070 Ti's, its eager training
-slower (that path is mostly kernel launches, and the cloud machine's host
-was not profiled). The whole job ran 39 minutes and cost $3.12 on Modal's
-bill (H100 $2.68, CPU and memory $0.43). A profile of eager sampling at 256 rows had
+minutes, once per batch shape.
+
+The H100 ran the same steps as the 4070 Ti (the same tokens, so the same
+lengths), so the logged steps pair up. With the graphed sampler on both, at
+steps 5 and 10: sampling 2.08 s on the H100 against 4.18 s, twice as fast;
+training 7.76 s against 3.83 s, twice as slow. Training on both used
+compiled products and eager everything else; over steps 80 to 150 it took
+5.86 s on the H100 against 3.12 s on the 4070 Ti, the same 1.9 times. A
+whole step averaged 8.7 s on the H100 (1.49 s sampling, 7.19 s training)
+against 8.4 s for the 4070 Ti's graphed steps 4 to 10, so about the same
+speed. Why the H100 trains slower was not found: the cloud host's CPU is
+unnamed (24 vCPUs), the eager training path is mostly kernel launches, and
+on an H100 the quantizers round in the float64 formula; none was profiled.
+The whole job ran 39 minutes and cost $3.12 on Modal's bill (H100 $2.68,
+CPU and memory $0.43). A profile of eager sampling at 256 rows had
 put 17% of its time in the vocabulary softmax and the rest in the model's
 own elementwise work, which the compiled step fuses.
 
