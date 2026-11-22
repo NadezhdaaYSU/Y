@@ -53,14 +53,14 @@ def batch(seed=0, B=3, T=30, prompt=10, vocab=512):
     return ids, labels
 
 
-def train_tiny(device, steps=4, mm=None):
+def train_tiny(device, steps=4, mm=None, compile=False, lengths=(30,)):
     from y_lang.exact import lora
     m = tiny_model().to(device)
-    ad = lora.attach(m, r=8, alpha=8, mm=mm)
+    ad = lora.attach(m, r=8, alpha=8, mm=mm, compile=compile)
     sft = lora.SFT(m, ad, lr=3e-3)
     tps = []
     for s in range(steps):
-        ids, labels = batch(seed=s)
+        ids, labels = batch(seed=s, T=lengths[s % len(lengths)])
         tps.append(lora.tp_digest(sft.step(ids.to(device), labels.to(device))))
     sft.verify()
     return ad.digest(), tps, ad
@@ -315,6 +315,40 @@ class TinyModel(unittest.TestCase):
             kv.USE_CACHE = old
 
 
+class Flags(unittest.TestCase):
+    def test_compile_flags_hold_in_every_thread(self):
+        """model.py's Inductor flags and CompiledOps' `specialize_int`, read
+        in a new thread and in autograd's backward (its own thread on a GPU):
+        torch's config values are per thread, and an assignment alone reached
+        neither (2026-11-22)."""
+        import threading
+        import torch._inductor.config as ic
+        from y_lang.exact import lora
+        lora.CompiledOps(exact=True, mm=lora.mm_f64, act=torch.float32)
+
+        def read():
+            return (ic.eager_numerics.division_rounding, ic.emulate_precision_casts,
+                    torch._dynamo.config.specialize_int)
+        out = {}
+        t = threading.Thread(target=lambda: out.update(thread=read()))
+        t.start()
+        t.join()
+        self.assertEqual(out["thread"], (True, True, True))
+        if torch.cuda.is_available():
+            class F(torch.autograd.Function):
+                @staticmethod
+                def forward(ctx, x):
+                    return x * 2
+
+                @staticmethod
+                def backward(ctx, g):
+                    out["backward"] = (read(), threading.current_thread() is threading.main_thread())
+                    return g * 2
+            x = torch.ones(4, device="cuda", requires_grad=True)
+            F.apply(x).sum().backward()
+            self.assertEqual(out["backward"], ((True, True, True), False))
+
+
 @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA GPU")
 class OnTheGpu(unittest.TestCase):
     def test_any_shape_on_ys_gemm(self):
@@ -330,6 +364,60 @@ class OnTheGpu(unittest.TestCase):
         torch.backends.cuda.matmul.allow_tf32 = False
         ref = train_tiny("cpu")[:2]
         self.assertEqual(train_tiny("cuda")[:2], ref)
+
+    def test_compiled_products_are_the_eager_ones(self):
+        """Every product of five steps (three batch lengths, so the shapes
+        change under the compiled code), compiled against eager, bit for bit;
+        and the adapters and every step's p(target) the CPU's."""
+        from unittest import mock
+        from y_lang.exact import lora
+        torch.backends.cuda.matmul.allow_tf32 = False
+        lengths = (30, 27, 33)
+        same = []
+        compiled = lora.CompiledOps.product
+
+        def both(ops, a, b, bits_a, bits_b, batched, int8, qa, qb):
+            want = lora.Ops.product(ops, a, b, bits_a, bits_b, batched, int8, qa, qb)
+            got = compiled(ops, a, b, bits_a, bits_b, batched, int8, qa, qb)
+            same.append(want.dtype == got.dtype and torch.equal(
+                want.contiguous().view(torch.int32), got.contiguous().view(torch.int32)))
+            return got
+        with mock.patch.object(lora.CompiledOps, "product", both):
+            got = train_tiny("cuda", steps=5, compile=True, lengths=lengths)
+        self.assertIsInstance(got[2].ops, lora.CompiledOps)
+        self.assertGreater(len(same), 100)
+        self.assertEqual(same.count(False), 0, f"{same.count(False)} of {len(same)} products differ")
+        self.assertEqual(got[:2], train_tiny("cpu", steps=5, lengths=lengths)[:2])
+
+    def test_compiled_products_keep_the_clamp(self):
+        """A 12-bit gradient at the clamp, 2047 / 2048 times a weight of 1:
+        exactly 2047 / 2048, eager and compiled. With symbolic widths (the
+        hazard `CompiledOps` guards against) Inductor clamped it at 2046; the
+        guard refuses to run without `specialize_int`, and the hazard itself
+        is shown, so this test would see it."""
+        from y_lang.exact import lora
+        x = torch.full((4, 64), 0.25, device="cuda")
+        x[:, 0] = 2047 / 2048                       # q8 at 12 bits: s = -11, q = 2047
+        w = torch.zeros(8, 64, device="cuda")
+        w[:, 0] = 1.0
+        want = torch.full((4, 8), 2047 / 2048, device="cuda")
+        eager = lora.make_ops("cuda")
+        ops = lora.make_ops("cuda", compile=True)
+        self.assertTrue(torch.equal(eager.matmul(x, w, grad="a"), want))
+        self.assertTrue(torch.equal(ops.matmul(x, w, grad="a"), want))
+        torch._dynamo.config.specialize_int = False
+        try:
+            with self.assertRaises(RuntimeError):
+                ops.matmul(x, w, grad="a")
+            f = torch.compile(lambda a, b, bits_a, bits_b: lora._checked_product(
+                a, b, bits_a, bits_b, ops.mm, False, False, torch.float32, None, None)[0], dynamic=True)
+            moved = f(x, w, 12, 8)
+        finally:
+            torch._dynamo.config.specialize_int = True
+        if torch.equal(moved, want):
+            self.skipTest("this torch keeps q8's clamp under symbolic widths (the guard is then "
+                          "not needed, and harmless)")
+        self.assertTrue(torch.equal(moved, torch.full_like(want, 2046 / 2048)))
 
 
 if __name__ == "__main__":

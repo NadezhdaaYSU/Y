@@ -391,6 +391,51 @@ def _exact_int8_bmm(a, b):
     return int8_bmm(a.to(torch.int8), b.to(torch.int8)).to(torch.int64)
 
 
+def exact_product(a, b, bits_a, bits_b, mm, batched=False, int8=False, act=None, qa=None, qb=None,
+                  bad=None):
+    """`Ops.matmul`'s exact product, a @ b^T over the last dimension: a on
+    `bits_a`, b on `bits_b` (q8, then int8 digits), every digit pair in one
+    integer product (`mm`, or batched: `int8_bmm` where `int8`, else the
+    float32 or float64 product of exact integers), the blocks added in
+    int64, scaled by the two power-of-two scales. The caller has refused a
+    K whose sums could pass 2^53 (`Ops.matmul`). A function of tensors and
+    constants only, so `lora` can compile it; `act` float32 rounds the exact
+    value once."""
+    qa, sa = q8(a, bits=bits_a, bad=bad) if qa is None else qa
+    qb, sb = q8(b, bits=bits_b, bad=bad) if qb is None else qb
+    da = digits(qa, bits_a, bounded=True)
+    db = digits(qb, bits_b, bounded=True)
+    # Every digit of a against every digit of b in ONE product: the
+    # digits stacked along the rows of each operand, block (i, j) of the
+    # result the product of digit i of a and digit j of b.
+    M, N = qa.shape[-2], qb.shape[-2]
+    A = da[0] if len(da) == 1 else torch.cat(da, dim=-2)
+    B = db[0] if len(db) == 1 else torch.cat(db, dim=-2)
+    if batched:
+        if int8:
+            P = _exact_int8_bmm(A, B)
+        elif A.shape[-1] * 127 * 127 >= FP32_EXACT and not A.is_cuda:
+            # A sum too long for float32's exact integers (attention's
+            # backward over a query group): float64's, on the CPU.
+            P = (A.to(torch.float64) @ B.to(torch.float64).transpose(-1, -2))
+        else:
+            P = _exact_fp32_bmm(A, B)
+        P = P.to(torch.int64)
+    else:
+        P = mm(A, B).to(torch.int64)
+    c = None
+    for i in range(len(da)):
+        for j in range(len(db)):
+            part = P[..., i * M:(i + 1) * M, j * N:(j + 1) * N]
+            part = part << (7 * (i + j)) if i + j else part
+            c = part if c is None else c + part
+    # c below 2^53 (the caller's bound): its float64 is exact, and so is the
+    # power-of-two scale: |sa|, |sb| <= 511 (q8), so sa + sb is in range.
+    # With float32 activations that exact value is rounded once.
+    out = c.to(torch.float64) * pow2(sa + sb.transpose(-1, -2), checked=True)
+    return out if act in (None, torch.float64) else out.to(act)
+
+
 class Ops:
     """The model's sums and softmax, exact (`exact=True`) or ordinary float
     (`exact=False`: the float twin and the autograd reference)."""
@@ -454,45 +499,18 @@ class Ops:
             return a @ b.transpose(-1, -2)
         bits_a = 8 if grad is None else self.grad_bits if grad == "a" else self.bwd_bits
         bits_b = 8 if grad is None else self.grad_bits if grad == "b" else self.bwd_bits
-        # Every partial sum below, of digit products, is at most K times the
-        # digits' capacities: below 2^53, so float64 holds it exactly. Known
-        # from the widths alone, so refused before anything runs.
+        # Every partial sum of digit products is at most K times the digits'
+        # capacities: below 2^53, so float64 holds it exactly. Known from the
+        # widths alone, so refused before anything runs.
         if a.shape[-1] * capacity(bits_a) * capacity(bits_b) >= F64_EXACT:
             raise OverflowError("exact train: a product sum could pass float64's exact integers")
-        qa, sa = q8(a, bits=bits_a, bad=self.bad) if qa is None else qa
-        qb, sb = q8(b, bits=bits_b, bad=self.bad) if qb is None else qb
-        da = digits(qa, bits_a, bounded=True)
-        db = digits(qb, bits_b, bounded=True)
-        # Every digit of a against every digit of b in ONE product: the
-        # digits stacked along the rows of each operand, block (i, j) of the
-        # result the product of digit i of a and digit j of b.
-        M, N = qa.shape[-2], qb.shape[-2]
-        A = da[0] if len(da) == 1 else torch.cat(da, dim=-2)
-        B = db[0] if len(db) == 1 else torch.cat(db, dim=-2)
-        if batched:
-            int8 = self.bmm == "int8" or (self.bmm is None and A.is_cuda and int8_bmm_ok(A.device))
-            if int8:
-                P = _exact_int8_bmm(A, B)
-            elif A.shape[-1] * 127 * 127 >= FP32_EXACT and not A.is_cuda:
-                # A sum too long for float32's exact integers (attention's
-                # backward over a query group): float64's, on the CPU.
-                P = (A.to(torch.float64) @ B.to(torch.float64).transpose(-1, -2))
-            else:
-                P = _exact_fp32_bmm(A, B)
-            P = P.to(torch.int64)
-        else:
-            P = self.mm(A, B).to(torch.int64)
-        c = None
-        for i in range(len(da)):
-            for j in range(len(db)):
-                part = P[..., i * M:(i + 1) * M, j * N:(j + 1) * N]
-                part = part << (7 * (i + j)) if i + j else part
-                c = part if c is None else c + part
-        # c below 2^53 (the bound above): its float64 is exact, and so is the
-        # power-of-two scale: |sa|, |sb| <= 511 (q8), so sa + sb is in range.
-        # With float32 activations that exact value is rounded once.
-        out = c.to(torch.float64) * pow2(sa + sb.transpose(-1, -2), checked=True)
-        return out if self.act in (None, torch.float64) else out.to(self.act)
+        int8 = batched and (self.bmm == "int8" or (self.bmm is None and a.is_cuda and int8_bmm_ok(a.device)))
+        return self.product(a, b, bits_a, bits_b, batched, int8, qa, qb)
+
+    def product(self, a, b, bits_a, bits_b, batched, int8, qa, qb):
+        """`exact_product` with this object's GEMM, activation type and
+        checks (`lora.CompiledOps` runs it compiled)."""
+        return exact_product(a, b, bits_a, bits_b, self.mm, batched, int8, self.act, qa, qb, self.bad)
 
     def sum(self, x, dim):
         """The sum along `dim` (kept), of x rounded to one fixed-point scale
@@ -540,6 +558,13 @@ class Ops:
         """softmax over the last dimension, `blocked` entries excluded."""
         if not self.exact:
             return torch.softmax(z.masked_fill(blocked, float("-inf")), dim=-1)
+        return self.ratio(*self.softmax_ints(z, blocked))
+
+    def softmax_ints(self, z, blocked):
+        """The exact softmax's integers: (p, l), p the numerators (int64,
+        Q0.28 values of the integer exp2, 0 where `blocked`) and l [..][1]
+        their sums along the last dimension. An exact sampler draws from
+        these (`rl`)."""
         table = self._tables.get(z.device)
         if table is None:
             table = self._tables[z.device] = _table(z.device)
@@ -549,8 +574,12 @@ class Ops:
         m = logit.masked_fill(blocked, float("-inf")).amax(dim=-1, keepdim=True)
         t = torch.round(m - logit).clamp(0, 1 << 30).masked_fill(blocked, 1 << 30)
         p = exp2_neg_q16_16(t, table).masked_fill(blocked, 0)  # Q0.28, int64
+        return p, p.sum(dim=-1, keepdim=True)
+
+    def ratio(self, p, l):
+        """p / l in the activations' type: the softmax from its integers."""
         dt = torch.float64 if self.act is None else self.act
-        return p.to(dt) / p.sum(dim=-1, keepdim=True).to(dt)
+        return p.to(dt) / l.to(dt)
 
 
 # ---- the model -----------------------------------------------------------------

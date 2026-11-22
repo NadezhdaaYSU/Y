@@ -1,0 +1,179 @@
+"""y_lang.exact.rl: an exact sampler and a GRPO trainer that agree on every
+probability. The draw is an integer inverse CDF of the exact softmax, the
+trainer recomputes the same integers at every sampled token (and a sampler
+off by one weight update is caught), training raises the reward, and a CPU
+and a GPU sample the same tokens and train the same adapters."""
+
+import os
+import sys
+import unittest
+
+import torch
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from test_exact_lora import randomize_b, tiny_model  # noqa: E402
+
+
+def prompts(lengths=(5, 8, 6, 5), vocab=512, seed=0, group=2):
+    """Left-padded prompts, each repeated `group` times."""
+    g = torch.Generator().manual_seed(seed)
+    seqs = [torch.randint(1, vocab, (n,), generator=g).tolist() for n in lengths]
+    seqs = [s for s in seqs for _ in range(group)]
+    T = max(len(s) for s in seqs)
+    ids = torch.tensor([[0] * (T - len(s)) + s for s in seqs])
+    mask = torch.tensor([[0] * (T - len(s)) + [1] * len(s) for s in seqs])
+    return ids, mask
+
+
+END = 7          # the tiny model's "end of turn"
+
+
+def setup(device="cpu", compile=False):
+    from y_lang.exact import lora, rl
+    m = tiny_model().to(device)
+    ad = lora.attach(m, r=8, alpha=8, compile=compile)
+    randomize_b(ad, std=0.05)
+    return m, ad, rl.GRPO(m, ad, lr=3e-3)
+
+
+def even_reward(tokens):
+    """1 for a completion whose first token is even."""
+    return [int(row[0] % 2 == 0) for row in tokens.cpu().tolist()]
+
+
+def run_rl(device, steps=3, compile=False):
+    from y_lang.exact import lora, rl
+    m, ad, grpo = setup(device, compile)
+    ids, mask = prompts()
+    out = []
+    for s in range(steps):
+        rand = rl.uniforms(0, s, ids.shape[0], 4)
+        sampled = rl.sample(m, ad.ops, ids.to(device), mask.to(device), 4, rand)
+        rewards = even_reward(sampled[0])
+        tp, mism = grpo.step(ids.to(device), mask.to(device), sampled, rewards, END, 2)
+        out.append((sampled[0].cpu().tolist(), lora.tp_digest(tp), mism))
+    grpo.verify()
+    return ad.digest(), out
+
+
+class Draw(unittest.TestCase):
+    def test_uniforms_are_fixed_and_batch_free(self):
+        from y_lang.exact import rl
+        u = rl.uniforms(3, 11, 4, 5)
+        self.assertEqual(u.dtype, torch.int64)
+        self.assertTrue(bool((u >= 0).all()) and bool((u < 2 ** 62).all()))
+        self.assertTrue(torch.equal(rl.uniforms(3, 11, 2, 5), u[:2]))
+        self.assertFalse(torch.equal(rl.uniforms(3, 12, 4, 5), u))
+        # pinned: the same integers on every machine and Python
+        self.assertEqual(int(u[0, 0]), int(rl.uniforms(3, 11, 1, 1)[0, 0]))
+        self.assertEqual(rl.uniforms(0, 0, 1, 1).tolist(), [[UNIFORM_0_0]])
+
+    def test_draw_is_the_integer_inverse_cdf(self):
+        from y_lang.exact import rl
+        p = torch.tensor([[0, 3, 0, 5]])
+        l = p.sum(-1, keepdim=True)
+        got = [int(rl.draw(p, l, torch.tensor([r]))) for r in range(24)]
+        self.assertEqual(got, [1, 1, 1, 3, 3, 3, 3, 3] * 3)
+
+    def test_draw_frequencies_are_p_over_l(self):
+        from y_lang.exact import rl
+        g = torch.Generator().manual_seed(0)
+        p = torch.randint(0, 1 << 20, (1, 50), generator=g)
+        p[0, 7] = 0
+        n = 40000
+        r = torch.randint(0, 1 << 62, (n,), generator=g, dtype=torch.int64)
+        tok = rl.draw(p.expand(n, -1), p.sum(-1, keepdim=True).expand(n, -1), r)
+        freq = torch.bincount(tok, minlength=50).double() / n
+        want = p[0].double() / p.sum()
+        self.assertEqual(int(freq[7]), 0)
+        self.assertLess(float((freq - want).abs().max()), 0.006)
+
+
+class Agreement(unittest.TestCase):
+    def test_the_trainer_has_the_samplers_integers(self):
+        """Prompts of three lengths, left padded for the sampler and right
+        padded for the trainer: every sampled token's (p, l) the same."""
+        digest, steps = run_rl("cpu")
+        self.assertEqual([s[2] for s in steps], [0, 0, 0])
+
+    def test_a_sampler_one_update_behind_is_caught(self):
+        """The control: tokens sampled before an update, trained on after
+        it. Their integers differ, the step counts them and verify raises."""
+        from y_lang.exact import rl
+        m, ad, grpo = setup()
+        ids, mask = prompts()
+        stale = rl.sample(m, ad.ops, ids, mask, 4, rl.uniforms(0, 0, ids.shape[0], 4))
+        fresh = rl.sample(m, ad.ops, ids, mask, 4, rl.uniforms(0, 1, ids.shape[0], 4))
+        grpo.step(ids, mask, fresh, even_reward(fresh[0]), END, 2)
+        grpo.verify()
+        _, mism = grpo.step(ids, mask, stale, even_reward(stale[0]), END, 2)
+        self.assertGreater(mism, 0)
+        with self.assertRaises(OverflowError):
+            grpo.verify()
+
+    def test_one_changed_integer_is_caught(self):
+        from y_lang.exact import rl
+        m, ad, grpo = setup()
+        ids, mask = prompts()
+        toks, p, l = rl.sample(m, ad.ops, ids, mask, 4, rl.uniforms(0, 0, ids.shape[0], 4))
+        p = p.clone()
+        p[3, 0] += 1
+        _, mism = grpo.step(ids, mask, (toks, p, l), even_reward(toks), END, 2)
+        self.assertEqual(mism, 1)
+        with self.assertRaises(OverflowError):
+            grpo.verify()
+
+
+class Learning(unittest.TestCase):
+    def test_an_update_moves_probability_toward_the_rewarded(self):
+        """One step raises the objective it follows, sum A log p over the
+        sampled tokens (16 completions of two prompts), and the completions
+        that beat their group's mean gain more log probability than those
+        below it (single ones below it can still rise: they share the
+        adapters with the rest); and a run repeats."""
+        from y_lang.exact import rl
+        m, ad, grpo = setup()
+        ids, mask = prompts(group=8, lengths=(5, 8))
+        toks, p, l = rl.sample(m, ad.ops, ids, mask, 1, rl.uniforms(1, 0, ids.shape[0], 1))
+        rewards = even_reward(toks)
+        adv = rl.advantages(rewards, 8)
+        self.assertTrue(any(a > 0 for a in adv) and any(a < 0 for a in adv), rewards)
+        grpo.step(ids, mask, (toks, p, l), rewards, END, 8)
+        grpo.verify()
+        with torch.no_grad():
+            pos = (mask.cumsum(-1) - 1).masked_fill(mask == 0, 0)
+            logits = m(input_ids=ids, attention_mask=mask, position_ids=pos).logits[:, -1].float()
+            p2, l2 = ad.ops.softmax_ints(logits, torch.zeros_like(logits, dtype=torch.bool))
+        before = p[:, 0].double() / l[:, 0].double()
+        after = p2.gather(1, toks).reshape(-1).double() / l2.reshape(-1).double()
+        gain = (after.log() - before.log()).tolist()
+        self.assertGreater(sum(a * g for a, g in zip(adv, gain)), 0)
+        up = [g for a, g in zip(adv, gain) if a > 0]
+        down = [g for a, g in zip(adv, gain) if a < 0]
+        self.assertGreater(sum(up) / len(up), 0)
+        self.assertLess(sum(down) / len(down), 0)
+        self.assertEqual(run_rl("cpu"), run_rl("cpu"))
+
+    def test_advantages(self):
+        from y_lang.exact import rl
+        self.assertEqual(rl.advantages([1, 0, 0, 0, 1, 1, 1, 1], 4), [0.75, -0.25, -0.25, -0.25, 0, 0, 0, 0])
+        with self.assertRaises(ValueError):
+            rl.advantages([1, 0, 1], 2)
+        self.assertEqual(rl.completion_lengths(torch.tensor([[3, END, 5], [1, 2, 3]]), END), [2, 3])
+
+
+@unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA GPU")
+class OnTheGpu(unittest.TestCase):
+    def test_the_cpus_samples_and_adapters_on_the_gpu(self):
+        torch.backends.cuda.matmul.allow_tf32 = False
+        ref = run_rl("cpu")
+        self.assertEqual(run_rl("cuda"), ref)
+        self.assertEqual(run_rl("cuda", compile=True), ref)
+
+
+UNIFORM_0_0 = 202160430523473325   # blake2b of 'y-exact-rl/0/0/0/0', top 62 bits
+
+
+if __name__ == "__main__":
+    unittest.main()

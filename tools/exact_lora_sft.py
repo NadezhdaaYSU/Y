@@ -132,7 +132,7 @@ def run(args):
     torch.backends.cuda.matmul.allow_tf32 = False
     device = args.device
     model, tok = load(MODEL, device)
-    ad = lora.attach(model, r=args.r, alpha=args.alpha, seed=args.seed)
+    ad = lora.attach(model, r=args.r, alpha=args.alpha, seed=args.seed, compile=args.compile)
     train, test = pairs()
     test = test[:args.eval]
     rec = {"config": vars(args), "machine": machine(device), "steps": [], "checkpoints": {},
@@ -234,6 +234,7 @@ def main():
     ap.add_argument("--load")
     ap.add_argument("--eval-only", action="store_true")
     ap.add_argument("--compare", nargs=2)
+    ap.add_argument("--compile", action="store_true", help="the exact products compiled (a GPU; the same bits)")
     args = ap.parse_args()
     if args.compare:
         sys.exit(0 if compare(*args.compare) else 1)

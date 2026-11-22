@@ -48,7 +48,7 @@ import torch.nn as nn
 from . import attention as _attn
 from . import kv as _kv
 from . import model as _model
-from .train_lm import F64_EXACT, Adam, Ops, det_sqrt, mm_f64, reduce_checks, refuse
+from .train_lm import F64_EXACT, Adam, Ops, det_sqrt, exact_product, mm_f64, reduce_checks, refuse
 
 TARGETS = ("qkv_proj", "o_proj", "gate_proj", "up_proj", "down_proj", "gate_up_proj",
            "q_proj", "k_proj", "v_proj")
@@ -93,9 +93,70 @@ def default_mm(device):
     return mm_y_any if torch.device(device).type == "cuda" else mm_f64
 
 
-def make_ops(device, mm=None, grad_bits=12, bwd_bits=8):
-    return Ops(exact=True, mm=mm or default_mm(device), grad_bits=grad_bits, bwd_bits=bwd_bits,
+def make_ops(device, mm=None, grad_bits=12, bwd_bits=8, compile=False):
+    """The exact `Ops` of the adapters' products; `compile` (a GPU only)
+    runs each product compiled (`CompiledOps`)."""
+    if compile and torch.device(device).type != "cuda":
+        raise ValueError("lora: compile is for a CUDA device")
+    cls = CompiledOps if compile else Ops
+    return cls(exact=True, mm=mm or default_mm(device), grad_bits=grad_bits, bwd_bits=bwd_bits,
                act=torch.float32)
+
+
+# ---- compiled products -------------------------------------------------------
+
+def _checked_product(a, b, bits_a, bits_b, mm, batched, int8, act, qa, qb):
+    bad = []
+    out = exact_product(a, b, bits_a, bits_b, mm, batched, int8, act, qa, qb, bad)
+    return out, [c for c, _ in bad], [m for _, m in bad]
+
+
+_COMPILED = []
+
+
+def _compiled_product():
+    if not _COMPILED:
+        _COMPILED.append(torch.compile(_checked_product, dynamic=True))
+    return _COMPILED[0]
+
+
+class CompiledOps(Ops):
+    """`Ops` whose exact products on a GPU each run as one compiled function
+    (`torch.compile` of `train_lm.exact_product`: the quantizers, the digit
+    split, the GEMM, the join and the scale fused into a few kernels), with
+    shapes dynamic so a new batch length does not recompile. The same
+    function: it is integer and bit operations, products by powers of two,
+    one rounding to float32 and the GEMM, none of which Inductor rounds
+    differently (`model.py`'s flags cover the operations that it does).
+
+    One hazard it does have, measured 2026-11-22: under `dynamic=True` a
+    Python int becomes symbolic, even a closure's constant, and Inductor
+    lowers q8's `(1 << (bits - 1)) - 1` to float64 `pow(2.0, bits - 1) - 1`,
+    which CUDA's pow puts below 2048, so 12-bit values clamped at 2046, not
+    2047 (91 of a step's 935 products differed). So this sets
+    `torch._dynamo.config.specialize_int` in every thread
+    (`model.set_in_every_thread`: the backward's products compile on
+    autograd's own thread, which a plain assignment does not reach), and
+    refuses to run in a thread where it is unset; the widths are then
+    constants of each graph. Ints specialized cost recompiles, never bits.
+    Tests compare every product of a step with the eager one, and a value at
+    the clamp."""
+
+    def __init__(self, *args, **kw):
+        super().__init__(*args, **kw)
+        _model.set_in_every_thread(torch._dynamo.config, "specialize_int", True)
+
+    def product(self, a, b, bits_a, bits_b, batched, int8, qa, qb):
+        if not a.is_cuda:
+            return super().product(a, b, bits_a, bits_b, batched, int8, qa, qb)
+        if not torch._dynamo.config.specialize_int:
+            raise RuntimeError("lora: compiled products need torch._dynamo.config.specialize_int "
+                               "(a symbolic width moves q8's clamp, see CompiledOps)")
+        out, conds, msgs = _compiled_product()(a, b, bits_a, bits_b, self.mm, batched, int8,
+                                               self.act, qa, qb)
+        for cond, msg in zip(conds, msgs):
+            refuse(self.bad, cond, msg)
+        return out
 
 
 # ---- the wrapped modules -----------------------------------------------------
@@ -360,11 +421,13 @@ def digest(params) -> str:
     return h.hexdigest()[:16]
 
 
-def attach(model, r=16, alpha=16, targets=None, seed=0, mm=None, grad_bits=12, bwd_bits=8):
+def attach(model, r=16, alpha=16, targets=None, seed=0, mm=None, grad_bits=12, bwd_bits=8,
+           compile=False):
     """Adapters on `model`'s exact linear layers named in `targets` (default:
     every projection of every decoder layer), every other exact module given
     its exact backward. `model` must already be converted (`y_lang.exact.load`).
-    Returns the `Adapters`."""
+    `compile` (a GPU): the exact products compiled (`CompiledOps`), the same
+    bits. Returns the `Adapters`."""
     import transformers.models.qwen2.modeling_qwen2 as qwen2
     if _kv.USE_CACHE:
         raise RuntimeError("lora: Y_EXACT_KVCACHE keeps quantised K/V across calls of the same "
@@ -373,7 +436,7 @@ def attach(model, r=16, alpha=16, targets=None, seed=0, mm=None, grad_bits=12, b
         raise RuntimeError("lora: adapters are already attached to this model")
     targets = TARGETS if targets is None else tuple(targets)
     device = next(model.buffers()).device
-    ops = make_ops(device, mm, grad_bits, bwd_bits)
+    ops = make_ops(device, mm, grad_bits, bwd_bits, compile)
     for p in model.parameters():
         p.requires_grad_(False)
     gen = torch.Generator().manual_seed(seed)
@@ -410,12 +473,21 @@ def attach(model, r=16, alpha=16, targets=None, seed=0, mm=None, grad_bits=12, b
 
 # ---- the loss ----------------------------------------------------------------
 
-def softmax_rows(ops, logits, rows=64):
+def softmax_rows(ops, logits, rows=64, targets=None):
     """`Ops.softmax` over the vocabulary, `rows` at a time (its int64
-    numerators are 8 bytes a logit)."""
+    numerators are 8 bytes a logit). With `targets` (one token per row):
+    (softmax, p, l), p each target's integer numerator and l its row's sum
+    (`Ops.softmax_ints`)."""
     none = torch.zeros(1, logits.shape[-1], dtype=torch.bool, device=logits.device)
-    return torch.cat([ops.softmax(logits[i:i + rows], none.expand(min(rows, logits.shape[0] - i), -1))
-                      for i in range(0, logits.shape[0], rows)])
+    P, pt, lt = [], [], []
+    for i in range(0, logits.shape[0], rows):
+        p, l = ops.softmax_ints(logits[i:i + rows], none.expand(min(rows, logits.shape[0] - i), -1))
+        P.append(ops.ratio(p, l))
+        if targets is not None:
+            pt.append(p.gather(1, targets[i:i + rows, None]).reshape(-1))
+            lt.append(l.reshape(-1))
+    P = torch.cat(P)
+    return P if targets is None else (P, torch.cat(pt), torch.cat(lt))
 
 
 def target_positions(labels):
@@ -458,6 +530,15 @@ class SFT:
     def step(self, ids, labels):
         """One step; returns p(target) of the labelled tokens (float32, in
         order), from the forward pass before the update."""
+        return self.run(ids, labels)[0]
+
+    def run(self, ids, labels, weights=None, check=None):
+        """`step`, with what RL needs. Returns (p(target), p, l): p and l
+        the exact softmax's integers at each labelled token (its numerator,
+        its row's sum). `weights` (float32, one per labelled token in
+        `target_positions` order) makes the gradient through the softmax
+        weights * (P - onehot) in place of (P - onehot) / n. `check(p, l)`
+        returns (a bool tensor, a message), refused with the step's checks."""
         bad = []
         self.ops.bad = bad
         try:
@@ -465,13 +546,20 @@ class SFT:
             n = tgt.numel()
             if n == 0:
                 raise ValueError("lora: a batch with no labelled token")
+            if weights is not None and weights.shape != (n,):
+                raise ValueError(f"lora: {tuple(weights.shape)} weights for {n} labelled tokens")
             hidden = self.forward(ids)
             logits = self.logits_at(hidden, pos)
             with torch.no_grad():
-                P = softmax_rows(self.ops, logits.detach())
+                P, p_t, l_t = softmax_rows(self.ops, logits.detach(), targets=tgt)
                 tp = P[torch.arange(n, device=P.device), tgt]
                 onehot = torch.zeros_like(P).scatter_(1, tgt[:, None], 1.0)
-                dlogits = (P - onehot) * (1.0 / n)
+                if weights is None:
+                    dlogits = (P - onehot) * (1.0 / n)
+                else:
+                    dlogits = (P - onehot) * weights.to(P.dtype)[:, None]
+                if check is not None:
+                    refuse(bad, *check(p_t, l_t))
             logits.backward(dlogits)
             grads = {}
             for k, t in self.ad.params.items():
@@ -495,7 +583,7 @@ class SFT:
                 raise OverflowError("; ".join(m for m, f in zip(messages, flags.tolist()) if f))
         else:
             self._acc |= flags
-        return tp
+        return tp, p_t, l_t
 
     def verify(self):
         """Raise OverflowError if a check of any step so far failed."""

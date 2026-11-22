@@ -102,7 +102,26 @@ def y_int8_mm():
 # 194 of 4,096 scales off the CPU's; with both fixed, 0. These flags are global
 # to the process, which is the point: nothing compiled next to the exact path
 # should round differently from it.
+#
+# Global takes more than an assignment: torch's config values are per thread
+# (torch 2.13: each a ContextVar), so `cfg.flag = True` here held only in the
+# importing thread, and a compile in any other thread got PyTorch's defaults
+# (found 2026-11-22: autograd runs a GPU backward on its own thread, and
+# `lora.CompiledOps` compiles there). `set_in_every_thread` also sets the
+# default every thread falls back on; a thread's own setting, such as a
+# baseline's `patch(INDUCTOR_DEFAULTS)`, still comes first.
 import torch._inductor.config as _inductor_config  # noqa: E402
+
+
+def set_in_every_thread(cfg, name, value):
+    """`cfg.<name> = value` in this thread, and as the default of every
+    thread with no setting of its own. `name` may be dotted
+    ("eager_numerics.division_rounding")."""
+    setattr(cfg, name, value)
+    entries = getattr(cfg, "_config", None)
+    if entries is not None:
+        entries[name].default = value
+
 
 # What the process had before this import, so a baseline that should compile
 # the way PyTorch ships can patch them back (exact_throughput's stock arm).
@@ -111,8 +130,8 @@ INDUCTOR_DEFAULTS = {
         _inductor_config.eager_numerics.division_rounding,
     "emulate_precision_casts": _inductor_config.emulate_precision_casts,
 }
-_inductor_config.eager_numerics.division_rounding = True
-_inductor_config.emulate_precision_casts = True
+set_in_every_thread(_inductor_config, "eager_numerics.division_rounding", True)
+set_in_every_thread(_inductor_config, "emulate_precision_casts", True)
 
 
 # A fourth way, which is not rounding but a data race (torch 2.13.0, Triton
