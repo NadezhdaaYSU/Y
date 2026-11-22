@@ -61,6 +61,45 @@ Compiling is slow on Modal's CPU: the first exact step took 226 s at T2's
 size (23 s when Inductor's cache was warm, in the same container) and 539 s
 at width 512, against 81 and 146 s on the development machine.
 
+## Float32 activations, and a bf16 baseline (`act32/`)
+
+`modal_train.py --stage act32`, Y at 24da895: the same training with
+`Ops(act=torch.float32)` (every sum still an exact integer sum, elementwise
+IEEE float32, products' exact integers rounded once to float32, quantizers on
+24-bit mantissas in int32; parameters and Adam float64). A different model
+from the float64 one, so its own CPU reference, made on a CPU-only Modal
+container (24 CPUs, 3,148 s for 5000 steps).
+
+**Same bits**: the H100's record has the CPU record's weights at all 10
+checkpoints and its target probabilities at all 5000 steps
+(`act32/compare.txt`, final weights `502c0f1cba2ee8f4`). At width 512 the
+H100's weights after 3 steps are the CPU's (`e7714afaa0a4fb6b`); so are the
+float64 model's (`726658118d294e45`) in the same run.
+
+**Accuracy**: held-out 1.6963 after 5000 steps, against the float64 exact
+model's 1.6883 and float32's 1.6933 to 1.7060 across runs: no measurable
+cost, on one seed.
+
+**Speed** (H100, ms a step, everything compiled and graphed). `bf16` is the
+float twin with its products in bf16 (float32 parameters and elementwise
+operations, the usual mixed-precision training):
+
+| Model | exact, float32 activations | exact, float64 | float32 | bf16 |
+|---|---|---|---|---|
+| T2 (width 128) | 0.76 | 0.80 | 0.41 | 0.27 |
+| width 512, 4 layers, 4,096 tokens | 9.57 | 11.70 | 8.89 | 2.32 |
+
+At width 512 float32 activations bring the exact step to 1.08x float32's
+time. **bf16 is 4.1x faster than the exact step there**, and 3.8x faster
+than float32: its products run on the H100's bf16 tensor cores, float32's
+do not (TF32 off). The exact step's linear layers are int8 tensor-core
+products already; its attention products are int8 values multiplied in
+float32 without tensor cores, and its quantizers and elementwise work are
+the rest. No H100 profile was taken, so the split is not measured. Against
+bf16, not float32, is where the exact step is slow.
+
+Cost: $2.64 (H100 $2.2, the CPU container about $0.4).
+
 ## Not covered
 
 - One H100, one run of each. Step times are wall clock over 500 (T2) and 50

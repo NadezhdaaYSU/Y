@@ -1,0 +1,5 @@
+/bin/sh: 1: nvidia-smi: not found
+CPU(s):              24
+Model name:          unknown
+2.13.0+cu126 3.7.1
+b264cfca54401bcfc7389b72e89e426c3bb7951f4c00cdd464d5f0b91d5a646c  /root/Y/target/release/liby.so

@@ -1,0 +1,14 @@
+step   500  train 2.0822  held-out 2.1305  weights 49bf25ecf00fb04d  371 s
+step  1000  train 1.8664  held-out 1.9674  weights b7fb9ef304d86b55  734 s
+step  1500  train 1.7670  held-out 1.8781  weights 167f3dd88d01276d  1065 s
+step  2000  train 1.6989  held-out 1.8453  weights 574586e672aab944  1337 s
+step  2500  train 1.6548  held-out 1.7991  weights cebc8a26a8e4cf04  1608 s
+step  3000  train 1.6227  held-out 1.7691  weights 5b863dabd0186678  1996 s
+step  3500  train 1.4325  held-out 1.7408  weights 91482ce733f60340  2309 s
+step  4000  train 1.5318  held-out 1.7137  weights 73fec996fa94fd0d  2486 s
+step  4500  train 1.5819  held-out 1.6881  weights 3350c32352901adb  2820 s
+step  5000  train 1.4935  held-out 1.6963  weights 502c0f1cba2ee8f4  3162 s
+steps: 3148.2 s, the first 1.2 s (compile, capture), then 629.52 ms/step
+written to /root/out/cpu_exact32_g12b8.json
+
+exit 0 3174 s
