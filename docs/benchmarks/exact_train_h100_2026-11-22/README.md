@@ -100,6 +100,39 @@ bf16, not float32, is where the exact step is slow.
 
 Cost: $2.64 (H100 $2.2, the CPU container about $0.4).
 
+## Where the time goes, and the float32 formula (`profile/`, `tune/`, `f32formula/`)
+
+`tools/exact_train_profile.py` at width 512, H100, float32 activations,
+compiled (GPU time a step, no CUDA graph):
+
+| | before (24da895) | float32 formula (5f9d9c1) | bf16 |
+|---|---|---|---|
+| Inductor's elementwise and quantizer kernels | 7.09 ms | 5.30 ms | 1.32 ms |
+| attention's float32 products (cuBLAS, no tensor cores) | 1.27 ms | 1.29 ms | |
+| Y's int8 GEMM (51 calls) | 1.23 ms | 1.24 ms | |
+| bf16 products (cuBLAS) | | | 0.88 ms |
+| all | 9.62 ms | 7.86 ms | 2.20 ms |
+
+The float32 formula: a float32 quantizer computes round(x * 2^a * 2^b) in
+float32, the same function as the integer one on the float's bits (tested,
+and the CPU reproduces the H100's earlier digests), in a few float32
+operations instead of about thirty integer ones. Step time with it,
+compiled and graphed, `f32formula/`: **8.03 ms against float32's 8.91 and
+bf16's 2.33**, the CPU's weights after 3 steps (`e7714afaa0a4fb6b`). The
+exact step is now faster than float32 here, and 3.4x bf16's time.
+
+Inductor's coordinate-descent and pointwise autotuning (`tune/`) cut the
+GPU time 9.62 to 9.10 ms on the older code (5%) and made CUDA graph capture
+fail, so they are not used.
+
+What is left, by kernel (`f32formula/h100_profile32f_medium_exact32.txt`):
+the attention softmax and the quantizing of P (two kernels over 32768 rows
+of 256, 0.86 ms), the other attention-sized quantizers and epilogues, and
+attention's float32 products: about 3 ms of the 7.86 together. Adam's
+integer square root over 12.8M parameters is 0.26 ms.
+
+Cost of these three runs: $4.70.
+
 ## Not covered
 
 - One H100, one run of each. Step times are wall clock over 500 (T2) and 50
