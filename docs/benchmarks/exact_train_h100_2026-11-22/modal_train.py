@@ -80,6 +80,17 @@ STAGES["profile"] = [
     ("profile_medium_bf16", "exact_train_profile.py --size medium --arm bf16 "
                             "--out {out}/h100_profile_medium_bf16.txt"),
 ]
+# Inductor's own tuning (block sizes by coordinate descent, autotuned
+# pointwise configs): environment variables only, the same code.
+TUNED = {"TORCHINDUCTOR_COORDINATE_DESCENT_TUNING": "1", "TORCHINDUCTOR_MAX_AUTOTUNE_POINTWISE": "1"}
+STAGES["tune"] = [
+    ("speed32_medium_tuned", "exact_train_speed.py --size medium --check 3 --steady 50 "
+                             "--modes exact32:compile+graph --out {out}/h100_speed32_medium_tuned.json", TUNED),
+    ("profile_medium_exact32_tuned", "exact_train_profile.py --size medium --arm exact32 "
+                                     "--out {out}/h100_profile_medium_exact32_tuned.txt", TUNED),
+    ("profile_medium_exact32", "exact_train_profile.py --size medium --arm exact32 "
+                               "--out {out}/h100_profile_medium_exact32.txt"),
+]
 # The CPU reference for a stage, on a CPU-only container.
 CPU_RUNS = {"act32": [("cpu_exact32_g12b8", "exact_train_lm.py --device cpu --record "
                                             "{out}/cpu_exact32_g12b8.json --act float32")]}
@@ -99,7 +110,8 @@ def _run(runs, end):
                f"sha256sum {REPO}/target/release/liby.so")
     files["machine.txt"] = head
     print(head, flush=True)
-    for name, cmd in runs:
+    for name, cmd, *env in runs:
+        env = dict(os.environ, **(env[0] if env else {}))
         t0 = time.time()
         left = end - time.time()
         if left < 60:
@@ -108,7 +120,7 @@ def _run(runs, end):
         try:
             # `exec`, so a kill at the budget reaches python, not just the shell.
             p = subprocess.run(f"cd {REPO}/tools && exec {sys.executable} {cmd.format(out=out)}",
-                               shell=True, timeout=left, text=True,
+                               shell=True, timeout=left, text=True, env=env,
                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             log = p.stdout + f"\nexit {p.returncode} {time.time() - t0:.0f} s\n"
         except subprocess.TimeoutExpired as e:
