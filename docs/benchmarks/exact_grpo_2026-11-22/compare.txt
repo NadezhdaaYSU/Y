@@ -9,3 +9,27 @@ adapters @20: c16a4d98f89fdd43 c16a4d98f89fdd43 same
 eval @0: 276/600 vs 276/600, tokens b449b7c4f779fd53 b449b7c4f779fd53 same
 eval @20: 306/600 vs 306/600, tokens 09f17c24d4a76eed 09f17c24d4a76eed same
 SAME
+
+== the CPU's 20-step record against the H100's (h100_grpo20)
+tokens digests: 20/20 steps the same
+ints digests: 20/20 steps the same
+tp digests: 20/20 steps the same
+AMD Ryzen 9 9950X 16-Core Processor: 0 sampled tokens whose trainer integers differ from the sampler's, over 20 steps
+NVIDIA H100 80GB HBM3: 0 sampled tokens whose trainer integers differ from the sampler's, over 20 steps
+adapters @10: 51bc97149251eb34 51bc97149251eb34 same
+adapters @20: c16a4d98f89fdd43 c16a4d98f89fdd43 same
+eval @0: 276/600 vs 276/600, tokens b449b7c4f779fd53 b449b7c4f779fd53 same
+eval @20: 306/600 vs 306/600, tokens 09f17c24d4a76eed 09f17c24d4a76eed same
+SAME
+
+== the CPU's 20-step record against the H100's (h100_grpo20_compiled)
+tokens digests: 20/20 steps the same
+ints digests: 20/20 steps the same
+tp digests: 20/20 steps the same
+AMD Ryzen 9 9950X 16-Core Processor: 0 sampled tokens whose trainer integers differ from the sampler's, over 20 steps
+NVIDIA H100 80GB HBM3: 0 sampled tokens whose trainer integers differ from the sampler's, over 20 steps
+adapters @10: 51bc97149251eb34 51bc97149251eb34 same
+adapters @20: c16a4d98f89fdd43 c16a4d98f89fdd43 same
+eval @0: 276/600 vs 276/600, tokens b449b7c4f779fd53 b449b7c4f779fd53 same
+eval @20: 306/600 vs 306/600, tokens 09f17c24d4a76eed 09f17c24d4a76eed same
+SAME

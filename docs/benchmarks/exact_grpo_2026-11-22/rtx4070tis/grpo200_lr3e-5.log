@@ -1,0 +1,33 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  59%|█████▉    | 172/290 [00:00<00:00, 1706.58it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1920.82it/s]
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 276/600 right, 276 clean, tokens b449b7c4f779fd53 (8.91 s)
+W1122 10:28:56.220000 796879 torch/_dynamo/convert_frame.py:1994] [0/8] torch._dynamo hit config.recompile_limit (8)
+W1122 10:28:56.220000 796879 torch/_dynamo/convert_frame.py:1994] [0/8]    function: '_checked_product' (~/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../python/y_lang/exact/lora.py:108)
+W1122 10:28:56.220000 796879 torch/_dynamo/convert_frame.py:1994] [0/8]    last reason: 0/1: tensor 'a' requires_grad mismatch. expected requires_grad=0
+W1122 10:28:56.220000 796879 torch/_dynamo/convert_frame.py:1994] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W1122 10:28:56.220000 796879 torch/_dynamo/convert_frame.py:1994] [0/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+[W1122 10:28:58.207891425 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 371195904 bytes (free: 306053120, total: 16769744896).
+[W1122 10:29:02.839248900 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 383778816 bytes (free: 493092864, total: 16769744896).
+step 20: reward 0.297 mismatch 0 tokens 007670b4eab79071 sample 0.58 s train 1.22 s
+eval @20: 287/600 right, 287 clean, tokens bce84cf0f5d5e0d8 (4.33 s)
+step 40: reward 0.516 mismatch 0 tokens e14f8090a8ece04f sample 0.60 s train 1.20 s
+eval @40: 317/600 right, 317 clean, tokens 102b1ccf5e04ec86 (4.4 s)
+[W1122 10:30:17.076491172 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 394264576 bytes (free: 296026112, total: 16769744896).
+step 60: reward 0.328 mismatch 0 tokens e8a4afda1dd06d8c sample 0.57 s train 1.13 s
+eval @60: 322/600 right, 322 clean, tokens e4abe1b66a7c0002 (4.22 s)
+step 80: reward 0.219 mismatch 0 tokens f12e08fd1cd1faf3 sample 0.58 s train 1.22 s
+eval @80: 348/600 right, 348 clean, tokens a4d4dcd8095813b1 (4.08 s)
+step 100: reward 0.375 mismatch 0 tokens da59690655f82bd6 sample 0.60 s train 1.16 s
+eval @100: 349/600 right, 349 clean, tokens d8652449c4b217b0 (4.36 s)
+step 120: reward 0.453 mismatch 0 tokens 37b14537a6b40bcd sample 0.59 s train 1.16 s
+eval @120: 345/600 right, 345 clean, tokens 21ed2e1f84c23e66 (4.38 s)
+step 140: reward 0.703 mismatch 0 tokens 483d540f7be77a1c sample 0.58 s train 1.22 s
+eval @140: 366/600 right, 366 clean, tokens bff682e5fc7e669d (4.27 s)
+step 160: reward 0.812 mismatch 0 tokens b75f8b9b9f0ff270 sample 0.60 s train 1.16 s
+eval @160: 357/600 right, 357 clean, tokens 831d77111b583cf0 (4.41 s)
+step 180: reward 0.438 mismatch 0 tokens 7a2054f6feee9e10 sample 0.59 s train 1.18 s
+eval @180: 362/600 right, 362 clean, tokens 82c0693d6908f772 (4.43 s)
+step 200: reward 0.531 mismatch 0 tokens ee3118a1574ddc9b sample 0.78 s train 1.24 s
+eval @200: 357/600 right, 357 clean, tokens 8a3fb3516f0a39a1 (4.24 s)
+exit 0

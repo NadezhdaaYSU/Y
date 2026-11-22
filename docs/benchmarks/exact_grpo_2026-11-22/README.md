@@ -1,4 +1,4 @@
-# Exact reinforcement learning (T3b) on an RTX 4070 Ti SUPER and a CPU, 2026-11-22
+# Exact reinforcement learning (T3b) on an RTX 4070 Ti SUPER, an H100 and a CPU, 2026-11-22
 
 ## What was asked
 
@@ -40,8 +40,15 @@ Records:
   `../exact_lora_2026-11-22/README.md`), evaluated every 20 steps.
 - `cpu_grpo20.json`: steps 1 to 20 on the development machine's CPU (AMD
   Ryzen 9 9950X), eager, evaluated at steps 0 and 20.
+- `h100/`: an H100 80GB HBM3 on Modal (`modal_grpo.py`): the RL and LoRA
+  GPU tests (26 passed), and steps 1 to 20 eager (`h100_grpo20.json`) and
+  with compiled products (`h100_grpo20_compiled.json`; on an H100 the
+  quantizers' rounding runs in the float64 formula, not the integer one,
+  `train_lm.FAST_FLOAT64`).
+- `rtx4070tis/grpo200_lr3e-5.json` and `grpo200_lr3e-4.log`: the same run
+  at two other learning rates.
 - `rtx4070tis/stock_mismatch.json`: the control (`stock_mismatch.py`).
-- `compare.txt`: the CPU's record against the GPU's.
+- `compare.txt`: the CPU's record against the 4070 Ti's and both H100 runs'.
 
 ## The sampler is the trainer
 
@@ -63,16 +70,18 @@ The stock numbers are for one batch of one step, with the sampler and the
 trainer in one framework and one process. Systems that sample with one
 engine and train with another were not measured here.
 
-## Same bits on a CPU and a GPU
+## Same bits on a CPU and two GPUs
 
-The CPU's first 20 steps are the GPU's (`compare.txt`): at all 20 steps the
+The CPU's first 20 steps are the 4070 Ti's and the H100's, eager and
+compiled (`compare.txt`): at all 20 steps the
 same sampled tokens, the same sampler integers and the same p(target) of
 the trainer; the same adapters at steps 10 and 20 (`51bc97149251eb34`,
 `c16a4d98f89fdd43`); every token of the held-out evaluation the same at
 steps 0 and 20. The CPU, eager, also had its trainer's integers equal to
-its sampler's at all 6,157 sampled tokens; the GPU's ran with compiled
-products, so the CPU's eager products and the GPU's compiled ones give the
-same RL run.
+its sampler's at all 6,157 sampled tokens, and so did both H100 runs. Four
+ways of computing (the CPU's eager products, the 4070 Ti's compiled ones,
+the H100's eager and compiled ones, with its float64 rounding formula) give
+one RL run.
 
 ## Learning
 
@@ -83,8 +92,23 @@ Held-out problems answered right (greedy, the SFT run's evaluation):
 | right of 600 | 276 | 306 | 337 | 323 | 319 | 361 | 358 | 367 | 364 | 359 | 355 |
 
 46% to 59% at step 200 (61% at its best, step 140). The mean training
-reward over each 40 steps: 0.49, 0.52, 0.58, 0.59, 0.55. One seed, one
-learning rate, no tuning. SFT on the answers reached 382 by step 20 and 463
+reward over each 40 steps: 0.49, 0.52, 0.58, 0.59, 0.55. One seed.
+
+Other learning rates, the same run otherwise:
+
+| lr | step 20 | 40 | 80 | 100 | 140 | 200 |
+|---|---|---|---|---|---|---|
+| 3e-4 | 1 | 1 | stopped | | | |
+| 1e-4 | 306 | 337 | 319 | 361 | 367 | 355 |
+| 3e-5 | 287 | 317 | 348 | 349 | 366 | 357 |
+
+At 3e-4 the policy collapsed within 20 steps (every reward 0 by step 20, so
+every advantage 0 and nothing left to learn from); the run was stopped at
+step 40 and has its log, not a record. 1e-4 and 3e-5 level off at the same
+place, about 60%, so the plateau is not the learning rate. Its cause was not
+studied (one candidate: problems none of 8 completions get right give no
+gradient). The 3e-5 run also checked 61,633 sampled tokens, every one the
+sampler's integers. SFT on the answers reached 382 by step 20 and 463
 by step 400 (`../exact_lora_2026-11-22/`); RL here learns from a 0 or 1 per
 completion, and is slower.
 
@@ -92,7 +116,10 @@ completion, and is slower.
 
 0.61 s to sample a step's 64 completions and 1.22 s to train on them, on the
 4070 Ti (1.8 s a step, 200 steps in about 6 minutes plus evaluations); 7.7
-and 28 s on the CPU.
+and 28 s on the CPU; on the H100 2.44 and 1.46 s eager, 1.25 and 1.20 s
+compiled. The H100 samples slower than the 4070 Ti; sampling is mostly
+kernel launches, and the cloud machine's host was not profiled. The H100
+job cost about $0.40.
 
 ## Tests
 
@@ -108,9 +135,10 @@ padding, the training batch left padded) are each caught by three tests.
 
 ## Not covered
 
-- One seed and one learning rate; accuracy flattens after step 100 and was
-  not tuned.
-- The CPU ran 20 of the 200 steps. Steps 21 to 200 are the GPU's alone.
+- One seed; accuracy flattens near 60% at two learning rates, for a reason
+  not studied.
+- The CPU and the H100 ran 20 of the 200 steps. Steps 21 to 200 are the
+  4070 Ti's alone.
 - The draw's modulo bias (below 2^-16 relative) is bounded, not removed.
 - The stock control measures one batch, greedy, in one framework, as a
   measure of the gap the exact path closes; it is not a measurement of any

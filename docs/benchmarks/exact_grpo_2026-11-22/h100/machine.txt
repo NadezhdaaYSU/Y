@@ -1,0 +1,7 @@
+name, compute_cap, driver_version, clocks.max.sm [MHz], memory.total [MiB]
+NVIDIA H100 80GB HBM3, 9.0, 620.70.06, 1980 MHz, 81559 MiB
+CPU(s):              24
+Model name:          unknown
+2.13.0+cu126 3.7.1
+b264cfca54401bcfc7389b72e89e426c3bb7951f4c00cdd464d5f0b91d5a646c  /root/Y/target/release/liby.so
+fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe  /root/hf/hub/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/7ae557604adf67be50417f59c2c2f167def9a775/model.safetensors

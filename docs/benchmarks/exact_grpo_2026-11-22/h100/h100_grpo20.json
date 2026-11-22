@@ -1,0 +1,245 @@
+{
+ "config": {
+  "device": "cuda",
+  "steps": 20,
+  "prompts": 8,
+  "group": 8,
+  "new": 6,
+  "lr": 0.0001,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 600,
+  "eval_every": 20,
+  "eval_batch": 100,
+  "checkpoint": 10,
+  "log": 1,
+  "record": "/root/out/h100_grpo20.json",
+  "save": null,
+  "load": null,
+  "compile": false,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.12.16",
+  "torch": "2.13.0+cu126",
+  "cpu": "unknown",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "cuda": "12.6",
+  "transformers": "5.15.0",
+  "gemm": "triton"
+ },
+ "steps": [
+  {
+   "step": 1,
+   "tokens": "3d10ec43b2b8ad0c",
+   "ints": "bab223efbd634035",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "90f0b9c9f6135e9d",
+   "n": 296
+  },
+  {
+   "step": 2,
+   "tokens": "868fb35ed14846a7",
+   "ints": "c4510a92fa5f12ce",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "0daf001f84cf3c79",
+   "n": 305
+  },
+  {
+   "step": 3,
+   "tokens": "a770440e04d19482",
+   "ints": "bf53c81839692d3f",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "28b26f8947193b53",
+   "n": 313
+  },
+  {
+   "step": 4,
+   "tokens": "f556d2132af20b04",
+   "ints": "ceec48eab37f33c1",
+   "mismatch": 0,
+   "reward": 0.296875,
+   "tp": "4516b407508da517",
+   "n": 315
+  },
+  {
+   "step": 5,
+   "tokens": "89da873fa54d7330",
+   "ints": "b0f3e3c5b6b44f01",
+   "mismatch": 0,
+   "reward": 0.484375,
+   "tp": "cbefc53887655449",
+   "n": 316
+  },
+  {
+   "step": 6,
+   "tokens": "112e2a183ff2d666",
+   "ints": "592988005c95c878",
+   "mismatch": 0,
+   "reward": 0.234375,
+   "tp": "3501c4e4e2361be9",
+   "n": 304
+  },
+  {
+   "step": 7,
+   "tokens": "b958ee8604f6f4f2",
+   "ints": "4b29fd12a1b1d413",
+   "mismatch": 0,
+   "reward": 0.59375,
+   "tp": "2eadf67eef4ec638",
+   "n": 313
+  },
+  {
+   "step": 8,
+   "tokens": "22f521015d094c9f",
+   "ints": "2463d1e381cb8e49",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "c9f4cbfdc340ab00",
+   "n": 304
+  },
+  {
+   "step": 9,
+   "tokens": "05ddd0ba429ec9cf",
+   "ints": "fc8203021c774c2f",
+   "mismatch": 0,
+   "reward": 0.71875,
+   "tp": "318706cd441b8182",
+   "n": 297
+  },
+  {
+   "step": 10,
+   "tokens": "255daf396aaa5af9",
+   "ints": "e628b66db3541445",
+   "mismatch": 0,
+   "reward": 0.609375,
+   "tp": "92122a626b15fef6",
+   "n": 306
+  },
+  {
+   "step": 11,
+   "tokens": "7b5c95a7c0034bc1",
+   "ints": "89ea25d9784f8a55",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "8558f1e73a60e11e",
+   "n": 320
+  },
+  {
+   "step": 12,
+   "tokens": "0b294aaa7bfd9d8f",
+   "ints": "1ff372af84a08a12",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "dd530474dddde99b",
+   "n": 304
+  },
+  {
+   "step": 13,
+   "tokens": "2a70a956ef7bfc18",
+   "ints": "6c79a8f1753ee011",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "882f44140abba2aa",
+   "n": 307
+  },
+  {
+   "step": 14,
+   "tokens": "c1aa45d4e20c7ab0",
+   "ints": "0f1d82032df2a0e2",
+   "mismatch": 0,
+   "reward": 0.296875,
+   "tp": "ffe973eea366607e",
+   "n": 314
+  },
+  {
+   "step": 15,
+   "tokens": "3df7fb49efe1806a",
+   "ints": "3d6c85d8bc80e824",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "be0e955adbf065ef",
+   "n": 304
+  },
+  {
+   "step": 16,
+   "tokens": "65d4dfad1d08f7f2",
+   "ints": "9c22a05444eedf46",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "b045b2ff668f1097",
+   "n": 304
+  },
+  {
+   "step": 17,
+   "tokens": "cc80a5ed2901d8ad",
+   "ints": "34bc84b8be6e4aee",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "bfe2512bd931d82b",
+   "n": 312
+  },
+  {
+   "step": 18,
+   "tokens": "169e1580f12707a4",
+   "ints": "49cd36e294dab7b6",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "5ad903436c4ad3bb",
+   "n": 307
+  },
+  {
+   "step": 19,
+   "tokens": "a2e568f733f06bcd",
+   "ints": "7dfd772192256e3a",
+   "mismatch": 0,
+   "reward": 0.703125,
+   "tp": "bc4866dec6449177",
+   "n": 312
+  },
+  {
+   "step": 20,
+   "tokens": "3bf8f38c53e5f70f",
+   "ints": "e3864eb3bc38a058",
+   "mismatch": 0,
+   "reward": 0.453125,
+   "tp": "ad010a9ed9278009",
+   "n": 304
+  }
+ ],
+ "checkpoints": {
+  "10": "51bc97149251eb34",
+  "20": "c16a4d98f89fdd43"
+ },
+ "evals": {
+  "0": {
+   "right": 276,
+   "clean": 276,
+   "n": 600,
+   "acc": 0.46,
+   "clean_acc": 0.46,
+   "tokens": "b449b7c4f779fd53",
+   "seconds": 18.12
+  },
+  "20": {
+   "right": 306,
+   "clean": 306,
+   "n": 600,
+   "acc": 0.51,
+   "clean_acc": 0.51,
+   "tokens": "09f17c24d4a76eed",
+   "seconds": 15.23
+  }
+ },
+ "init": "46d5ebab8e5370de",
+ "seconds_per_step": {
+  "sample": 2.4412714453304516,
+  "train": 1.4576381234561695
+ },
+ "final": "c16a4d98f89fdd43",
+ "mismatches": 0
+}

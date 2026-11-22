@@ -1,0 +1,61 @@
+test_a_sampler_one_update_behind_is_caught (python.tests.test_exact_rl.Agreement.test_a_sampler_one_update_behind_is_caught)
+The control: tokens sampled before an update, trained on after ... ok
+test_one_changed_integer_is_caught (python.tests.test_exact_rl.Agreement.test_one_changed_integer_is_caught) ... ok
+test_the_trainer_has_the_samplers_integers (python.tests.test_exact_rl.Agreement.test_the_trainer_has_the_samplers_integers)
+Prompts of three lengths, left padded for the sampler and right ... ok
+test_draw_frequencies_are_p_over_l (python.tests.test_exact_rl.Draw.test_draw_frequencies_are_p_over_l) ... ok
+test_draw_is_the_integer_inverse_cdf (python.tests.test_exact_rl.Draw.test_draw_is_the_integer_inverse_cdf) ... ok
+test_uniforms_are_fixed_and_batch_free (python.tests.test_exact_rl.Draw.test_uniforms_are_fixed_and_batch_free) ... ok
+test_advantages (python.tests.test_exact_rl.Learning.test_advantages) ... ok
+test_an_update_moves_probability_toward_the_rewarded (python.tests.test_exact_rl.Learning.test_an_update_moves_probability_toward_the_rewarded)
+One step raises the objective it follows, sum A log p over the ... ok
+test_the_cpus_samples_and_adapters_on_the_gpu (python.tests.test_exact_rl.OnTheGpu.test_the_cpus_samples_and_adapters_on_the_gpu) ... y: no hardware profile at /root/y_hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+/usr/local/lib/python3.12/site-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:532: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+/usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+W1122 07:29:04.599000 20 site-packages/torch/_dynamo/convert_frame.py:1994] [0/8] torch._dynamo hit config.recompile_limit (8)
+W1122 07:29:04.599000 20 site-packages/torch/_dynamo/convert_frame.py:1994] [0/8]    function: '_checked_product' (/root/Y/python/y_lang/exact/lora.py:108)
+W1122 07:29:04.599000 20 site-packages/torch/_dynamo/convert_frame.py:1994] [0/8]    last reason: 0/1: tensor 'a' requires_grad mismatch. expected requires_grad=0
+W1122 07:29:04.599000 20 site-packages/torch/_dynamo/convert_frame.py:1994] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W1122 07:29:04.599000 20 site-packages/torch/_dynamo/convert_frame.py:1994] [0/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+ok
+test_compile_flags_hold_in_every_thread (python.tests.test_exact_lora.Flags.test_compile_flags_hold_in_every_thread)
+model.py's Inductor flags and CompiledOps' `specialize_int`, read ... ok
+test_any_shape_on_ys_gemm (python.tests.test_exact_lora.OnTheGpu.test_any_shape_on_ys_gemm) ... ok
+test_compiled_products_are_the_eager_ones (python.tests.test_exact_lora.OnTheGpu.test_compiled_products_are_the_eager_ones)
+Every product of five steps (three batch lengths, so the shapes ... ok
+test_compiled_products_keep_the_clamp (python.tests.test_exact_lora.OnTheGpu.test_compiled_products_keep_the_clamp)
+A 12-bit gradient at the clamp, 2047 / 2048 times a weight of 1: ... /usr/local/lib/python3.12/site-packages/torch/_inductor/async_compile.py:455: UserWarning: CUDA_HOME not set; using Triton's bundled libdevice which may cause minor precision differences in pow operations. To fix: set TRITON_LIBDEVICE_PATH to your CUDA toolkit's libdevice, e.g., export TRITON_LIBDEVICE_PATH=/usr/local/cuda/nvvm/libdevice/libdevice.10.bc
+  _set_triton_libdevice_path()
+ok
+test_the_cpus_adapters_on_the_gpu (python.tests.test_exact_lora.OnTheGpu.test_the_cpus_adapters_on_the_gpu) ... ok
+test_attention_backward_reads_the_forwards_weights (python.tests.test_exact_lora.Pieces.test_attention_backward_reads_the_forwards_weights) ... ok
+test_attention_with_grouped_heads (python.tests.test_exact_lora.Pieces.test_attention_with_grouped_heads) ... ok
+test_frozen_linear (python.tests.test_exact_lora.Pieces.test_frozen_linear) ... ok
+test_lora_linear (python.tests.test_exact_lora.Pieces.test_lora_linear) ... ok
+test_norm (python.tests.test_exact_lora.Pieces.test_norm) ... ok
+test_silu (python.tests.test_exact_lora.Pieces.test_silu) ... ok
+test_a_non_finite_value_is_refused_at_verify (python.tests.test_exact_lora.TinyModel.test_a_non_finite_value_is_refused_at_verify) ... ok
+test_the_kv_cache_flag_is_refused (python.tests.test_exact_lora.TinyModel.test_the_kv_cache_flag_is_refused) ... ok
+test_trainer_logits_are_a_cached_decodes (python.tests.test_exact_lora.TinyModel.test_trainer_logits_are_a_cached_decodes)
+What an RL trainer computes is what its sampler computed: the ... ok
+test_training_learns_and_repeats (python.tests.test_exact_lora.TinyModel.test_training_learns_and_repeats) ... ok
+test_whole_model_gradient_is_the_float_ones (python.tests.test_exact_lora.TinyModel.test_whole_model_gradient_is_the_float_ones)
+The adapters' gradients against float64 autograd of the stock ... ok
+test_zero_b_is_the_base_model_and_gradients_change_nothing_forward (python.tests.test_exact_lora.TinyModel.test_zero_b_is_the_base_model_and_gradients_change_nothing_forward) ... ok
+
+----------------------------------------------------------------------
+Ran 26 tests in 38.621s
+
+OK
+
+exit 0 42 s

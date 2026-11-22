@@ -1,0 +1,1964 @@
+{
+ "config": {
+  "device": "cuda",
+  "steps": 200,
+  "prompts": 8,
+  "group": 8,
+  "new": 6,
+  "lr": 3e-05,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 600,
+  "eval_every": 20,
+  "eval_batch": 100,
+  "checkpoint": 10,
+  "log": 20,
+  "record": "docs/benchmarks/exact_grpo_2026-11-22/rtx4070tis/grpo200_lr3e-5.json",
+  "save": null,
+  "load": null,
+  "compile": true,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.14.8",
+  "torch": "2.13.0+cu130",
+  "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "cuda": "13.0",
+  "transformers": "5.15.0",
+  "gemm": "triton"
+ },
+ "steps": [
+  {
+   "step": 1,
+   "tokens": "3d10ec43b2b8ad0c",
+   "ints": "bab223efbd634035",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "90f0b9c9f6135e9d",
+   "n": 296
+  },
+  {
+   "step": 2,
+   "tokens": "2fb89eb7d23c4a85",
+   "ints": "184bf0e551273d9c",
+   "mismatch": 0,
+   "reward": 0.328125,
+   "tp": "10bfaa6e2fb04ee9",
+   "n": 304
+  },
+  {
+   "step": 3,
+   "tokens": "ec83736ecb0ffdd4",
+   "ints": "a10a30bed87b4359",
+   "mismatch": 0,
+   "reward": 0.609375,
+   "tp": "077144e595fd46d2",
+   "n": 313
+  },
+  {
+   "step": 4,
+   "tokens": "33bedcc569631e2a",
+   "ints": "3fa768469c49657f",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "125469966d97fcc4",
+   "n": 315
+  },
+  {
+   "step": 5,
+   "tokens": "77cdf65ecb990f91",
+   "ints": "c6c66133392d3ec8",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "08f2f3f2e3480396",
+   "n": 312
+  },
+  {
+   "step": 6,
+   "tokens": "405f6008b6bfa126",
+   "ints": "4e450be6ed7f9eb0",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "472573fd5a6e7028",
+   "n": 297
+  },
+  {
+   "step": 7,
+   "tokens": "0c5bb39c670399a6",
+   "ints": "242bfcc19ae46114",
+   "mismatch": 0,
+   "reward": 0.40625,
+   "tp": "62f4e55e27e7cb13",
+   "n": 312
+  },
+  {
+   "step": 8,
+   "tokens": "9ea7bebbb49f4a8b",
+   "ints": "68231f470084b4f6",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "60e9077c73ac5851",
+   "n": 304
+  },
+  {
+   "step": 9,
+   "tokens": "f5748255444ed876",
+   "ints": "55b13ce00c6241dd",
+   "mismatch": 0,
+   "reward": 0.5625,
+   "tp": "8fc50a22efe87e12",
+   "n": 297
+  },
+  {
+   "step": 10,
+   "tokens": "03a8a8135fa0b389",
+   "ints": "b7270ed6e9213c3c",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "bd11c22fe3cbdbfc",
+   "n": 304
+  },
+  {
+   "step": 11,
+   "tokens": "84f6b9bfb2e46cf1",
+   "ints": "af00a9a5d5b62750",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "3e35712bf7ff0f0c",
+   "n": 320
+  },
+  {
+   "step": 12,
+   "tokens": "679a8348da552371",
+   "ints": "6039be9e712dd3c5",
+   "mismatch": 0,
+   "reward": 0.3125,
+   "tp": "5b24108d1e168db6",
+   "n": 306
+  },
+  {
+   "step": 13,
+   "tokens": "ffff2a673399356c",
+   "ints": "53adfb4938460b36",
+   "mismatch": 0,
+   "reward": 0.671875,
+   "tp": "c773825e779f4d89",
+   "n": 307
+  },
+  {
+   "step": 14,
+   "tokens": "2e962a1631efae72",
+   "ints": "bb7755e122c9d0d1",
+   "mismatch": 0,
+   "reward": 0.375,
+   "tp": "a4f16a9a3ef67b91",
+   "n": 315
+  },
+  {
+   "step": 15,
+   "tokens": "447a8efa7dc00c51",
+   "ints": "678f19cdabd76fae",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "ccb46c80e9eecc97",
+   "n": 303
+  },
+  {
+   "step": 16,
+   "tokens": "eef29d7c90e58fcb",
+   "ints": "e644ac2330dd1bce",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "14776689ad04414c",
+   "n": 305
+  },
+  {
+   "step": 17,
+   "tokens": "35c60a05b7e42472",
+   "ints": "691d78db29a0472d",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "1d589c911d2c7f1b",
+   "n": 312
+  },
+  {
+   "step": 18,
+   "tokens": "073498bcc01f9946",
+   "ints": "f0572d4a1d74ec2b",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "69600d38d2db4a5f",
+   "n": 304
+  },
+  {
+   "step": 19,
+   "tokens": "f88a9c61f890fdf6",
+   "ints": "f317f35228339543",
+   "mismatch": 0,
+   "reward": 0.65625,
+   "tp": "ce4dd602ca00a861",
+   "n": 313
+  },
+  {
+   "step": 20,
+   "tokens": "007670b4eab79071",
+   "ints": "06c0d37e3ddc6611",
+   "mismatch": 0,
+   "reward": 0.296875,
+   "tp": "8992d5d34bab2155",
+   "n": 306
+  },
+  {
+   "step": 21,
+   "tokens": "170c13d2f792857e",
+   "ints": "dc2e0de885c93259",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "2c718d4126a63f3f",
+   "n": 306
+  },
+  {
+   "step": 22,
+   "tokens": "9fa2db34b8967dd3",
+   "ints": "203d028939e6b6be",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "c8e8cb576e710a38",
+   "n": 304
+  },
+  {
+   "step": 23,
+   "tokens": "10229999e01ca5fd",
+   "ints": "6591fa277cd9ea60",
+   "mismatch": 0,
+   "reward": 0.296875,
+   "tp": "9cca1e0ca85dc25e",
+   "n": 288
+  },
+  {
+   "step": 24,
+   "tokens": "1fee91720dd688b3",
+   "ints": "32547fa0af5818fc",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "d47892b36a2e5f4e",
+   "n": 308
+  },
+  {
+   "step": 25,
+   "tokens": "3f05bb3a0533d14d",
+   "ints": "426ddd0ac4c1e7b7",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "88fb25e9801862f3",
+   "n": 304
+  },
+  {
+   "step": 26,
+   "tokens": "695dcc261cadced0",
+   "ints": "4caf7fa3a7a25aa4",
+   "mismatch": 0,
+   "reward": 0.34375,
+   "tp": "776e9724e6e03499",
+   "n": 296
+  },
+  {
+   "step": 27,
+   "tokens": "3a1de2933320ce4e",
+   "ints": "f28e9c1d52e3206a",
+   "mismatch": 0,
+   "reward": 0.796875,
+   "tp": "768180b87d83cb0b",
+   "n": 301
+  },
+  {
+   "step": 28,
+   "tokens": "fdf87a6f726daf49",
+   "ints": "b34be54836f0f291",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "88bf406c92c5f851",
+   "n": 296
+  },
+  {
+   "step": 29,
+   "tokens": "d05da8d8c531aec0",
+   "ints": "c2d4d6962a53979f",
+   "mismatch": 0,
+   "reward": 0.546875,
+   "tp": "ab8bbbc34e87c541",
+   "n": 320
+  },
+  {
+   "step": 30,
+   "tokens": "c4f4b1dd4d5b9254",
+   "ints": "36fc79833dc075e4",
+   "mismatch": 0,
+   "reward": 0.6875,
+   "tp": "e7ee32b8139972c4",
+   "n": 297
+  },
+  {
+   "step": 31,
+   "tokens": "61fec90f7dbfd51c",
+   "ints": "be3cb469fd862a99",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "55e305b20ecc2ed9",
+   "n": 312
+  },
+  {
+   "step": 32,
+   "tokens": "9cdabaf88a8ffa90",
+   "ints": "487ea540c9d572e4",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "7c1ba574ed32da9b",
+   "n": 312
+  },
+  {
+   "step": 33,
+   "tokens": "5a17082c58e2d32c",
+   "ints": "54b4d4dff2511077",
+   "mismatch": 0,
+   "reward": 0.640625,
+   "tp": "ab3fe3b3671dd5a8",
+   "n": 303
+  },
+  {
+   "step": 34,
+   "tokens": "597f4c2ce1822140",
+   "ints": "fe744e133d180929",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "681ceb83d82fa56b",
+   "n": 312
+  },
+  {
+   "step": 35,
+   "tokens": "087193495e983778",
+   "ints": "39b92c2ead75b458",
+   "mismatch": 0,
+   "reward": 0.34375,
+   "tp": "c0dd24a34b2d8937",
+   "n": 304
+  },
+  {
+   "step": 36,
+   "tokens": "f4698fb11d3b68b8",
+   "ints": "8c2d1b9fdfe72a05",
+   "mismatch": 0,
+   "reward": 0.40625,
+   "tp": "019110be0b6f6500",
+   "n": 312
+  },
+  {
+   "step": 37,
+   "tokens": "20ff54f1cfdd25f5",
+   "ints": "810de13e3f9f7e0a",
+   "mismatch": 0,
+   "reward": 0.265625,
+   "tp": "d1b2f3f8949e32cb",
+   "n": 319
+  },
+  {
+   "step": 38,
+   "tokens": "f7d8b069826b637d",
+   "ints": "bc7ff4c396ae8d4b",
+   "mismatch": 0,
+   "reward": 0.390625,
+   "tp": "048393e0451230c7",
+   "n": 320
+  },
+  {
+   "step": 39,
+   "tokens": "8f41e9a005f79e44",
+   "ints": "1aa31b044ce102ec",
+   "mismatch": 0,
+   "reward": 0.375,
+   "tp": "f36163b9587627f2",
+   "n": 302
+  },
+  {
+   "step": 40,
+   "tokens": "e14f8090a8ece04f",
+   "ints": "b5e73061a9f5fab7",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "70704487471dc898",
+   "n": 312
+  },
+  {
+   "step": 41,
+   "tokens": "50deb8ed45030002",
+   "ints": "88baf5d0d3d0b3c5",
+   "mismatch": 0,
+   "reward": 0.28125,
+   "tp": "3c1129f33a1a3bf3",
+   "n": 323
+  },
+  {
+   "step": 42,
+   "tokens": "331b047f64c62bc3",
+   "ints": "713a55cfa5f34bf4",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "f7064fe6ba2187cd",
+   "n": 305
+  },
+  {
+   "step": 43,
+   "tokens": "8804c6a66eb5ce82",
+   "ints": "f9b77fc2c4bc04b9",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "0b01a6d61021e9ee",
+   "n": 323
+  },
+  {
+   "step": 44,
+   "tokens": "89c428a67ff4a35e",
+   "ints": "da926577ef63cee8",
+   "mismatch": 0,
+   "reward": 0.640625,
+   "tp": "113638cf4d7f52cc",
+   "n": 324
+  },
+  {
+   "step": 45,
+   "tokens": "abcb1aa4f33aed27",
+   "ints": "df0678a367bec76e",
+   "mismatch": 0,
+   "reward": 0.546875,
+   "tp": "8597c418476efaca",
+   "n": 314
+  },
+  {
+   "step": 46,
+   "tokens": "51991d96f58c5276",
+   "ints": "e5c89ec167a98ff7",
+   "mismatch": 0,
+   "reward": 0.6875,
+   "tp": "239bd2ce9a2fbe66",
+   "n": 288
+  },
+  {
+   "step": 47,
+   "tokens": "aba4d1b7553a2208",
+   "ints": "47f61521896f1ddb",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "a0bef6a73645b773",
+   "n": 312
+  },
+  {
+   "step": 48,
+   "tokens": "2bac9b6aa5e5f69c",
+   "ints": "94633f6fea4545f0",
+   "mismatch": 0,
+   "reward": 0.234375,
+   "tp": "2e1edfc030eed1a3",
+   "n": 311
+  },
+  {
+   "step": 49,
+   "tokens": "246b362afe1440bb",
+   "ints": "daac1a59d6316213",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "da76b906762b96eb",
+   "n": 311
+  },
+  {
+   "step": 50,
+   "tokens": "0031bbb4ee689d2f",
+   "ints": "eb54f4f79a867a2e",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "4c3cb68f62ce5927",
+   "n": 314
+  },
+  {
+   "step": 51,
+   "tokens": "a85670d1068a2b2c",
+   "ints": "6556106044dede75",
+   "mismatch": 0,
+   "reward": 0.390625,
+   "tp": "e01e46b8121e8f65",
+   "n": 306
+  },
+  {
+   "step": 52,
+   "tokens": "fc39a8695ea3bc6f",
+   "ints": "6d85d44545398340",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "dca1ede5e29f078c",
+   "n": 320
+  },
+  {
+   "step": 53,
+   "tokens": "d5a0dbe83ba7d3f2",
+   "ints": "2d048446b9f11669",
+   "mismatch": 0,
+   "reward": 0.375,
+   "tp": "0911ff38ec8fb0dd",
+   "n": 312
+  },
+  {
+   "step": 54,
+   "tokens": "ceb6ba2de343e335",
+   "ints": "ca578c59b8a5395a",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "bc210a59c9496c76",
+   "n": 305
+  },
+  {
+   "step": 55,
+   "tokens": "d8f7b7a700a01331",
+   "ints": "9ef0c060aa695285",
+   "mismatch": 0,
+   "reward": 0.453125,
+   "tp": "b221f682c4f4c7b5",
+   "n": 320
+  },
+  {
+   "step": 56,
+   "tokens": "c9a66e981d9269d5",
+   "ints": "1ccc46d3cc1f4bd2",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "3762afce475ab91d",
+   "n": 306
+  },
+  {
+   "step": 57,
+   "tokens": "cbdf1acaec9b458e",
+   "ints": "8772ea0a3cf6ba40",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "c5a2fb287829ac0f",
+   "n": 296
+  },
+  {
+   "step": 58,
+   "tokens": "97ca1c8144350e72",
+   "ints": "de04c31e68b3fd73",
+   "mismatch": 0,
+   "reward": 0.265625,
+   "tp": "c88014a20dc16d6a",
+   "n": 323
+  },
+  {
+   "step": 59,
+   "tokens": "fe5b035267cd2a62",
+   "ints": "0b11ca249c4298ef",
+   "mismatch": 0,
+   "reward": 0.5625,
+   "tp": "1335201acc46e13a",
+   "n": 320
+  },
+  {
+   "step": 60,
+   "tokens": "e8a4afda1dd06d8c",
+   "ints": "9a2b67aa1caaf3d1",
+   "mismatch": 0,
+   "reward": 0.328125,
+   "tp": "5033df5c3d407eaa",
+   "n": 312
+  },
+  {
+   "step": 61,
+   "tokens": "c93f01dd6fe54b34",
+   "ints": "c67f3aadb3108f9b",
+   "mismatch": 0,
+   "reward": 0.765625,
+   "tp": "233a98f62a763385",
+   "n": 288
+  },
+  {
+   "step": 62,
+   "tokens": "c82ff2f4022ab437",
+   "ints": "cc904de318f62fdf",
+   "mismatch": 0,
+   "reward": 0.78125,
+   "tp": "177eb739d3eeb298",
+   "n": 295
+  },
+  {
+   "step": 63,
+   "tokens": "c3a03753d86e0f27",
+   "ints": "8755d0f58bcc745a",
+   "mismatch": 0,
+   "reward": 0.734375,
+   "tp": "aa060754f6eb8ed9",
+   "n": 296
+  },
+  {
+   "step": 64,
+   "tokens": "e078732929a99751",
+   "ints": "0e5de81c1db189a1",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "c3a9a6f6a7b27b10",
+   "n": 305
+  },
+  {
+   "step": 65,
+   "tokens": "d2a90b7af9a97c2c",
+   "ints": "4791597f90c69f8a",
+   "mismatch": 0,
+   "reward": 0.59375,
+   "tp": "99932c46a5291130",
+   "n": 313
+  },
+  {
+   "step": 66,
+   "tokens": "b51c3ce6ffc2cea5",
+   "ints": "5fcc218f7fc39e37",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "dcab1f64aafbb47f",
+   "n": 312
+  },
+  {
+   "step": 67,
+   "tokens": "fcccf4ef8a14500e",
+   "ints": "0ddd6aed02278e97",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "cc4b7e59f48a5e51",
+   "n": 296
+  },
+  {
+   "step": 68,
+   "tokens": "6c1749b881aea56d",
+   "ints": "6a862ded98494b5b",
+   "mismatch": 0,
+   "reward": 0.390625,
+   "tp": "7132fe8f82364dd0",
+   "n": 315
+  },
+  {
+   "step": 69,
+   "tokens": "329e50749df618ed",
+   "ints": "75a0a9274fd06058",
+   "mismatch": 0,
+   "reward": 0.265625,
+   "tp": "b5ff414dd3c375d9",
+   "n": 309
+  },
+  {
+   "step": 70,
+   "tokens": "c7a37479f257c51b",
+   "ints": "8e9e29b728a0cdf0",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "08e972edcac077dc",
+   "n": 306
+  },
+  {
+   "step": 71,
+   "tokens": "7dfb00209aeb9171",
+   "ints": "91e4786b32cf539d",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "ed74b18b004b179e",
+   "n": 304
+  },
+  {
+   "step": 72,
+   "tokens": "ad918d9d1c071aa8",
+   "ints": "9d6e1503ea696680",
+   "mismatch": 0,
+   "reward": 0.703125,
+   "tp": "151583f8fee33ad6",
+   "n": 304
+  },
+  {
+   "step": 73,
+   "tokens": "6bd8e4c9d5ac7c39",
+   "ints": "698c99ab0cf695f3",
+   "mismatch": 0,
+   "reward": 0.546875,
+   "tp": "475d274fe2a957b5",
+   "n": 289
+  },
+  {
+   "step": 74,
+   "tokens": "40c476c538c17199",
+   "ints": "ef3d9ffef8b21c1c",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "56ddabffc67da16a",
+   "n": 304
+  },
+  {
+   "step": 75,
+   "tokens": "37ab8301e9e7eee7",
+   "ints": "47d7f9bbc1f06a83",
+   "mismatch": 0,
+   "reward": 0.703125,
+   "tp": "d8fbec7b9aefb7e1",
+   "n": 307
+  },
+  {
+   "step": 76,
+   "tokens": "724173c7eeae4e79",
+   "ints": "ad8baffe0dc5de3f",
+   "mismatch": 0,
+   "reward": 0.5625,
+   "tp": "ecf28bc5090c1d4b",
+   "n": 304
+  },
+  {
+   "step": 77,
+   "tokens": "0ae4305b36531db9",
+   "ints": "f501b2b0077e4255",
+   "mismatch": 0,
+   "reward": 0.140625,
+   "tp": "766a0542254ca391",
+   "n": 324
+  },
+  {
+   "step": 78,
+   "tokens": "0ad5ba149a0979dd",
+   "ints": "f970a94ed5ea701c",
+   "mismatch": 0,
+   "reward": 0.59375,
+   "tp": "d4f27ed4d044a03f",
+   "n": 288
+  },
+  {
+   "step": 79,
+   "tokens": "e217b9ade466c1f6",
+   "ints": "46d1b75b8273f548",
+   "mismatch": 0,
+   "reward": 0.65625,
+   "tp": "0966056782258da2",
+   "n": 304
+  },
+  {
+   "step": 80,
+   "tokens": "f12e08fd1cd1faf3",
+   "ints": "8ce6f1fb5552b915",
+   "mismatch": 0,
+   "reward": 0.21875,
+   "tp": "bacb7e2958ea33f4",
+   "n": 314
+  },
+  {
+   "step": 81,
+   "tokens": "de19fcf3a36ed79e",
+   "ints": "94396bc5afaf6b60",
+   "mismatch": 0,
+   "reward": 0.3125,
+   "tp": "1c673b5d9e961512",
+   "n": 320
+  },
+  {
+   "step": 82,
+   "tokens": "96fdbb1ab743a359",
+   "ints": "e02be9fe9fee19de",
+   "mismatch": 0,
+   "reward": 0.40625,
+   "tp": "4582ff8e56cb2a66",
+   "n": 304
+  },
+  {
+   "step": 83,
+   "tokens": "b384ff3319b88b2a",
+   "ints": "1bf9d3692131d34b",
+   "mismatch": 0,
+   "reward": 0.609375,
+   "tp": "caa080982d8abadd",
+   "n": 319
+  },
+  {
+   "step": 84,
+   "tokens": "4a4369db48f68c85",
+   "ints": "8831fe10b6494f91",
+   "mismatch": 0,
+   "reward": 0.859375,
+   "tp": "23b498b86eecb4c7",
+   "n": 311
+  },
+  {
+   "step": 85,
+   "tokens": "c45ab80e6d924f7a",
+   "ints": "36862ff182d1ac22",
+   "mismatch": 0,
+   "reward": 0.234375,
+   "tp": "153bfc1c74571359",
+   "n": 319
+  },
+  {
+   "step": 86,
+   "tokens": "f27f106cb3f8d91e",
+   "ints": "3600e3f87a30e800",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "948ea341efad76c7",
+   "n": 312
+  },
+  {
+   "step": 87,
+   "tokens": "91ef8c66787bf464",
+   "ints": "6befbf1f8ae055b2",
+   "mismatch": 0,
+   "reward": 0.171875,
+   "tp": "91b46d1cd81ef803",
+   "n": 321
+  },
+  {
+   "step": 88,
+   "tokens": "45e4d6b708f14703",
+   "ints": "f32a566a91e4ee2f",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "5f1548f510ad2e74",
+   "n": 312
+  },
+  {
+   "step": 89,
+   "tokens": "bfe1eedf7d44e430",
+   "ints": "8c955e906da175a8",
+   "mismatch": 0,
+   "reward": 0.796875,
+   "tp": "ca69c8caa26e1ba5",
+   "n": 312
+  },
+  {
+   "step": 90,
+   "tokens": "6147170dadf59273",
+   "ints": "836998bf1e7108ae",
+   "mismatch": 0,
+   "reward": 0.84375,
+   "tp": "57bafbe15212fa7f",
+   "n": 290
+  },
+  {
+   "step": 91,
+   "tokens": "3a424fda8c6fdffb",
+   "ints": "abd61bd727942f5e",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "ce6db8f85090580b",
+   "n": 310
+  },
+  {
+   "step": 92,
+   "tokens": "f97e8229de52ddcb",
+   "ints": "65f2a617c27b15f5",
+   "mismatch": 0,
+   "reward": 0.671875,
+   "tp": "bce5eb919a29c239",
+   "n": 304
+  },
+  {
+   "step": 93,
+   "tokens": "6408dd98d4519422",
+   "ints": "a5d1b85b618f48b4",
+   "mismatch": 0,
+   "reward": 0.390625,
+   "tp": "b4b175d50039f53d",
+   "n": 312
+  },
+  {
+   "step": 94,
+   "tokens": "3fb3c92631891faa",
+   "ints": "87036aff51217a8a",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "2460884d01de27ba",
+   "n": 296
+  },
+  {
+   "step": 95,
+   "tokens": "752a9ec0b322851d",
+   "ints": "8ae9821509cb6133",
+   "mismatch": 0,
+   "reward": 0.75,
+   "tp": "74f484d1e1184595",
+   "n": 288
+  },
+  {
+   "step": 96,
+   "tokens": "b210937e9302bcc9",
+   "ints": "5893d174240f1564",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "93c30b42f0c83287",
+   "n": 296
+  },
+  {
+   "step": 97,
+   "tokens": "2be58840f3aaf3cd",
+   "ints": "e5361ab388ffc568",
+   "mismatch": 0,
+   "reward": 0.59375,
+   "tp": "b908a1210397c315",
+   "n": 304
+  },
+  {
+   "step": 98,
+   "tokens": "c25c861d3a8948ad",
+   "ints": "a704209fee574ff5",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "90b32b0c14150a6b",
+   "n": 306
+  },
+  {
+   "step": 99,
+   "tokens": "46beb849e3c7c283",
+   "ints": "42ea60681a7b1155",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "3717565af91dedd1",
+   "n": 320
+  },
+  {
+   "step": 100,
+   "tokens": "da59690655f82bd6",
+   "ints": "571b95f98dd73034",
+   "mismatch": 0,
+   "reward": 0.375,
+   "tp": "5a0fcdaa8c55b3c5",
+   "n": 320
+  },
+  {
+   "step": 101,
+   "tokens": "df78e34eff7cace2",
+   "ints": "4cd9e1c8ef082890",
+   "mismatch": 0,
+   "reward": 0.40625,
+   "tp": "8fef7a0bf5769027",
+   "n": 312
+  },
+  {
+   "step": 102,
+   "tokens": "ecbf71f067f37cd7",
+   "ints": "508a686c404eddb0",
+   "mismatch": 0,
+   "reward": 0.796875,
+   "tp": "f4a86bd9ddcc8909",
+   "n": 304
+  },
+  {
+   "step": 103,
+   "tokens": "33e68d694cff7e43",
+   "ints": "be75a813b42634bc",
+   "mismatch": 0,
+   "reward": 0.28125,
+   "tp": "686c2375775a7e43",
+   "n": 296
+  },
+  {
+   "step": 104,
+   "tokens": "4d4671d9c27abed1",
+   "ints": "6f8373824e415add",
+   "mismatch": 0,
+   "reward": 0.75,
+   "tp": "7096dfcf5bb339b8",
+   "n": 303
+  },
+  {
+   "step": 105,
+   "tokens": "ec923129aa9dde22",
+   "ints": "9302d2a481d1da94",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "231b30d9fa6d53cb",
+   "n": 298
+  },
+  {
+   "step": 106,
+   "tokens": "e16e4d1c6b612d91",
+   "ints": "e2c5ad70808bd345",
+   "mismatch": 0,
+   "reward": 0.609375,
+   "tp": "ad350f833b1bb516",
+   "n": 312
+  },
+  {
+   "step": 107,
+   "tokens": "263da4b9023a86c2",
+   "ints": "bfe6d5ab3bc5ffb0",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "289058aea1166234",
+   "n": 299
+  },
+  {
+   "step": 108,
+   "tokens": "a35ef5e0dcafcc19",
+   "ints": "839a7d0a1b0b02b5",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "166d149a13b04017",
+   "n": 301
+  },
+  {
+   "step": 109,
+   "tokens": "6c837780f3c2e5eb",
+   "ints": "54a383ca5ded3bdf",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "f8e9cc2230d0c50d",
+   "n": 305
+  },
+  {
+   "step": 110,
+   "tokens": "7978c577888c8409",
+   "ints": "41691cbf42968fc5",
+   "mismatch": 0,
+   "reward": 0.671875,
+   "tp": "8ffaf5518b3cf2a4",
+   "n": 304
+  },
+  {
+   "step": 111,
+   "tokens": "20b421221cf1dbe5",
+   "ints": "741127004b975ee9",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "6d4022eab43b6827",
+   "n": 322
+  },
+  {
+   "step": 112,
+   "tokens": "62a6e71649ae695b",
+   "ints": "5af1321829b9672a",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "3a7872f240c5e654",
+   "n": 304
+  },
+  {
+   "step": 113,
+   "tokens": "ed9f0a6deb0e567f",
+   "ints": "df0be30911b9ac12",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "092de5030720b005",
+   "n": 304
+  },
+  {
+   "step": 114,
+   "tokens": "8cf050341abd6259",
+   "ints": "1b3918336a51956a",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "b5bd2dbe4e3924f4",
+   "n": 304
+  },
+  {
+   "step": 115,
+   "tokens": "8188b9f534361019",
+   "ints": "aafffb04105a96e7",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "a8da10cfa2f75b0e",
+   "n": 297
+  },
+  {
+   "step": 116,
+   "tokens": "b59c52a3acc48b28",
+   "ints": "aaa80944cc2feb68",
+   "mismatch": 0,
+   "reward": 0.8125,
+   "tp": "0d173ae56fcefc81",
+   "n": 312
+  },
+  {
+   "step": 117,
+   "tokens": "b962f1cfe327388c",
+   "ints": "2bd2b0758096502d",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "72470c19f9e8edf0",
+   "n": 312
+  },
+  {
+   "step": 118,
+   "tokens": "e79202841ab131af",
+   "ints": "adfb59a96ff110e8",
+   "mismatch": 0,
+   "reward": 0.703125,
+   "tp": "45a09d2cacfcc574",
+   "n": 288
+  },
+  {
+   "step": 119,
+   "tokens": "86d5c1a5227cabc7",
+   "ints": "1f2ce2d7880fd8da",
+   "mismatch": 0,
+   "reward": 0.6875,
+   "tp": "6f36cac45945a143",
+   "n": 304
+  },
+  {
+   "step": 120,
+   "tokens": "37b14537a6b40bcd",
+   "ints": "08c0ab0c615e98c9",
+   "mismatch": 0,
+   "reward": 0.453125,
+   "tp": "6656d5067fb04cde",
+   "n": 304
+  },
+  {
+   "step": 121,
+   "tokens": "49495b4adef6b574",
+   "ints": "a7d6c61ef6a8d3e3",
+   "mismatch": 0,
+   "reward": 0.765625,
+   "tp": "ee87bc0522d534a3",
+   "n": 320
+  },
+  {
+   "step": 122,
+   "tokens": "77fbc0c61655d2a3",
+   "ints": "fe4006af6e107da2",
+   "mismatch": 0,
+   "reward": 0.546875,
+   "tp": "9d15aa7b862ad36e",
+   "n": 312
+  },
+  {
+   "step": 123,
+   "tokens": "8027ef419ee6e6f4",
+   "ints": "1be498896e60f453",
+   "mismatch": 0,
+   "reward": 0.484375,
+   "tp": "3df8ff61ead9b0cb",
+   "n": 316
+  },
+  {
+   "step": 124,
+   "tokens": "90368ec915124ec3",
+   "ints": "59ab857374fc4e79",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "847c5b741d454fc0",
+   "n": 321
+  },
+  {
+   "step": 125,
+   "tokens": "0032031dbf736ce7",
+   "ints": "e97b9f2f547f947d",
+   "mismatch": 0,
+   "reward": 0.640625,
+   "tp": "7e6ad675765474ee",
+   "n": 304
+  },
+  {
+   "step": 126,
+   "tokens": "535ba5ddb6db34cf",
+   "ints": "28014edc19b853d9",
+   "mismatch": 0,
+   "reward": 0.65625,
+   "tp": "918b9b1b87c23653",
+   "n": 296
+  },
+  {
+   "step": 127,
+   "tokens": "392ea82bc7b329bf",
+   "ints": "5f89019c70bcab04",
+   "mismatch": 0,
+   "reward": 0.8125,
+   "tp": "a0e5ed97ffdad446",
+   "n": 313
+  },
+  {
+   "step": 128,
+   "tokens": "5495bf4d28d6095e",
+   "ints": "68083afab0b24a55",
+   "mismatch": 0,
+   "reward": 0.71875,
+   "tp": "a4a56c30ed84ba74",
+   "n": 296
+  },
+  {
+   "step": 129,
+   "tokens": "d5a0052b9f2d0551",
+   "ints": "dd70f0cae9b85e1d",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "4fdcdb97eb6127f5",
+   "n": 312
+  },
+  {
+   "step": 130,
+   "tokens": "1c039d33de50be20",
+   "ints": "fe55e92228c3918f",
+   "mismatch": 0,
+   "reward": 0.65625,
+   "tp": "ea75b2ddce09f739",
+   "n": 299
+  },
+  {
+   "step": 131,
+   "tokens": "cc011a17471f78d8",
+   "ints": "9e51a387a9f4ca24",
+   "mismatch": 0,
+   "reward": 0.5625,
+   "tp": "5b0004669b30d4f9",
+   "n": 313
+  },
+  {
+   "step": 132,
+   "tokens": "a06d4837873d4dd3",
+   "ints": "b575a22d4358af21",
+   "mismatch": 0,
+   "reward": 0.59375,
+   "tp": "421141b06048cbc7",
+   "n": 311
+  },
+  {
+   "step": 133,
+   "tokens": "50dbec2e6414d81f",
+   "ints": "d0b7b40c4ebe1c98",
+   "mismatch": 0,
+   "reward": 0.703125,
+   "tp": "2a1e4878332e6636",
+   "n": 304
+  },
+  {
+   "step": 134,
+   "tokens": "893f41a15216b6d3",
+   "ints": "04f746a30e568b9c",
+   "mismatch": 0,
+   "reward": 0.390625,
+   "tp": "3fa3d2658575c6a5",
+   "n": 319
+  },
+  {
+   "step": 135,
+   "tokens": "a1e377dfa0311b2d",
+   "ints": "a57cc6bbfa1d6725",
+   "mismatch": 0,
+   "reward": 0.765625,
+   "tp": "0dc4ececc8c79135",
+   "n": 320
+  },
+  {
+   "step": 136,
+   "tokens": "ec97e8af4342c185",
+   "ints": "47d37b5ad5486005",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "479af5143f602f20",
+   "n": 312
+  },
+  {
+   "step": 137,
+   "tokens": "10f91df5c5a1d446",
+   "ints": "c8d40f5860ebc704",
+   "mismatch": 0,
+   "reward": 0.375,
+   "tp": "ba3349dcfb8586a2",
+   "n": 315
+  },
+  {
+   "step": 138,
+   "tokens": "46c2bb41c586ad6b",
+   "ints": "846bc65fe4b76c2e",
+   "mismatch": 0,
+   "reward": 0.546875,
+   "tp": "62d9753e175ac29f",
+   "n": 297
+  },
+  {
+   "step": 139,
+   "tokens": "6086c555a23f693c",
+   "ints": "7c1acbf9b679d806",
+   "mismatch": 0,
+   "reward": 0.890625,
+   "tp": "27a4b6b9d01c7309",
+   "n": 296
+  },
+  {
+   "step": 140,
+   "tokens": "483d540f7be77a1c",
+   "ints": "a2833b467dd94287",
+   "mismatch": 0,
+   "reward": 0.703125,
+   "tp": "9c81268e706fc28e",
+   "n": 305
+  },
+  {
+   "step": 141,
+   "tokens": "13477262475e4664",
+   "ints": "380e8ac8375a20ca",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "ae89173c1f4700e7",
+   "n": 320
+  },
+  {
+   "step": 142,
+   "tokens": "9f3b5d71542dfe22",
+   "ints": "36dcf29a57db1dc9",
+   "mismatch": 0,
+   "reward": 0.265625,
+   "tp": "9b5993805de13d2b",
+   "n": 320
+  },
+  {
+   "step": 143,
+   "tokens": "4f0ec6defcce9112",
+   "ints": "cfcea0dc1b6b7f30",
+   "mismatch": 0,
+   "reward": 0.921875,
+   "tp": "d30a1a1a78af4354",
+   "n": 304
+  },
+  {
+   "step": 144,
+   "tokens": "4f4d37013e73bbf3",
+   "ints": "ac386ce3c11323a2",
+   "mismatch": 0,
+   "reward": 0.484375,
+   "tp": "86cc4f8d3d244e59",
+   "n": 304
+  },
+  {
+   "step": 145,
+   "tokens": "d97a9d6bbdea58b4",
+   "ints": "a27a0071a4562b34",
+   "mismatch": 0,
+   "reward": 0.703125,
+   "tp": "b7fc05c97ef56834",
+   "n": 304
+  },
+  {
+   "step": 146,
+   "tokens": "f6ac492c3c918fce",
+   "ints": "8c1f0e2481155bb2",
+   "mismatch": 0,
+   "reward": 0.671875,
+   "tp": "8e6a894e15a73724",
+   "n": 304
+  },
+  {
+   "step": 147,
+   "tokens": "59beace64b666752",
+   "ints": "55c80c24a5af1a07",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "67498561a51b597a",
+   "n": 312
+  },
+  {
+   "step": 148,
+   "tokens": "13676b3be84e93a6",
+   "ints": "92b2ac3b480b5a28",
+   "mismatch": 0,
+   "reward": 0.453125,
+   "tp": "72888a14bf466bc3",
+   "n": 312
+  },
+  {
+   "step": 149,
+   "tokens": "632438ff8dbf3264",
+   "ints": "3e99b40db2ccda13",
+   "mismatch": 0,
+   "reward": 0.6875,
+   "tp": "3705f0bf15b1625a",
+   "n": 312
+  },
+  {
+   "step": 150,
+   "tokens": "1d2f28118e4394da",
+   "ints": "7f248c3615d44c1c",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "3f95d01d048f6c06",
+   "n": 312
+  },
+  {
+   "step": 151,
+   "tokens": "0672a81c430ac097",
+   "ints": "41a115d03dd70ea4",
+   "mismatch": 0,
+   "reward": 0.1875,
+   "tp": "1756edb7848a9e87",
+   "n": 320
+  },
+  {
+   "step": 152,
+   "tokens": "ef994f4cb0b844ad",
+   "ints": "e4f71cc5725f8fd0",
+   "mismatch": 0,
+   "reward": 0.578125,
+   "tp": "fa6ef1aa0c7665bb",
+   "n": 296
+  },
+  {
+   "step": 153,
+   "tokens": "1da1a3a8328a4b2e",
+   "ints": "15c98416d18f7aa0",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "3f84f27e121b0d71",
+   "n": 314
+  },
+  {
+   "step": 154,
+   "tokens": "b9910b3014b4d8a2",
+   "ints": "96e2993ba3af1240",
+   "mismatch": 0,
+   "reward": 0.5625,
+   "tp": "f7901a166ee19d1c",
+   "n": 297
+  },
+  {
+   "step": 155,
+   "tokens": "f101871d82950fe5",
+   "ints": "2534a993a7a22965",
+   "mismatch": 0,
+   "reward": 0.453125,
+   "tp": "5b9ef430aa97027c",
+   "n": 312
+  },
+  {
+   "step": 156,
+   "tokens": "e3c56e378cadbb59",
+   "ints": "df912429f8d7c40d",
+   "mismatch": 0,
+   "reward": 0.671875,
+   "tp": "c17c5ebc098ee9c0",
+   "n": 296
+  },
+  {
+   "step": 157,
+   "tokens": "5ad05a5fc9aaf5e3",
+   "ints": "fb22891ed3faeeaa",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "04c85d615eff5d7a",
+   "n": 320
+  },
+  {
+   "step": 158,
+   "tokens": "d176291b2bd207f6",
+   "ints": "828d9571ecf2c5df",
+   "mismatch": 0,
+   "reward": 0.546875,
+   "tp": "b15d56337e9d140d",
+   "n": 303
+  },
+  {
+   "step": 159,
+   "tokens": "8126c2f0748e9249",
+   "ints": "cd6a2cf110bf2288",
+   "mismatch": 0,
+   "reward": 0.625,
+   "tp": "0dcf9070a76755cb",
+   "n": 321
+  },
+  {
+   "step": 160,
+   "tokens": "b75f8b9b9f0ff270",
+   "ints": "757f7abbe29a273c",
+   "mismatch": 0,
+   "reward": 0.8125,
+   "tp": "05980ebccdd92c2b",
+   "n": 304
+  },
+  {
+   "step": 161,
+   "tokens": "fabe24d50d75e16a",
+   "ints": "b1983e6cfa2c0d78",
+   "mismatch": 0,
+   "reward": 0.34375,
+   "tp": "a8fc577ee4536df7",
+   "n": 305
+  },
+  {
+   "step": 162,
+   "tokens": "4f08ac2709238a6b",
+   "ints": "3b7ecbcf7f1301e1",
+   "mismatch": 0,
+   "reward": 0.65625,
+   "tp": "a65a4c9cf35bfaaf",
+   "n": 296
+  },
+  {
+   "step": 163,
+   "tokens": "dd5daec36ea2b532",
+   "ints": "828edf282b7f8c2b",
+   "mismatch": 0,
+   "reward": 0.71875,
+   "tp": "8e49d985122e051e",
+   "n": 312
+  },
+  {
+   "step": 164,
+   "tokens": "c0810a40858252e6",
+   "ints": "0fd39d0bc2eca368",
+   "mismatch": 0,
+   "reward": 0.359375,
+   "tp": "4256d57eea2e9bb1",
+   "n": 313
+  },
+  {
+   "step": 165,
+   "tokens": "f0006cd38ba262b2",
+   "ints": "fc6c3cb6a3584a5e",
+   "mismatch": 0,
+   "reward": 0.734375,
+   "tp": "2ce4dd9307cf0b9b",
+   "n": 321
+  },
+  {
+   "step": 166,
+   "tokens": "b726d4cd6cc1146f",
+   "ints": "6a8b36866c4508b2",
+   "mismatch": 0,
+   "reward": 0.484375,
+   "tp": "86b0c23d2fb11b98",
+   "n": 303
+  },
+  {
+   "step": 167,
+   "tokens": "a2209baf14564aa8",
+   "ints": "b4734a1601cb031f",
+   "mismatch": 0,
+   "reward": 0.71875,
+   "tp": "ed530a6251369efa",
+   "n": 304
+  },
+  {
+   "step": 168,
+   "tokens": "493709aab6b14067",
+   "ints": "2d2ab2658ef03caf",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "fd9731e39fc3d000",
+   "n": 321
+  },
+  {
+   "step": 169,
+   "tokens": "93f6cfaaea0cba27",
+   "ints": "384cd2a7337b4e8d",
+   "mismatch": 0,
+   "reward": 0.453125,
+   "tp": "ecdb664dfda7bef3",
+   "n": 303
+  },
+  {
+   "step": 170,
+   "tokens": "4a80171f72bdfaa5",
+   "ints": "b52eca0bcb9e0f32",
+   "mismatch": 0,
+   "reward": 0.78125,
+   "tp": "7d3cd220c7c83798",
+   "n": 313
+  },
+  {
+   "step": 171,
+   "tokens": "0a22c1618dd880b9",
+   "ints": "49d4f4891bee8335",
+   "mismatch": 0,
+   "reward": 0.59375,
+   "tp": "a42ba24f2f613015",
+   "n": 304
+  },
+  {
+   "step": 172,
+   "tokens": "33f40b68c1de8b09",
+   "ints": "b35919887c1e7fc5",
+   "mismatch": 0,
+   "reward": 0.78125,
+   "tp": "94efe7c949c51c92",
+   "n": 312
+  },
+  {
+   "step": 173,
+   "tokens": "1524c0872eb8d5da",
+   "ints": "b217b5a5a6b9ca74",
+   "mismatch": 0,
+   "reward": 0.78125,
+   "tp": "a0d3a7609d2fb655",
+   "n": 295
+  },
+  {
+   "step": 174,
+   "tokens": "473c49177d072c12",
+   "ints": "a8dac0ccda304f44",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "de0772357a930f14",
+   "n": 312
+  },
+  {
+   "step": 175,
+   "tokens": "bd9a28f53e5b23cc",
+   "ints": "c7accefde15f0029",
+   "mismatch": 0,
+   "reward": 0.828125,
+   "tp": "76eb4b8cd3695998",
+   "n": 296
+  },
+  {
+   "step": 176,
+   "tokens": "6160c31b1c33a5d8",
+   "ints": "a400db6b7437987e",
+   "mismatch": 0,
+   "reward": 0.21875,
+   "tp": "4c8af0436744162f",
+   "n": 321
+  },
+  {
+   "step": 177,
+   "tokens": "d106bfee0c7d9833",
+   "ints": "90866326f07c3ca7",
+   "mismatch": 0,
+   "reward": 0.265625,
+   "tp": "f1b98d36cfb7d48e",
+   "n": 320
+  },
+  {
+   "step": 178,
+   "tokens": "d35b7e79db11ed3a",
+   "ints": "febfe2928dc09b49",
+   "mismatch": 0,
+   "reward": 0.546875,
+   "tp": "c7a5d3faa42d3f4f",
+   "n": 313
+  },
+  {
+   "step": 179,
+   "tokens": "54c2bfb81307ddc0",
+   "ints": "3143adbd7fd273ac",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "46d7b056a7a42f60",
+   "n": 304
+  },
+  {
+   "step": 180,
+   "tokens": "7a2054f6feee9e10",
+   "ints": "eaf425aefa5ff846",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "84ab64df57d05802",
+   "n": 309
+  },
+  {
+   "step": 181,
+   "tokens": "e101d1f9614000d5",
+   "ints": "dc0589609179dd39",
+   "mismatch": 0,
+   "reward": 0.609375,
+   "tp": "9ec5e7ce0841dcf6",
+   "n": 305
+  },
+  {
+   "step": 182,
+   "tokens": "c13d5321397b7fba",
+   "ints": "a849c2af371e8ddc",
+   "mismatch": 0,
+   "reward": 0.828125,
+   "tp": "308ac1a8cab14c27",
+   "n": 304
+  },
+  {
+   "step": 183,
+   "tokens": "41c63409464e8d24",
+   "ints": "4d708aab2aa81e5e",
+   "mismatch": 0,
+   "reward": 0.46875,
+   "tp": "5a9bab2b08a15240",
+   "n": 313
+  },
+  {
+   "step": 184,
+   "tokens": "dc1574b18b087f26",
+   "ints": "bc8822ab8d5e9cef",
+   "mismatch": 0,
+   "reward": 0.65625,
+   "tp": "f27bcc4d7b1cbdde",
+   "n": 312
+  },
+  {
+   "step": 185,
+   "tokens": "905064fdc45d0ba7",
+   "ints": "5333b110c44e82b6",
+   "mismatch": 0,
+   "reward": 0.765625,
+   "tp": "1be450733bda9888",
+   "n": 320
+  },
+  {
+   "step": 186,
+   "tokens": "35926a0f55a07cf3",
+   "ints": "5ed70bf68b2de564",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "b104059a35d77dde",
+   "n": 312
+  },
+  {
+   "step": 187,
+   "tokens": "7b89a6f54ebb5f51",
+   "ints": "f9592708397dc352",
+   "mismatch": 0,
+   "reward": 0.59375,
+   "tp": "b3f9bf2f82da080d",
+   "n": 321
+  },
+  {
+   "step": 188,
+   "tokens": "9bf97765ebd390f1",
+   "ints": "96134abe9247430f",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "06dd0bd5740f04e2",
+   "n": 313
+  },
+  {
+   "step": 189,
+   "tokens": "76970bebb66ac546",
+   "ints": "d89fe63710d0e357",
+   "mismatch": 0,
+   "reward": 0.5,
+   "tp": "b6134aed668a581e",
+   "n": 320
+  },
+  {
+   "step": 190,
+   "tokens": "0fe5549070be553c",
+   "ints": "ab28de3a58014173",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "b82230c4a156bb05",
+   "n": 319
+  },
+  {
+   "step": 191,
+   "tokens": "487644742e604ea5",
+   "ints": "e9488b11055d10bd",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "f23effb4976d0d42",
+   "n": 296
+  },
+  {
+   "step": 192,
+   "tokens": "cbdefbb58c4ca36a",
+   "ints": "5ebf094240308a29",
+   "mismatch": 0,
+   "reward": 0.421875,
+   "tp": "5b66a8df6f89e003",
+   "n": 320
+  },
+  {
+   "step": 193,
+   "tokens": "580a4e9bebe69680",
+   "ints": "3f54adc0138719ca",
+   "mismatch": 0,
+   "reward": 0.5625,
+   "tp": "67f6a0c6754b3497",
+   "n": 312
+  },
+  {
+   "step": 194,
+   "tokens": "22aaafaf180b4f81",
+   "ints": "aa656cd0c2db4343",
+   "mismatch": 0,
+   "reward": 0.71875,
+   "tp": "cdb56d8e5b055dfb",
+   "n": 313
+  },
+  {
+   "step": 195,
+   "tokens": "128d590c91786a22",
+   "ints": "031e46f12e9427c1",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "d0d24cc0fdef4734",
+   "n": 306
+  },
+  {
+   "step": 196,
+   "tokens": "1d09c54feac4dcb3",
+   "ints": "e188eb92f636f3eb",
+   "mismatch": 0,
+   "reward": 0.4375,
+   "tp": "09580d493bbd7f90",
+   "n": 312
+  },
+  {
+   "step": 197,
+   "tokens": "57b0f91c82708c5b",
+   "ints": "74c44d44dcadde54",
+   "mismatch": 0,
+   "reward": 0.515625,
+   "tp": "1db5815bd6b199ad",
+   "n": 320
+  },
+  {
+   "step": 198,
+   "tokens": "be32613bccbbf8ec",
+   "ints": "7a131b36a9be5db3",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "ec9db569243a696b",
+   "n": 305
+  },
+  {
+   "step": 199,
+   "tokens": "525d185198af2979",
+   "ints": "3ca0ccc684b3b3f7",
+   "mismatch": 0,
+   "reward": 0.796875,
+   "tp": "ca275086a86a3e21",
+   "n": 296
+  },
+  {
+   "step": 200,
+   "tokens": "ee3118a1574ddc9b",
+   "ints": "a455058acaa8a433",
+   "mismatch": 0,
+   "reward": 0.53125,
+   "tp": "c8a27314dcfbcc58",
+   "n": 313
+  }
+ ],
+ "checkpoints": {
+  "10": "c658ab27c17ceb20",
+  "20": "71442f95d069b27d",
+  "30": "65a3f3f05b8b5a23",
+  "40": "f958088c195d6793",
+  "50": "e635faf9ff8781f2",
+  "60": "861cfd8e975ee83c",
+  "70": "5ca56379f8af6fc6",
+  "80": "2f620fd54300659f",
+  "90": "16dccebd3969f563",
+  "100": "79478aec676daa78",
+  "110": "75753e5103d3d3e2",
+  "120": "697f4dbcef057291",
+  "130": "b777d0b37541627e",
+  "140": "564871dd47d30b60",
+  "150": "943da61f03117128",
+  "160": "ce4e56ee054ec381",
+  "170": "acca62e06fd81cfd",
+  "180": "d89949f3592361c2",
+  "190": "c0331184b5907cad",
+  "200": "e97cfcff519d484b"
+ },
+ "evals": {
+  "0": {
+   "right": 276,
+   "clean": 276,
+   "n": 600,
+   "acc": 0.46,
+   "clean_acc": 0.46,
+   "tokens": "b449b7c4f779fd53",
+   "seconds": 8.91
+  },
+  "20": {
+   "right": 287,
+   "clean": 287,
+   "n": 600,
+   "acc": 0.47833333333333333,
+   "clean_acc": 0.47833333333333333,
+   "tokens": "bce84cf0f5d5e0d8",
+   "seconds": 4.33
+  },
+  "40": {
+   "right": 317,
+   "clean": 317,
+   "n": 600,
+   "acc": 0.5283333333333333,
+   "clean_acc": 0.5283333333333333,
+   "tokens": "102b1ccf5e04ec86",
+   "seconds": 4.4
+  },
+  "60": {
+   "right": 322,
+   "clean": 322,
+   "n": 600,
+   "acc": 0.5366666666666666,
+   "clean_acc": 0.5366666666666666,
+   "tokens": "e4abe1b66a7c0002",
+   "seconds": 4.22
+  },
+  "80": {
+   "right": 348,
+   "clean": 348,
+   "n": 600,
+   "acc": 0.58,
+   "clean_acc": 0.58,
+   "tokens": "a4d4dcd8095813b1",
+   "seconds": 4.08
+  },
+  "100": {
+   "right": 349,
+   "clean": 349,
+   "n": 600,
+   "acc": 0.5816666666666667,
+   "clean_acc": 0.5816666666666667,
+   "tokens": "d8652449c4b217b0",
+   "seconds": 4.36
+  },
+  "120": {
+   "right": 345,
+   "clean": 345,
+   "n": 600,
+   "acc": 0.575,
+   "clean_acc": 0.575,
+   "tokens": "21ed2e1f84c23e66",
+   "seconds": 4.38
+  },
+  "140": {
+   "right": 366,
+   "clean": 366,
+   "n": 600,
+   "acc": 0.61,
+   "clean_acc": 0.61,
+   "tokens": "bff682e5fc7e669d",
+   "seconds": 4.27
+  },
+  "160": {
+   "right": 357,
+   "clean": 357,
+   "n": 600,
+   "acc": 0.595,
+   "clean_acc": 0.595,
+   "tokens": "831d77111b583cf0",
+   "seconds": 4.41
+  },
+  "180": {
+   "right": 362,
+   "clean": 362,
+   "n": 600,
+   "acc": 0.6033333333333334,
+   "clean_acc": 0.6033333333333334,
+   "tokens": "82c0693d6908f772",
+   "seconds": 4.43
+  },
+  "200": {
+   "right": 357,
+   "clean": 357,
+   "n": 600,
+   "acc": 0.595,
+   "clean_acc": 0.595,
+   "tokens": "8a3fb3516f0a39a1",
+   "seconds": 4.24
+  }
+ },
+ "init": "46d5ebab8e5370de",
+ "seconds_per_step": {
+  "sample": 0.6004983640564274,
+  "train": 1.1853697408879469
+ },
+ "final": "e97cfcff519d484b",
+ "mismatches": 0
+}
