@@ -117,6 +117,17 @@ STAGES["kernels"] = [
     ("profilek_medium", "exact_train_profile.py --size medium --arm exact32 "
                         "--out {out}/h100_profilek_medium_exact32.txt"),
 ]
+# float64 quantizers (the weights, Adam's square root) by the float64 formula
+# on GPUs whose float64 is fast; the GPU tests compare it with the CPU's
+# integers.
+STAGES["f64formula"] = [
+    ("gpu_tests", "RAW:" + TESTS),
+    ("exact32_f64f_fast", REC + "h100_exact32_f64f_fast.json --mm y --act float32 --graph --compile"),
+    ("speedf_medium", "exact_train_speed.py --size medium --check 3 --steady 50 "
+                      "--modes exact32:compile+graph --out {out}/h100_speedf_medium.json"),
+    ("profilef_medium", "exact_train_profile.py --size medium --arm exact32 "
+                        "--out {out}/h100_profilef_medium_exact32.txt"),
+]
 # The CPU reference for a stage, on a CPU-only container.
 CPU_RUNS = {"act32": [("cpu_exact32_g12b8", "exact_train_lm.py --device cpu --record "
                                             "{out}/cpu_exact32_g12b8.json --act float32")]}

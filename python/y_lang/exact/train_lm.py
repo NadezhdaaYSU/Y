@@ -180,12 +180,47 @@ def _pow2_f32(k: torch.Tensor) -> torch.Tensor:
     return torch.bitwise_left_shift(k.to(torch.int32) + 127, 23).view(torch.float32)
 
 
+# GPUs whose float64 runs at half float32's rate (P100, V100, A100, H100,
+# B200): there the float64 formula below is the cheap one. GeForce and T4
+# parts run float64 at 1/32 to 1/64 and keep the integers.
+FAST_FLOAT64 = {(6, 0), (7, 0), (8, 0), (9, 0), (10, 0)}
+_F64_OK = {}
+# None: by the GPU. True or False forces it (tests: the two give the same bits).
+FORCE_F64_FORMULA = None
+
+
+def f64_formula_ok(device) -> bool:
+    if FORCE_F64_FORMULA is not None:
+        return FORCE_F64_FORMULA
+    device = torch.device(device)
+    key = (device.type, device.index)
+    if key not in _F64_OK:
+        _F64_OK[key] = device.type == "cuda" and torch.cuda.get_device_capability(device) in FAST_FLOAT64
+    return _F64_OK[key]
+
+
+def _scaled_round_f64(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
+    """`scaled_round` of float64 x in float64: x * 2^a * 2^b, a + b = -s,
+    a = clamp(-s, -1022, 1023), then round. The same function as the
+    integer one, for the reason the float32 path is (each factor a normal
+    power of two; b in [0, 61] for every s the callers make: q8 |s| <= 511,
+    sums -s >= -1022, det_sqrt -s <= 1084; an underflow loses bits only of a
+    value whose round is 0)."""
+    ns = -s
+    a = torch.clamp(ns, -1022, 1023)
+    b = torch.clamp(ns - a, -1022, 1023)
+    y = torch.round((x * pow2(a, checked=True)) * pow2(b, checked=True))
+    return y.to(torch.int64 if wide else torch.int32)
+
+
 def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
     """round-half-even(x * 2^-s), exactly, for finite x and integer s
     (broadcast): int64 (`wide`, for |x * 2^-s| < 2^62) or int32 (below 2^30).
 
     float64 x: in integers on the float's bits (`scaled_round_int`), since a
-    GeForce GPU's float64 runs at 1/64 rate. float32 x: in float32, which is
+    GeForce GPU's float64 runs at 1/64 rate; on a GPU whose float64 is fast
+    (`f64_formula_ok`) in float64, the same function (`_scaled_round_f64`).
+    float32 x: in float32, which is
     the same function and five operations rather than thirty: x * 2^a * 2^b
     with a + b = -s, a = clamp(-s, -126, 127) and so b in [0, 59] for every s
     the callers make (q8: -s >= -120; sums: -s >= -126), is exact (each factor
@@ -196,6 +231,8 @@ def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
     against `scaled_round_int` on ties, zeros, subnormals and extreme scales
     (python/tests/test_exact_train_lm.py)."""
     if x.dtype != torch.float32:
+        if x.is_cuda and f64_formula_ok(x.device):
+            return _scaled_round_f64(x, s, wide)
         return scaled_round_int(x, s, wide)
     ns = -s
     a = torch.clamp(ns, -126, 127)
@@ -779,7 +816,8 @@ class Trainer:
         self.params = init_params(cfg, seed, dtype, self.device)
         self.opt = Adam(self.params, lr=lr, exact=ops.exact)
         if self.device.type == "cuda":
-            int8_bmm_ok(self.device)      # decided before any compile, a constant to it
+            int8_bmm_ok(self.device)      # decided before any compile, constants to it
+            f64_formula_ok(self.device)
         if compile:
             from . import model  # noqa: F401  (the Inductor rounding flags)
         self._fn = torch.compile(self._step, dynamic=False) if compile else self._step

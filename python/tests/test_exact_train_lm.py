@@ -223,6 +223,35 @@ class Pieces(unittest.TestCase):
                 s = L.exponent(v, -1) - 61 + c
                 self.assertTrue(torch.equal(L.scaled_round(v, s), L.scaled_round_int(v, s)), c)
 
+    def test_float64_formula_is_the_integer_definition(self):
+        # The float64 path for GPUs with fast float64 (_scaled_round_f64)
+        # against the integer definition, on q8's scales, the exact sums'
+        # (left shifts) and det_sqrt's (shifts up to 1084).
+        g = torch.Generator().manual_seed(14)
+        m = torch.randint(-1074, 1020, (400, 1), generator=g).double()
+        x = torch.randn(400, 256, generator=g, dtype=torch.float64) * torch.exp2(m.clamp(-1022, 1019))
+        x = x * torch.where(m < -1022, torch.exp2(m + 1022), torch.ones_like(m))
+        x[:, :6] = torch.tensor([0.0, -0.0, 5e-324, -1e-310, 1.7e308, -1.7e308], dtype=torch.float64)
+        t = (torch.arange(-2048, 2048).double() + 0.5).reshape(16, 256)
+        for v in (x, t, t * 2.0 ** -1040, torch.randn(8, 256, generator=g, dtype=torch.float64) * 1e300):
+            for bits in (8, 12, 16):
+                s = L.exponent(v, -1) - (bits - 1)
+                ok = (s.abs() <= L.Q_SCALE_RANGE).reshape(-1)
+                self.assertTrue(torch.equal(L._scaled_round_f64(v, s)[ok], L.scaled_round_int(v, s)[ok]), bits)
+            for c in (0, 8, 12):
+                s = L.exponent(v, -1) - 61 + c
+                ok = ((-s >= -1022) & (-s <= 1023)).reshape(-1)
+                self.assertTrue(torch.equal(L._scaled_round_f64(v, s)[ok], L.scaled_round_int(v, s)[ok]), c)
+        # det_sqrt's shift of v to an integer in [2^60, 2^62), down into the
+        # subnormals: there det_sqrt refuses the shift (-k past 1023), but the
+        # rounding is still defined and needs its second factor (2^b, b > 0).
+        v = torch.rand(5000, generator=g, dtype=torch.float64) * torch.exp2(
+            torch.randint(-1074, 1000, (5000,), generator=g).double())
+        a, field = L._fields(v)
+        k = torch.where(a == 0, 0, field - 1022) - 61
+        k = k - (k & 1)
+        self.assertTrue(torch.equal(L._scaled_round_f64(v, k), L.scaled_round_int(v, k)))
+
     def test_non_finite_values_are_refused(self):
         # A NaN used to pass the quantizer, and det_sqrt(NaN) gave 0 on CUDA.
         for bad in (float("nan"), float("inf"), -float("inf")):
