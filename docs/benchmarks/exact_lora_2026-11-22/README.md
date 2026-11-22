@@ -81,6 +81,37 @@ freeing its cache. A failed `torch._int_mm` would fall back to the float32
 or float64 product of the same integers (`model.py`), so the bits cannot
 depend on it, and they did not.
 
+## Compiled products (`--compile`), RTX 4070 Ti SUPER
+
+A profile of one step (64 rows, 29 tokens) found the GPU busy for 1.21 s
+of a 1.28 s step, over about 100,000 small kernels, most of them elementwise:
+each exact product is 60 to 80 eager kernels (two quantizers, the digit
+split, the GEMM, the join and the scale), and the gradients of the MLP
+projections are [1856][4864] float32. `lora.attach(..., compile=True)` runs
+each product as one `torch.compile`d function (`lora.CompiledOps`, of
+`train_lm.exact_product`, the function the eager path runs).
+
+Two hazards found on the way, both of which gave wrong bits before the fix:
+
+- Under `dynamic=True` the bit widths became symbolic, and Inductor lowered
+  q8's `(1 << (bits - 1)) - 1` to float64 `pow(2.0, bits - 1) - 1`, which
+  CUDA's pow puts just below 2048: 12-bit values clamped at 2046, not 2047,
+  in 91 of a step's 935 products (found by comparing every product of a
+  real step with the eager one; random inputs did not show it).
+  `torch._dynamo.config.specialize_int` keeps the widths constant.
+- torch's config values are per thread, and autograd runs a GPU backward on
+  its own thread, so a setting made at import, including `model.py`'s
+  Inductor rounding flags, did not hold where the backward's products
+  compiled. `model.set_in_every_thread` now sets them for every thread.
+
+`rtx4070tis/sft20_compiled.json`: the same 20 steps with `--compile` are
+the CPU's (every step's p(target), the adapters at 10 and 20, every
+generated token at steps 0 and 20). The gain is small: 1.21 s a step
+against 1.28 s eager; the evaluation at step 20 4.4 s against 7.0 s (the
+adapters' products run when serving too). The rest of the step is the
+exact modules' own eager elementwise work (norms, SiLU, attention, the
+frozen layers' quantizers), which this does not touch.
+
 ## Not covered
 
 - One seed, one run; no float twin of the fine-tune for an accuracy

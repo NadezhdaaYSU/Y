@@ -1,0 +1,62 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  72%|███████▏  | 209/290 [00:00<00:00, 2061.18it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2149.66it/s]
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 276/600 right, 276 clean, tokens b449b7c4f779fd53 (9.09 s)
+W1122 10:01:51.601000 745375 torch/_dynamo/convert_frame.py:1994] [0/8] torch._dynamo hit config.recompile_limit (8)
+W1122 10:01:51.601000 745375 torch/_dynamo/convert_frame.py:1994] [0/8]    function: '_checked_product' (~/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../python/y_lang/exact/lora.py:108)
+W1122 10:01:51.601000 745375 torch/_dynamo/convert_frame.py:1994] [0/8]    last reason: 0/1: tensor 'a' requires_grad mismatch. expected requires_grad=0
+W1122 10:01:51.601000 745375 torch/_dynamo/convert_frame.py:1994] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W1122 10:01:51.601000 745375 torch/_dynamo/convert_frame.py:1994] [0/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+[W1122 10:01:56.105524916 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 190840832 bytes (free: 135135232, total: 16769744896).
+step 5: reward 0.484 mismatch 0 tokens 89da873fa54d7330 sample 0.61 s train 1.26 s
+step 10: reward 0.609 mismatch 0 tokens 255daf396aaa5af9 sample 0.62 s train 1.25 s
+[W1122 10:02:11.412660937 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 390070272 bytes (free: 224264192, total: 16769744896).
+step 15: reward 0.500 mismatch 0 tokens 3df7fb49efe1806a sample 0.60 s train 1.19 s
+step 20: reward 0.453 mismatch 0 tokens 3bf8f38c53e5f70f sample 0.60 s train 1.20 s
+eval @20: 306/600 right, 306 clean, tokens 09f17c24d4a76eed (4.48 s)
+step 25: reward 0.516 mismatch 0 tokens 4cc50e5f733b18f8 sample 0.61 s train 1.22 s
+step 30: reward 0.531 mismatch 0 tokens bff296966f1b2845 sample 0.60 s train 1.18 s
+step 35: reward 0.281 mismatch 0 tokens 39b6551c22dda15b sample 0.59 s train 1.18 s
+step 40: reward 0.594 mismatch 0 tokens c62c527e7fe8faac sample 0.61 s train 1.27 s
+eval @40: 337/600 right, 337 clean, tokens 214dc61645e8a594 (4.53 s)
+step 45: reward 0.562 mismatch 0 tokens c862da557e65ae7f sample 0.60 s train 1.24 s
+step 50: reward 0.578 mismatch 0 tokens 4e70f28b76b4aabd sample 0.59 s train 1.19 s
+step 55: reward 0.422 mismatch 0 tokens 6700b5cfae82ee56 sample 0.60 s train 1.19 s
+step 60: reward 0.469 mismatch 0 tokens dfa451f89281ceac sample 0.60 s train 1.19 s
+eval @60: 323/600 right, 323 clean, tokens 2afbf6d4c31cccea (4.47 s)
+step 65: reward 0.484 mismatch 0 tokens 5e8d15ade906a8f8 sample 0.61 s train 1.26 s
+step 70: reward 0.469 mismatch 0 tokens 4028805ce9f87a8b sample 0.59 s train 1.23 s
+step 75: reward 0.609 mismatch 0 tokens a8432f54611efa94 sample 0.59 s train 1.29 s
+step 80: reward 0.172 mismatch 0 tokens 3b6727e05ad46fa3 sample 0.61 s train 1.28 s
+eval @80: 319/600 right, 319 clean, tokens 3b7054ad2c314d8f (4.18 s)
+step 85: reward 0.375 mismatch 0 tokens 6c71f6ff0605fc8e sample 0.58 s train 1.18 s
+step 90: reward 0.797 mismatch 0 tokens 72279d7b6fb4f4ed sample 0.60 s train 1.18 s
+step 95: reward 0.734 mismatch 0 tokens 5c1f0cabbbde2bfb sample 0.60 s train 1.18 s
+step 100: reward 0.266 mismatch 0 tokens 88bc2060b759ed02 sample 0.60 s train 1.23 s
+eval @100: 361/600 right, 361 clean, tokens f22571c1369cbb06 (4.44 s)
+step 105: reward 0.578 mismatch 0 tokens e10ac56e98401b68 sample 0.59 s train 1.17 s
+step 110: reward 0.609 mismatch 0 tokens 844b26f59f251775 sample 0.70 s train 1.21 s
+step 115: reward 0.562 mismatch 0 tokens 72aca7f106f7b02a sample 0.59 s train 1.22 s
+step 120: reward 0.422 mismatch 0 tokens 5d2c40665a32197b sample 0.59 s train 1.15 s
+eval @120: 358/600 right, 358 clean, tokens 16e483ae5d604abf (4.35 s)
+step 125: reward 0.688 mismatch 0 tokens 21444898a0a64297 sample 0.59 s train 1.36 s
+step 130: reward 0.641 mismatch 0 tokens 3c18759dc11f2297 sample 0.60 s train 1.16 s
+step 135: reward 0.656 mismatch 0 tokens bb8cf4990e21f9a0 sample 0.58 s train 1.16 s
+step 140: reward 0.750 mismatch 0 tokens 1988cdf5ee8605e2 sample 0.59 s train 1.18 s
+eval @140: 367/600 right, 367 clean, tokens f773b8498cf8967e (4.4 s)
+step 145: reward 0.812 mismatch 0 tokens 944c9f94700c99a8 sample 0.60 s train 1.31 s
+step 150: reward 0.484 mismatch 0 tokens 940c25698faef4e8 sample 0.81 s train 1.19 s
+step 155: reward 0.266 mismatch 0 tokens c0ac27890a1bacac sample 0.59 s train 1.16 s
+step 160: reward 0.922 mismatch 0 tokens ab5b3fab7ef3cdc0 sample 0.59 s train 1.16 s
+eval @160: 364/600 right, 364 clean, tokens 08875a20d67b9162 (4.39 s)
+step 165: reward 0.688 mismatch 0 tokens f126078341bc22c7 sample 0.58 s train 1.18 s
+step 170: reward 0.703 mismatch 0 tokens ece9d8483f26b79d sample 0.59 s train 1.17 s
+step 175: reward 0.750 mismatch 0 tokens 62f7275319af573d sample 0.78 s train 1.15 s
+step 180: reward 0.453 mismatch 0 tokens c2a0074f1fecc3c1 sample 0.61 s train 1.20 s
+eval @180: 359/600 right, 359 clean, tokens 4e87f02a0cda6db9 (4.38 s)
+step 185: reward 0.703 mismatch 0 tokens a5113a3a9381d50f sample 0.58 s train 1.21 s
+step 190: reward 0.406 mismatch 0 tokens acc67aa105849ce6 sample 0.58 s train 1.21 s
+step 195: reward 0.484 mismatch 0 tokens 66cfc8d2a6059248 sample 0.58 s train 1.16 s
+step 200: reward 0.391 mismatch 0 tokens 5bda1627e19eff4e sample 0.77 s train 1.17 s
+eval @200: 355/600 right, 355 clean, tokens d5486a6bcfcc0a0c (4.17 s)
+exit 0

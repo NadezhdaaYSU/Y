@@ -1,0 +1,27 @@
+{
+ "machine": {
+  "python": "3.14.8",
+  "torch": "2.13.0+cu130",
+  "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "cuda": "13.0",
+  "transformers": "5.15.0",
+  "gemm": "triton"
+ },
+ "results": [
+  {
+   "dtype": "bfloat16",
+   "tokens": 384,
+   "differ": 368,
+   "max_abs_logp_diff": 0.9692753553390503,
+   "max_ratio_minus_1": 0.6206421852111816
+  },
+  {
+   "dtype": "float32",
+   "tokens": 384,
+   "differ": 120,
+   "max_abs_logp_diff": 2.6226043701171875e-05,
+   "max_ratio_minus_1": 2.6226043701171875e-05
+  }
+ ]
+}

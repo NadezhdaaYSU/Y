@@ -1,0 +1,8 @@
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 276/600 right, 276 clean, tokens b449b7c4f779fd53 (10.74 s)
+step 5: nll 0.2436 tp 32ef6783370dc265 1.239 s
+[W1122 09:53:07.727724823 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 190840832 bytes (free: 127467520, total: 16769744896).
+step 10: nll 0.2384 tp 4d068f358e020205 1.193 s
+step 15: nll 0.2254 tp 3cd6c799aeb536da 1.206 s
+step 20: nll 0.2245 tp 455154b8c6680593 1.179 s
+eval @20: 382/600 right, 382 clean, tokens 56e862b5f39cbe88 (4.42 s)

@@ -1,0 +1,26 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  47%|████▋     | 135/290 [00:00<00:00, 1316.30it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 1649.46it/s]
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 276/600 right, 276 clean, tokens b449b7c4f779fd53 (75.91 s)
+step 1: reward 0.469 mismatch 0 tokens 3d10ec43b2b8ad0c sample 8.66 s train 28.06 s
+step 2: reward 0.359 mismatch 0 tokens 868fb35ed14846a7 sample 6.79 s train 28.75 s
+step 3: reward 0.531 mismatch 0 tokens a770440e04d19482 sample 6.62 s train 29.19 s
+step 4: reward 0.297 mismatch 0 tokens f556d2132af20b04 sample 7.04 s train 30.03 s
+step 5: reward 0.484 mismatch 0 tokens 89da873fa54d7330 sample 7.08 s train 31.92 s
+step 6: reward 0.234 mismatch 0 tokens 112e2a183ff2d666 sample 21.68 s train 30.02 s
+step 7: reward 0.594 mismatch 0 tokens b958ee8604f6f4f2 sample 6.94 s train 30.50 s
+step 8: reward 0.422 mismatch 0 tokens 22f521015d094c9f sample 7.03 s train 27.58 s
+step 9: reward 0.719 mismatch 0 tokens 05ddd0ba429ec9cf sample 6.63 s train 29.01 s
+step 10: reward 0.609 mismatch 0 tokens 255daf396aaa5af9 sample 7.03 s train 30.19 s
+step 11: reward 0.359 mismatch 0 tokens 7b5c95a7c0034bc1 sample 6.97 s train 31.21 s
+step 12: reward 0.438 mismatch 0 tokens 0b294aaa7bfd9d8f sample 6.83 s train 28.19 s
+step 13: reward 0.578 mismatch 0 tokens 2a70a956ef7bfc18 sample 6.81 s train 27.19 s
+step 14: reward 0.297 mismatch 0 tokens c1aa45d4e20c7ab0 sample 7.29 s train 28.49 s
+step 15: reward 0.500 mismatch 0 tokens 3df7fb49efe1806a sample 6.90 s train 26.29 s
+step 16: reward 0.469 mismatch 0 tokens 65d4dfad1d08f7f2 sample 6.72 s train 26.52 s
+step 17: reward 0.578 mismatch 0 tokens cc80a5ed2901d8ad sample 6.64 s train 25.56 s
+step 18: reward 0.531 mismatch 0 tokens 169e1580f12707a4 sample 6.42 s train 26.57 s
+step 19: reward 0.703 mismatch 0 tokens a2e568f733f06bcd sample 6.42 s train 25.30 s
+step 20: reward 0.453 mismatch 0 tokens 3bf8f38c53e5f70f sample 6.51 s train 26.05 s
+eval @20: 306/600 right, 306 clean, tokens 09f17c24d4a76eed (51.69 s)
+exit 0
