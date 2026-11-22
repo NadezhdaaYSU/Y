@@ -70,8 +70,17 @@ def refuse(bad, cond: torch.Tensor, msg: str):
     if bad is None:
         if bool(cond.any()):
             raise OverflowError(msg)
+    elif cond.numel() > _KEEP_WHOLE:
+        # A large condition is kept as its `any`, on the device: the same
+        # check, without holding every element until the step's one read
+        # (a sampler's softmax checks over 128 tokens of a 151,936-word
+        # vocabulary held 5 GB).
+        bad.append((cond.any(), msg))
     else:
         bad.append((cond, msg))
+
+
+_KEEP_WHOLE = 1 << 16
 
 
 def reduce_checks(bad):

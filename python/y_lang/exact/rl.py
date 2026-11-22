@@ -68,12 +68,16 @@ def draw(p: torch.Tensor, l: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
 
 
 @torch.no_grad()
-def sample(model, ops, input_ids, attention_mask, new_tokens, rand):
+def sample(model, ops, input_ids, attention_mask, new_tokens, rand, rows=64, stop=None, every=16):
     """Sampled continuations: (tokens [B][new], p of each token [B][new]
     int64, l of each step [B][new] int64), all on the model's device.
     `input_ids`, `attention_mask` left padded as `greedy` takes them; `rand`
     [B][new] from `uniforms`. End of turn does not stop a row: every row
-    gets `new_tokens` (the trainer reads each up to its first end)."""
+    gets `new_tokens` (the trainer reads each up to its first end). The
+    softmax and the draw run `rows` rows at a time, the same bits for any
+    `rows`. `stop` (a token id): after every `every` tokens, end when every
+    row has drawn it (a test of the tokens, read on the host, so every
+    device stops at the same length); the outputs are then shorter."""
     device = input_ids.device
     rand = rand.to(device)
     cache = new_cache(model.config.get_text_config(decoder=True))
@@ -83,15 +87,32 @@ def sample(model, ops, input_ids, attention_mask, new_tokens, rand):
     toks, ps, ls = [], [], []
     position = position[:, -1:]
     ones = attention_mask.new_ones((attention_mask.shape[0], 1))
+    ended = None
     for t in range(new_tokens):
         logits = out.logits[:, -1].to(torch.float32)
-        p, l = ops.softmax_ints(logits, torch.zeros_like(logits, dtype=torch.bool))
-        token = draw(p, l, rand[:, t])
+        # `rows` at a time: each row's softmax and draw are its own, and the
+        # int64 numerators of a whole batch over the vocabulary do not fit
+        # (256 rows: about 8 GB at the peak).
+        token, pt, lt = [], [], []
+        for i in range(0, logits.shape[0], rows):
+            z = logits[i:i + rows]
+            p, l = ops.softmax_ints(z, torch.zeros_like(z, dtype=torch.bool))
+            tk = draw(p, l, rand[i:i + rows, t])
+            token.append(tk)
+            pt.append(p.gather(1, tk[:, None]).reshape(-1))
+            lt.append(l.reshape(-1))
+            del p, l
+        token = torch.cat(token)
         toks.append(token)
-        ps.append(p.gather(1, token[:, None]).reshape(-1))
-        ls.append(l.reshape(-1))
+        ps.append(torch.cat(pt))
+        ls.append(torch.cat(lt))
         if t + 1 == new_tokens:
             break
+        if stop is not None:
+            hit = token == stop
+            ended = hit if ended is None else ended | hit
+            if (t + 1) % every == 0 and bool(ended.all()):
+                break
         del out
         position = position + 1
         attention_mask = torch.cat([attention_mask, ones], dim=-1)
@@ -126,17 +147,19 @@ def advantages(rewards, group: int) -> list:
 MISMATCH = "rl: the trainer's probabilities of the sampled tokens are not the sampler's"
 
 
-def training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad=0):
+def training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad=0, which=None, n=None):
     """(ids, labels, weights, rows, cols): each row's real prompt then its
     completion (the first `lens[i]` sampled tokens), right padded so its
     positions count from 0 as the sampler's did, labelled on the
-    completion; one weight A_i / n per labelled token (n: all of them), in
+    completion; one weight A_i / n per labelled token (n: all of them, or
+    the given `n` when this is one piece of a larger batch), in
     `lora.target_positions` order, which (rows, cols) index into the
-    sampler's [B][new] outputs."""
+    sampler's [B][new] outputs. `which`: the rows to include (all)."""
     pm, pi, tk = prompt_mask.cpu().tolist(), prompt_ids.cpu().tolist(), tokens.cpu().tolist()
-    n = sum(lens)
+    which = range(len(pi)) if which is None else which
+    n = sum(lens) if n is None else n
     seqs, labels, weights, rows, cols = [], [], [], [], []
-    for i in range(len(pi)):
+    for i in which:
         prompt = [t for t, m in zip(pi[i], pm[i]) if m]
         comp = tk[i][:lens[i]]
         seqs.append(prompt + comp)
@@ -155,22 +178,39 @@ def training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad=0):
 class GRPO(_lora.SFT):
     """Dr. GRPO on the adapters, on-policy: one update per sampled batch."""
 
-    def step(self, prompt_ids, prompt_mask, sampled, rewards, end, group, pad=0):
+    def step(self, prompt_ids, prompt_mask, sampled, rewards, end, group, pad=0, chunk_tokens=None):
         """One update from `sample`'s output for `prompt_ids` (left padded,
         as the sampler had them) and one reward per row, the rows in groups
         of `group` consecutive rows sharing a prompt. Returns (p(target) of
         the completion tokens, as `SFT.step`; the number of them whose
         (p, l) differ from the sampler's, read on the host: 0 unless
-        something is wrong, and then `verify` raises too)."""
+        something is wrong, and then `verify` raises too).
+
+        `chunk_tokens`: run the batch in pieces of consecutive rows, each at
+        most that many tokens (rows times the piece's longest row), the
+        gradients added in order (`SFT.run_chunks`); None, one piece."""
         tokens, p_s, l_s = sampled
         lens = completion_lengths(tokens.cpu(), end)
-        ids, labels, w, rows, cols = training_batch(prompt_ids, prompt_mask, tokens, lens,
-                                                    advantages(rewards, group), pad)
-        ps, ls = p_s[rows, cols], l_s[rows, cols]
-        differs = {}
+        adv = advantages(rewards, group)
+        pm = prompt_mask.cpu()
+        full = [int(pm[i].sum()) + lens[i] for i in range(len(lens))]
+        pieces, cur = [], []
+        for i in range(len(lens)):
+            if cur and chunk_tokens is not None and (len(cur) + 1) * max(full[j] for j in cur + [i]) > chunk_tokens:
+                pieces.append(cur)
+                cur = []
+            cur.append(i)
+        pieces.append(cur)
+        n = sum(lens)
+        chunks, differs = [], []
+        for which in pieces:
+            ids, labels, w, rows, cols = training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad,
+                                                        which=which, n=n)
+            ps, ls = p_s[rows, cols], l_s[rows, cols]
 
-        def check(p, l):
-            differs["x"] = (p != ps) | (l.reshape(-1) != ls)
-            return differs["x"], MISMATCH
-        tp = self.run(ids, labels, weights=w, check=check)[0]
-        return tp, int(differs["x"].sum())
+            def check(p, l, ps=ps, ls=ls):
+                differs.append((p != ps) | (l.reshape(-1) != ls))
+                return differs[-1], MISMATCH
+            chunks.append((ids, labels, w, check))
+        tp = self.run_chunks(chunks)[0]
+        return tp, int(sum(int(d.sum()) for d in differs))

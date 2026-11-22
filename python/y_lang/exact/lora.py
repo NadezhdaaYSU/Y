@@ -539,40 +539,35 @@ class SFT:
         `target_positions` order) makes the gradient through the softmax
         weights * (P - onehot) in place of (P - onehot) / n. `check(p, l)`
         returns (a bool tensor, a message), refused with the step's checks."""
+        return self.run_chunks([(ids, labels, weights, check)])
+
+    def run_chunks(self, chunks):
+        """One update from several batches, each (ids, labels, weights,
+        check) as `run` takes them, forward and backward one at a time with
+        the gradients added in float64 in this order (so the same bits on
+        every device), then one Adam step: a batch too large for the
+        device's memory, in pieces. Each piece's products quantize on its
+        own scales, so a split is a different function from the whole batch,
+        each as exact. Returns `run`'s three tensors, the pieces' in order."""
         bad = []
         self.ops.bad = bad
+        outs = []
         try:
-            pos, tgt = target_positions(labels)
-            n = tgt.numel()
-            if n == 0:
-                raise ValueError("lora: a batch with no labelled token")
-            if weights is not None and weights.shape != (n,):
-                raise ValueError(f"lora: {tuple(weights.shape)} weights for {n} labelled tokens")
-            hidden = self.forward(ids)
-            logits = self.logits_at(hidden, pos)
-            with torch.no_grad():
-                P, p_t, l_t = softmax_rows(self.ops, logits.detach(), targets=tgt)
-                tp = P[torch.arange(n, device=P.device), tgt]
-                onehot = torch.zeros_like(P).scatter_(1, tgt[:, None], 1.0)
-                if weights is None:
-                    dlogits = (P - onehot) * (1.0 / n)
-                else:
-                    dlogits = (P - onehot) * weights.to(P.dtype)[:, None]
-                if check is not None:
-                    refuse(bad, *check(p_t, l_t))
-            logits.backward(dlogits)
+            for ids, labels, weights, check in chunks:
+                outs.append(self._accumulate(ids, labels, weights, check, bad))
             grads = {}
             for k, t in self.ad.params.items():
                 grads[k] = t.grad if t.grad is not None else torch.zeros_like(t)
             r1, r2 = self.opt.corrections()
             with torch.no_grad():
                 self.opt.update(grads, r1, r2, bad)
-            for t in self.ad.params.values():
-                t.grad = None
         finally:
             self.ops.bad = None
+            # Also after a failed piece: a later step must not add to them.
+            for t in self.ad.params.values():
+                t.grad = None
         if not bad:
-            bad = [(torch.zeros((), dtype=torch.bool, device=ids.device), "(none)")]
+            bad = [(torch.zeros((), dtype=torch.bool, device=chunks[0][0].device), "(none)")]
         flags, messages = reduce_checks(bad)
         if self._acc is None:
             self._acc, self.messages = torch.zeros_like(flags), messages
@@ -583,6 +578,32 @@ class SFT:
                 raise OverflowError("; ".join(m for m, f in zip(messages, flags.tolist()) if f))
         else:
             self._acc |= flags
+        if len(outs) == 1:
+            return outs[0]
+        return tuple(torch.cat([o[i] for o in outs]) for i in range(3))
+
+    def _accumulate(self, ids, labels, weights, check, bad):
+        """Forward and backward of one batch, its gradients added to the
+        adapters' `.grad`; (p(target), p, l)."""
+        pos, tgt = target_positions(labels)
+        n = tgt.numel()
+        if n == 0:
+            raise ValueError("lora: a batch with no labelled token")
+        if weights is not None and weights.shape != (n,):
+            raise ValueError(f"lora: {tuple(weights.shape)} weights for {n} labelled tokens")
+        hidden = self.forward(ids)
+        logits = self.logits_at(hidden, pos)
+        with torch.no_grad():
+            P, p_t, l_t = softmax_rows(self.ops, logits.detach(), targets=tgt)
+            tp = P[torch.arange(n, device=P.device), tgt]
+            onehot = torch.zeros_like(P).scatter_(1, tgt[:, None], 1.0)
+            if weights is None:
+                dlogits = (P - onehot) * (1.0 / n)
+            else:
+                dlogits = (P - onehot) * weights.to(P.dtype)[:, None]
+            if check is not None:
+                refuse(bad, *check(p_t, l_t))
+        logits.backward(dlogits)
         return tp, p_t, l_t
 
     def verify(self):

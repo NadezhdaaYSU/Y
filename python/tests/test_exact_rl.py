@@ -42,7 +42,7 @@ def even_reward(tokens):
     return [int(row[0] % 2 == 0) for row in tokens.cpu().tolist()]
 
 
-def run_rl(device, steps=3, compile=False):
+def run_rl(device, steps=3, compile=False, chunk_tokens=None):
     from y_lang.exact import lora, rl
     m, ad, grpo = setup(device, compile)
     ids, mask = prompts()
@@ -51,7 +51,8 @@ def run_rl(device, steps=3, compile=False):
         rand = rl.uniforms(0, s, ids.shape[0], 4)
         sampled = rl.sample(m, ad.ops, ids.to(device), mask.to(device), 4, rand)
         rewards = even_reward(sampled[0])
-        tp, mism = grpo.step(ids.to(device), mask.to(device), sampled, rewards, END, 2)
+        tp, mism = grpo.step(ids.to(device), mask.to(device), sampled, rewards, END, 2,
+                             chunk_tokens=chunk_tokens)
         out.append((sampled[0].cpu().tolist(), lora.tp_digest(tp), mism))
     grpo.verify()
     return ad.digest(), out
@@ -112,6 +113,36 @@ class Agreement(unittest.TestCase):
         with self.assertRaises(OverflowError):
             grpo.verify()
 
+    def test_the_draw_in_row_pieces_is_the_same(self):
+        from y_lang.exact import rl
+        m, ad, _ = setup()
+        ids, mask = prompts()
+        rand = rl.uniforms(0, 0, ids.shape[0], 4)
+        whole = rl.sample(m, ad.ops, ids, mask, 4, rand)
+        for rows in (1, 3):
+            got = rl.sample(m, ad.ops, ids, mask, 4, rand, rows=rows)
+            self.assertTrue(all(torch.equal(x, y) for x, y in zip(got, whole)), rows)
+
+    def test_an_early_stop_keeps_every_drawn_token(self):
+        """Stopping once every row has drawn the end token, checked every
+        2 tokens: the tokens drawn are the full run's first ones. One row
+        whose 4th token is the stop token stops at 4; two rows, one of
+        which never draws it, run to the end."""
+        from y_lang.exact import rl
+        m, ad, _ = setup()
+        ids, mask = prompts()
+        rand = rl.uniforms(0, 0, ids.shape[0], 12)
+        full = rl.sample(m, ad.ops, ids, mask, 12, rand)
+        stop = int(full[0][0, 3])
+        self.assertFalse(bool((full[0][0, :3] == stop).any()))
+        got = rl.sample(m, ad.ops, ids[:1], mask[:1], 12, rand[:1], stop=stop, every=2)
+        self.assertEqual(got[0].shape[1], 4)
+        self.assertTrue(all(torch.equal(g, f[:1, :4]) for g, f in zip(got, full)))
+        never = next(i for i in range(1, ids.shape[0]) if not bool((full[0][i] == stop).any()))
+        pair = [0, never]
+        got = rl.sample(m, ad.ops, ids[pair], mask[pair], 12, rand[pair], stop=stop, every=2)
+        self.assertTrue(all(torch.equal(g, f[pair]) for g, f in zip(got, full)))
+
     def test_one_changed_integer_is_caught(self):
         from y_lang.exact import rl
         m, ad, grpo = setup()
@@ -123,6 +154,49 @@ class Agreement(unittest.TestCase):
         self.assertEqual(mism, 1)
         with self.assertRaises(OverflowError):
             grpo.verify()
+
+
+class Pieces(unittest.TestCase):
+    def update(self, chunk_tokens):
+        from y_lang.exact import rl
+        m, ad, grpo = setup()
+        ids, mask = prompts()
+        sampled = rl.sample(m, ad.ops, ids, mask, 4, rl.uniforms(0, 0, ids.shape[0], 4))
+        before = {k: t.detach().clone() for k, t in ad.params.items()}
+        tp, mism = grpo.step(ids, mask, sampled, even_reward(sampled[0]), END, 2, chunk_tokens=chunk_tokens)
+        grpo.verify()
+        delta = torch.cat([(ad.params[k].detach() - before[k]).reshape(-1) for k in sorted(before)])
+        return delta, tp, mism, ad.digest()
+
+    def test_a_batch_in_pieces_is_one_update(self):
+        """Eight rows in pieces of at most 24 tokens (three or more pieces):
+        every sampled token checked, the update close to the whole batch's
+        (the pieces quantize on their own scales; a first Adam step is
+        about lr times the gradient's sign, so the few near-zero elements
+        whose sign flips are most of the 0.073 measured), and repeatable. A
+        version that kept only the last piece's gradient measured 1.14."""
+        whole, tp_w, _, _ = self.update(None)
+        split, tp_s, mism, digest = self.update(24)
+        self.assertEqual(mism, 0)
+        self.assertEqual(tp_s.numel(), tp_w.numel())
+        self.assertTrue(torch.equal(tp_s, tp_w))          # the forward pass is per row
+        self.assertFalse(torch.equal(split, whole))
+        self.assertLess(float((split - whole).norm() / whole.norm()), 0.2)
+        self.assertEqual(self.update(24)[3], digest)
+
+    def test_pieces_cover_every_row_once(self):
+        from y_lang.exact import lora
+        seen = []
+        real = lora.SFT.run_chunks
+
+        def spy(sft, chunks):
+            seen.extend(int((c[1] != -100).sum()) for c in chunks)
+            return real(sft, chunks)
+        from unittest import mock
+        with mock.patch.object(lora.SFT, "run_chunks", spy):
+            _, tp, _, _ = self.update(24)
+        self.assertGreater(len(seen), 2)
+        self.assertEqual(sum(seen), tp.numel())
 
 
 class Learning(unittest.TestCase):
@@ -170,6 +244,7 @@ class OnTheGpu(unittest.TestCase):
         ref = run_rl("cpu")
         self.assertEqual(run_rl("cuda"), ref)
         self.assertEqual(run_rl("cuda", compile=True), ref)
+        self.assertEqual(run_rl("cuda", chunk_tokens=24), run_rl("cpu", chunk_tokens=24))
 
 
 UNIFORM_0_0 = 202160430523473325   # blake2b of 'y-exact-rl/0/0/0/0', top 62 bits
