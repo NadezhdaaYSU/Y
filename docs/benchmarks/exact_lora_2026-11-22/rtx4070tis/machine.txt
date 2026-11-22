@@ -1,0 +1,12 @@
+name, compute_cap, driver_version, clocks.max.sm [MHz], memory.total [MiB]
+NVIDIA GeForce RTX 4070 Ti SUPER, 8.9, 615.78.08, 3120 MHz, 16376 MiB
+CPU(s):                                  32
+Model name:                              AMD Ryzen 9 9950X 16-Core Processor
+CPU(s) scaling MHz:                      60%
+2.13.0+cu130 3.7.1
+5dcc1dabc0e0ee4e973017b7b1284c502ba71e98e543d5e25badaef96f88497d  target/release/liby.so
+7f394c2eb94caa43ffdc97e8ca3ef432e4820c6e982da48341455dbdd5f06844  docs/benchmark_data/exact_lora/cpu_sft20_adapters.pt
+9aaf762cfadb98c06080553a2a2a671ceb257be949665184c3a3defe16e904d3  docs/benchmark_data/exact_lora/h100_sft400_adapters.pt
+e9e78e0e8ecd9e703452974ea839573aa4e3e07a077a74ad700fdb77d0a1ec53  docs/benchmark_data/exact_lora/rtx4070tis_sft20_adapters.pt
+fdf756fa7fcbe7404d5c60e26bff1a0c8b8aa1f72ced49e7dd0210fe288fb7fe  ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-0.5B-Instruct/snapshots/7ae557604adf67be50417f59c2c2f167def9a775/model.safetensors
+56e0bd8

@@ -1,0 +1,45 @@
+{
+ "config": {
+  "device": "cuda",
+  "steps": 300,
+  "batch": 64,
+  "lr": 0.0003,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 600,
+  "eval_every": 0,
+  "eval_batch": 100,
+  "checkpoint": 10,
+  "log": 10,
+  "record": "docs/benchmarks/exact_lora_2026-11-22/rtx4070tis/serve_h100_400.json",
+  "save": null,
+  "load": "docs/benchmark_data/exact_lora/h100_sft400_adapters.pt",
+  "eval_only": true,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.14.8",
+  "torch": "2.13.0+cu130",
+  "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "cuda": "13.0",
+  "transformers": "5.15.0",
+  "gemm": "triton"
+ },
+ "steps": [],
+ "checkpoints": {},
+ "evals": {
+  "0": {
+   "right": 463,
+   "clean": 463,
+   "n": 600,
+   "acc": 0.7716666666666666,
+   "clean_acc": 0.7716666666666666,
+   "tokens": "9e42ef656b5b2136",
+   "seconds": 7.17
+  }
+ },
+ "init": "46d5ebab8e5370de",
+ "loaded": "1aabfadac1e65edb"
+}

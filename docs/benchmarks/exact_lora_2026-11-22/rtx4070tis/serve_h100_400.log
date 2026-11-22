@@ -1,0 +1,4 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  74%|███████▍  | 216/290 [00:00<00:00, 2155.12it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2283.29it/s]
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 463/600 right, 463 clean, tokens 9e42ef656b5b2136 (7.17 s)

@@ -12,3 +12,26 @@ CPU 382/600 tokens 56e862b5f39cbe88; H100 382/600 tokens 56e862b5f39cbe88: same
 == the H100's 400-step adapters served on the CPU, against the H100's own eval @400
 adapters 1aabfadac1e65edb loaded as 1aabfadac1e65edb
 H100 463/600 tokens 9e42ef656b5b2136; CPU 463/600 tokens 9e42ef656b5b2136: same
+
+== RTX 4070 Ti SUPER 20-step record against the CPU's 20-step record
+p(target) digests: 20/20 steps the same
+adapters @10: 8b994789036285f5 8b994789036285f5 same
+adapters @20: ba36215735e33487 ba36215735e33487 same
+eval @0: 276/600 vs 276/600, tokens b449b7c4f779fd53 b449b7c4f779fd53 same
+eval @20: 382/600 vs 382/600, tokens 56e862b5f39cbe88 56e862b5f39cbe88 same
+final adapters: ba36215735e33487 ba36215735e33487
+SAME
+
+== RTX 4070 Ti SUPER 20-step record against the H100's 400-step record
+p(target) digests: 20/20 steps the same
+adapters @10: 8b994789036285f5 8b994789036285f5 same
+adapters @20: ba36215735e33487 ba36215735e33487 same
+eval @0: 276/600 vs 276/600, tokens b449b7c4f779fd53 b449b7c4f779fd53 same
+eval @20: 382/600 vs 382/600, tokens 56e862b5f39cbe88 56e862b5f39cbe88 same
+SAME
+
+== the H100's 400-step adapters served on the RTX 4070 Ti SUPER, against the H100's own eval @400
+adapters 1aabfadac1e65edb loaded as 1aabfadac1e65edb
+H100 463/600 tokens 9e42ef656b5b2136; RTX 4070 Ti SUPER 463/600 tokens 9e42ef656b5b2136: same
+
+== the CPU's and the RTX 4070 Ti SUPER's step-20 adapter files: all 240 tensors the same bytes (the .pt containers differ)

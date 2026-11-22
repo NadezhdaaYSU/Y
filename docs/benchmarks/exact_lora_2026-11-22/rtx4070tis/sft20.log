@@ -1,0 +1,10 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  80%|███████▉  | 231/290 [00:00<00:00, 2279.81it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2322.78it/s]
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 276/600 right, 276 clean, tokens b449b7c4f779fd53 (8.34 s)
+step 5: nll 0.2436 tp 32ef6783370dc265 1.283 s
+[W1122 09:25:57.570952644 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 190840832 bytes (free: 292552704, total: 16769744896).
+step 10: nll 0.2384 tp 4d068f358e020205 1.282 s
+step 15: nll 0.2254 tp 3cd6c799aeb536da 1.278 s
+step 20: nll 0.2245 tp 455154b8c6680593 1.282 s
+eval @20: 382/600 right, 382 clean, tokens 56e862b5f39cbe88 (6.99 s)
