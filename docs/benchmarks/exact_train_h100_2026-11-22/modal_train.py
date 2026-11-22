@@ -48,6 +48,11 @@ image = (
 )
 
 app = modal.App("y-exact-train", image=image)
+# Inductor's and Triton's caches, kept between runs: compiling on Modal's
+# CPUs took 4 to 9 minutes a model, more than the runs themselves. The cache
+# keys cover the sources, the config and y_lang.exact.model's tag, so a
+# changed graph compiles again.
+CACHE = modal.Volume.from_name("y-inductor-cache", create_if_missing=True)
 
 REC = "exact_train_lm.py --device cuda --record {out}/"
 SPEED_MODES = "exact32:compile+graph,exact:compile+graph,f32:compile+graph,bf16:compile+graph"
@@ -69,6 +74,12 @@ STAGES = {"t2": [
     ("speed32_tiny", f"exact_train_speed.py --size tiny --check 30 --steady 500 --modes {SPEED_MODES} "
                      "--out {out}/h100_speed32_tiny.json"),
 ]}
+STAGES["profile"] = [
+    ("profile_medium_exact32", "exact_train_profile.py --size medium --arm exact32 "
+                               "--out {out}/h100_profile_medium_exact32.txt"),
+    ("profile_medium_bf16", "exact_train_profile.py --size medium --arm bf16 "
+                            "--out {out}/h100_profile_medium_bf16.txt"),
+]
 # The CPU reference for a stage, on a CPU-only container.
 CPU_RUNS = {"act32": [("cpu_exact32_g12b8", "exact_train_lm.py --device cpu --record "
                                             "{out}/cpu_exact32_g12b8.json --act float32")]}
@@ -105,14 +116,18 @@ def _run(runs, end):
             log = got + f"\nKILLED at the budget after {time.time() - t0:.0f} s\n"
         files[f"{name}.log"] = log
         print(log[-2500:], flush=True)
-        for js in out.glob("*.json"):
+        for js in [*out.glob("*.json"), *out.glob("*.txt")]:
             files[js.name] = js.read_text()
     return files
 
 
-@app.function(gpu="H100!", timeout=45 * 60, cpu=16.0, memory=32768)
+@app.function(gpu="H100!", timeout=45 * 60, cpu=16.0, memory=32768, volumes={"/cache": CACHE})
 def on_h100(stage: str):
-    return _run(STAGES[stage], time.time() + 42 * 60)
+    os.environ.update(TORCHINDUCTOR_CACHE_DIR="/cache/inductor", TRITON_CACHE_DIR="/cache/triton")
+    try:
+        return _run(STAGES[stage], time.time() + 42 * 60)
+    finally:
+        CACHE.commit()
 
 
 @app.function(timeout=60 * 60, cpu=8.0, memory=16384)
