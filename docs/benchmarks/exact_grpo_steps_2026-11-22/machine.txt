@@ -1,0 +1,6 @@
+name, compute_cap, driver_version, clocks.max.sm [MHz], memory.total [MiB]
+NVIDIA GeForce RTX 4070 Ti SUPER, 8.9, 615.78.08, 3120 MHz, 16376 MiB
+Model name:                              AMD Ryzen 9 9950X 16-Core Processor
+2.13.0+cu130 3.7.1 5.15.0
+5dcc1dabc0e0ee4e973017b7b1284c502ba71e98e543d5e25badaef96f88497d  target/release/liby.so
+code: e6aef05 (steps150, cpu_steps3), c3dfd1e (timing10_*; --graphed)

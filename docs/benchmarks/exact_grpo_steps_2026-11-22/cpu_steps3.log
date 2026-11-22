@@ -1,0 +1,7 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  27%|██▋       | 77/290 [00:00<00:00, 735.67it/s]Loading weights:  62%|██████▏   | 179/290 [00:00<00:00, 877.68it/s]Loading weights:  94%|█████████▍| 273/290 [00:00<00:00, 901.04it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 919.03it/s]
+    (169 linear layers + 49 norms converted to exact form)
+step 1: reward 0.195 mismatch 0 tokens 623601f41f103988 groups {'sampled': 32, 'all_right': 0, 'all_wrong': 7, 'kept': 8} sample 264.13 s train 137.43 s
+step 2: reward 0.535 mismatch 0 tokens 1cf84fa4ad680d5f groups {'sampled': 32, 'all_right': 5, 'all_wrong': 6, 'kept': 8} sample 232.81 s train 122.14 s
+step 3: reward 0.508 mismatch 0 tokens c6f55c58fe648623 groups {'sampled': 32, 'all_right': 10, 'all_wrong': 8, 'kept': 8} sample 243.92 s train 88.99 s
+exit 0

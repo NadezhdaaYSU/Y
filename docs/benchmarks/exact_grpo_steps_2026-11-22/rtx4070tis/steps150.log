@@ -1,0 +1,46 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  76%|███████▌  | 219/290 [00:00<00:00, 2166.98it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2284.21it/s]
+    (169 linear layers + 49 norms converted to exact form)
+eval @0: 294/600 right, 294 clean, tokens 9a965588a93444de (84.82 s)
+W1122 12:58:11.264000 1077894 torch/_dynamo/convert_frame.py:1994] [0/8] torch._dynamo hit config.recompile_limit (8)
+W1122 12:58:11.264000 1077894 torch/_dynamo/convert_frame.py:1994] [0/8]    function: '_checked_product' (~/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../python/y_lang/exact/lora.py:108)
+W1122 12:58:11.264000 1077894 torch/_dynamo/convert_frame.py:1994] [0/8]    last reason: 0/1: tensor 'a' requires_grad mismatch. expected requires_grad=0
+W1122 12:58:11.264000 1077894 torch/_dynamo/convert_frame.py:1994] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W1122 12:58:11.264000 1077894 torch/_dynamo/convert_frame.py:1994] [0/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+step 5: reward 0.656 mismatch 0 tokens 19e09c6ccb295cdb groups {'sampled': 32, 'all_right': 16, 'all_wrong': 5, 'kept': 8} sample 14.95 s train 4.27 s
+step 10: reward 0.637 mismatch 0 tokens 6e57dbc82c1fac2c groups {'sampled': 32, 'all_right': 18, 'all_wrong': 8, 'kept': 6} sample 17.22 s train 4.07 s
+step 15: reward 0.625 mismatch 0 tokens 85384a571d2bce9c groups {'sampled': 32, 'all_right': 15, 'all_wrong': 5, 'kept': 8} sample 11.31 s train 4.16 s
+step 20: reward 0.566 mismatch 0 tokens ea6f5ff57a34f0b4 groups {'sampled': 32, 'all_right': 12, 'all_wrong': 7, 'kept': 8} sample 10.90 s train 3.94 s
+step 25: reward 0.562 mismatch 0 tokens 094cf5704e182f25 groups {'sampled': 32, 'all_right': 10, 'all_wrong': 6, 'kept': 8} sample 15.26 s train 4.18 s
+eval @25: 367/600 right, 367 clean, tokens 85317d8bd9c1a6eb (78.89 s)
+step 30: reward 0.551 mismatch 0 tokens 3169b74cbb639b1d groups {'sampled': 32, 'all_right': 7, 'all_wrong': 8, 'kept': 8} sample 16.50 s train 4.52 s
+step 35: reward 0.402 mismatch 0 tokens a1254060ea875ed7 groups {'sampled': 32, 'all_right': 6, 'all_wrong': 11, 'kept': 8} sample 14.95 s train 5.08 s
+step 40: reward 0.523 mismatch 0 tokens cab93a1fc388aa1a groups {'sampled': 32, 'all_right': 12, 'all_wrong': 10, 'kept': 8} sample 16.53 s train 4.55 s
+step 45: reward 0.762 mismatch 0 tokens a23149f3908fd216 groups {'sampled': 32, 'all_right': 14, 'all_wrong': 3, 'kept': 8} sample 14.60 s train 5.05 s
+step 50: reward 0.637 mismatch 0 tokens 4ec7727cbda24ded groups {'sampled': 32, 'all_right': 14, 'all_wrong': 3, 'kept': 8} sample 16.45 s train 4.57 s
+eval @50: 393/600 right, 393 clean, tokens 024810bb5c9fb7ef (77.44 s)
+step 55: reward 0.477 mismatch 0 tokens aed7245961a5b2f8 groups {'sampled': 32, 'all_right': 6, 'all_wrong': 8, 'kept': 8} sample 12.95 s train 3.95 s
+step 60: reward 0.586 mismatch 0 tokens 97f81c7fdfd50cb2 groups {'sampled': 32, 'all_right': 12, 'all_wrong': 7, 'kept': 8} sample 12.83 s train 3.92 s
+step 65: reward 0.625 mismatch 0 tokens 7d6b2835781c504e groups {'sampled': 32, 'all_right': 15, 'all_wrong': 5, 'kept': 8} sample 15.09 s train 4.42 s
+step 70: reward 0.625 mismatch 0 tokens 390fff73a056ad81 groups {'sampled': 32, 'all_right': 12, 'all_wrong': 6, 'kept': 8} sample 12.94 s train 4.62 s
+step 75: reward 0.617 mismatch 0 tokens b947e46af9e06a46 groups {'sampled': 32, 'all_right': 12, 'all_wrong': 8, 'kept': 8} sample 11.37 s train 3.25 s
+eval @75: 386/600 right, 386 clean, tokens c7110fdc504b73b1 (78.92 s)
+step 80: reward 0.465 mismatch 0 tokens 5e1d7a669c48f171 groups {'sampled': 32, 'all_right': 9, 'all_wrong': 9, 'kept': 8} sample 7.00 s train 3.46 s
+step 85: reward 0.473 mismatch 0 tokens 153df228e48c5e46 groups {'sampled': 32, 'all_right': 12, 'all_wrong': 15, 'kept': 5} sample 9.12 s train 2.44 s
+step 90: reward 0.793 mismatch 0 tokens 92efa5fa246edcf6 groups {'sampled': 32, 'all_right': 20, 'all_wrong': 2, 'kept': 8} sample 7.22 s train 3.19 s
+step 95: reward 0.637 mismatch 0 tokens 7702dd0e09b40d6d groups {'sampled': 32, 'all_right': 17, 'all_wrong': 7, 'kept': 8} sample 7.25 s train 3.40 s
+step 100: reward 0.688 mismatch 0 tokens 37d698bacabcbc21 groups {'sampled': 32, 'all_right': 17, 'all_wrong': 4, 'kept': 8} sample 7.27 s train 3.17 s
+eval @100: 395/600 right, 395 clean, tokens dd05e607409a7160 (79.39 s)
+step 105: reward 0.602 mismatch 0 tokens 632e7cb23f5a97d3 groups {'sampled': 32, 'all_right': 15, 'all_wrong': 9, 'kept': 8} sample 7.21 s train 3.18 s
+step 110: reward 0.699 mismatch 0 tokens 66e0c1ceec5a3a50 groups {'sampled': 32, 'all_right': 20, 'all_wrong': 6, 'kept': 6} sample 7.21 s train 2.51 s
+step 115: reward 0.590 mismatch 0 tokens 8440603820123904 groups {'sampled': 32, 'all_right': 15, 'all_wrong': 8, 'kept': 8} sample 7.26 s train 3.20 s
+step 120: reward 0.586 mismatch 0 tokens c3d06e3216976614 groups {'sampled': 32, 'all_right': 14, 'all_wrong': 9, 'kept': 8} sample 7.24 s train 3.42 s
+step 125: reward 0.617 mismatch 0 tokens 577d5172a6593a28 groups {'sampled': 32, 'all_right': 15, 'all_wrong': 7, 'kept': 8} sample 7.23 s train 3.20 s
+eval @125: 378/600 right, 378 clean, tokens 673d38ee5abc8426 (79.2 s)
+step 130: reward 0.621 mismatch 0 tokens 9930b901cd91889c groups {'sampled': 32, 'all_right': 15, 'all_wrong': 8, 'kept': 8} sample 7.31 s train 3.20 s
+step 135: reward 0.723 mismatch 0 tokens 9d1624b2a806a519 groups {'sampled': 32, 'all_right': 18, 'all_wrong': 5, 'kept': 8} sample 7.26 s train 3.18 s
+step 140: reward 0.621 mismatch 0 tokens eb32835b1b3c3f3f groups {'sampled': 32, 'all_right': 15, 'all_wrong': 7, 'kept': 8} sample 7.31 s train 3.46 s
+step 145: reward 0.613 mismatch 0 tokens 64d02a1a60db1c8f groups {'sampled': 32, 'all_right': 17, 'all_wrong': 9, 'kept': 6} sample 7.28 s train 2.54 s
+step 150: reward 0.539 mismatch 0 tokens 95d125853edc2820 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 10, 'kept': 8} sample 9.19 s train 3.18 s
+eval @150: 380/600 right, 380 clean, tokens 1a390a3f9db0429c (80.28 s)
+exit 0

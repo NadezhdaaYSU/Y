@@ -1,0 +1,97 @@
+{
+ "config": {
+  "device": "cpu",
+  "steps": 3,
+  "prompts": 8,
+  "group": 8,
+  "new": 128,
+  "lr": 0.0001,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 0,
+  "eval_every": 0,
+  "eval_batch": 100,
+  "checkpoint": 1,
+  "log": 1,
+  "record": "docs/benchmarks/exact_grpo_steps_2026-11-22/cpu_steps3.json",
+  "save": null,
+  "load": null,
+  "compile": false,
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "mode": "steps",
+  "digits": 2,
+  "eval_new": 6,
+  "sample_prompts": 32,
+  "early_stop": true,
+  "chunk_tokens": 1024,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.14.8",
+  "torch": "2.13.0+cu130",
+  "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+  "transformers": "5.15.0",
+  "gemm": "triton"
+ },
+ "steps": [
+  {
+   "step": 1,
+   "tokens": "623601f41f103988",
+   "ints": "ff22a429643d7cfc",
+   "reward": 0.1953125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 0,
+    "all_wrong": 7,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "dea0cad41bed0627",
+   "n": 3804
+  },
+  {
+   "step": 2,
+   "tokens": "1cf84fa4ad680d5f",
+   "ints": "af073daaff631826",
+   "reward": 0.53515625,
+   "groups": {
+    "sampled": 32,
+    "all_right": 5,
+    "all_wrong": 6,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "e38133962156ca03",
+   "n": 3403
+  },
+  {
+   "step": 3,
+   "tokens": "c6f55c58fe648623",
+   "ints": "7063c86f6a1fb029",
+   "reward": 0.5078125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 10,
+    "all_wrong": 8,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "d293f53f7729ab6d",
+   "n": 2687
+  }
+ ],
+ "checkpoints": {
+  "1": "a97760949a22287a",
+  "2": "9746760536dcc31d",
+  "3": "e10960fd1160594b"
+ },
+ "evals": {},
+ "init": "46d5ebab8e5370de",
+ "seconds_per_step": {
+  "sample": 243.9154133796692,
+  "train": 88.99083065986633
+ },
+ "final": "e10960fd1160594b",
+ "mismatches": 0
+}
