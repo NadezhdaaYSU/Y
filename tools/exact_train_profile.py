@@ -29,9 +29,9 @@ def kind(name):
     n = name.lower()
     if n.startswith("triton"):
         return "triton (Inductor)"
-    if "int8" in n or "ysu" in n or "tile" in n:
+    if n.startswith("y_int8") or "int8_mm" in n:
         return "Y int8 GEMM"
-    if any(s in n for s in ("gemm", "cutlass", "sm80", "sm89", "sm90", "xmma", "cublas", "ampere", "hopper")):
+    if any(s in n for s in ("gemm", "cutlass", "sm80", "sm89", "sm90", "xmma", "cublas", "ampere", "hopper", "nvjet")):
         return "cuBLAS"
     if "memcpy" in n or "memset" in n:
         return "memcpy/memset"
@@ -100,7 +100,7 @@ def main():
     for name, (c, t) in sorted(per.items(), key=lambda kv: -kv[1][1])[:a.top]:
         sizes, nodes = info.get(name, ({}, ""))
         sz = " ".join(f"{k.replace('numel', '')}={v}" for k, v in sizes.items())
-        lines.append(f"  {t / n:9.1f}  x{c / n:<5.1f} {sz:28s} {name[:48]}")
+        lines.append(f"  {t / n:9.1f}  x{c / n:<5.1f} {sz:28s} {name}")
         if nodes:
             lines.append(f"            nodes: {nodes[:400]}")
     text = "\n".join(lines)
