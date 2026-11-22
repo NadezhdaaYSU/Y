@@ -156,11 +156,12 @@ def _round_shift(mant, r, neg, most):
     return torch.where(neg, -q, q)
 
 
-def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
+def scaled_round_int(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
     """round-half-even(x * 2^-s) for finite float64 or float32 x and integer s
     (broadcast), computed in integers, exactly: int64, for |x * 2^-s| < 2^62.
     `wide=False` (float32 x only) works in int32, for a result below 2^30
-    that needs no left shift (q8's, at 16 bits or fewer)."""
+    that needs no left shift (q8's, at 16 bits or fewer). The definition the
+    float32 path of `scaled_round` is checked against."""
     it, mbits, _, _, ebias = _FMT[x.dtype]
     a, field = _fields(x)
     mant = (a & ((1 << mbits) - 1)) | ((field > 0).to(it) << mbits)
@@ -172,6 +173,35 @@ def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
     if x.dtype != torch.float32:
         raise TypeError("exact train: the int32 rounding is for float32 values")
     return _round_shift(mant, s.to(torch.int32) - E, neg, 30)
+
+
+def _pow2_f32(k: torch.Tensor) -> torch.Tensor:
+    """2^k as float32, from its bits, for integer k in [-126, 127]."""
+    return torch.bitwise_left_shift(k.to(torch.int32) + 127, 23).view(torch.float32)
+
+
+def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
+    """round-half-even(x * 2^-s), exactly, for finite x and integer s
+    (broadcast): int64 (`wide`, for |x * 2^-s| < 2^62) or int32 (below 2^30).
+
+    float64 x: in integers on the float's bits (`scaled_round_int`), since a
+    GeForce GPU's float64 runs at 1/64 rate. float32 x: in float32, which is
+    the same function and five operations rather than thirty: x * 2^a * 2^b
+    with a + b = -s, a = clamp(-s, -126, 127) and so b in [0, 59] for every s
+    the callers make (q8: -s >= -120; sums: -s >= -126), is exact (each factor
+    is a normal power of two, and the product of x and 2^a can only grow by
+    2^b) unless it underflows, which loses bits only of a value below 2^-126,
+    whose round is 0 either way; `round` of an exact value is the round-half-
+    even of x * 2^-s, an integer below 2^62 that converts exactly. Checked
+    against `scaled_round_int` on ties, zeros, subnormals and extreme scales
+    (python/tests/test_exact_train_lm.py)."""
+    if x.dtype != torch.float32:
+        return scaled_round_int(x, s, wide)
+    ns = -s
+    a = torch.clamp(ns, -126, 127)
+    b = torch.clamp(ns - a, -126, 127)
+    y = torch.round((x * _pow2_f32(a)) * _pow2_f32(b))
+    return y.to(torch.int64 if wide else torch.int32)
 
 
 def q8(x: torch.Tensor, dim: int = -1, bits: int = 8, bad=None):

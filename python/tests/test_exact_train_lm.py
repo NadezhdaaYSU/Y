@@ -193,6 +193,28 @@ class Pieces(unittest.TestCase):
             ok = y.abs() < 2.0 ** 62
             self.assertTrue(torch.equal(L.scaled_round(x, s)[ok], torch.round(y).to(torch.int64)[ok]), sh)
 
+    def test_float32_formula_is_the_integer_definition(self):
+        # scaled_round's float32 path (x * 2^a * 2^b, then round) against the
+        # integer definition on the floats' bits: rows over the whole float32
+        # range and down into the subnormals, ties of both parities, zeros of
+        # both signs, the largest and smallest values; q8's scales and the
+        # exact sums' (which shift left).
+        g = torch.Generator().manual_seed(13)
+        m = torch.randint(-149, 124, (400, 1), generator=g).float()
+        x = torch.randn(400, 256, generator=g) * torch.exp2(m.clamp(-126, 123))
+        x = x * torch.where(m < -126, torch.exp2(m + 126), torch.ones_like(m))
+        x[:, :8] = torch.tensor([0.0, -0.0, 1e-45, -1e-45, 1.17549435e-38, -3e-39, 3.4e38, -3.4e38])
+        t = (torch.arange(-2048, 2048).float() + 0.5).reshape(16, 256)
+        for v in (x, t, t * 2.0 ** -20, t * 2.0 ** -130, torch.randn(8, 256, generator=g) * 5e37):
+            for bits in (8, 12, 16):
+                s = L.exponent(v, -1) - (bits - 1)
+                ok = (s.abs() <= L.Q_SCALE_RANGE).reshape(-1)
+                self.assertTrue(torch.equal(L.scaled_round(v, s, wide=False)[ok],
+                                            L.scaled_round_int(v, s, wide=False)[ok]), bits)
+            for c in (0, 8, 12):
+                s = L.exponent(v, -1) - 61 + c
+                self.assertTrue(torch.equal(L.scaled_round(v, s), L.scaled_round_int(v, s)), c)
+
     def test_non_finite_values_are_refused(self):
         # A NaN used to pass the quantizer, and det_sqrt(NaN) gave 0 on CUDA.
         for bad in (float("nan"), float("inf"), -float("inf")):
