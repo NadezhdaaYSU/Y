@@ -1,0 +1,5 @@
+A: cpu:x86_64  arm exact  mm f64
+B: NVIDIA H100 80GB HBM3 (sm_90)  arm exact  mm y
+  weights identical at 10/10 checkpoints
+  p(target) identical at every step
+  final held-out loss: A 1.696322  B 1.696322

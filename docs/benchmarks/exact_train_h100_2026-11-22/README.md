@@ -133,6 +133,33 @@ integer square root over 12.8M parameters is 0.26 ms.
 
 Cost of these three runs: $4.70.
 
+## Two kernels for attention (`kernels/`)
+
+Y at a969e70. `int8_bmm` runs attention's products on int8 tensor cores (a
+Triton `tl.dot` with an int32 accumulator: the integers the float32 product
+gave, exactly), and `softmax_kernel` does the causal softmax and the
+quantizing of its output in one kernel, every operation the Python's in its
+order (FMA fusion off). Both were checked against the Python under Triton's
+interpreter on the CPU before the H100 ran them.
+
+- **The GPU tests** of both kernels and of float32-activation training pass on
+  the H100 (10 tests, `kernels/gpu_tests.log`).
+- **Same bits**: the 5000-step T2 record on the new kernels has the CPU
+  reference's weights at all 10 checkpoints and its target probabilities at
+  all 5000 steps (`kernels/compare.txt`, final weights `502c0f1cba2ee8f4`); at
+  width 512 the weights after 3 steps are the CPU's (`e7714afaa0a4fb6b`).
+- **Speed**, width 512, compiled and graphed: **6.76 ms a step against
+  float32's 8.79 and bf16's 2.25**, from 8.03. The exact step is 1.30x faster
+  than float32 and 3.0x bf16's time. T2: 0.63 ms (from 0.77).
+- **Profile** (`kernels/h100_profilek_medium_exact32.txt`, 6.83 ms of GPU time,
+  from 7.86): attention's products 1.29 ms (float32 cuBLAS) to 0.35 ms
+  (`int8_bmm`), the softmax and its quantizer 0.86 ms (two Inductor kernels)
+  to 0.26 ms. Inductor's kernels 4.95 ms, Y's int8 GEMM 1.24 ms.
+- **cuBLAS's int8 GEMM in place of Y's** (`--mm torch`): 8.45 ms a step against
+  Y's 6.76, the same bits. Y's GEMM is the faster one here.
+
+Cost: $6.35 for the four runs since the profile (`modal billing report`).
+
 ## Not covered
 
 - One H100, one run of each. Step times are wall clock over 500 (T2) and 50
