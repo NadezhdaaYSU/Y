@@ -77,6 +77,36 @@ class Draw(unittest.TestCase):
         got = [int(rl.draw(p, l, torch.tensor([r]))) for r in range(24)]
         self.assertEqual(got, [1, 1, 1, 3, 3, 3, 3, 3] * 3)
 
+    def test_the_two_level_draw_is_the_running_sum(self):
+        """`draw` (block sums, then one block) against `draw_flat` (one
+        running sum): random rows, u at every block boundary and next to
+        it, a row with one nonzero entry (the last), vocabularies shorter
+        than a block and not a multiple of it, and a block of zeros."""
+        from y_lang.exact import rl
+        g = torch.Generator().manual_seed(1)
+        B = rl.DRAW_BLOCK
+        for V in (5, B - 1, B, B + 1, 3 * B + 17, 151936):
+            p = torch.randint(0, 1 << 28, (6, V), generator=g, dtype=torch.int64)
+            p[1, : V // 2] = 0
+            p[2] = 0
+            p[2, -1] = 1 << 20
+            if V > 2 * B:
+                p[3, B:2 * B] = 0
+            l = p.sum(-1, keepdim=True)
+            r = torch.randint(0, 1 << 62, (6,), generator=g, dtype=torch.int64)
+            self.assertTrue(torch.equal(rl.draw(p, l, r), rl.draw_flat(p, l, r)), V)
+            # u exactly at each block's running sum, and one below it, in a
+            # row whose blocks each start with zeros (a draw that stops a
+            # block early lands on one of them)
+            row = p[0:1].clone()
+            for s in range(0, V, B):
+                row[0, s:s + 3] = 0
+            cb = torch.cumsum(torch.nn.functional.pad(row, (0, -V % B)).view(1, -1, B).sum(-1), -1)[0]
+            us = torch.cat([cb[:-1], cb[:-1] - 1, torch.tensor([0])]).clamp(min=0)
+            rr, pp = us, row.expand(len(us), -1)
+            ll = pp.sum(-1, keepdim=True)
+            self.assertTrue(torch.equal(rl.draw(pp, ll, rr), rl.draw_flat(pp, ll, rr)), V)
+
     def test_draw_frequencies_are_p_over_l(self):
         from y_lang.exact import rl
         g = torch.Generator().manual_seed(0)

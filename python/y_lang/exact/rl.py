@@ -61,7 +61,31 @@ def uniforms(seed: int, step: int, rows: int, n: int) -> torch.Tensor:
 def draw(p: torch.Tensor, l: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
     """The integer inverse CDF: for each row, the first i with
     p_0 + ... + p_i > r mod l. p [rows][V] int64 >= 0, l [rows][1] its row
-    sums (> 0), r [rows] int64 below 2^62."""
+    sums (> 0), r [rows] int64 below 2^62.
+
+    In two levels, so no running sum over the whole vocabulary is written:
+    the sums of blocks of `DRAW_BLOCK` entries, their running sum, the first
+    block whose running sum passes u (every entry before it sums to at most
+    u), then the running sum inside that block from the sum of the blocks
+    before it. Integer sums, so the same token as one running sum over the
+    row (`draw_flat`, tests)."""
+    rows, V = p.shape
+    u = torch.remainder(r[:, None], l)                                # [rows][1], below l
+    nb = -(-V // DRAW_BLOCK)
+    blocks = torch.nn.functional.pad(p, (0, nb * DRAW_BLOCK - V)).view(rows, nb, DRAW_BLOCK)
+    cb = torch.cumsum(blocks.sum(-1), dim=-1)                         # [rows][nb]
+    k = torch.searchsorted(cb, u, right=True)                         # [rows][1]
+    before = torch.where(k > 0, cb.gather(1, (k - 1).clamp(min=0)), torch.zeros_like(k))
+    inner = blocks.gather(1, k[:, :, None].expand(rows, 1, DRAW_BLOCK)).view(rows, DRAW_BLOCK)
+    j = torch.searchsorted(torch.cumsum(inner, dim=-1) + before, u, right=True)
+    return (k * DRAW_BLOCK + j).reshape(-1)
+
+
+DRAW_BLOCK = 1024
+
+
+def draw_flat(p: torch.Tensor, l: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
+    """`draw` as one running sum over each row (its definition)."""
     c = torch.cumsum(p, dim=-1)
     u = torch.remainder(r[:, None], l)
     return torch.searchsorted(c, u, right=True).reshape(-1)
@@ -276,6 +300,24 @@ def graphed_sampler(model, ops, batch, prompt_len, new_tokens, rows=64, stop=Non
             return first, position[:, -1:] + 1, rows_
 
         def _step(self, token, pos, t, r):
+            """The decode step and its draw, its checks collected here and
+            or-ed inside the compiled graph into one flag per message (were
+            they returned one by one, the step's ~950 conditions each cost
+            an eager reduction and an or in the replayed graph)."""
+            outer, self.ops.bad = self.ops.bad, []
+            try:
+                out = self._decode(token, pos, t, r)
+                local = self.ops.bad
+            finally:
+                self.ops.bad = outer
+            msgs = []
+            for _, m in local:
+                if m not in msgs:
+                    msgs.append(m)
+            flags = [torch.stack([c.any() for c, m2 in local if m2 == m]).any() for m in msgs]
+            return (*out, flags, msgs)
+
+        def _decode(self, token, pos, t, r):
             inner = self.model.model
             h = inner.embed_tokens(token[:, None])
             pe = inner.rotary_emb(h, pos)
@@ -294,13 +336,11 @@ def graphed_sampler(model, ops, batch, prompt_len, new_tokens, rows=64, stop=Non
 
         def _advance(self):
             r = self.rand.index_select(1, (self.step_i + 1).view(1)).view(-1)
-            n0 = len(self.ops.bad)
-            nxt, pt, lt = self._step_compiled(self.token, self.pos, self.t, r)
-            for cond, msg in self.ops.bad[n0:]:
+            nxt, pt, lt, flags, msgs = self._step_compiled(self.token, self.pos, self.t, r)
+            for f, msg in zip(flags, msgs):
                 if msg not in self.flags:
                     self.flags[msg] = torch.zeros((), dtype=torch.bool, device=self.dev)
-                self.flags[msg] |= cond.any()
-            del self.ops.bad[n0:]
+                self.flags[msg] |= f
             self.token.copy_(nxt)
             self.pos.add_(1)
             self.t.add_(1)

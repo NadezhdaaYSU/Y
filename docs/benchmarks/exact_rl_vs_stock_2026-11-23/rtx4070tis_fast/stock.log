@@ -1,0 +1,105 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 25883.05it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 24993.28it/s]
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 22099.75it/s]
+round 0 step 1 train_eager: 1.053 s
+W1124 02:49:34.710000 228911 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [0/0] Not enough SMs to use max_autotune_gemm mode
+round 0 step 1 sample_graphed: 18.703 s (first call, compiles)
+round 0 step 1 sample_eager: 2.112 s
+round 0 step 1 train_autotune: 79.224 s (first call, compiles)
+round 0 step 1 train_compile: 17.058 s (first call, compiles)
+round 0 step 2 sample_eager: 2.096 s
+round 0 step 2 train_eager: 0.486 s
+round 0 step 2 sample_graphed: 3.285 s
+round 0 step 2 train_compile: 0.389 s
+round 0 step 2 train_autotune: 0.385 s
+round 0 step 3 sample_graphed: 3.214 s
+round 0 step 3 sample_eager: 2.086 s
+round 0 step 3 train_autotune: 0.315 s
+round 0 step 3 train_eager: 0.405 s
+round 0 step 3 train_compile: 0.315 s
+round 0 step 4 train_eager: 0.428 s
+round 0 step 4 sample_eager: 2.074 s
+round 0 step 4 train_compile: 0.342 s
+round 0 step 4 sample_graphed: 3.197 s
+round 0 step 4 train_autotune: 0.343 s
+round 0 step 5 sample_graphed: 2.847 s
+round 0 step 5 train_autotune: 0.277 s
+round 0 step 5 train_compile: 0.278 s
+round 0 step 5 train_eager: 0.353 s
+round 0 step 5 sample_eager: 1.849 s
+round 0 step 6 sample_graphed: 2.470 s
+round 0 step 6 train_compile: 0.280 s
+round 0 step 6 train_autotune: 0.278 s
+round 0 step 6 sample_eager: 1.604 s
+round 0 step 6 train_eager: 0.353 s
+round 0 step 7 sample_graphed: 2.849 s
+round 0 step 7 sample_eager: 1.826 s
+round 0 step 7 train_autotune: 0.283 s
+round 0 step 7 train_compile: 0.286 s
+round 0 step 7 train_eager: 0.361 s
+round 0 step 8 train_autotune: 0.311 s
+round 0 step 8 sample_eager: 2.061 s
+round 0 step 8 sample_graphed: 3.162 s
+round 0 step 8 train_compile: 0.320 s
+round 0 step 8 train_eager: 0.400 s
+round 0 step 9 sample_eager: 2.060 s
+round 0 step 9 train_eager: 0.376 s
+round 0 step 9 sample_graphed: 3.149 s
+round 0 step 9 train_compile: 0.291 s
+round 0 step 9 train_autotune: 0.289 s
+round 0 step 10 train_eager: 0.308 s
+round 0 step 10 sample_graphed: 3.153 s
+round 0 step 10 train_compile: 0.232 s
+round 0 step 10 train_autotune: 0.233 s
+round 0 step 10 sample_eager: 2.080 s
+round 1 step 1 train_eager: 0.565 s
+round 1 step 1 train_autotune: 0.433 s
+round 1 step 1 sample_graphed: 3.198 s
+round 1 step 1 train_compile: 0.439 s
+round 1 step 1 sample_eager: 2.072 s
+round 1 step 2 sample_graphed: 3.188 s
+round 1 step 2 train_autotune: 0.383 s
+round 1 step 2 train_compile: 0.393 s
+round 1 step 2 sample_eager: 2.135 s
+round 1 step 2 train_eager: 0.498 s
+round 1 step 3 sample_eager: 2.165 s
+round 1 step 3 train_compile: 0.330 s
+round 1 step 3 train_eager: 0.416 s
+round 1 step 3 train_autotune: 0.327 s
+round 1 step 3 sample_graphed: 3.381 s
+round 1 step 4 train_compile: 0.360 s
+round 1 step 4 train_eager: 0.446 s
+round 1 step 4 sample_graphed: 3.383 s
+round 1 step 4 train_autotune: 0.361 s
+round 1 step 4 sample_eager: 2.165 s
+round 1 step 5 train_autotune: 0.290 s
+round 1 step 5 sample_graphed: 2.995 s
+round 1 step 5 train_compile: 0.292 s
+round 1 step 5 train_eager: 0.372 s
+round 1 step 5 sample_eager: 1.915 s
+round 1 step 6 sample_graphed: 2.607 s
+round 1 step 6 train_autotune: 0.289 s
+round 1 step 6 train_compile: 0.293 s
+round 1 step 6 train_eager: 0.365 s
+round 1 step 6 sample_eager: 1.674 s
+round 1 step 7 train_compile: 0.301 s
+round 1 step 7 sample_eager: 1.911 s
+round 1 step 7 sample_graphed: 2.992 s
+round 1 step 7 train_eager: 0.383 s
+round 1 step 7 train_autotune: 0.297 s
+round 1 step 8 train_eager: 0.424 s
+round 1 step 8 sample_eager: 2.174 s
+round 1 step 8 sample_graphed: 3.396 s
+round 1 step 8 train_compile: 0.331 s
+round 1 step 8 train_autotune: 0.328 s
+round 1 step 9 train_compile: 0.309 s
+round 1 step 9 train_autotune: 0.303 s
+round 1 step 9 sample_eager: 2.163 s
+round 1 step 9 sample_graphed: 3.385 s
+round 1 step 9 train_eager: 0.391 s
+round 1 step 10 train_compile: 0.244 s
+round 1 step 10 train_autotune: 0.242 s
+round 1 step 10 sample_graphed: 3.379 s
+round 1 step 10 train_eager: 0.320 s
+round 1 step 10 sample_eager: 2.159 s

@@ -187,12 +187,12 @@ def run(args):
             if args.graphed:
                 key = tuple(ids.shape)
                 if key not in samplers:
-                    samplers[key] = rl.graphed_sampler(model, ad.ops, *key, args.new,
+                    samplers[key] = rl.graphed_sampler(model, ad.ops, *key, args.new, rows=args.sample_rows,
                                                        stop=end if args.early_stop else None)
                 sampled = samplers[key].run(ids.to(device), mask.to(device), rand.to(device))
             else:
                 sampled = rl.sample(model, ad.ops, ids.to(device), mask.to(device), args.new, rand,
-                                    stop=end if args.early_stop else None)
+                                    rows=args.sample_rows, stop=end if args.early_stop else None)
         finally:
             ad.ops.bad = None
         if bad:
@@ -315,6 +315,8 @@ def main():
                     help="stop sampling once every row has ended (checked every 16 tokens)")
     ap.add_argument("--graphed", action="store_true",
                     help="sample with each decode step replayed from a CUDA graph (the same bits)")
+    ap.add_argument("--sample-rows", type=int, default=64,
+                    help="rows of the sampler's vocabulary softmax and draw at a time (the same bits for any)")
     ap.add_argument("--chunk-tokens", type=int, default=None, help="train in pieces of at most this many tokens")
     ap.add_argument("--dump", help="save each step's prompts, sampled tokens, integers, rewards, kept groups "
                     "and times (torch.save), for a baseline to repeat the same work")

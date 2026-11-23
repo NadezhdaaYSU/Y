@@ -390,7 +390,7 @@ class Norm(nn.Module):
     def forward(self, x):
         if _needs_grad(x):
             return _NormFn.apply(x, self)
-        return self.base(x)
+        return _run(self.ops, _module_forward, x, self.base)
 
 
 class _SiLUFn(torch.autograd.Function):
@@ -432,7 +432,7 @@ class SiLU(nn.Module):
     def forward(self, x):
         if _needs_grad(x):
             return _SiLUFn.apply(x, self)
-        return self.base(x)
+        return _run(self.ops, _silu_forward, x, self.base)
 
 
 class _AttnFn(torch.autograd.Function):
@@ -475,7 +475,7 @@ def _warm_attention(q, k, scaling, ops):
     make while compiling (a constant there would become a reciprocal
     multiply), sending the rest of that call eager, with a recompile per
     length (measured 2026-11-24)."""
-    key = (q.device, q.dtype, q.shape[1], k.shape[1], q.shape[-1], scaling)
+    key = (q.device, q.dtype, q.shape[1], k.shape[1], q.shape[-1], scaling, _kv.PACK)
     if key in _WARM or not isinstance(ops, CompiledOps):
         return
     if q.device not in _attn.TABLE:
@@ -488,6 +488,10 @@ def _warm_attention(q, k, scaling, ops):
         return torch.randn(*shape, generator=g, device=q.device).to(q.dtype)
     with torch.no_grad():
         _attn_forward(r(1, nh, 2, d), r(1, nkv, 2, d), r(1, nkv, 2, d), None, scaling)
+        if _kv.PACK:
+            kp, vp = _kv.quantize_and_pack(r(1, nkv, 2, d), r(1, nkv, 2, d))
+            _attn_forward(r(1, nh, 1, d), kp, vp, None, scaling)        # decode
+            _attn_forward(r(1, nh, 2, d), kp, vp, None, scaling)        # a prefill
         _attn_backward(r(1, nh, 2, d), r(1, nkv, 2, d), r(1, nkv, 2, d), None, r(1, 2, nh, d), sc,
                        ops.grad_bits, ops.bwd_bits, _bmm_int8(ops, q), ops.act)
     _WARM.add(key)
@@ -546,6 +550,11 @@ def attention(module, query, key, value, attention_mask, scaling=None, dropout=0
     ops = _OPS.get(id(module))
     if ops is not None and _needs_grad(query, key, value):
         return _AttnFn.apply(query, key, value, attention_mask, module, scaling, ops), None
+    if ops is not None:
+        # No gradients (sampling, a prefill), K/V maybe packed: the module
+        # only reaches a decode cache, which `attach` refuses.
+        _warm_attention(query, key, scaling, ops)
+        return _run(ops, _attn_forward, query, key, value, attention_mask, scaling), None
     return _attn.exact_attention(module, query, key, value, attention_mask, scaling=scaling,
                                  dropout=dropout, **kw)
 

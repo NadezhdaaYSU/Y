@@ -76,6 +76,25 @@ found on the way to fix 4:
 - The 10-step run after the fixes has the same sampled tokens, sampler
   integers, p(target) and adapters as the run before them.
 
+## The sampler (`profile_sample.py`)
+
+The graphed sampler at 256 rows, the run's first step (its tokens and p
+checked against the dump each time), ms a token:
+
+| | ms a token | kernels a token |
+|---|---|---|
+| before (`profile_sample.txt`) | 33.8 | 3,401 |
+| the inference switches: packed K/V, Y's decode attention, V int8 (`_switches`) | 25.6 | 3,313 |
+| checks or-ed in the graph, the prefill's norms, SiLU, attention compiled (`_fix1`) | 18.5 | 2,332 |
+| cuBLAS's int8 GEMM (`_gemm_torch`; Y's: `_gemm_y`, 17.3) | 17.2 | 2,302 |
+| the two-level draw, 64 / 256 rows at a time (`_draw_rows64`, `_draw_rows256`) | 15.7 / 15.2 | 2,287 |
+
+Before, 950 conditions a token were each reduced and or-ed by two eager
+kernels inside the replayed graph (9% of the time); the attention
+re-quantized every cached K/V row every token; the draw wrote a running sum
+over the whole vocabulary. What is left: Y's decode attention 17%, the
+GEMMs 15%, the vocabulary softmax 12%, the adapters' products 6%.
+
 ## Not done
 
 - The adapters' backward still launches 44 kernels a call: each of its five

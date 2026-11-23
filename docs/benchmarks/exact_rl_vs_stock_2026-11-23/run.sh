@@ -27,10 +27,15 @@ export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 EXACT=(tools/exact_lora_grpo.py --device cuda --compile --graphed --mode steps --new 128 --early-stop
        --sample-prompts 32 --chunk-tokens 1024 --steps 10 --eval 0 --eval-every 0 --log 1)
 
-nice "$PY" "${EXACT[@]}" --record "$OUT/exact_a.json" --dump "$DATA/exact_a.pt" 2>&1 | tee "$OUT/exact_a.log"
+# EXACT_ENV (settings for the exact runs only, e.g. Y_EXACT_KV_PACK=inplace) and
+# EXACT_FLAGS (more options for them); the stock and vLLM arms never see them.
+echo "EXACT_ENV=${EXACT_ENV:-} EXACT_FLAGS=${EXACT_FLAGS:-}" | tee "$OUT/exact_settings.txt"
+# shellcheck disable=SC2086
+nice env ${EXACT_ENV:-} "$PY" "${EXACT[@]}" ${EXACT_FLAGS:-} --record "$OUT/exact_a.json" --dump "$DATA/exact_a.pt" 2>&1 | tee "$OUT/exact_a.log"
 nice "$PY" tools/exact_rl_stock_speed.py "$DATA/exact_a.pt" --rounds 2 --record "$OUT/stock.json" \
     --vllm-input "$DATA/vllm_in.json" 2>&1 | tee "$OUT/stock.log"
 nice "$VPY" "$D/vllm_sample.py" "$DATA/vllm_in.json" --record "$OUT/vllm.json" 2>&1 | tee "$OUT/vllm.log"
-nice "$PY" "${EXACT[@]}" --record "$OUT/exact_b.json" --dump "$DATA/exact_b.pt" 2>&1 | tee "$OUT/exact_b.log"
+# shellcheck disable=SC2086
+nice env ${EXACT_ENV:-} "$PY" "${EXACT[@]}" ${EXACT_FLAGS:-} --record "$OUT/exact_b.json" --dump "$DATA/exact_b.pt" 2>&1 | tee "$OUT/exact_b.log"
 "$PY" tools/exact_lora_grpo.py --compare "$OUT/exact_a.json" "$OUT/exact_b.json" | tee "$OUT/exact_ab_compare.txt"
 "$PY" "$D/summarize.py" "$DATA/exact_a.pt" "$DATA/exact_b.pt" "$OUT/stock.json" "$OUT/vllm.json" | tee "$OUT/summary.txt"

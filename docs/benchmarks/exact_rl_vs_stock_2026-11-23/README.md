@@ -114,6 +114,32 @@ an exact step (3.88 of 4.96 s). The stock trainers' mean log p agreed to
 0.12 this time (0.04 before): each trains its own adapters in bf16, and the
 second round repeats the steps after ten updates.
 
+## After the sampler fixes (2026-11-24)
+
+The sampler's checks or-ed inside its compiled step (one flag per message,
+not ~950 eager reductions a token), its prefill's attention, norms and
+SiLU compiled, a two-level draw (block sums, then one block: the same
+token, `test_the_two_level_draw_is_the_running_sum`), and the inference
+path's switches for the exact runs only (`exact_settings.txt`:
+`Y_EXACT_GEMM=torch Y_EXACT_KV_PACK=inplace Y_EXACT_ATTN=y Y_EXACT_V_INT8=1`,
+`--sample-rows 256`): K/V rows quantized once as they arrive, Y's decode
+attention kernel, cuBLAS's int8 GEMM. Training runs without a cache and
+never packs. `run.sh` again (`RUN=rtx4070tis_fast`):
+
+| | exact | stock | exact takes |
+|---|---|---|---|
+| sampling, vLLM | **1.82** (was 3.88) | 1.10 | **1.65x** the time |
+| sampling, bf16 PyTorch eager | | 1.94 | 0.94x |
+| sampling, bf16 PyTorch graphed | | 2.98 | 0.61x |
+| training, compiled, max-autotune | 1.08 | 0.288 | 3.75x |
+| a whole step (vLLM + max-autotune) | **2.90** (was 8.60, then 4.96) | 1.39 | **2.09x** |
+
+The same sampled tokens, sampler integers, p(target) and adapters as the run
+before these changes (`vs_train_fixed_compare.txt`) and between the two
+exact runs; no sampled token's trainer integers differ from the sampler's.
+Exact sampling is now faster than stock PyTorch's own, eager or graphed;
+vLLM is 1.65 times faster. Training is now the larger gap (3.75x).
+
 ## Not covered
 
 - One GPU, one model size, 10 steps. Exact's training time includes the

@@ -1,0 +1,46 @@
+first run (compiles and records): 148.2 s
+tokens and p: the dump step 1; 128 tokens
+bare runs: 2.366, 2.368, 2.367 s; 18.49 ms a token
+profiled run: 298538 kernels, GPU busy 2371.3 ms, 18.53 ms a token, 2332 kernels a token
+
+kernels by GPU time (ms over the run, calls):
+     424.45 ms  12416x  17.9%  _w8a8_gemm
+     337.54 ms   3048x  14.2%  exact_decode_attention
+     187.66 ms    127x   7.9%  triton_spl_fused___lshift_____rshift____to_copy_add_bitwise_and_clamp_cumsum_ge_index_masked_fill_mul_ones_like_round_rs
+     170.59 ms   3072x   7.2%  _w8a8_gemm_splitk
+     128.85 ms  30720x   5.4%  y_int8_mm
+     102.30 ms   3048x   4.3%  triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_bitwise_left_shift_clamp_clamp_max_div_eq_ge_index_int8_mm
+      71.71 ms   2794x   3.0%  triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_left_shift_bitwise_or_clamp_div_eq_
+      69.74 ms   2921x   2.9%  triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_left_shift_bitwise_or_clamp_div_eq_
+      65.44 ms    508x   2.8%  triton_red_fused_masked_fill_sum_zeros_like_52
+      52.39 ms     96x   2.2%  triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_eq_mul_scalar_tensor_slice_sub_transpose_view_where_7
+      27.01 ms    224x   1.1%  void at::native::vectorized_elementwise_kernel<2, at::native::BUnaryFunctor<long, long, long, at::native::rshift_kernel_
+      23.79 ms  26670x   1.0%  triton_per_fused___rshift___any_eq_stack_23
+      21.97 ms  12192x   0.9%  triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_or_clamp_eq_gt_int8_mm_le_lt_neg_ones_like_
+      21.94 ms     24x   0.9%  void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::binary_inte
+      20.57 ms  26670x   0.9%  triton_per_fused___rshift____to_copy_any_bitwise_or_eq_gt_lt_scalar_tensor_stack_sub_where_24
+      19.53 ms     49x   0.8%  triton_per_fused___lshift_____rshift____to_copy_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_ones_like_pow_rs
+      18.14 ms     84x   0.8%  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctor_add<long>, std::array<char*, 3ul> >(int, at::n
+      16.52 ms  15240x   0.7%  triton_per_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_clamp_eq_mul_neg_round_scalar_tensor_sub_tr
+      16.48 ms     24x   0.7%  triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_div_eq_gt_lt_mul_neg_o
+      15.43 ms     84x   0.7%  void at::native::vectorized_elementwise_kernel<2, at::native::BinaryFunctor<long, long, long, at::native::binary_interna
+      15.12 ms   6096x   0.6%  triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_or_clamp_eq_gt_le_lt_neg_ones_like_scalar_t
+      14.67 ms   3048x   0.6%  triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_or_clamp_eq_gt_int8_mm_le_lt_neg_ones_like_
+      14.57 ms    120x   0.6%  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<double, double,
+      14.17 ms     24x   0.6%  triton_poi_fused___rshift____to_copy_add_bitwise_and_clamp_clamp_max_ge_index_le_mul_nan_to_num_ones_like_round_where_ze
+      14.09 ms   3048x   0.6%  triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_eq_mul_scalar_tensor_sub_transpose_view_where_25
+      13.83 ms     24x   0.6%  exact_pv
+      13.81 ms     48x   0.6%  void at::native::reduce_kernel<512, 1, at::native::ReduceOp<double, at::native::func_wrapper_t<double, at::native::MaxNa
+      13.67 ms  15240x   0.6%  triton_per_fused___rshift___any_bitwise_or_eq_gt_lt_scalar_tensor_stack_sub_where_7
+      13.21 ms     72x   0.6%  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::(anonymous namespace)::where_
+      13.02 ms  15240x   0.5%  triton_poi_fused__to_copy_constant_pad_nd_int8_mm_22
+      12.34 ms   6096x   0.5%  triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_or_clamp_eq_gt_le_lt_neg_ones_like_scalar_t
+      12.05 ms  15240x   0.5%  triton_per_fused___rshift___any_eq_stack_6
+      11.60 ms    127x   0.5%  triton_red_fused___rshift___any_bitwise_and_eq_select_slice_view_39
+      11.31 ms    127x   0.5%  triton_red_fused___rshift___any_bitwise_and_eq_select_slice_view_41
+       9.80 ms   6096x   0.4%  triton_red_fused___rshift___any_bitwise_or_eq_gt_lt_scalar_tensor_stack_sub_where_16
+       9.78 ms   3048x   0.4%  triton_per_fused__to_copy_abs_add_amax_bitwise_and_cat_clamp_div_eq_exact_decode_attention_index_le_lt_mul_neg_ones_like
+       9.57 ms     84x   0.4%  void at::native::vectorized_elementwise_kernel<2, at::native::(anonymous namespace)::launch_clamp_scalar(at::TensorItera
+       9.16 ms     24x   0.4%  triton_poi_fused__to_copy_clamp_constant_pad_nd_int8_mm_round_3
+       8.62 ms    567x   0.4%  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2ul> >(int,
+       8.52 ms   3048x   0.4%  triton_per_fused___rshift____to_copy_abs_add_amax_bitwise_and_bitwise_left_shift_clamp_div_eq_int8_mm_mul_neg_ones_like_
