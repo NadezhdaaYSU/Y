@@ -173,6 +173,7 @@ def run(args):
         do_eval(0)
     times = []
     samplers = {}
+    dump = [] if args.dump else None
     for step in range(1, args.steps + 1):
         rows, ids, mask = prompts_batch(tok, train, step, args.sample_prompts or args.prompts, args.group,
                                         args.seed, task.prompt)
@@ -223,6 +224,10 @@ def run(args):
         if not args.sample_prompts:
             del entry["groups"]["kept"]
         times.append((t1 - t0, time.time() - t1))
+        if dump is not None:
+            dump.append({"step": step, "ids": ids, "mask": mask, "tokens": sampled[0].cpu(),
+                         "p": sampled[1].cpu(), "l": sampled[2].cpu(), "rewards": rewards,
+                         "keep": keep, "n": entry["n"], "sample_s": times[-1][0], "train_s": times[-1][1]})
         rec["steps"].append(entry)
         if step % args.checkpoint == 0 or step == args.steps:
             grpo.verify()
@@ -242,6 +247,9 @@ def run(args):
     rec["mismatches"] = sum(s["mismatch"] for s in rec["steps"])
     if args.save:
         torch.save(ad.state(), args.save)
+    if args.dump:
+        torch.save({"config": vars(args), "end": end, "group": args.group, "steps": dump,
+                    "machine": rec["machine"]}, args.dump)
     if args.record:
         with open(args.record, "w") as f:
             json.dump(rec, f, indent=1)
@@ -308,6 +316,8 @@ def main():
     ap.add_argument("--graphed", action="store_true",
                     help="sample with each decode step replayed from a CUDA graph (the same bits)")
     ap.add_argument("--chunk-tokens", type=int, default=None, help="train in pieces of at most this many tokens")
+    ap.add_argument("--dump", help="save each step's prompts, sampled tokens, integers, rewards, kept groups "
+                    "and times (torch.save), for a baseline to repeat the same work")
     ap.add_argument("--compare", nargs=2)
     args = ap.parse_args()
     if args.compare:

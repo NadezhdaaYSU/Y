@@ -149,6 +149,21 @@ def advantages(rewards, group: int) -> list:
     return out
 
 
+def pieces(full, chunk_tokens=None) -> list:
+    """`GRPO.step`'s split of a batch: lists of consecutive row indices,
+    each piece at most `chunk_tokens` tokens counted as its rows times its
+    longest row (`full`: each row's prompt plus completion length); None,
+    one piece."""
+    out, cur = [], []
+    for i in range(len(full)):
+        if cur and chunk_tokens is not None and (len(cur) + 1) * max(full[j] for j in cur + [i]) > chunk_tokens:
+            out.append(cur)
+            cur = []
+        cur.append(i)
+    out.append(cur)
+    return out
+
+
 MISMATCH = "rl: the trainer's probabilities of the sampled tokens are not the sampler's"
 
 
@@ -199,16 +214,9 @@ class GRPO(_lora.SFT):
         adv = advantages(rewards, group)
         pm = prompt_mask.cpu()
         full = [int(pm[i].sum()) + lens[i] for i in range(len(lens))]
-        pieces, cur = [], []
-        for i in range(len(lens)):
-            if cur and chunk_tokens is not None and (len(cur) + 1) * max(full[j] for j in cur + [i]) > chunk_tokens:
-                pieces.append(cur)
-                cur = []
-            cur.append(i)
-        pieces.append(cur)
         n = sum(lens)
         chunks, differs = [], []
-        for which in pieces:
+        for which in pieces(full, chunk_tokens):
             ids, labels, w, rows, cols = training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad,
                                                         which=which, n=n)
             ps, ls = p_s[rows, cols], l_s[rows, cols]

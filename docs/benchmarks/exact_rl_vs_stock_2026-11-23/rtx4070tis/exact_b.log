@@ -1,0 +1,18 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  71%|███████▏  | 207/290 [00:00<00:00, 1995.10it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2087.42it/s]
+W1123 23:51:50.889000 60966 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_dynamo/convert_frame.py:1994] [0/8] torch._dynamo hit config.recompile_limit (8)
+W1123 23:51:50.889000 60966 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_dynamo/convert_frame.py:1994] [0/8]    function: '_checked_product' (/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/tools/../python/y_lang/exact/lora.py:108)
+W1123 23:51:50.889000 60966 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_dynamo/convert_frame.py:1994] [0/8]    last reason: 0/1: tensor 'b' dtype mismatch. expected Double, actual Char
+W1123 23:51:50.889000 60966 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_dynamo/convert_frame.py:1994] [0/8] To log all recompilation reasons, use TORCH_LOGS="recompiles".
+W1123 23:51:50.889000 60966 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_dynamo/convert_frame.py:1994] [0/8] To diagnose recompilation issues, see https://docs.pytorch.org/docs/main/user_guide/torch_compiler/compile/programming_model.recompilation.html
+    (169 linear layers + 49 norms converted to exact form)
+step 1: reward 0.195 mismatch 0 tokens 623601f41f103988 groups {'sampled': 32, 'all_right': 0, 'all_wrong': 7, 'kept': 8} sample 43.99 s train 7.98 s
+step 2: reward 0.535 mismatch 0 tokens 1cf84fa4ad680d5f groups {'sampled': 32, 'all_right': 5, 'all_wrong': 6, 'kept': 8} sample 4.38 s train 5.64 s
+step 3: reward 0.508 mismatch 0 tokens c6f55c58fe648623 groups {'sampled': 32, 'all_right': 10, 'all_wrong': 8, 'kept': 8} sample 4.37 s train 5.37 s
+step 4: reward 0.539 mismatch 0 tokens 0143a7b2b94e7109 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 6, 'kept': 8} sample 4.40 s train 4.99 s
+step 5: reward 0.656 mismatch 0 tokens 19e09c6ccb295cdb groups {'sampled': 32, 'all_right': 16, 'all_wrong': 5, 'kept': 8} sample 4.03 s train 4.15 s
+step 6: reward 0.508 mismatch 0 tokens b5b1c5161c17a9f9 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 9, 'kept': 8} sample 3.67 s train 4.13 s
+step 7: reward 0.633 mismatch 0 tokens 64281adf95dbaa44 groups {'sampled': 32, 'all_right': 14, 'all_wrong': 8, 'kept': 8} sample 4.05 s train 4.74 s
+step 8: reward 0.609 mismatch 0 tokens a1befc5fa3ce7b06 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 5, 'kept': 8} sample 4.40 s train 4.86 s
+step 9: reward 0.574 mismatch 0 tokens f99d876e9589d2af groups {'sampled': 32, 'all_right': 14, 'all_wrong': 9, 'kept': 8} sample 4.40 s train 4.48 s
+step 10: reward 0.637 mismatch 0 tokens 6e57dbc82c1fac2c groups {'sampled': 32, 'all_right': 18, 'all_wrong': 8, 'kept': 6} sample 4.40 s train 3.60 s
