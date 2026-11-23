@@ -1,0 +1,66 @@
+step 1: 16.369 s, 3804 tokens, mismatch 0, p(target) the record
+step 2: 5.666 s, 3403 tokens, mismatch 0, p(target) the record
+step 3: 4.659 s, 2687 tokens, mismatch 0, p(target) the record
+step 4: 4.961 s, 3012 tokens, mismatch 0, p(target) the record
+step 5: 11.888 s, 2507 tokens, mismatch 0, p(target) the record
+
+profiled step: 528970 GPU kernels and copies, GPU busy 4.813 s (sum of their times; the step's wall time is above)
+
+phases (wall time on the host, calls):
+  backward          4.097 s  7 calls
+  forward           0.899 s  14 calls
+  vocab_softmax     0.016 s  14 calls
+  host_batch        0.004 s  14 calls
+  lm_head           0.002 s  14 calls
+  adam              0.001 s  2 calls
+
+kernel launches by phase: {'forward': 71511, 'vocab_softmax': 7527, 'backward': 444273, 'lm_head': 588, 'adam': 103}
+
+kernels by GPU time:
+     899.98 ms      7x  phase:forward
+     456.05 ms      7x  phase:vocab_softmax
+     163.75 ms  19336x  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+     149.27 ms  16034x  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctor_add<long>, std::array<char*, 3ul> >(
+     140.53 ms   8900x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<int>, std::array<char*, 3ul> >(i
+     130.54 ms   7745x  void at::native::vectorized_elementwise_kernel<2, at::native::BUnaryFunctor<long, long, long, at::native::rshi
+     127.32 ms  27145x  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2
+     114.88 ms  18024x  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float
+     101.59 ms  29615x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnSelf_add<int>, std::array<char*, 2u
+      96.77 ms  11100x  void at::native::vectorized_elementwise_kernel<2, at::native::BUnaryFunctor<long, long, long, at::native::lshi
+      87.32 ms  12551x  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+      83.99 ms   5880x  y_int8_mm
+      83.97 ms  24050x  void at::native::vectorized_elementwise_kernel<2, at::native::(anonymous namespace)::launch_clamp_scalar(at::T
+      77.94 ms   1848x  void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::b
+      77.91 ms   8474x  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<int, int, int, at::native::Bitwise
+      76.62 ms   2177x  void at::native::(anonymous namespace)::CatArrayBatchedCopy_vectorized<at::native::(anonymous namespace)::Opaq
+      76.48 ms   5810x  void at::native::vectorized_elementwise_kernel<2, at::native::BinaryFunctor<double, double, double, at::native
+      75.25 ms  16863x  void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<int, int, int, at::native::rshift_
+      67.65 ms   8592x  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+      67.21 ms   3164x  void at::native::vectorized_elementwise_kernel<2, at::native::BinaryFunctor<long, long, long, at::native::bina
+      63.50 ms   1440x  void at::native::(anonymous namespace)::CatArrayBatchedCopy<at::native::(anonymous namespace)::OpaqueType<4u>,
+      61.78 ms  21891x  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+      60.60 ms  22374x  void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<int, int, int, at::native::lshift_
+      60.28 ms   7070x  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+      51.08 ms   3521x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul> >
+      50.86 ms   9849x  void at::native::vectorized_elementwise_kernel<2, at::native::AUnaryFunctor<long, long, long, at::native::Bitw
+      49.76 ms   9139x  void at::native::vectorized_elementwise_kernel<4, at::native::round_kernel_cuda(at::TensorIteratorBase&)::{lam
+      46.20 ms    679x  _w8a8_gemm
+      44.50 ms   6998x  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::CUDAFunctor_add<lon
+      43.41 ms   2527x  void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::where_kernel_impl(at::Ten
+
+kernels by count:
+   29615x    101.59 ms  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctorOnSelf_add<int>, std::array<char*, 2u
+   27145x    127.32 ms  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctorOnSelf_add<long>, std::array<char*, 2
+   24621x     41.84 ms  void at::native::vectorized_elementwise_kernel<4, at::native::compare_scalar_kernel<long>(at::TensorIteratorBa
+   24050x     83.97 ms  void at::native::vectorized_elementwise_kernel<2, at::native::(anonymous namespace)::launch_clamp_scalar(at::T
+   22374x     60.60 ms  void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<int, int, int, at::native::lshift_
+   21891x     61.78 ms  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+   19336x    163.75 ms  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+   18024x    114.88 ms  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float
+   16863x     75.25 ms  void at::native::vectorized_elementwise_kernel<4, at::native::BUnaryFunctor<int, int, int, at::native::rshift_
+   16034x    149.27 ms  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctor_add<long>, std::array<char*, 3ul> >(
+   15211x     21.35 ms  void at::native::vectorized_elementwise_kernel<4, at::native::AUnaryFunctor<int, int, bool, at::native::(anony
+   12551x     87.32 ms  void at::native::unrolled_elementwise_kernel<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{la
+   11286x     12.40 ms  void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<bool, bool, bool, at::native::Bitw
+   11108x     12.86 ms  void at::native::vectorized_elementwise_kernel<2, at::native::neg_kernel_cuda(at::TensorIteratorBase&)::{lambd
+   11100x     96.77 ms  void at::native::vectorized_elementwise_kernel<2, at::native::BUnaryFunctor<long, long, long, at::native::lshi

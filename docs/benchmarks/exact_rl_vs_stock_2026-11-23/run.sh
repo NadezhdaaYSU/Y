@@ -2,6 +2,7 @@
 # Exact RL against stock bf16 PyTorch and vLLM on the same work, on this
 # machine's GPU: exact (10 steps, graphed sampler, compiled products), the
 # stock arms on its dump, vLLM on its prompts and lengths, exact again.
+# RUN names the output folder (default rtx4070tis, the first run).
 # Paths go through a link without spaces: torch.compile cannot link from a
 # path with one.
 set -euo pipefail
@@ -9,8 +10,8 @@ REPO="/home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y"
 LINK=/tmp/y_exact_nospace
 [ -e "$LINK" ] || ln -s "$REPO" "$LINK"
 D="$LINK/docs/benchmarks/exact_rl_vs_stock_2026-11-23"
-OUT="$D/rtx4070tis"
-DATA="$LINK/docs/benchmark_data/exact_rl_vs_stock"
+OUT="$D/${RUN:-rtx4070tis}"
+DATA="$LINK/docs/benchmark_data/exact_rl_vs_stock/${RUN:-}"
 mkdir -p "$OUT" "$DATA"
 PY="$LINK/venv/bin/python3"
 VPY="$HOME/vllm_env/bin/python"

@@ -1,0 +1,7 @@
+tokens digests: 10/10 steps the same
+ints digests: 10/10 steps the same
+tp digests: 10/10 steps the same
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 10 steps
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 10 steps
+adapters @10: aff2f8de68b44170 aff2f8de68b44170 same
+SAME

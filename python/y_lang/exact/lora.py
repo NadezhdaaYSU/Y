@@ -48,7 +48,8 @@ import torch.nn as nn
 from . import attention as _attn
 from . import kv as _kv
 from . import model as _model
-from .train_lm import F64_EXACT, Adam, Ops, det_sqrt, exact_product, mm_f64, reduce_checks, refuse
+from .train_lm import (F64_EXACT, Adam, Ops, det_sqrt, exact_product, exact_sum, int8_bmm_ok, mm_f64,
+                       product_widths, reduce_checks, refuse, softmax_ints)
 
 TARGETS = ("qkv_proj", "o_proj", "gate_proj", "up_proj", "down_proj", "gate_up_proj",
            "q_proj", "k_proj", "v_proj")
@@ -80,6 +81,19 @@ def mm_y_any(a, b):
     a = _pad_to(a, 1, 32)
     b = _pad_to(_pad_to(b, 1, 32), 0, 8)
     K = a.shape[1]
+    if K <= Y_MAX_K:
+        # One call. Under `torch.compile` with dynamic shapes this is a
+        # guard on K's range; the loop below would fix K to one value, and
+        # every new length (a token count, in the adapters' gradients) would
+        # compile again until the recompile limit sent the rest eager.
+        M = a.shape[0]
+        if torch.compiler.is_compiling():
+            # The op pads a's rows to its kernel's row count itself, a fill
+            # and a copy a call; padded here, the pad fuses into the kernel
+            # that makes a. Zero rows, and each output row is its own row's.
+            from ..int8_gemm import rows_bucket
+            a = torch.nn.functional.pad(a, (0, 0, 0, rows_bucket(M) - M))
+        return int8_mm(a.contiguous(), b.contiguous())[:M, :N].to(torch.int64)
     out = None
     for k0 in range(0, K, Y_MAX_K):
         part = int8_mm(a[:, k0:k0 + Y_MAX_K].contiguous(), b[:, k0:k0 + Y_MAX_K].contiguous())
@@ -142,9 +156,18 @@ class CompiledOps(Ops):
     Tests compare every product of a step with the eager one, and a value at
     the clamp."""
 
+    # A training step's products come in about 20 kinds (widths, operand
+    # types, a frozen int8 weight or not, transposed operands, batched or
+    # not), each one compiled graph with its lengths dynamic. Past PyTorch's
+    # default limit of 8 graphs a function runs eagerly, silently: measured
+    # 2026-11-24, the backward then launched about 500,000 kernels a step.
+    RECOMPILE_LIMIT = 64
+
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         _model.set_in_every_thread(torch._dynamo.config, "specialize_int", True)
+        if torch._dynamo.config.recompile_limit < self.RECOMPILE_LIMIT:
+            _model.set_in_every_thread(torch._dynamo.config, "recompile_limit", self.RECOMPILE_LIMIT)
 
     def product(self, a, b, bits_a, bits_b, batched, int8, qa, qb):
         if not a.is_cuda:
@@ -152,6 +175,10 @@ class CompiledOps(Ops):
         if not torch._dynamo.config.specialize_int:
             raise RuntimeError("lora: compiled products need torch._dynamo.config.specialize_int "
                                "(a symbolic width moves q8's clamp, see CompiledOps)")
+        # Autograd never differentiates through a product (the wrapped
+        # modules' backward calls it), so its operands' requires_grad, a
+        # guard of the compiled graph, need not double the graphs.
+        a, b = a.detach(), b.detach()
         out, conds, msgs = _compiled_product()(a, b, bits_a, bits_b, self.mm, batched, int8,
                                                self.act, qa, qb)
         for cond, msg in zip(conds, msgs):
@@ -218,19 +245,74 @@ class _LoRAFn(torch.autograd.Function):
     @staticmethod
     def backward(ctx, dy):
         mod = ctx.mod
-        ops = mod.ops
         xf, u = ctx.saved_tensors
         A, B = mod.A, mod.B
-        N = mod.base.out_features
-        dyc = dy.reshape(-1, N).to(torch.float32) * mod.scale     # a power of two: exact
-        dB = ops.matmul(dyc.t(), u.t(), grad="a")                 # [N][r], over tokens
-        du = ops.matmul(dyc, B.t(), grad="a")                     # [M][r]
-        dA = ops.matmul(du.t(), xf.t(), grad="a")                 # [r][K], over tokens
-        dx = None
-        if ctx.needs_input_grad[0]:
-            dx = mod.dx_base(dy).reshape(-1, mod.base.in_features) + ops.matmul(du, A.t(), grad="a")
+        wk, s0 = mod._weight()
+        dx, dA, dB = _run(mod.ops, _lora_backward, dy.detach(), xf, u, A.detach(), B.detach(),
+                          mod.base.sw, wk, s0, mod.scale, ctx.needs_input_grad[0], *_widths(mod.ops))
+        if dx is not None:
             dx = dx.reshape(ctx.shape)
         return dx, dA.to(A.dtype), dB.to(B.dtype), None
+
+
+def _widths(ops):
+    return ops.grad_bits, ops.bwd_bits, ops.mm, ops.act
+
+
+def _exact_mm(a, b, grad, grad_bits, bwd_bits, mm, act, bad, qb=None):
+    """`Ops.matmul` of two 2-D operands, its checks appended to `bad`."""
+    bits_a, bits_b = product_widths(a.shape[-1], grad, grad_bits, bwd_bits)
+    return exact_product(a, b, bits_a, bits_b, mm, False, False, act, None, qb, bad)
+
+
+def _lora_forward(x, A, B, base, scale, grad_bits, bwd_bits, mm, act):
+    """`LoRALinear`'s forward: ((y, x as float32 rows, u = x A^T), check
+    conditions, their messages)."""
+    bad = []
+    y = base(x)
+    xf = x.reshape(-1, base.in_features).to(torch.float32)
+    u = _exact_mm(xf, A, None, grad_bits, bwd_bits, mm, act, bad)              # [M][r]
+    z = _exact_mm(u, B, None, grad_bits, bwd_bits, mm, act, bad)               # [M][N]
+    y = (y.reshape(-1, base.out_features) + z * scale).reshape(y.shape)
+    return (y, xf, u), [c for c, _ in bad], [m for _, m in bad]
+
+
+def _lora_backward(dy, xf, u, A, B, sw, wk, s0, scale, need_dx, grad_bits, bwd_bits, mm, act):
+    """`_LoRAFn`'s backward: ((dx or None, dA, dB), check conditions, their
+    messages). dx = dY W (the frozen int8 W, its row scales folded into dY)
+    + du A."""
+    bad = []
+    N = B.shape[0]
+    dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact
+    dB = _exact_mm(dyc.t(), u.t(), "a", grad_bits, bwd_bits, mm, act, bad)     # [N][r], over tokens
+    du = _exact_mm(dyc, B.t(), "a", grad_bits, bwd_bits, mm, act, bad)         # [M][r]
+    dA = _exact_mm(du.t(), xf.t(), "a", grad_bits, bwd_bits, mm, act, bad)     # [r][K], over tokens
+    dx = None
+    if need_dx:
+        g = dy.reshape(-1, N).to(torch.float32) * sw
+        dx = (_exact_mm(g, wk, "a", grad_bits, bwd_bits, mm, act, bad, qb=(wk, s0))
+              + _exact_mm(du, A.t(), "a", grad_bits, bwd_bits, mm, act, bad))
+    # In the adapters' type (float64) here, where the cast fuses.
+    return (dx, dA.to(A.dtype), dB.to(B.dtype)), [c for c, _ in bad], [m for _, m in bad]
+
+
+def _run(ops, fn, *args):
+    """`fn(*args)`, a function of tensors and constants returning (result,
+    check conditions, their messages): compiled (one graph per kind of call,
+    shapes dynamic) when `ops` is `CompiledOps` on a GPU and nothing is being
+    compiled around it, else as it is. Its checks go to `ops.bad` as `Ops`'
+    own do."""
+    on_gpu = any(isinstance(a, torch.Tensor) and a.is_cuda for a in args)
+    if isinstance(ops, CompiledOps) and on_gpu and not torch.compiler.is_compiling():
+        if not torch._dynamo.config.specialize_int:
+            # The products' widths must be constants of the graph (see
+            # CompiledOps: a symbolic width moved q8's clamp).
+            raise RuntimeError("lora: compiled steps need torch._dynamo.config.specialize_int")
+        fn = _compiled(fn)
+    out, conds, msgs = fn(*args)
+    for cond, msg in zip(conds, msgs):
+        refuse(ops.bad, cond, msg)
+    return out
 
 
 class LoRALinear(Frozen):
@@ -246,12 +328,8 @@ class LoRALinear(Frozen):
         self.A = self.B = None
 
     def _forward(self, x, A, B):
-        y = self.base(x)
-        xf = x.reshape(-1, self.base.in_features).to(torch.float32)
-        u = self.ops.matmul(xf, A)                                 # [M][r]
-        z = self.ops.matmul(u, B)                                  # [M][N]
-        y = (y.reshape(-1, self.base.out_features) + z * self.scale).reshape(y.shape)
-        return y, xf, u
+        return _run(self.ops, _lora_forward, x.detach(), A.detach(), B.detach(), self.base, self.scale,
+                    *_widths(self.ops))
 
     def forward(self, x):
         if _needs_grad(x, self.A, self.B):
@@ -264,21 +342,41 @@ class _NormFn(torch.autograd.Function):
     def forward(ctx, x, mod):
         ctx.mod = mod
         ctx.save_for_backward(x)
-        return mod.base(x)
+        return _run(mod.ops, _module_forward, x.detach(), mod.base)
 
     @staticmethod
     def backward(ctx, dy):
         mod = ctx.mod
         ops, base = mod.ops, mod.base
         (x,) = ctx.saved_tensors
-        H = x.shape[-1]
-        xd = x.to(torch.float64)
-        v = _model.sum_of_squares(x) / _model.divisor(H, xd) + base.eps
-        r = (torch.ones_like(v) / det_sqrt(v, ops.bad)).to(torch.float32)
-        xh = x * r
-        dxh = dy.to(torch.float32) * base.weight
-        mean = (ops.sum(dxh * xh, -1) * (1.0 / H)).to(torch.float32)
-        return r * (dxh - xh * mean), None
+        div = _model.divisor(x.shape[-1], x.new_empty(0, dtype=torch.float64))
+        return _run(ops, _norm_backward, x.detach(), dy.detach(), base.weight, base.eps, div), None
+
+
+def _norm_backward(x, dy, weight, eps, div):
+    """`_NormFn`'s backward, a function of tensors and constants (so
+    `CompiledOps` users run it compiled, the same bits: integer sums, an
+    integer square root, float64 and float32 operations that the process's
+    Inductor flags round as eager does, and `div` made outside the graph so
+    it stays a divide). Returns (dx, check conditions, their messages)."""
+    bad = []
+    H = x.shape[-1]
+    v = _model.sum_of_squares(x) / div + eps
+    r = (torch.ones_like(v) / det_sqrt(v, bad)).to(torch.float32)
+    xh = x * r
+    dxh = dy.to(torch.float32) * weight
+    mean = (exact_sum(dxh * xh, -1, bad) * (1.0 / H)).to(torch.float32)
+    return r * (dxh - xh * mean), [c for c, _ in bad], [m for _, m in bad]
+
+
+_COMPILED_FNS = {}
+
+
+def _compiled(fn):
+    """`fn` under `torch.compile` with dynamic shapes, one per function."""
+    if fn not in _COMPILED_FNS:
+        _COMPILED_FNS[fn] = torch.compile(fn, dynamic=True)
+    return _COMPILED_FNS[fn]
 
 
 class Norm(nn.Module):
@@ -300,14 +398,28 @@ class _SiLUFn(torch.autograd.Function):
     def forward(ctx, x, mod):
         ctx.mod = mod
         ctx.save_for_backward(x)
-        return mod.base(x)
+        return _run(mod.ops, _silu_forward, x.detach(), mod.base)
 
     @staticmethod
     def backward(ctx, dy):
         (x,) = ctx.saved_tensors
-        sig = ctx.mod.base.sigmoid(x)
-        x = x.to(torch.float32)
-        return dy * (sig * (1.0 + x * (1.0 - sig))), None
+        return _run(ctx.mod.ops, _silu_backward, x.detach(), dy.detach(), ctx.mod.base), None
+
+
+def _module_forward(x, base):
+    """An exact module's own forward (an `ExactRMSNorm`'s), no checks."""
+    return base(x), [], []
+
+
+def _silu_forward(x, base):
+    return base(x), [], []
+
+
+def _silu_backward(x, dy, base):
+    """d silu(x) = s (1 + x (1 - s)), s the table's sigmoid."""
+    sig = base.sigmoid(x)
+    x = x.to(torch.float32)
+    return dy * (sig * (1.0 + x * (1.0 - sig))), [], []
 
 
 class SiLU(nn.Module):
@@ -326,7 +438,10 @@ class SiLU(nn.Module):
 class _AttnFn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, q, k, v, mask, module, scaling, ops):
-        out, _ = _attn.exact_attention(module, q, k, v, mask, scaling=scaling)
+        _warm_attention(q, k, scaling, ops)
+        # The module only reaches a decode cache, which training refuses
+        # (`attach`), so None: one compiled graph for every layer.
+        out = _run(ops, _attn_forward, q.detach(), k.detach(), v.detach(), mask, scaling)
         ctx.save_for_backward(q, k, v, mask if mask is not None else torch.empty(0))
         ctx.has_mask, ctx.scaling, ctx.ops = mask is not None, scaling, ops
         return out
@@ -336,21 +451,78 @@ class _AttnFn(torch.autograd.Function):
         q, k, v, mask = ctx.saved_tensors
         mask = mask if ctx.has_mask else None
         ops = ctx.ops
-        b, nh, T, d = q.shape
-        nkv, tk = k.shape[1], k.shape[-2]
-        rep = nh // nkv
+        d = q.shape[-1]
         sc = ctx.scaling if ctx.scaling is not None else 1.0 / math.sqrt(d)
-        P = attention_weights(q, k, v, mask, sc)                     # [b][nh][T][tk]
-        f32 = torch.float32
-        Pg = P.reshape(b, nkv, rep * T, tk)
-        qg = q.reshape(b, nkv, rep * T, d)
-        dOg = dout.transpose(1, 2).reshape(b, nkv, rep * T, d).to(f32)
-        dPg = ops.matmul(dOg, v, batched=True, grad="a")
-        dv = ops.matmul(Pg.transpose(-1, -2), dOg.transpose(-1, -2), batched=True, grad="b")
-        dSg = Pg * (dPg - ops.sum(Pg * dPg, -1).to(f32)) * sc
-        dq = ops.matmul(dSg, k.transpose(-1, -2), batched=True, grad="a")
-        dk = ops.matmul(dSg.transpose(-1, -2), qg.transpose(-1, -2), batched=True, grad="a")
-        return dq.reshape(b, nh, T, d), dk, dv, None, None, None, None
+        int8 = _bmm_int8(ops, q)
+        _warm_attention(q, k, ctx.scaling, ops)
+        dq, dk, dv = _run(ops, _attn_backward, q.detach(), k.detach(), v.detach(), mask, dout.detach(), sc,
+                          ops.grad_bits, ops.bwd_bits, int8, ops.act)
+        return dq, dk, dv, None, None, None, None
+
+
+def _bmm_int8(ops, q):
+    return ops.bmm == "int8" or (ops.bmm is None and q.is_cuda and int8_bmm_ok(q.device))
+
+
+_WARM = set()
+
+
+def _warm_attention(q, k, scaling, ops):
+    """Run the attention's forward and backward once, uncompiled, on a tiny
+    input of `q` and `k`'s head layout, so that what they make on first use
+    exists before a compiled graph reaches it: the exp2 table (a global
+    write) and the quantizers' divisors, which `model.divisor` refuses to
+    make while compiling (a constant there would become a reciprocal
+    multiply), sending the rest of that call eager, with a recompile per
+    length (measured 2026-11-24)."""
+    key = (q.device, q.dtype, q.shape[1], k.shape[1], q.shape[-1], scaling)
+    if key in _WARM or not isinstance(ops, CompiledOps):
+        return
+    if q.device not in _attn.TABLE:
+        _attn.TABLE[q.device] = _attn._table(q.device)
+    nh, nkv, d = q.shape[1], k.shape[1], q.shape[-1]
+    sc = scaling if scaling is not None else 1.0 / math.sqrt(d)
+    g = torch.Generator(device=q.device).manual_seed(0)
+
+    def r(*shape):
+        return torch.randn(*shape, generator=g, device=q.device).to(q.dtype)
+    with torch.no_grad():
+        _attn_forward(r(1, nh, 2, d), r(1, nkv, 2, d), r(1, nkv, 2, d), None, scaling)
+        _attn_backward(r(1, nh, 2, d), r(1, nkv, 2, d), r(1, nkv, 2, d), None, r(1, 2, nh, d), sc,
+                       ops.grad_bits, ops.bwd_bits, _bmm_int8(ops, q), ops.act)
+    _WARM.add(key)
+
+
+def _attn_forward(q, k, v, mask, scaling):
+    """`exact_attention` without a module: (output, no checks)."""
+    out, _ = _attn.exact_attention(None, q, k, v, mask, scaling=scaling)
+    return out, [], []
+
+
+def _attn_backward(q, k, v, mask, dout, sc, grad_bits, bwd_bits, int8, act):
+    """`_AttnFn`'s backward: ((dq, dk, dv), check conditions, their
+    messages), every product exact (`Ops.matmul`, batched), the softmax's
+    row sums exact (`exact_sum`), the weights the forward's own integers."""
+    bad = []
+
+    def bmm(a, b_, grad):
+        bits_a, bits_b = product_widths(a.shape[-1], grad, grad_bits, bwd_bits)
+        return exact_product(a, b_, bits_a, bits_b, None, True, int8, act, None, None, bad)
+
+    b, nh, T, d = q.shape
+    nkv, tk = k.shape[1], k.shape[-2]
+    rep = nh // nkv
+    P = attention_weights(q, k, v, mask, sc)                     # [b][nh][T][tk]
+    f32 = torch.float32
+    Pg = P.reshape(b, nkv, rep * T, tk)
+    qg = q.reshape(b, nkv, rep * T, d)
+    dOg = dout.transpose(1, 2).reshape(b, nkv, rep * T, d).to(f32)
+    dPg = bmm(dOg, v, "a")
+    dv = bmm(Pg.transpose(-1, -2), dOg.transpose(-1, -2), "b")
+    dSg = Pg * (dPg - exact_sum(Pg * dPg, -1, bad).to(f32)) * sc
+    dq = bmm(dSg, k.transpose(-1, -2), "a")
+    dk = bmm(dSg.transpose(-1, -2), qg.transpose(-1, -2), "a")
+    return (dq.reshape(b, nh, T, d), dk, dv), [c for c, _ in bad], [m for _, m in bad]
 
 
 def attention_weights(q, k, v, mask, sc):
@@ -490,6 +662,22 @@ def softmax_rows(ops, logits, rows=64, targets=None):
     return P if targets is None else (P, torch.cat(pt), torch.cat(lt))
 
 
+def _vocab_rows(logits, tgt, w, table, act):
+    """Rows of `SFT._accumulate`'s loss with per-token weights: ((p(target)
+    float, p and l of each target, dlogits = (P - onehot) * w), checks):
+    P = p / l (`Ops.ratio`) from the exact softmax's integers."""
+    bad = []
+    blocked = torch.zeros(1, logits.shape[-1], dtype=torch.bool, device=logits.device).expand(logits.shape[0], -1)
+    p, l = softmax_ints(logits, blocked, table, bad)
+    dt = torch.float64 if act is None else act
+    P = p.to(dt) / l.to(dt)
+    col = tgt[:, None]
+    onehot = torch.zeros_like(P).scatter_(1, col, 1.0)
+    d = (P - onehot) * w.to(P.dtype)[:, None]
+    out = (P.gather(1, col).reshape(-1), p.gather(1, col).reshape(-1), l.reshape(-1), d)
+    return out, [c for c, _ in bad], [m for _, m in bad]
+
+
 def target_positions(labels):
     """(flat positions whose next token is learned, those tokens): the
     usual shift, labels[t + 1] predicted at t, -100 ignored."""
@@ -593,6 +781,18 @@ class SFT:
             raise ValueError(f"lora: {tuple(weights.shape)} weights for {n} labelled tokens")
         hidden = self.forward(ids)
         logits = self.logits_at(hidden, pos)
+        if weights is not None and isinstance(self.ops, CompiledOps) and logits.is_cuda:
+            # The same values as below, `rows` at a time in one compiled
+            # call each, without the whole P or a one-hot in memory.
+            with torch.no_grad():
+                table, lg = self.ops.table(logits.device), logits.detach()
+                parts = [_run(self.ops, _vocab_rows, lg[i:i + 64], tgt[i:i + 64], weights[i:i + 64], table,
+                              self.ops.act) for i in range(0, n, 64)]
+                tp, p_t, l_t, dlogits = (torch.cat([q[j] for q in parts]) for j in range(4))
+                if check is not None:
+                    refuse(bad, *check(p_t, l_t))
+            logits.backward(dlogits)
+            return tp, p_t, l_t
         with torch.no_grad():
             P, p_t, l_t = softmax_rows(self.ops, logits.detach(), targets=tgt)
             tp = P[torch.arange(n, device=P.device), tgt]

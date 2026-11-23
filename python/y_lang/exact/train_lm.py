@@ -341,7 +341,16 @@ def capacity(bits: int) -> int:
 
 
 def _ceil_log2(n: int) -> int:
-    return max(0, (n - 1).bit_length())
+    if n <= 0 or not torch.compiler.is_compiling():
+        return max(0, (n - 1).bit_length())
+    # Under torch.compile a length is symbolic (and passes isinstance int):
+    # `bit_length` would fix it to one value, so every new length compiled
+    # again (an attention backward's key count, 2026-11-24). The same integer
+    # by comparisons, which guard only the power-of-two range it is in.
+    k = 0
+    while (1 << k) < n:
+        k += 1
+    return k
 
 
 # Each `mm` takes integer tensors a [M][K], b [N][K] with entries in
@@ -445,6 +454,42 @@ def exact_product(a, b, bits_a, bits_b, mm, batched=False, int8=False, act=None,
     return out if act in (None, torch.float64) else out.to(act)
 
 
+def softmax_ints(z, blocked, table, bad=None):
+    """`Ops.softmax_ints` with its exp2 `table` given: a function of tensors
+    and constants, so it can be compiled."""
+    refuse(bad, _fields(z)[1] == _FMT[z.dtype][2],
+           "exact train: a softmax input that is not finite (inf or NaN)")
+    logit = z * LOG2E_Q16                                  # log2 units, Q16.16
+    m = logit.masked_fill(blocked, float("-inf")).amax(dim=-1, keepdim=True)
+    t = torch.round(m - logit).clamp(0, 1 << 30).masked_fill(blocked, 1 << 30)
+    p = exp2_neg_q16_16(t, table).masked_fill(blocked, 0)  # Q0.28, int64
+    return p, p.sum(dim=-1, keepdim=True)
+
+
+def product_widths(K, grad, grad_bits, bwd_bits):
+    """(bits of a, bits of b) for `Ops.matmul`'s product over K: 8 and 8
+    forward; the gradient operand (`grad` "a" or "b") `grad_bits` and the
+    other `bwd_bits` backward. Every partial sum of digit products is at
+    most K times the digits' capacities: below 2^53, so float64 holds it
+    exactly. Known from the widths alone, so refused before anything runs."""
+    bits_a = 8 if grad is None else grad_bits if grad == "a" else bwd_bits
+    bits_b = 8 if grad is None else grad_bits if grad == "b" else bwd_bits
+    if K * capacity(bits_a) * capacity(bits_b) >= F64_EXACT:
+        raise OverflowError("exact train: a product sum could pass float64's exact integers")
+    return bits_a, bits_b
+
+
+def exact_sum(x, dim, bad=None):
+    """`Ops.sum`'s exact sum along `dim` (kept): x rounded to one fixed-point
+    scale per sum, chosen so the int64 total cannot overflow, added in
+    int64. A function of tensors and constants, so it can be compiled."""
+    s = exponent(x, dim, bad) - 61 + _ceil_log2(x.shape[dim])
+    check_exp(-s, bad)                              # and so s in [-1023, 1022]:
+    refuse(bad, s == -1023, "exact train: a scale exponent outside float64's normal range")
+    q = scaled_round(x, s)
+    return q.sum(dim=dim, keepdim=True).to(torch.float64) * pow2(s, checked=True)
+
+
 class Ops:
     """The model's sums and softmax, exact (`exact=True`) or ordinary float
     (`exact=False`: the float twin and the autograd reference)."""
@@ -506,13 +551,7 @@ class Ops:
             if self.float_mm is not None:
                 return (a.to(self.float_mm) @ b.to(self.float_mm).transpose(-1, -2)).to(a.dtype)
             return a @ b.transpose(-1, -2)
-        bits_a = 8 if grad is None else self.grad_bits if grad == "a" else self.bwd_bits
-        bits_b = 8 if grad is None else self.grad_bits if grad == "b" else self.bwd_bits
-        # Every partial sum of digit products is at most K times the digits'
-        # capacities: below 2^53, so float64 holds it exactly. Known from the
-        # widths alone, so refused before anything runs.
-        if a.shape[-1] * capacity(bits_a) * capacity(bits_b) >= F64_EXACT:
-            raise OverflowError("exact train: a product sum could pass float64's exact integers")
+        bits_a, bits_b = product_widths(a.shape[-1], grad, self.grad_bits, self.bwd_bits)
         int8 = batched and (self.bmm == "int8" or (self.bmm is None and a.is_cuda and int8_bmm_ok(a.device)))
         return self.product(a, b, bits_a, bits_b, batched, int8, qa, qb)
 
@@ -526,11 +565,7 @@ class Ops:
         per sum chosen so the int64 total cannot overflow."""
         if not self.exact:
             return x.sum(dim=dim, keepdim=True)
-        s = exponent(x, dim, self.bad) - 61 + _ceil_log2(x.shape[dim])
-        check_exp(-s, self.bad)                     # and so s in [-1023, 1022]:
-        refuse(self.bad, s == -1023, "exact train: a scale exponent outside float64's normal range")
-        q = scaled_round(x, s)
-        return q.sum(dim=dim, keepdim=True).to(torch.float64) * pow2(s, checked=True)
+        return exact_sum(x, dim, self.bad)
 
     def scatter_rows(self, idx, src, rows):
         """out[idx[t]] += src[t]: an embedding's gradient."""
@@ -574,16 +609,14 @@ class Ops:
         Q0.28 values of the integer exp2, 0 where `blocked`) and l [..][1]
         their sums along the last dimension. An exact sampler draws from
         these (`rl`)."""
-        table = self._tables.get(z.device)
+        return softmax_ints(z, blocked, self.table(z.device), self.bad)
+
+    def table(self, device):
+        """The integer exp2's table on `device`."""
+        table = self._tables.get(device)
         if table is None:
-            table = self._tables[z.device] = _table(z.device)
-        refuse(self.bad, _fields(z)[1] == _FMT[z.dtype][2],
-               "exact train: a softmax input that is not finite (inf or NaN)")
-        logit = z * LOG2E_Q16                                  # log2 units, Q16.16
-        m = logit.masked_fill(blocked, float("-inf")).amax(dim=-1, keepdim=True)
-        t = torch.round(m - logit).clamp(0, 1 << 30).masked_fill(blocked, 1 << 30)
-        p = exp2_neg_q16_16(t, table).masked_fill(blocked, 0)  # Q0.28, int64
-        return p, p.sum(dim=-1, keepdim=True)
+            table = self._tables[device] = _table(device)
+        return table
 
     def ratio(self, p, l):
         """p / l in the activations' type: the softmax from its integers."""

@@ -53,6 +53,22 @@ def batch(seed=0, B=3, T=30, prompt=10, vocab=512):
     return ids, labels
 
 
+def bits_equal(a, b):
+    """The same structure, and every tensor in it the same dtype, shape and
+    bits (floats compared as integers of their width, so a NaN or -0.0
+    counts)."""
+    if isinstance(a, (tuple, list)):
+        return isinstance(b, (tuple, list)) and len(a) == len(b) and all(map(bits_equal, a, b))
+    if isinstance(a, torch.Tensor):
+        if not isinstance(b, torch.Tensor) or a.dtype != b.dtype or a.shape != b.shape:
+            return False
+        if a.dtype.is_floating_point:
+            it = {2: torch.int16, 4: torch.int32, 8: torch.int64}[a.element_size()]
+            a, b = a.contiguous().view(it), b.contiguous().view(it)
+        return torch.equal(a, b)
+    return a == b
+
+
 def train_tiny(device, steps=4, mm=None, compile=False, lengths=(30,)):
     from y_lang.exact import lora
     m = tiny_model().to(device)
@@ -365,28 +381,44 @@ class OnTheGpu(unittest.TestCase):
         ref = train_tiny("cpu")[:2]
         self.assertEqual(train_tiny("cuda")[:2], ref)
 
-    def test_compiled_products_are_the_eager_ones(self):
-        """Every product of five steps (three batch lengths, so the shapes
-        change under the compiled code), compiled against eager, bit for bit;
+    def test_compiled_steps_are_the_eager_ones(self):
+        """Every compiled call of five steps (three batch lengths, so the
+        shapes change under the compiled code) against the same call eager,
+        bit for bit, every output and every check: the adapters' forward and
+        backward, the norms', SiLU's and attention's (`lora._run`), and the
+        products compiled alone (`CompiledOps.product`, the frozen head's);
         and the adapters and every step's p(target) the CPU's."""
         from unittest import mock
         from y_lang.exact import lora
         torch.backends.cuda.matmul.allow_tf32 = False
         lengths = (30, 27, 33)
         same = []
-        compiled = lora.CompiledOps.product
+        compiled_product, compiled = lora.CompiledOps.product, lora._compiled
 
-        def both(ops, a, b, bits_a, bits_b, batched, int8, qa, qb):
+        def product(ops, a, b, bits_a, bits_b, batched, int8, qa, qb):
             want = lora.Ops.product(ops, a, b, bits_a, bits_b, batched, int8, qa, qb)
-            got = compiled(ops, a, b, bits_a, bits_b, batched, int8, qa, qb)
-            same.append(want.dtype == got.dtype and torch.equal(
-                want.contiguous().view(torch.int32), got.contiguous().view(torch.int32)))
+            got = compiled_product(ops, a, b, bits_a, bits_b, batched, int8, qa, qb)
+            same.append(("product", bits_equal(want, got)))
             return got
-        with mock.patch.object(lora.CompiledOps, "product", both):
+
+        def both(fn):
+            c = compiled(fn)
+
+            def run(*args):
+                want, got = fn(*args), c(*args)
+                same.append((fn.__name__, bits_equal(want, got)))
+                return got
+            return run
+        with mock.patch.object(lora.CompiledOps, "product", product), mock.patch.object(lora, "_compiled", both):
             got = train_tiny("cuda", steps=5, compile=True, lengths=lengths)
         self.assertIsInstance(got[2].ops, lora.CompiledOps)
+        kinds = {k for k, _ in same}
+        for k in ("_lora_forward", "_lora_backward", "_norm_backward", "_module_forward", "_silu_forward",
+                  "_silu_backward", "_attn_forward", "_attn_backward", "product"):
+            self.assertIn(k, kinds)
         self.assertGreater(len(same), 100)
-        self.assertEqual(same.count(False), 0, f"{same.count(False)} of {len(same)} products differ")
+        bad = [k for k, ok in same if not ok]
+        self.assertEqual(bad, [], f"{len(bad)} of {len(same)} compiled calls differ")
         self.assertEqual(got[:2], train_tiny("cpu", steps=5, lengths=lengths)[:2])
 
     def test_compiled_products_keep_the_clamp(self):

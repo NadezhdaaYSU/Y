@@ -91,6 +91,29 @@ compiles and records).
   compiled softmax and draw over 256 x 151,936 logits were not profiled.
   vLLM is the stock sampler that counts.
 
+## After the training fixes (2026-11-24)
+
+`../exact_rl_train_profile_2026-11-24/` found exact training running mostly
+uncompiled (PyTorch's recompile limit) and fixed it. `run.sh` again, all
+of it (`RUN=rtx4070tis_train_fixed`), same order, same machine:
+
+| | exact | stock | exact takes |
+|---|---|---|---|
+| sampling, vLLM | 3.88 | 1.15 | **3.4x** the time |
+| sampling, bf16 PyTorch eager | | 2.04 | 1.9x |
+| training, compiled, max-autotune | **1.08** (was 4.42) | 0.302 | **3.6x** (was 14.9x) |
+| training, compiled, default | | 0.305 | 3.5x |
+| training, eager | | 0.388 | 2.8x |
+| a whole step (vLLM + max-autotune) | 4.96 (was 8.60) | 1.45 | **3.4x** (was 6.0x) |
+
+The two exact runs have the same sampled tokens, sampler integers,
+p(target) and adapters at every step as each other and as the first
+exact run here (`exact_ab_compare.txt`; adapters at step 10 aff2f8de68b44170
+in all four). Exact training is 4.1 times faster; sampling is now most of
+an exact step (3.88 of 4.96 s). The stock trainers' mean log p agreed to
+0.12 this time (0.04 before): each trains its own adapters in bf16, and the
+second round repeats the steps after ten updates.
+
 ## Not covered
 
 - One GPU, one model size, 10 steps. Exact's training time includes the
