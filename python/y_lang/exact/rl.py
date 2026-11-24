@@ -279,7 +279,14 @@ def graphed_sampler(model, ops, batch, prompt_len, new_tokens, rows=64, stop=Non
         token's integers anyway."""
 
         def __init__(self):
-            super().__init__(model, batch, prompt_len, new_tokens)
+            # The adapters' attention (`lora.attention`, which `sample` and the
+            # recorded decode step use), not GraphedGreedy's default
+            # `exact_attention`: with no gradients it runs the prefill's
+            # attention compiled (`lora._run`), where `exact_attention` ran it
+            # eagerly, 205 of the prefill's 446 ms at 256 rows of 35 tokens
+            # (2026-11-24). A module `attach` did not register falls back to
+            # `exact_attention`. The same bits (tests: graphed == sample).
+            super().__init__(model, batch, prompt_len, new_tokens, attention=_lora.attention)
             dev = self.dev
             self.ops, self.rows, self.stop, self.every = ops, rows, stop, every
             self.rand = torch.zeros((batch, new_tokens), dtype=torch.int64, device=dev)

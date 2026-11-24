@@ -75,6 +75,20 @@ kernels = [e for e in ev if e.device_type == torch.autograd.DeviceType.CUDA]
 busy = sum(e.time_range.elapsed_us() for e in kernels) / 1e3
 say(f"profiled run: {len(kernels)} kernels, GPU busy {busy:.1f} ms, {busy / n:.2f} ms a token, "
     f"{len(kernels) / n:.0f} kernels a token")
+launches = [e.time_range.start for e in ev if e.device_type == torch.autograd.DeviceType.CPU
+            and e.name == "cudaGraphLaunch"]
+if launches:
+    first = min(launches)
+    pre = [e for e in kernels if e.time_range.start < first]
+    say(f"before the first graph replay (the prefill and the first draw): {len(pre)} kernels, "
+        f"GPU busy {sum(e.time_range.elapsed_us() for e in pre) / 1e3:.1f} ms")
+    pby = defaultdict(lambda: [0.0, 0])
+    for e in pre:
+        pby[e.name][0] += e.time_range.elapsed_us() / 1e3
+        pby[e.name][1] += 1
+    say("  its kernels by GPU time:")
+    for name, (t, c) in sorted(pby.items(), key=lambda kv: -kv[1][0])[:25]:
+        say(f"  {t:9.2f} ms {c:6d}x  {name[:120]}")
 by = defaultdict(lambda: [0.0, 0])
 for e in kernels:
     by[e.name][0] += e.time_range.elapsed_us() / 1e3
