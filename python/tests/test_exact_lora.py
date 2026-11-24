@@ -381,6 +381,25 @@ class OnTheGpu(unittest.TestCase):
             got = lora.mm_y_any(a.cuda(), b.cuda()).cpu()
             self.assertTrue(torch.equal(got, a @ b.t()), (M_, N_, K_))
 
+    def test_moved_to_a_gpu_without_the_triton_dot(self):
+        """A model converted on the CPU and moved to a GPU below sm_80 (a T4)
+        leaves Triton's int8 dot, which does not build there, as `convert`
+        on that GPU would; its logits are the Triton path's, bit for bit.
+        (Only the move sees sm_75, so no other cache learns it.)"""
+        from unittest import mock
+        from y_lang.exact import model as M
+        ids = batch()[0].cuda()
+        with mock.patch.object(torch.cuda, "get_device_capability", lambda *_: (7, 5)):
+            old = tiny_model().to("cuda")
+        new = tiny_model().to("cuda")
+        lin = lambda m: [x for x in m.modules() if isinstance(x, M.ExactLinear)]  # noqa: E731
+        self.assertTrue(lin(old) and not any(x.triton_ok for x in lin(old)))
+        self.assertEqual(all(x.triton_ok for x in lin(new)), M.triton_int8_dot_ok("cuda"))
+        with torch.no_grad():
+            self.assertTrue(bits_equal(old(ids).logits, new(ids).logits))
+        old.to("cpu").to("cuda")
+        self.assertEqual(all(x.triton_ok for x in lin(old)), M.triton_int8_dot_ok("cuda"))
+
     def test_the_cpus_adapters_on_the_gpu(self):
         torch.backends.cuda.matmul.allow_tf32 = False
         ref = train_tiny("cpu")[:2]

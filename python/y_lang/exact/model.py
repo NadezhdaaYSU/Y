@@ -483,6 +483,17 @@ class ExactLinear(nn.Module):
             setattr(m, f, getattr(first, f))
         return m
 
+    def _apply(self, fn, *args, **kwargs):
+        """`.to()`, `.cuda()`: a layer converted on the CPU and moved to a GPU
+        decides again whether that GPU can build Triton's int8 dot (not below
+        sm_80), as `convert` decides for a layer converted on its GPU. Moved
+        to a T4 it would otherwise call the Triton kernel, which does not
+        compile there; the other paths give the same bits."""
+        out = super()._apply(fn, *args, **kwargs)
+        if self.w8t.is_cuda:
+            self.triton_ok = triton_int8_dot_ok(self.w8t.device)
+        return out
+
     def forward(self, x):
         shape = x.shape
         xf = x.reshape(-1, shape[-1])
