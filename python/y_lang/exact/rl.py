@@ -39,6 +39,7 @@ import hashlib
 import torch
 
 from . import lora as _lora
+from . import vocab_draw as _vocab_draw
 from .kv import new_cache
 
 R_BITS = 62
@@ -96,7 +97,13 @@ def draw_rows(ops, logits, r, rows=64):
     with the integers `r` [B]: the exact softmax's integers and the inverse
     CDF, `rows` rows at a time. Each row's softmax and draw are its own, and
     the int64 numerators of a whole batch over the vocabulary do not fit
-    (256 rows: about 8 GB at the peak), so any `rows` gives the same bits."""
+    (256 rows: about 8 GB at the peak), so any `rows` gives the same bits.
+
+    On a GPU the softmax and the draw run as one kernel
+    (`vocab_draw`, the same bits; `Y_EXACT_DRAW=torch` for this code),
+    which never stores p for the whole vocabulary."""
+    if logits.is_cuda and logits.dtype == torch.float32 and _vocab_draw.available(logits.device):
+        return _vocab_draw.draw(logits.contiguous(), r, ops.table(logits.device), ops.bad)
     token, pt, lt = [], [], []
     for i in range(0, logits.shape[0], rows):
         z = logits[i:i + rows]
