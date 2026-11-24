@@ -30,6 +30,8 @@ ap.add_argument("record")
 ap.add_argument("--steps", type=int, default=5, help="the last is profiled, the one before timed bare")
 ap.add_argument("--out")
 ap.add_argument("--eager", action="store_true", help="products eager too (no --compile)")
+ap.add_argument("--chunk-tokens", type=int, help="pieces of this many tokens, not the run's (a different "
+                "exact function: p(target) is then not compared with the record)")
 args = ap.parse_args()
 
 d = torch.load(args.dump, weights_only=False)
@@ -77,7 +79,7 @@ def train(s):
     r = torch.tensor([g * G + j for g in s["keep"] for j in range(G)])
     sub = tuple(t.cuda()[r] for t in (s["tokens"], s["p"], s["l"]))
     return grpo.step(s["ids"].cuda()[r], s["mask"].cuda()[r], sub, [s["rewards"][i] for i in r.tolist()],
-                     end, G, chunk_tokens=cfg["chunk_tokens"])
+                     end, G, chunk_tokens=args.chunk_tokens or cfg["chunk_tokens"])
 
 
 lines = []
@@ -101,12 +103,15 @@ for s in d["steps"][:args.steps]:
         tp, mism = train(s)
         torch.cuda.synchronize()
     dt = time.perf_counter() - t0
-    same = lora.tp_digest(tp) == want[st]["tp"]
+    same = args.chunk_tokens is not None or lora.tp_digest(tp) == want[st]["tp"]
     say(f"step {st}: {dt:.3f} s, {int(tp.numel())} tokens, mismatch {mism}, p(target) "
         f"{'the record' if same else 'NOT the record'}")
-    if not same or mism:
+    if (not same or mism) and not args.chunk_tokens:
         sys.exit("the replay is not the record")
-grpo.verify()
+if not args.chunk_tokens:
+    # (Other pieces train other adapters, so from step 2 the dump's sampled
+    # integers are not this trainer's: a timing run, not a replay.)
+    grpo.verify()
 
 ev = prof.events()
 kernels = [e for e in ev if e.device_type == torch.autograd.DeviceType.CUDA

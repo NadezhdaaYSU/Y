@@ -95,6 +95,31 @@ re-quantized every cached K/V row every token; the draw wrote a running sum
 over the whole vocabulary. What is left: Y's decode attention 17%, the
 GEMMs 15%, the vocabulary softmax 12%, the adapters' products 6%.
 
+## The fused product, and what did not help (later the same day)
+
+- **The adapters' products in one kernel** (`y_lang.exact.qmm`, 7accac9):
+  40,773 kernels a step (was 54,567), GPU busy 0.67 s (0.75); the median
+  of steps 4 to 9 1.05 s against 1.13 s (`profile_train_qmm1.txt`,
+  `_qmm0.txt`), and 0.99 s in a later run (`_qmm_custom_B.txt`). Alone the
+  kernel is slower than Y's GEMM on the same digits (64 against 44 us on
+  the large products, 19 against 5 to 7 on the rank-16 ones); it wins by
+  replacing four or five kernels with one.
+- **The same kernel as a `torch.library.triton_op`** (launched from the
+  compiled code, tiles by size class): the adapters' backward used half the
+  host time, but under compilation the kernel ran 2.7 times slower; steps
+  1.32 and 1.37 s against 0.99 s, run new, old, new
+  (`_qmm_op_A.txt`, `_qmm_custom_B.txt`, `_qmm_op_C.txt`). Not kept.
+- **cuBLAS's int8 GEMM for the adapters' products**: cuBLASLt refused the
+  layout Inductor gave the transposed operand (`CUBLAS_STATUS_NOT_SUPPORTED`).
+- **CUDA graphs**: a piece's shape changes from step to step, so a graph
+  would be recorded again almost every call; fixed shapes need padding,
+  which moves the quantizers' scales and so changes the bits.
+- **Larger pieces** (`--chunk-tokens`, a different exact function): 4,096
+  tokens ran out of the 16 GB; 2,048 halved the kernels (20,333) but the
+  steps stayed within the noise (`_chunk2048.txt`).
+- Measuring needs the GPU to itself: while a browser tab used it, Y's GEMM
+  alone took 4 to 8 times as long.
+
 ## Not done
 
 - The adapters' backward still launches 44 kernels a call: each of its five
