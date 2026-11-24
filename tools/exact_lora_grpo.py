@@ -190,6 +190,7 @@ def run(args):
         rand = rl.uniforms(args.seed, step, ids.shape[0], args.new)
         if device != "cpu":
             torch.cuda.synchronize()
+            torch.cuda.reset_peak_memory_stats()
         t0 = time.time()
         bad = []
         ad.ops.bad = bad
@@ -235,6 +236,8 @@ def run(args):
             del entry["groups"]["kept"]
         times.append((t1 - t0, time.time() - t1))
         entry.update(sample_s=round(times[-1][0], 3), train_s=round(times[-1][1], 3))
+        if device != "cpu":
+            entry["peak_gb"] = round(torch.cuda.max_memory_allocated() / 2 ** 30, 2)
         if dump is not None:
             dump.append({"step": step, "ids": ids, "mask": mask, "tokens": sampled[0].cpu(),
                          "p": sampled[1].cpu(), "l": sampled[2].cpu(), "rewards": rewards,
@@ -247,7 +250,8 @@ def run(args):
         if step % args.log == 0 or step == args.steps:
             s = rec["steps"][-1]
             print(f"step {step}: reward {s['reward']:.3f} mismatch {mism} tokens {s['tokens']} "
-                  f"groups {s['groups']} sample {times[-1][0]:.2f} s train {times[-1][1]:.2f} s", flush=True)
+                  f"groups {s['groups']} sample {times[-1][0]:.2f} s train {times[-1][1]:.2f} s"
+                  + (f" peak {s['peak_gb']} GB" if "peak_gb" in s else ""), flush=True)
         if args.eval and args.eval_every and (step % args.eval_every == 0 or step == args.steps):
             do_eval(step)
             save_partial(step)
