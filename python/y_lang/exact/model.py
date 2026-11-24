@@ -928,7 +928,7 @@ def _merged_attention_forward(self, hidden_states, position_embeddings, attentio
     attn_output, attn_weights = attention_interface(
         self, query_states, key_states, value_states, attention_mask,
         dropout=0.0 if not self.training else self.attention_dropout,
-        scaling=self.scaling, sliding_window=self.sliding_window, **kwargs)
+        scaling=self.scaling, sliding_window=getattr(self, "sliding_window", None), **kwargs)
     attn_output = attn_output.reshape(*input_shape, -1).contiguous()
     attn_output = self.o_proj(attn_output)
     return attn_output, attn_weights
@@ -972,6 +972,13 @@ def unmerged_buffer_shapes(model):
     return out
 
 
+def attention_and_mlp_classes():
+    """transformers' attention and MLP classes of the supported models."""
+    import transformers.models.llama.modeling_llama as llama
+    import transformers.models.qwen2.modeling_qwen2 as qwen2
+    return (qwen2.Qwen2Attention, llama.LlamaAttention), (qwen2.Qwen2MLP, llama.LlamaMLP)
+
+
 def merge_projections(model, groups=("qkv", "gate_up")):
     """Merge each Qwen2 layer's q/k/v and gate/up ExactLinears
     (`ExactLinear.merge`): 4 GEMMs a layer where there were 7, and as many
@@ -982,11 +989,10 @@ def merge_projections(model, groups=("qkv", "gate_up")):
     import inspect
     import sys
     import types
-    import transformers.models.qwen2.modeling_qwen2 as qwen2
-    attention_src = inspect.getsource(qwen2.Qwen2Attention.forward)
-    mlp_src = inspect.getsource(qwen2.Qwen2MLP.forward)
-    missing = [line for line in _ATTENTION_LINES if line not in attention_src]
-    missing += [line for line in _MLP_LINES if line not in mlp_src]
+    attention_classes, mlp_classes = attention_and_mlp_classes()
+    missing = [line for c in attention_classes for line in _ATTENTION_LINES
+               if line not in inspect.getsource(c.forward)]
+    missing += [line for c in mlp_classes for line in _MLP_LINES if line not in inspect.getsource(c.forward)]
     if missing:
         sys.stderr.write(
             "y_lang.exact: transformers' Qwen2 forwards are not the ones the merged "
@@ -996,9 +1002,9 @@ def merge_projections(model, groups=("qkv", "gate_up")):
     merged = 0
     for mod in list(model.modules()):
         names = None
-        if isinstance(mod, qwen2.Qwen2Attention) and "qkv" in groups:
+        if isinstance(mod, attention_classes) and "qkv" in groups:
             names, fused, sizes, fwd = ("q_proj", "k_proj", "v_proj"), "qkv_proj", "qkv_sizes", _merged_attention_forward
-        elif isinstance(mod, qwen2.Qwen2MLP) and "gate_up" in groups:
+        elif isinstance(mod, mlp_classes) and "gate_up" in groups:
             names, fused, sizes, fwd = ("gate_proj", "up_proj"), "gate_up_proj", "gate_up_sizes", _merged_mlp_forward
         if names is None or not all(isinstance(getattr(mod, n, None), ExactLinear) for n in names):
             continue
@@ -1063,6 +1069,16 @@ def convert(model, linears=True, norms=True, floats=None, merge=None):
     groups = MERGE if merge is None else (("qkv", "gate_up") if merge is True else (merge or ()))
     if groups:
         merge_projections(model, groups)
+    if model_type == "llama" and linears:
+        # Llama's own forward calls its own module's eager attention, which the
+        # exact path does not replace; only the merged forward reaches it.
+        import transformers.models.llama.modeling_llama as llama
+        left = [n for n, m in model.named_modules()
+                if isinstance(m, llama.LlamaAttention) and not hasattr(m, "qkv_proj")]
+        if left:
+            raise ValueError(f"y_lang.exact convert: {len(left)} Llama attention layers were not "
+                             f"merged (Y_EXACT_MERGE without qkv?), so their attention would stay "
+                             f"float; merge q/k/v")
     exact = [m for m in model.modules() if isinstance(m, ExactLinear)]
     shapes = sorted({(m.out_features, m.in_features) for m in exact})
     if exact:

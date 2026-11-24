@@ -1,0 +1,95 @@
+{
+ "config": {
+  "device": "cpu",
+  "steps": 3,
+  "prompts": 4,
+  "group": 4,
+  "new": 6,
+  "lr": 0.0001,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 0,
+  "eval_every": 0,
+  "eval_batch": 100,
+  "checkpoint": 3,
+  "log": 1,
+  "record": "/tmp/claude-1000/-home-yumin-NVME-files-YSU-engine-main-YSU-engine-main-src-Y-lang-Y/8ed295d8-e66f-4af6-8439-a5fa065fbc5d/scratchpad/llama_cpu.json",
+  "save": null,
+  "load": null,
+  "compile": false,
+  "model": "unsloth/Llama-3.2-1B-Instruct",
+  "mode": "number",
+  "digits": 2,
+  "eval_new": 6,
+  "sample_prompts": 0,
+  "early_stop": false,
+  "graphed": false,
+  "sample_rows": 64,
+  "chunk_tokens": null,
+  "dump": null,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.14.8",
+  "torch": "2.13.0+cu130",
+  "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+  "transformers": "5.15.0",
+  "gemm": "triton"
+ },
+ "steps": [
+  {
+   "step": 1,
+   "tokens": "2021b626e027f335",
+   "ints": "a4beb7b376ef6c30",
+   "reward": 0.0625,
+   "groups": {
+    "sampled": 4,
+    "all_right": 0,
+    "all_wrong": 3
+   },
+   "mismatch": 0,
+   "tp": "70a24c183b26718c",
+   "n": 47
+  },
+  {
+   "step": 2,
+   "tokens": "4dfddeb0520f0f50",
+   "ints": "500545aaadb9fbde",
+   "reward": 0.3125,
+   "groups": {
+    "sampled": 4,
+    "all_right": 1,
+    "all_wrong": 2
+   },
+   "mismatch": 0,
+   "tp": "b78e2baba606eb54",
+   "n": 44
+  },
+  {
+   "step": 3,
+   "tokens": "ffcc8b78a5da0b9f",
+   "ints": "89275e417d82284f",
+   "reward": 0.125,
+   "groups": {
+    "sampled": 4,
+    "all_right": 0,
+    "all_wrong": 3
+   },
+   "mismatch": 0,
+   "tp": "7cfc867983f2b6a0",
+   "n": 48
+  }
+ ],
+ "checkpoints": {
+  "3": "707719f314858a53"
+ },
+ "evals": {},
+ "init": "0900e113c70ec6df",
+ "seconds_per_step": {
+  "sample": 3.8067805767059326,
+  "train": 14.587612867355347
+ },
+ "final": "707719f314858a53",
+ "mismatches": 0
+}

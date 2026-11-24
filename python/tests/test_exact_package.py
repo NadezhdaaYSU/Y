@@ -107,30 +107,87 @@ class TestLoad(unittest.TestCase):
 
     def test_refuses_another_architecture(self):
         from y_lang.exact import load
-        d = self.tmp / "llama"
+        d = self.tmp / "gemma"
         d.mkdir()
         (d / "config.json").write_text(json.dumps({
-            "model_type": "llama", "hidden_size": 64, "intermediate_size": 128,
+            "model_type": "gemma", "hidden_size": 64, "intermediate_size": 128,
             "num_hidden_layers": 1, "num_attention_heads": 4, "vocab_size": 128}))
-        with self.assertRaisesRegex(ValueError, "'llama' model; y_lang.exact supports qwen2 only"):
+        with self.assertRaisesRegex(ValueError, "'gemma' model; y_lang.exact supports qwen2, llama only"):
             load(str(d))
 
     def test_convert_refuses_another_architecture_before_touching_it(self):
-        # `convert` matches layers by class name, so on a Llama or Gemma it
-        # would run and give another model (float attention, Qwen2's norm and
-        # rotary embedding). It must refuse first and leave the model as it was.
+        # `convert` matches layers by class name, so on a Gemma it would run
+        # and give another model (its `(1 + weight)` RMSNorm as Qwen2's
+        # `weight` one). It must refuse first and leave the model as it was.
         import torch
-        from transformers import LlamaConfig, LlamaForCausalLM
+        from transformers import GemmaConfig, GemmaForCausalLM
         from y_lang.exact import model as em
-        m = LlamaForCausalLM(LlamaConfig(vocab_size=64, hidden_size=32, intermediate_size=64,
+        m = GemmaForCausalLM(GemmaConfig(vocab_size=64, hidden_size=32, intermediate_size=64,
                                          num_hidden_layers=1, num_attention_heads=4,
-                                         num_key_value_heads=2)).eval()
+                                         num_key_value_heads=2, head_dim=8)).eval()
         before = [type(x).__name__ for x in m.modules()]
-        with self.assertRaisesRegex(ValueError, "model_type 'llama'.*supports qwen2 only"):
+        with self.assertRaisesRegex(ValueError, "model_type 'gemma'.*supports qwen2, llama only"):
             em.convert(m)
         self.assertEqual([type(x).__name__ for x in m.modules()], before)
         with self.assertRaisesRegex(ValueError, "model_type None"):
             em.convert(torch.nn.Sequential(torch.nn.Linear(4, 4)))
+
+    def test_a_tiny_llama3_is_converted_close_and_batch_invariant(self):
+        """A Llama with Llama 3's scaled rotary embedding: every layer exact,
+        q/k/v merged (its own forward would call its own float attention),
+        logits close to the float model's, the rotary table the scaled one
+        (and far from the unscaled one), batch invariant; refused unmerged."""
+        import torch
+        from transformers import AutoTokenizer, LlamaConfig, LlamaForCausalLM
+        try:
+            tok = AutoTokenizer.from_pretrained(TOKENIZER)
+        except Exception as e:                      # not in the local cache
+            self.skipTest(f"{TOKENIZER}'s tokenizer is not cached: {e}")
+        d = self.tmp / "tiny_llama3"
+        torch.manual_seed(0)
+        rope = {"rope_type": "llama3", "factor": 8.0, "low_freq_factor": 1.0, "high_freq_factor": 4.0,
+                "original_max_position_embeddings": 64, "rope_theta": 10000.0}
+        cfg = LlamaConfig(vocab_size=len(tok), hidden_size=64, intermediate_size=128, num_hidden_layers=2,
+                          num_attention_heads=4, num_key_value_heads=2, max_position_embeddings=512,
+                          tie_word_embeddings=True, rope_parameters=rope)
+        reference = LlamaForCausalLM(cfg).eval()
+        reference.save_pretrained(d)
+        tok.save_pretrained(d)
+
+        from y_lang.exact import attention, generate, load
+        from y_lang.exact import model as em
+        model, tok2 = load(str(d), "cpu")
+        self.assertEqual([m for m in model.modules() if isinstance(m, torch.nn.Linear)], [])
+        self.assertEqual(model.model.layers[0].self_attn.qkv_sizes, (64, 32, 32))
+
+        # The rotary table is the scaled embedding's, not the plain one's.
+        x = torch.zeros(1, 1, 64)
+        pos = torch.arange(500)[None]
+        cos_exact = model.model.rotary_emb(x, pos)[0]
+        cos_float = reference.model.rotary_emb(x, pos)[0]
+        # (stock evaluates position * inv_freq in float32: about 4e-6 off at
+        # position 500; the table rounds a float64 angle once)
+        self.assertLess(float((cos_exact - cos_float).abs().max()), 1e-4)
+        plain = LlamaForCausalLM(LlamaConfig(**{**cfg.to_dict(), "rope_parameters": {
+            "rope_type": "default", "rope_theta": 10000.0}})).model.rotary_emb(x, pos)[0]
+        self.assertGreater(float((cos_float - plain).abs().max()), 0.1)
+
+        ids = tok("The capital of France is", return_tensors="pt").input_ids
+        with torch.no_grad():
+            want = reference(ids).logits.float()
+            got = model(ids).logits.float()
+        rel = ((got - want).norm() / want.norm()).item()
+        self.assertLess(rel, 0.05, f"exact logits are {rel:.3f} away from the float model's")
+
+        prompt = "A suspension bridge carries the weight of the deck"
+        alone = generate(model, tok2, prompt, max_new_tokens=12)
+        self.assertEqual(alone, attention.decode(model, tok2, prompt, 5, 12, torch.device("cpu")))
+
+        from transformers import AutoModelForCausalLM
+        unmerged = AutoModelForCausalLM.from_pretrained(str(d), dtype=torch.float32,
+                                                        attn_implementation="eager").eval()
+        with self.assertRaisesRegex(ValueError, "Llama attention layers were not merged"):
+            em.convert(unmerged, merge=False)
 
     def test_a_tiny_qwen2_is_converted_close_and_batch_invariant(self):
         import torch

@@ -660,7 +660,7 @@ def attach(model, r=16, alpha=16, targets=None, seed=0, mm=None, grad_bits=12, b
                 setattr(mod, name, Norm(child, ops))
             elif isinstance(child, _model.ExactSiLU):
                 setattr(mod, name, SiLU(child, ops))
-            if isinstance(child, qwen2.Qwen2Attention):
+            if isinstance(child, _model.attention_and_mlp_classes()[0]):
                 _OPS[id(child)] = ops
     if not modules:
         raise ValueError(f"lora: no exact linear layer named {targets} in a decoder layer")

@@ -47,7 +47,11 @@ imported.
 
 __all__ = ["load", "generate", "SUPPORTED_MODEL_TYPES"]
 
-SUPPORTED_MODEL_TYPES = ("qwen2",)
+# Llama's attention and MLP forwards are Qwen2's line for line (its q/k/v
+# without a bias, its rotary embedding's frequencies scaled when built), so
+# both run through the same merged forwards and exact attention; `convert`
+# refuses a Llama whose attention was not merged (it would stay float).
+SUPPORTED_MODEL_TYPES = ("qwen2", "llama")
 
 
 def load(model_id, device="cpu", *, low_memory=False):
@@ -72,6 +76,9 @@ def load(model_id, device="cpu", *, low_memory=False):
         raise ValueError(
             f"{model_id} is a {config.model_type!r} model; y_lang.exact supports "
             f"{', '.join(SUPPORTED_MODEL_TYPES)} only")
+    if low_memory and config.model_type != "qwen2":
+        raise ValueError(f"low_memory builds Qwen2 layers by hand; {config.model_type!r} is not "
+                         f"checked there")
     if low_memory:
         from .large_model import build_exact
         model = build_exact(model_id, device)

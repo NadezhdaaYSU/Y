@@ -20,18 +20,23 @@ def rel(a, b):
     return float((a - b).norm() / b.norm())
 
 
-def tiny_model(seed=0, layers=2):
+def tiny_model(seed=0, layers=2, arch="qwen2"):
     """A random Qwen2 (vocab 512, width 64, 4 query heads over 2 K/V heads),
-    converted to the exact form."""
+    or the same as a Llama with Llama 3's scaled rotary embedding, converted
+    to the exact form."""
     import transformers.models.qwen2.modeling_qwen2 as qwen2
-    from transformers import Qwen2Config, Qwen2ForCausalLM
+    from transformers import LlamaConfig, LlamaForCausalLM, Qwen2Config, Qwen2ForCausalLM
     from y_lang.exact import attention as A, model as M
     torch.manual_seed(seed)
-    cfg = Qwen2Config(vocab_size=512, hidden_size=64, intermediate_size=128,
-                      num_hidden_layers=layers, num_attention_heads=4, num_key_value_heads=2,
-                      max_position_embeddings=128, tie_word_embeddings=True,
-                      attn_implementation="eager")
-    m = Qwen2ForCausalLM(cfg).float().eval()
+    shape = dict(vocab_size=512, hidden_size=64, intermediate_size=128,
+                 num_hidden_layers=layers, num_attention_heads=4, num_key_value_heads=2,
+                 max_position_embeddings=128, tie_word_embeddings=True, attn_implementation="eager")
+    if arch == "llama":
+        rope = {"rope_type": "llama3", "factor": 8.0, "low_freq_factor": 1.0, "high_freq_factor": 4.0,
+                "original_max_position_embeddings": 32, "rope_theta": 10000.0}
+        m = LlamaForCausalLM(LlamaConfig(**shape, rope_parameters=rope)).float().eval()
+    else:
+        m = Qwen2ForCausalLM(Qwen2Config(**shape)).float().eval()
     qwen2.eager_attention_forward = A.exact_attention
     M.convert(m)
     return m
@@ -69,9 +74,9 @@ def bits_equal(a, b):
     return a == b
 
 
-def train_tiny(device, steps=4, mm=None, compile=False, lengths=(30,)):
+def train_tiny(device, steps=4, mm=None, compile=False, lengths=(30,), arch="qwen2"):
     from y_lang.exact import lora
-    m = tiny_model().to(device)
+    m = tiny_model(arch=arch).to(device)
     ad = lora.attach(m, r=8, alpha=8, mm=mm, compile=compile)
     sft = lora.SFT(m, ad, lr=3e-3)
     tps = []
@@ -380,6 +385,21 @@ class OnTheGpu(unittest.TestCase):
         torch.backends.cuda.matmul.allow_tf32 = False
         ref = train_tiny("cpu")[:2]
         self.assertEqual(train_tiny("cuda")[:2], ref)
+
+    def test_a_llamas_adapters_on_the_cpu_and_compiled_on_the_gpu(self):
+        """A Llama (Llama 3's rotary scaling): its attention has the exact
+        backward (`attach` registers Llama's attention class), and the
+        adapters and every step's p(target) are the CPU's."""
+        from y_lang.exact import lora
+        torch.backends.cuda.matmul.allow_tf32 = False
+        ref = train_tiny("cpu", arch="llama")
+        got = train_tiny("cuda", compile=True, arch="llama", lengths=(30, 27))
+        import transformers.models.llama.modeling_llama as llama
+        attn = [m for m in got[2].model.modules() if isinstance(m, llama.LlamaAttention)]
+        self.assertEqual(len(attn), 2)
+        self.assertTrue(all(isinstance(lora._OPS.get(id(m)), lora.CompiledOps) for m in attn))
+        self.assertEqual(got[:2], train_tiny("cpu", arch="llama", lengths=(30, 27))[:2])
+        self.assertNotEqual(ref[0], train_tiny("cpu")[0])          # not the Qwen2 run
 
     def test_compiled_steps_are_the_eager_ones(self):
         """Every compiled call of five steps (three batch lengths, so the

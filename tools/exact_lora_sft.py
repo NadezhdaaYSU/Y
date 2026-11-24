@@ -44,16 +44,34 @@ def pairs():
     return [p for p in every if p not in held], test
 
 
+def end_of_turn(tok):
+    """The chat's end-of-turn token: Qwen's <|im_end|>, Llama 3's <|eot_id|>,
+    else the tokenizer's end of sequence."""
+    vocab = tok.get_vocab()
+    for t in ("<|im_end|>", "<|eot_id|>"):
+        if t in vocab:
+            return vocab[t]
+    return tok.eos_token_id
+
+
+def ids(tok, text):
+    """`text`'s token ids with no special tokens added: the chat template
+    writes its own (Llama's tokenizer would add a second <|begin_of_text|>,
+    and one before an answer's digits); Qwen's adds none, so its ids, and the
+    earlier records, are unchanged."""
+    return tok(text, add_special_tokens=False).input_ids
+
+
 def prompt_ids(tok, a, b):
     text = tok.apply_chat_template([{"role": "system", "content": SYSTEM},
                                     {"role": "user", "content": f"{a}*{b}"}],
                                    tokenize=False, add_generation_prompt=True)
-    return tok(text).input_ids
+    return ids(tok, text)
 
 
 def example(tok, a, b):
     p = prompt_ids(tok, a, b)
-    ans = tok(str(a * b)).input_ids + [tok.convert_tokens_to_ids("<|im_end|>")]
+    ans = ids(tok, str(a * b)) + [end_of_turn(tok)]
     return p + ans, [-100] * len(p) + ans
 
 
@@ -73,7 +91,7 @@ def evaluate(model, tok, ad, test, device, batch=100, new=6):
     from y_lang.exact.greedy import greedy
     from y_lang.exact.train_lm import reduce_checks
     tok.padding_side = "left"
-    end = tok.convert_tokens_to_ids("<|im_end|>")
+    end = end_of_turn(tok)
     right = clean = 0
     h = hashlib.sha256()
     bad = []
@@ -92,7 +110,7 @@ def evaluate(model, tok, ad, test, device, batch=100, new=6):
                 m = re.match(r"\d+", text)
                 ok = bool(m) and m.group() == str(a * b)
                 right += ok
-                digits = tok(str(a * b)).input_ids
+                digits = ids(tok, str(a * b))
                 clean += ok and row[:len(digits) + 1] == digits + [end]
     finally:
         ad.ops.bad = None

@@ -1,0 +1,7 @@
+tokens digests: 3/3 steps the same
+ints digests: 3/3 steps the same
+tp digests: 3/3 steps the same
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+AMD Ryzen 9 9950X 16-Core Processor: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+adapters @3: 707719f314858a53 707719f314858a53 same
+SAME

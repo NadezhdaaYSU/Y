@@ -69,14 +69,14 @@ class Task:
         self.test = random.Random(1234).sample(every, S.HELD_OUT)
         held = set(self.test)
         self.train = [p for p in every if p not in held]
-        self.end = tok.convert_tokens_to_ids("<|im_end|>")
+        self.end = S.end_of_turn(tok)
         self.system = S.SYSTEM if mode == "number" else STEPS_SYSTEM
 
     def prompt(self, a, b):
         text = self.tok.apply_chat_template([{"role": "system", "content": self.system},
                                              {"role": "user", "content": f"{a}*{b}"}],
                                             tokenize=False, add_generation_prompt=True)
-        return self.tok(text).input_ids
+        return S.ids(self.tok, text)
 
     def reward(self, a, b, row):
         if self.mode == "number":
@@ -130,7 +130,7 @@ def prompts_batch(tok, train, step, n, group, seed, prompt=None):
 
 def reward(tok, a, b, row, end):
     """1 for the right number followed at once by the end of turn."""
-    digits = tok(str(a * b)).input_ids
+    digits = S.ids(tok, str(a * b))
     return int(row[:len(digits) + 1] == digits + [end])
 
 
