@@ -49,8 +49,9 @@ import torch.nn as nn
 from . import attention as _attn
 from . import kv as _kv
 from . import model as _model
+from . import qmm as _qmm
 from .train_lm import (F64_EXACT, Adam, Ops, det_sqrt, exact_product, exact_sum, int8_bmm_ok, mm_f64,
-                       product_widths, reduce_checks, refuse, softmax_ints)
+                       product_widths, q8, reduce_checks, refuse, softmax_ints)
 
 TARGETS = ("qkv_proj", "o_proj", "gate_proj", "up_proj", "down_proj", "gate_up_proj",
            "q_proj", "k_proj", "v_proj")
@@ -103,39 +104,13 @@ def mm_y_any(a, b):
     return out
 
 
-def mm_cublas_any(a, b):
-    """`mm_y_any` on `torch._int_mm` (cuBLASLt's int8 GEMM, int32 sums):
-    exact for the same reason, every partial sum below 2^31 for K up to
-    `Y_MAX_K`. Rows padded to 32 (what CUDA's `_int_mm` takes), K to 32, N
-    to 8, all with zeros; b passed as its transpose's column-major view (the
-    TN layout, whose kernels use the tensor cores)."""
-    a = a.to(torch.int8)
-    b = b.to(torch.int8)
-    M, N = a.shape[0], b.shape[0]
-    a = torch.nn.functional.pad(_pad_to(a, 1, 32), (0, 0, 0, (-M) % 32))
-    b = _pad_to(_pad_to(b, 1, 32), 0, 8)
-    K = a.shape[1]
-    out = None
-    for k0 in range(0, K, Y_MAX_K) if K > Y_MAX_K else (0,):
-        part = torch._int_mm(a[:, k0:k0 + Y_MAX_K].contiguous(), b[:, k0:k0 + Y_MAX_K].contiguous().t())
-        part = part[:M, :N].to(torch.int64)
-        out = part if out is None else out + part
-    return out
-
-
-# `Y_EXACT_LORA_MM`: the adapters' training products' int8 GEMM on a GPU,
-# "y" (Y's kernel, the default) or "cublas" (`torch._int_mm`). Exact both.
-LORA_MM = os.environ.get("Y_EXACT_LORA_MM", "y")
-if LORA_MM not in ("y", "cublas"):
-    raise ValueError(f"Y_EXACT_LORA_MM={LORA_MM!r}: expected 'y' or 'cublas'")
+# `Y_EXACT_QMM=0` turns off the fused product (`qmm`) for comparisons.
+QMM = os.environ.get("Y_EXACT_QMM", "1") != "0"
 
 
 def default_mm(device):
-    """Y's GEMM (or cuBLAS's, `Y_EXACT_LORA_MM`) on a GPU, float64 BLAS
-    (exact below 2^53) on a CPU."""
-    if torch.device(device).type != "cuda":
-        return mm_f64
-    return mm_cublas_any if LORA_MM == "cublas" else mm_y_any
+    """Y's GEMM on a GPU, float64 BLAS (exact below 2^53) on a CPU."""
+    return mm_y_any if torch.device(device).type == "cuda" else mm_f64
 
 
 def make_ops(device, mm=None, grad_bits=12, bwd_bits=8, compile=False):
@@ -297,8 +272,15 @@ def _widths(ops):
 
 
 def _exact_mm(a, b, grad, grad_bits, bwd_bits, mm, act, bad, qb=None):
-    """`Ops.matmul` of two 2-D operands, its checks appended to `bad`."""
+    """`Ops.matmul` of two 2-D operands, its checks appended to `bad`. On a
+    GPU with Y's GEMM and float32 results, the quantized operands' product
+    runs as one kernel (`qmm`, the same bits as `exact_product`)."""
     bits_a, bits_b = product_widths(a.shape[-1], grad, grad_bits, bwd_bits)
+    if (QMM and mm is mm_y_any and act is torch.float32 and bits_a <= 12 and bits_b <= 8
+            and a.shape[-1] <= _qmm.MAX_K and _qmm.available(a.device)):
+        qa, sa = q8(a, bits=bits_a, bad=bad)
+        qbv, sb = q8(b, bits=bits_b, bad=bad) if qb is None else qb
+        return _qmm.qmm(qa, sa, qbv, sb, bits_a, bits_b)
     return exact_product(a, b, bits_a, bits_b, mm, False, False, act, None, qb, bad)
 
 
