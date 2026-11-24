@@ -41,6 +41,7 @@ from a seeded generator on the CPU, B at zero, as LoRA's paper and PEFT do.
 
 import hashlib
 import math
+import os
 
 import torch
 import torch.nn as nn
@@ -102,9 +103,39 @@ def mm_y_any(a, b):
     return out
 
 
+def mm_cublas_any(a, b):
+    """`mm_y_any` on `torch._int_mm` (cuBLASLt's int8 GEMM, int32 sums):
+    exact for the same reason, every partial sum below 2^31 for K up to
+    `Y_MAX_K`. Rows padded to 32 (what CUDA's `_int_mm` takes), K to 32, N
+    to 8, all with zeros; b passed as its transpose's column-major view (the
+    TN layout, whose kernels use the tensor cores)."""
+    a = a.to(torch.int8)
+    b = b.to(torch.int8)
+    M, N = a.shape[0], b.shape[0]
+    a = torch.nn.functional.pad(_pad_to(a, 1, 32), (0, 0, 0, (-M) % 32))
+    b = _pad_to(_pad_to(b, 1, 32), 0, 8)
+    K = a.shape[1]
+    out = None
+    for k0 in range(0, K, Y_MAX_K) if K > Y_MAX_K else (0,):
+        part = torch._int_mm(a[:, k0:k0 + Y_MAX_K].contiguous(), b[:, k0:k0 + Y_MAX_K].contiguous().t())
+        part = part[:M, :N].to(torch.int64)
+        out = part if out is None else out + part
+    return out
+
+
+# `Y_EXACT_LORA_MM`: the adapters' training products' int8 GEMM on a GPU,
+# "y" (Y's kernel, the default) or "cublas" (`torch._int_mm`). Exact both.
+LORA_MM = os.environ.get("Y_EXACT_LORA_MM", "y")
+if LORA_MM not in ("y", "cublas"):
+    raise ValueError(f"Y_EXACT_LORA_MM={LORA_MM!r}: expected 'y' or 'cublas'")
+
+
 def default_mm(device):
-    """Y's GEMM on a GPU, float64 BLAS (exact below 2^53) on a CPU."""
-    return mm_y_any if torch.device(device).type == "cuda" else mm_f64
+    """Y's GEMM (or cuBLAS's, `Y_EXACT_LORA_MM`) on a GPU, float64 BLAS
+    (exact below 2^53) on a CPU."""
+    if torch.device(device).type != "cuda":
+        return mm_f64
+    return mm_cublas_any if LORA_MM == "cublas" else mm_y_any
 
 
 def make_ops(device, mm=None, grad_bits=12, bwd_bits=8, compile=False):
@@ -166,6 +197,12 @@ class CompiledOps(Ops):
     def __init__(self, *args, **kw):
         super().__init__(*args, **kw)
         _model.set_in_every_thread(torch._dynamo.config, "specialize_int", True)
+        # Python floats (attention's scale, a norm's eps) as constants too, as
+        # the inference path compiles them. Symbolic (torch 2.13's default),
+        # each arrived as a 0-d CPU float64 tensor and part of the graph ran
+        # as a C++ CPU kernel (found 2026-11-24: its build cannot link from a
+        # path with a space in it).
+        _model.set_in_every_thread(torch._dynamo.config, "specialize_float", True)
         if torch._dynamo.config.recompile_limit < self.RECOMPILE_LIMIT:
             _model.set_in_every_thread(torch._dynamo.config, "recompile_limit", self.RECOMPILE_LIMIT)
 
