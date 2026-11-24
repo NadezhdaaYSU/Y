@@ -581,6 +581,209 @@ def attention(module, query, key, value, attention_mask, scaling=None, dropout=0
 attention.takes_packed_kv = True
 
 
+# ---- whole decoder layers (compiled training) --------------------------------
+#
+# Above, each wrapped module is an autograd Function of its own, one compiled
+# call each way: about 18 calls a decoder layer, 3,000 a training step of
+# Qwen2.5-0.5B, with Python, Dynamo and autograd between them. That host time
+# was the step's critical path (the GPU busy 0.63 of 1.0 s, 2026-11-24).
+# `_LayerFn` makes a decoder layer ONE Function: its forward one compiled call
+# of `_layer_forward`, its backward one of `_layer_backward`. They are built
+# from the same pure functions the wrappers call (`_module_forward`,
+# `_lora_forward`, `_attn_forward`, `_silu_forward` and their backwards) and
+# transformers' own `apply_rotary_pos_emb`, in the order transformers'
+# decoder layer runs them; the glue between them (residual adds, the MLP's
+# product, the rotary embedding, views) is written out as autograd computes
+# it: an add's gradient passes through, a product's is the gradient times the
+# other operand, a tensor used twice gets the sum of its two gradients (an
+# IEEE add, the same bits in either order). The one freedom left is the sign
+# of a zero where autograd adds a slice's zero padding (the rotary halves):
+# every such gradient enters only quantizers (q8: |x| and x / 2^s, so -0.0
+# and +0.0 give the same integer 0), never an adapter's or a returned value
+# directly. Compiled elementwise work rounds as eager does (`model.py`'s
+# Inductor flags: no FMA contraction, divides correctly rounded). Tests: the
+# replay of recorded runs (every step's p(target), so every earlier update)
+# and the GPU against the CPU, which keeps the per-module path.
+#
+# Only for compiled training on a GPU, and only for a layer of the shape it
+# was written from (merged q/k/v, separate gate and up, every projection with
+# adapters); `Y_EXACT_LAYER=0` keeps the per-module path everywhere.
+
+LAYER_FUSED = os.environ.get("Y_EXACT_LAYER", "1") != "0"
+
+
+def _layer_forward(h, cos, sin, mask, Aq, Bq, Ao, Bo, Ag, Bg, Au, Bu, Ad, Bd,
+                   n1, n2, qkv, o, gate, up, down, act, sizes, head_dim, scaling, sq, so, sg, su, sd,
+                   grad_bits, bwd_bits, mm, act_dt):
+    """A decoder layer's forward (transformers' Qwen2/Llama decoder layer
+    over the merged attention forward): ((out, saved), checks, messages)."""
+    import transformers.models.qwen2.modeling_qwen2 as qwen2
+    conds, msgs = [], []
+
+    def run(fn, *a):
+        out, c, m = fn(*a)
+        conds.extend(c)
+        msgs.extend(m)
+        return out
+    w = (grad_bits, bwd_bits, mm, act_dt)
+    x1 = run(_module_forward, h, n1)
+    input_shape = x1.shape[:-1]
+    hidden_shape = (*input_shape, -1, head_dim)
+    yq, xf_q, u_q = run(_lora_forward, x1, Aq, Bq, qkv, sq, *w)
+    q, k, v = yq.split(sizes, dim=-1)
+    q = q.view(hidden_shape).transpose(1, 2)
+    k = k.view(hidden_shape).transpose(1, 2)
+    v = v.view(hidden_shape).transpose(1, 2)
+    q, k = qwen2.apply_rotary_pos_emb(q, k, cos, sin)
+    attn = run(_attn_forward, q, k, v, mask, scaling)
+    a2 = attn.reshape(*input_shape, -1).contiguous()
+    yo, xf_o, u_o = run(_lora_forward, a2, Ao, Bo, o, so, *w)
+    h2 = h + yo
+    x2 = run(_module_forward, h2, n2)
+    g, xf_g, u_g = run(_lora_forward, x2, Ag, Bg, gate, sg, *w)
+    yu, xf_u, u_u = run(_lora_forward, x2, Au, Bu, up, su, *w)
+    a = run(_silu_forward, g, act)
+    m = a * yu
+    yd, xf_d, u_d = run(_lora_forward, m, Ad, Bd, down, sd, *w)
+    out = h2 + yd
+    saved = (h, xf_q, u_q, q, k, v, xf_o, u_o, h2, xf_g, u_g, xf_u, u_u, g, a, yu, xf_d, u_d)
+    return (out, saved), conds, msgs
+
+
+def _rotary_backward(d, cos, sin):
+    """The gradient of `apply_rotary_pos_emb`'s x * cos + rotate_half(x) * sin
+    with respect to x: d * cos, plus rotate_half's backward of d * sin (its
+    cat's halves back to the slices they came from, the first negated)."""
+    c, s = cos.unsqueeze(1), sin.unsqueeze(1)
+    ds = d * s
+    half = ds.shape[-1] // 2
+    return d * c + torch.cat((ds[..., half:], -ds[..., :half]), dim=-1)
+
+
+def _layer_backward(dout, h, xf_q, u_q, q, k, v, xf_o, u_o, h2, xf_g, u_g, xf_u, u_u, g, a, yu, xf_d, u_d,
+                    cos, sin, mask, Aq, Bq, Ao, Bo, Ag, Bg, Au, Bu, Ad, Bd,
+                    wq, wo, wg, wu, wd, n1w, n1eps, n2w, n2eps, div1, div2, act, sc, int8, need_dh,
+                    sq, so, sg, su, sd, grad_bits, bwd_bits, mm, act_dt):
+    """`_layer_forward`'s backward: ((dh or None, dAq, dBq, ..., dAd, dBd),
+    checks, messages). `w*` are each projection's (sw, int8 weight, zero
+    scales) as `Frozen._weight` holds them."""
+    conds, msgs = [], []
+
+    def run(fn, *a_):
+        out, c, m_ = fn(*a_)
+        conds.extend(c)
+        msgs.extend(m_)
+        return out
+    w = (grad_bits, bwd_bits, mm, act_dt)
+    shape = h.shape
+    # out = h2 + yd: both get dout.
+    dm, dAd, dBd = run(_lora_backward, dout, xf_d, u_d, Ad, Bd, *wd, sd, True, *w)
+    dm = dm.reshape(yu.shape)
+    # m = a * yu
+    da = dm * yu
+    dyu = dm * a
+    dg = run(_silu_backward, g, da, act)
+    dx2g, dAg, dBg = run(_lora_backward, dg, xf_g, u_g, Ag, Bg, *wg, sg, True, *w)
+    dx2u, dAu, dBu = run(_lora_backward, dyu, xf_u, u_u, Au, Bu, *wu, su, True, *w)
+    dx2 = dx2g.reshape(shape) + dx2u.reshape(shape)
+    dh2 = dout + run(_norm_backward, h2, dx2, n2w, n2eps, div2)
+    # h2 = h + yo: both get dh2.
+    da2, dAo, dBo = run(_lora_backward, dh2, xf_o, u_o, Ao, Bo, *wo, so, True, *w)
+    b_, nh, T, d = q.shape
+    dattn = da2.reshape(b_, T, nh, d)
+    dq, dk, dv = run(_attn_backward, q, k, v, mask, dattn, sc, grad_bits, bwd_bits, int8, act_dt)
+    dq = _rotary_backward(dq, cos, sin)
+    dk = _rotary_backward(dk, cos, sin)
+    dyq = torch.cat([t.transpose(1, 2).reshape(b_, T, -1) for t in (dq, dk, dv)], dim=-1)
+    dx1, dAq, dBq = run(_lora_backward, dyq, xf_q, u_q, Aq, Bq, *wq, sq, need_dh, *w)
+    dh = None
+    if need_dh:
+        dh = dh2 + run(_norm_backward, h, dx1.reshape(shape), n1w, n1eps, div1)
+    return (dh, dAq, dBq, dAo, dBo, dAg, dBg, dAu, dBu, dAd, dBd), conds, msgs
+
+
+class _LayerFn(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, h, cos, sin, mask, layer, *params):
+        f = layer._y_fused
+        ops = f["ops"]
+        _warm_attention(f["q_like"], f["k_like"], f["scaling"], ops)
+        out, saved = _run(ops, _layer_forward, h.detach(), cos, sin, mask, *[p.detach() for p in params],
+                          *f["mods"], f["sizes"], f["head_dim"], f["scaling"], *f["scales"], *_widths(ops))
+        ctx.save_for_backward(*saved, cos, sin, mask if mask is not None else torch.empty(0))
+        ctx.layer, ctx.has_mask = layer, mask is not None
+        ctx.params = params
+        return out
+
+    @staticmethod
+    def backward(ctx, dout):
+        f = ctx.layer._y_fused
+        ops = f["ops"]
+        *saved, cos, sin, mask = ctx.saved_tensors
+        mask = mask if ctx.has_mask else None
+        h, q, k, h2 = saved[0], saved[3], saved[4], saved[8]
+        like = h.new_empty(0, dtype=torch.float64)
+        div1 = _model.divisor(h.shape[-1], like)
+        div2 = _model.divisor(h2.shape[-1], like)
+        sc = f["scaling"] if f["scaling"] is not None else 1.0 / math.sqrt(q.shape[-1])
+        _warm_attention(q, k, f["scaling"], ops)
+        n1, n2 = f["norms"]
+        weights = [(m.base.sw, *m._weight()) for m in f["loras"]]
+        dh, *grads = _run(ops, _layer_backward, dout.detach(), *saved, cos, sin, mask,
+                          *[p.detach() for p in ctx.params], *weights, n1.weight, n1.eps, n2.weight, n2.eps,
+                          div1, div2, f["act"], sc, _bmm_int8(ops, q), ctx.needs_input_grad[0],
+                          *f["scales"], *_widths(ops))
+        grads = [gr.to(p.dtype) for gr, p in zip(grads, ctx.params)]
+        return (dh, None, None, None, None, *grads)
+
+
+def _fuse_layer(layer, ops):
+    """Give `layer` the one-Function path (`_LayerFn`) for compiled GPU
+    training if it is the shape `_layer_forward` was written from; returns
+    whether it did."""
+    attn, mlp = getattr(layer, "self_attn", None), getattr(layer, "mlp", None)
+    if attn is None or mlp is None:
+        return False
+    names = ((attn, "qkv_proj"), (attn, "o_proj"), (mlp, "gate_proj"), (mlp, "up_proj"), (mlp, "down_proj"))
+    loras = [getattr(o, n, None) for o, n in names]
+    n1, n2 = getattr(layer, "input_layernorm", None), getattr(layer, "post_attention_layernorm", None)
+    act = getattr(mlp, "act_fn", None)
+    attn_cls, mlp_cls = _model.attention_and_mlp_classes()
+    fwd = vars(attn).get("forward")
+    if not (all(isinstance(m, LoRALinear) for m in loras) and isinstance(n1, Norm) and isinstance(n2, Norm)
+            and isinstance(act, SiLU) and isinstance(attn, attn_cls) and isinstance(mlp, mlp_cls)
+            and getattr(fwd, "__func__", None) is _model._merged_attention_forward
+            and "forward" not in vars(mlp)                 # transformers' own: gate and up apart
+            and getattr(attn.config, "_attn_implementation", None) == "eager"
+            and getattr(attn, "sliding_window", None) is None):
+        return False
+    nh = attn.config.num_attention_heads
+    nkv = getattr(attn.config, "num_key_value_heads", nh)
+    dev = loras[0].base.w8t.device
+    layer._y_fused = {
+        "ops": ops, "loras": loras, "norms": (n1.base, n2.base), "act": act.base,
+        "mods": (n1.base, n2.base, *[m.base for m in loras], act.base),
+        "sizes": attn.qkv_sizes, "head_dim": attn.head_dim, "scaling": attn.scaling,
+        "scales": tuple(m.scale for m in loras),
+        "q_like": torch.empty(1, nh, 1, attn.head_dim, device=dev),
+        "k_like": torch.empty(1, nkv, 1, attn.head_dim, device=dev),
+    }
+    plain = layer.forward
+
+    def forward(hidden_states, attention_mask=None, position_ids=None, past_key_values=None,
+                use_cache=False, position_embeddings=None, **kwargs):
+        params = [t for m in loras for t in (m.A, m.B)]
+        if (LAYER_FUSED and past_key_values is None and position_embeddings is not None
+                and hidden_states.is_cuda and _needs_grad(hidden_states, *params)):
+            cos, sin = position_embeddings
+            return _LayerFn.apply(hidden_states, cos, sin, attention_mask, layer, *params)
+        return plain(hidden_states, attention_mask=attention_mask, position_ids=position_ids,
+                     past_key_values=past_key_values, use_cache=use_cache,
+                     position_embeddings=position_embeddings, **kwargs)
+    layer.forward = forward
+    return True
+
+
 # ---- attaching ---------------------------------------------------------------
 
 class Adapters:
@@ -664,6 +867,9 @@ def attach(model, r=16, alpha=16, targets=None, seed=0, mm=None, grad_bits=12, b
                 _OPS[id(child)] = ops
     if not modules:
         raise ValueError(f"lora: no exact linear layer named {targets} in a decoder layer")
+    if isinstance(ops, CompiledOps):
+        for layer in getattr(getattr(model, "model", None), "layers", ()):
+            _fuse_layer(layer, ops)
     if qwen2.eager_attention_forward is not _attn.exact_attention and \
             qwen2.eager_attention_forward is not attention:
         raise RuntimeError("lora: the model's attention is not y_lang.exact's")
@@ -736,8 +942,18 @@ class SFT:
         self.ad.rebind({k: t.detach().requires_grad_() for k, t in views.items()})
 
     def forward(self, ids):
-        """The hidden states before the head, [B][T][H] (with gradients)."""
-        return self.model.model(input_ids=ids, use_cache=False).last_hidden_state
+        """The hidden states before the head, [B][T][H] (with gradients).
+
+        The causal mask is passed in, 4-D, as transformers would make it for
+        eager attention without padding (0 where a key is seen, float32's
+        min above the diagonal; the exact attention reads only `mask < -1`):
+        transformers returns a 4-D mask as it is, where making one read the
+        device twice (a packed-sequence test and the eager mask), and every
+        read stops the host from queueing work ahead of the GPU."""
+        B, T = ids.shape
+        mask = torch.full((T, T), torch.finfo(torch.float32).min, device=ids.device).triu_(1)
+        return self.model.model(input_ids=ids, attention_mask=mask.expand(B, 1, T, T),
+                                use_cache=False).last_hidden_state
 
     def logits_at(self, hidden, pos):
         h = hidden.reshape(-1, hidden.shape[-1]).index_select(0, pos)
@@ -769,8 +985,10 @@ class SFT:
         self.ops.bad = bad
         outs = []
         try:
-            for ids, labels, weights, check in chunks:
-                outs.append(self._accumulate(ids, labels, weights, check, bad))
+            for ids, labels, weights, check, *targets in chunks:
+                # A fifth element: (positions, tokens), `target_positions`
+                # already computed on the host (`rl.training_batch`).
+                outs.append(self._accumulate(ids, labels, weights, check, bad, *targets))
             grads = {}
             for k, t in self.ad.params.items():
                 grads[k] = t.grad if t.grad is not None else torch.zeros_like(t)
@@ -798,10 +1016,10 @@ class SFT:
             return outs[0]
         return tuple(torch.cat([o[i] for o in outs]) for i in range(3))
 
-    def _accumulate(self, ids, labels, weights, check, bad):
+    def _accumulate(self, ids, labels, weights, check, bad, targets=None):
         """Forward and backward of one batch, its gradients added to the
         adapters' `.grad`; (p(target), p, l)."""
-        pos, tgt = target_positions(labels)
+        pos, tgt = targets if targets is not None else target_positions(labels)
         n = tgt.numel()
         if n == 0:
             raise ValueError("lora: a batch with no labelled token")

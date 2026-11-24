@@ -420,17 +420,17 @@ class OnTheGpu(unittest.TestCase):
         self.assertEqual(got[:2], train_tiny("cpu", arch="llama", lengths=(30, 27))[:2])
         self.assertNotEqual(ref[0], train_tiny("cpu")[0])          # not the Qwen2 run
 
-    def test_compiled_steps_are_the_eager_ones(self):
-        """Every compiled call of five steps (three batch lengths, so the
-        shapes change under the compiled code) against the same call eager,
-        bit for bit, every output and every check: the adapters' forward and
-        backward, the norms', SiLU's and attention's (`lora._run`), and the
-        products compiled alone (`CompiledOps.product`, the frozen head's);
-        and the adapters and every step's p(target) the CPU's."""
+    def compiled_against_eager(self, fused):
+        """Five steps (three batch lengths, so the shapes change under the
+        compiled code), every compiled call also run eagerly and compared
+        bit for bit, every output and every check, and every product
+        compiled alone (`CompiledOps.product`, the frozen head's): the
+        per-module calls, or with `fused` each decoder layer's one call each
+        way (`_LayerFn`). Returns (the kinds called, the run's adapters and
+        p(target)s)."""
         from unittest import mock
         from y_lang.exact import lora
         torch.backends.cuda.matmul.allow_tf32 = False
-        lengths = (30, 27, 33)
         same = []
         compiled_product, compiled = lora.CompiledOps.product, lora._compiled
 
@@ -448,17 +448,39 @@ class OnTheGpu(unittest.TestCase):
                 same.append((fn.__name__, bits_equal(want, got)))
                 return got
             return run
-        with mock.patch.object(lora.CompiledOps, "product", product), mock.patch.object(lora, "_compiled", both):
-            got = train_tiny("cuda", steps=5, compile=True, lengths=lengths)
+        with mock.patch.object(lora.CompiledOps, "product", product), mock.patch.object(lora, "_compiled", both), \
+                mock.patch.object(lora, "LAYER_FUSED", fused):
+            got = train_tiny("cuda", steps=5, compile=True, lengths=self.LENGTHS)
         self.assertIsInstance(got[2].ops, lora.CompiledOps)
-        kinds = {k for k, _ in same}
+        self.assertGreater(len(same), 30)
+        bad = [k for k, ok in same if not ok]
+        self.assertEqual(bad, [], f"{len(bad)} of {len(same)} compiled calls differ")
+        return {k for k, _ in same}, got[:2]
+
+    LENGTHS = (30, 27, 33)
+
+    def test_compiled_steps_are_the_eager_ones(self):
+        """The per-module path (`Y_EXACT_LAYER=0`): the adapters' forward and
+        backward, the norms', SiLU's and attention's calls (`lora._run`) each
+        the eager call's bits, and the adapters and every step's p(target)
+        the CPU's."""
+        kinds, got = self.compiled_against_eager(False)
         for k in ("_lora_forward", "_lora_backward", "_norm_backward", "_module_forward", "_silu_forward",
                   "_silu_backward", "_attn_forward", "_attn_backward", "product"):
             self.assertIn(k, kinds)
-        self.assertGreater(len(same), 100)
-        bad = [k for k, ok in same if not ok]
-        self.assertEqual(bad, [], f"{len(bad)} of {len(same)} compiled calls differ")
-        self.assertEqual(got[:2], train_tiny("cpu", steps=5, lengths=lengths)[:2])
+        self.assertEqual(got, train_tiny("cpu", steps=5, lengths=self.LENGTHS)[:2])
+
+    def test_whole_layers_are_the_per_module_steps(self):
+        """The whole-layer path (the default for compiled GPU training): each
+        decoder layer one call each way, each the eager call's bits, and the
+        adapters and every step's p(target) the CPU's, which runs the
+        per-module path: so the layer's backward (its glue written out:
+        residuals, the MLP's product, the rotary embedding) is autograd's."""
+        kinds, got = self.compiled_against_eager(True)
+        self.assertIn("_layer_forward", kinds)
+        self.assertIn("_layer_backward", kinds)
+        self.assertNotIn("_lora_backward", kinds)
+        self.assertEqual(got, train_tiny("cpu", steps=5, lengths=self.LENGTHS)[:2])
 
     def test_compiled_products_keep_the_clamp(self):
         """A 12-bit gradient at the clamp, 2047 / 2048 times a weight of 1:

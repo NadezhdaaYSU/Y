@@ -198,15 +198,22 @@ def pieces(full, chunk_tokens=None) -> list:
 MISMATCH = "rl: the trainer's probabilities of the sampled tokens are not the sampler's"
 
 
-def training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad=0, which=None, n=None):
+def training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad=0, which=None, n=None, host=None,
+                   targets=False):
     """(ids, labels, weights, rows, cols): each row's real prompt then its
     completion (the first `lens[i]` sampled tokens), right padded so its
     positions count from 0 as the sampler's did, labelled on the
     completion; one weight A_i / n per labelled token (n: all of them, or
     the given `n` when this is one piece of a larger batch), in
     `lora.target_positions` order, which (rows, cols) index into the
-    sampler's [B][new] outputs. `which`: the rows to include (all)."""
-    pm, pi, tk = prompt_mask.cpu().tolist(), prompt_ids.cpu().tolist(), tokens.cpu().tolist()
+    sampler's [B][new] outputs. `which`: the rows to include (all).
+    `host`: (prompt_mask, prompt_ids, tokens) as lists, already read (one
+    read for every piece of a step). `targets`: also (positions, tokens),
+    `lora.target_positions(labels)` computed from the host's lists, so the
+    trainer need not read the device for them."""
+    if host is None:
+        host = (prompt_mask.cpu().tolist(), prompt_ids.cpu().tolist(), tokens.cpu().tolist())
+    pm, pi, tk = host
     which = range(len(pi)) if which is None else which
     n = sum(lens) if n is None else n
     seqs, labels, weights, rows, cols = [], [], [], [], []
@@ -220,10 +227,21 @@ def training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad=0, which=None
         cols.extend(range(lens[i]))
     T = max(len(s) for s in seqs)
     device = prompt_ids.device
-    return (torch.tensor([s + [pad] * (T - len(s)) for s in seqs], device=device),
-            torch.tensor([l + [-100] * (T - len(l)) for l in labels], device=device),
-            torch.tensor(weights, dtype=torch.float32, device=device),
-            torch.tensor(rows, device=device), torch.tensor(cols, device=device))
+    labels = [l + [-100] * (T - len(l)) for l in labels]
+    out = (torch.tensor([s + [pad] * (T - len(s)) for s in seqs], device=device),
+           torch.tensor(labels, device=device),
+           torch.tensor(weights, dtype=torch.float32, device=device),
+           torch.tensor(rows, device=device), torch.tensor(cols, device=device))
+    if targets:
+        pos, tgt = [], []
+        for b, row in enumerate(labels):
+            for t in range(T - 1):
+                if row[t + 1] != -100:
+                    pos.append(b * T + t)
+                    tgt.append(row[t + 1])
+        out += ((torch.tensor(pos, dtype=torch.int64, device=device),
+                 torch.tensor(tgt, dtype=torch.int64, device=device)),)
+    return out
 
 
 class GRPO(_lora.SFT):
@@ -246,18 +264,22 @@ class GRPO(_lora.SFT):
         pm = prompt_mask.cpu()
         full = [int(pm[i].sum()) + lens[i] for i in range(len(lens))]
         n = sum(lens)
+        # Everything the pieces need from the device, read once here: in
+        # the pieces' loop below, and in training, nothing is read until the
+        # step's end, so the host can queue work ahead of the GPU.
+        host = (pm.tolist(), prompt_ids.cpu().tolist(), tokens.cpu().tolist())
         chunks, differs = [], []
         for which in pieces(full, chunk_tokens):
-            ids, labels, w, rows, cols = training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad,
-                                                        which=which, n=n)
+            ids, labels, w, rows, cols, tg = training_batch(prompt_ids, prompt_mask, tokens, lens, adv, pad,
+                                                            which=which, n=n, host=host, targets=True)
             ps, ls = p_s[rows, cols], l_s[rows, cols]
 
             def check(p, l, ps=ps, ls=ls):
                 differs.append((p != ps) | (l.reshape(-1) != ls))
                 return differs[-1], MISMATCH
-            chunks.append((ids, labels, w, check))
+            chunks.append((ids, labels, w, check, tg))
         tp = self.run_chunks(chunks)[0]
-        return tp, int(sum(int(d.sum()) for d in differs))
+        return tp, int(torch.stack([d.sum() for d in differs]).sum())
 
 
 def graphed_sampler(model, ops, batch, prompt_len, new_tokens, rows=64, stop=None, every=16):
