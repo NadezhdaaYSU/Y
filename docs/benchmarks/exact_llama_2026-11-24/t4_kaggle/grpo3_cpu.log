@@ -1,0 +1,10 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<02:00,  1.21it/s]
+Loading weights:  59%|█████▉    | 86/146 [00:00<00:00, 125.00it/s]
+Loading weights:  92%|█████████▏| 134/146 [00:01<00:00, 130.32it/s]
+Loading weights: 100%|██████████| 146/146 [00:01<00:00, 109.18it/s]
+    (113 linear layers + 33 norms converted to exact form)
+step 1: reward 0.062 mismatch 0 tokens 2021b626e027f335 groups {'sampled': 4, 'all_right': 0, 'all_wrong': 3} sample 2279.45 s train 2182.72 s
+step 2: reward 0.312 mismatch 0 tokens 4dfddeb0520f0f50 groups {'sampled': 4, 'all_right': 1, 'all_wrong': 2} sample 2264.10 s train 2248.08 s
+step 3: reward 0.125 mismatch 0 tokens ffcc8b78a5da0b9f groups {'sampled': 4, 'all_right': 0, 'all_wrong': 3} sample 2505.10 s train 2444.81 s

@@ -1,0 +1,13 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<02:00,  1.20it/s]
+Loading weights:  58%|█████▊    | 84/146 [00:00<00:00, 121.18it/s]
+Loading weights:  88%|████████▊ | 129/146 [00:01<00:00, 123.25it/s]
+Loading weights: 100%|██████████| 146/146 [00:01<00:00, 104.89it/s]
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+W1124 03:12:12.489000 1508 torch/_inductor/utils.py:1953] [4/0] Not enough SMs to use max_autotune_gemm mode
+    (113 linear layers + 33 norms converted to exact form)
+step 1: reward 0.062 mismatch 0 tokens 2021b626e027f335 groups {'sampled': 4, 'all_right': 0, 'all_wrong': 3} sample 305.77 s train 101.70 s
+step 2: reward 0.312 mismatch 0 tokens 4dfddeb0520f0f50 groups {'sampled': 4, 'all_right': 1, 'all_wrong': 2} sample 0.31 s train 36.08 s
+step 3: reward 0.125 mismatch 0 tokens ffcc8b78a5da0b9f groups {'sampled': 4, 'all_right': 0, 'all_wrong': 3} sample 0.33 s train 0.57 s

@@ -1,0 +1,25 @@
+
+Loading weights:   0%|          | 0/272 [00:00<?, ?it/s]
+Loading weights:   0%|          | 1/272 [00:00<00:28,  9.62it/s]
+Loading weights: 100%|██████████| 272/272 [00:00<00:00, 1388.61it/s]
+    (211 linear layers + 61 norms converted to exact form)
+cpu alone == in batch: True
+
+Loading weights:   0%|          | 0/272 [00:00<?, ?it/s]
+Loading weights:  65%|██████▌   | 178/272 [00:00<00:00, 1766.56it/s]
+Loading weights: 100%|██████████| 272/272 [00:00<00:00, 1782.41it/s]
+    (211 linear layers + 61 norms converted to exact form)
+cuda alone == in batch: True
+CPU == GPU tokens: True
+'What is 17*23? Answer with the' -> '17*23 = 4503\nsystem\n\nuser\nI am'
+'Name three colors.' -> 'Three colors are:\n\n1. Red\n2. Blue\n3. Green\nsystem\n\n'
+'Write one sentence about the s' -> 'The sea, a vast and mysterious realm, is a place of endless wonder and awe, wher'
+'Explain what a CPU is in one s' -> 'A CPU (Central Processing Unit) is the brain of a computer, responsible for exec'
+
+Loading weights:   0%|          | 0/272 [00:00<?, ?it/s]
+Loading weights:  90%|█████████ | 246/272 [00:00<00:00, 2452.95it/s]
+Loading weights: 100%|██████████| 272/272 [00:00<00:00, 2555.18it/s]
+stock 'What is 17*23? Answer with the' -> '17*23 = 4296'
+stock 'Name three colors.' -> 'Hugging Face:'
+stock 'Write one sentence about the s' -> 'The sea, a vast and mysterious realm, is a place where the boundaries between re'
+stock 'Explain what a CPU is in one s' -> 'A CPU (Central Processing Unit) is the brain of a computer, responsible for exec'

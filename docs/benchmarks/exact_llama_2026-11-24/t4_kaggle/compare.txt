@@ -1,0 +1,41 @@
+SmolLM2-135M-Instruct, 24 greedy tokens of 4 prompts: AMD Ryzen 9 9950X 16-Core Processor, NVIDIA GeForce RTX 4070 Ti SUPER, Intel(R) Xeon(R) CPU @ 2.00GHz, Tesla T4: the same tokens
+Llama-3.2-1B-Instruct, 24 greedy tokens of 4 prompts: AMD Ryzen 9 9950X 16-Core Processor, NVIDIA GeForce RTX 4070 Ti SUPER, Intel(R) Xeon(R) CPU @ 2.00GHz, Tesla T4: the same tokens
+
+== 3 GRPO steps, the T4 compiled
+tokens digests: 3/3 steps the same
+ints digests: 3/3 steps the same
+tp digests: 3/3 steps the same
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+Tesla T4: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+adapters @3: 707719f314858a53 707719f314858a53 same
+SAME
+
+== 3 GRPO steps, the T4 graphed with every switch
+tokens digests: 3/3 steps the same
+ints digests: 3/3 steps the same
+tp digests: 3/3 steps the same
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+Tesla T4: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+adapters @3: 707719f314858a53 707719f314858a53 same
+SAME
+
+== 3 GRPO steps, Kaggle's Intel CPU
+tokens digests: 3/3 steps the same
+ints digests: 3/3 steps the same
+tp digests: 3/3 steps the same
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+Intel(R) Xeon(R) CPU @ 2.00GHz: 0 sampled tokens whose trainer integers differ from the sampler's, over 3 steps
+adapters @3: 707719f314858a53 707719f314858a53 same
+SAME
+
+== worked answers, the 4070 Ti's 10 steps against the T4's 150
+tokens digests: 10/10 steps the same
+ints digests: 10/10 steps the same
+tp digests: 10/10 steps the same
+NVIDIA GeForce RTX 4070 Ti SUPER: 0 sampled tokens whose trainer integers differ from the sampler's, over 10 steps
+Tesla T4: 0 sampled tokens whose trainer integers differ from the sampler's, over 150 steps
+adapters @10: 04d7c90285a11156 04d7c90285a11156 same
+eval @0: 421/600 vs 421/600, tokens dbd9689c5c427133 dbd9689c5c427133 same
+SAME
+
+ALL SAME

@@ -1,0 +1,52 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<01:46,  1.36it/s]
+Loading weights:  45%|████▌     | 66/146 [00:00<00:00, 106.72it/s]
+Loading weights:  71%|███████   | 104/146 [00:01<00:00, 110.09it/s]
+Loading weights:  89%|████████▉ | 130/146 [00:01<00:00, 117.64it/s]
+Loading weights: 100%|██████████| 146/146 [00:01<00:00, 101.96it/s]
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+W1124 02:22:49.946000 536 torch/_inductor/utils.py:1953] [2/0] Not enough SMs to use max_autotune_gemm mode
+[transformers] Ignoring clean_up_tokenization_spaces=True for BPE tokenizer TokenizersBackend. The clean_up_tokenization post-processing step is designed for WordPiece tokenizers and is destructive for BPE (it strips spaces before punctuation). Set clean_up_tokenization_spaces=False to suppress this warning, or set clean_up_tokenization_spaces_for_bpe_even_though_it_will_corrupt_output=True to force cleanup anyway.
+    (113 linear layers + 33 norms converted to exact form)
+eval @0: 421/600 right, 421 clean, tokens dbd9689c5c427133 (195.93 s)
+[W1124 02:34:24.728288737 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 461373440 bytes (free: 212598784, total: 15636037632).
+[W1124 02:36:32.529502646 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 497025024 bytes (free: 229376000, total: 15636037632).
+step 5: reward 0.605 mismatch 0 tokens 138bb1bad63c5cf5 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 5, 'kept': 8} sample 9.03 s train 150.69 s peak 10.37 GB
+step 10: reward 0.766 mismatch 0 tokens e8e3485ca92e2815 groups {'sampled': 32, 'all_right': 15, 'all_wrong': 2, 'kept': 8} sample 9.38 s train 6.50 s peak 10.37 GB
+step 15: reward 0.715 mismatch 0 tokens 76cea62c3e1c5772 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 4, 'kept': 8} sample 8.35 s train 6.13 s peak 10.37 GB
+step 20: reward 0.602 mismatch 0 tokens 4604511329dcda8e groups {'sampled': 32, 'all_right': 10, 'all_wrong': 2, 'kept': 8} sample 9.26 s train 5.25 s peak 10.37 GB
+step 25: reward 0.652 mismatch 0 tokens 4a7fdcbda8b87b2f groups {'sampled': 32, 'all_right': 12, 'all_wrong': 3, 'kept': 8} sample 11.30 s train 6.45 s peak 10.37 GB
+eval @25: 471/600 right, 471 clean, tokens 1ce37ed66315bb14 (113.56 s)
+step 30: reward 0.738 mismatch 0 tokens b92eb65379ed93f6 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 3, 'kept': 8} sample 9.10 s train 6.47 s peak 10.37 GB
+step 35: reward 0.574 mismatch 0 tokens 5b5ae3202963bb8b groups {'sampled': 32, 'all_right': 9, 'all_wrong': 6, 'kept': 8} sample 8.26 s train 6.44 s peak 10.37 GB
+step 40: reward 0.676 mismatch 0 tokens 5296bae52d24bc25 groups {'sampled': 32, 'all_right': 11, 'all_wrong': 3, 'kept': 8} sample 8.35 s train 7.91 s peak 10.37 GB
+step 45: reward 0.727 mismatch 0 tokens c9d95686a764f43c groups {'sampled': 32, 'all_right': 14, 'all_wrong': 1, 'kept': 8} sample 8.37 s train 6.45 s peak 10.37 GB
+step 50: reward 0.820 mismatch 0 tokens f1058e33880438ed groups {'sampled': 32, 'all_right': 17, 'all_wrong': 2, 'kept': 8} sample 8.33 s train 6.47 s peak 10.37 GB
+eval @50: 508/600 right, 508 clean, tokens 0dc1b92f4c6d814c (115.58 s)
+step 55: reward 0.676 mismatch 0 tokens 47a7f784625b293c groups {'sampled': 32, 'all_right': 9, 'all_wrong': 2, 'kept': 8} sample 8.15 s train 6.38 s peak 10.37 GB
+step 60: reward 0.781 mismatch 0 tokens b3ee1017de3cead9 groups {'sampled': 32, 'all_right': 14, 'all_wrong': 0, 'kept': 8} sample 8.24 s train 6.39 s peak 10.37 GB
+step 65: reward 0.836 mismatch 0 tokens 5f09e401420af0a1 groups {'sampled': 32, 'all_right': 24, 'all_wrong': 2, 'kept': 6} sample 8.36 s train 4.73 s peak 10.37 GB
+step 70: reward 0.805 mismatch 0 tokens e6ea2744a12d5f83 groups {'sampled': 32, 'all_right': 17, 'all_wrong': 2, 'kept': 8} sample 8.32 s train 6.45 s peak 10.37 GB
+step 75: reward 0.891 mismatch 0 tokens e1271661a8d2b6c4 groups {'sampled': 32, 'all_right': 20, 'all_wrong': 1, 'kept': 8} sample 8.71 s train 6.43 s peak 10.37 GB
+eval @75: 526/600 right, 526 clean, tokens 8f3f26c87ca4b2e2 (115.2 s)
+step 80: reward 0.785 mismatch 0 tokens 0e68e892ff5d5daa groups {'sampled': 32, 'all_right': 16, 'all_wrong': 0, 'kept': 8} sample 10.09 s train 6.43 s peak 10.37 GB
+step 85: reward 0.738 mismatch 0 tokens b6db4088b9720232 groups {'sampled': 32, 'all_right': 17, 'all_wrong': 4, 'kept': 8} sample 8.31 s train 6.40 s peak 10.37 GB
+step 90: reward 0.871 mismatch 0 tokens 9b3080d735368392 groups {'sampled': 32, 'all_right': 21, 'all_wrong': 2, 'kept': 8} sample 8.36 s train 6.41 s peak 10.37 GB
+step 95: reward 0.758 mismatch 0 tokens b59ad975a1247262 groups {'sampled': 32, 'all_right': 12, 'all_wrong': 1, 'kept': 8} sample 8.39 s train 6.35 s peak 10.37 GB
+step 100: reward 0.773 mismatch 0 tokens 32f46ff6cde946a9 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 3, 'kept': 8} sample 9.29 s train 6.32 s peak 10.37 GB
+eval @100: 537/600 right, 537 clean, tokens c2f6f2618f88fca7 (116.85 s)
+step 105: reward 0.828 mismatch 0 tokens 644af138bd322651 groups {'sampled': 32, 'all_right': 20, 'all_wrong': 1, 'kept': 8} sample 8.12 s train 6.18 s peak 10.37 GB
+step 110: reward 0.812 mismatch 0 tokens 3d5c330f5e966cb3 groups {'sampled': 32, 'all_right': 18, 'all_wrong': 1, 'kept': 8} sample 8.34 s train 6.35 s peak 10.37 GB
+step 115: reward 0.793 mismatch 0 tokens a0fc91ed79c6db6b groups {'sampled': 32, 'all_right': 16, 'all_wrong': 1, 'kept': 8} sample 8.38 s train 7.93 s peak 10.37 GB
+step 120: reward 0.848 mismatch 0 tokens 22346870b1d4c8ec groups {'sampled': 32, 'all_right': 20, 'all_wrong': 0, 'kept': 8} sample 8.30 s train 6.39 s peak 10.37 GB
+step 125: reward 0.883 mismatch 0 tokens 785225cbb1cac08c groups {'sampled': 32, 'all_right': 21, 'all_wrong': 0, 'kept': 8} sample 8.32 s train 6.38 s peak 10.37 GB
+eval @125: 548/600 right, 548 clean, tokens 036b064c6a6904a0 (114.22 s)
+step 130: reward 0.879 mismatch 0 tokens d07fd0665fe10edc groups {'sampled': 32, 'all_right': 17, 'all_wrong': 1, 'kept': 8} sample 8.18 s train 6.33 s peak 10.37 GB
+step 135: reward 0.883 mismatch 0 tokens c0fbe3e0007eb202 groups {'sampled': 32, 'all_right': 20, 'all_wrong': 0, 'kept': 8} sample 8.30 s train 6.29 s peak 10.37 GB
+step 140: reward 0.883 mismatch 0 tokens a5bc90c08e006d37 groups {'sampled': 32, 'all_right': 16, 'all_wrong': 0, 'kept': 8} sample 8.34 s train 6.39 s peak 10.37 GB
+step 145: reward 0.883 mismatch 0 tokens db0b79c8cfb79626 groups {'sampled': 32, 'all_right': 19, 'all_wrong': 1, 'kept': 8} sample 8.34 s train 6.41 s peak 10.37 GB
+step 150: reward 0.840 mismatch 0 tokens 77df4ef033f0ec17 groups {'sampled': 32, 'all_right': 18, 'all_wrong': 1, 'kept': 8} sample 8.35 s train 6.47 s peak 10.37 GB
+eval @150: 553/600 right, 553 clean, tokens 323a4c4c965746ad (114.78 s)

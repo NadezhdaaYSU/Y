@@ -41,9 +41,70 @@ integers and p(target) at every step, the same adapters after step 3
 (`compare.txt`), and no sampled token whose trainer integers differ from the
 sampler's on either.
 
+## On a Tesla T4 and an Intel CPU (Kaggle), 2026-11-24
+
+`make_t4_llama_job.py` wrote the two Kaggle jobs (Y at ab01008 for the checks,
+44dc9df for the 150 steps; the models
+pinned to the revisions the local records used: Llama 5a8abab4, SmolLM2
+12fd25f7; liby.so built on the machine, with Y's Turing int8 GEMM).
+`compare_t4.py` compares their records (`t4_kaggle/`) with the local ones and
+writes `t4_kaggle/compare.txt`: all the same.
+
+- **Inference**: both Llamas give the same 24 greedy tokens of the four
+  prompts on four machines: the Ryzen 9 9950X, the RTX 4070 Ti SUPER (sm_89),
+  Kaggle's Intel Xeon @ 2.00GHz and the Tesla T4 (sm_75); alone and in a
+  batch the same on each.
+- **3 GRPO steps** (the settings above) on the T4 compiled, on the T4 with
+  the graphed sampler and every inference switch on Y's GEMM, and eagerly on
+  the Intel CPU (about 75 minutes a step there): at every step the 4070 Ti's
+  sampled tokens, sampler integers and p(target), and its adapters after
+  step 3 (707719f314858a53).
+- **Worked answers, 150 steps on the T4** (`t4_kaggle/t4_llama_steps150.json`;
+  the 0.5B run's settings: `--mode steps --new 128 --sample-prompts 32
+  --early-stop --chunk-tokens 1024`, held-out 600 every 25 steps, greedy 160
+  tokens; graphed sampler, every switch, `--sample-rows 64`):
+
+  | step | 0 | 25 | 50 | 75 | 100 | 125 | 150 |
+  |---|---|---|---|---|---|---|---|
+  | right of 600 | 421 | 471 | 508 | 526 | 537 | 548 | 553 |
+
+  70% to 92%, still rising at the end (Qwen2.5-0.5B, the same settings: 49%
+  to 66% at best). The trainer checked all 479,441 sampled tokens: every one
+  had the sampler's integers. All-wrong groups fell from about 3 of 32 a
+  step to about 1.
+- **The 4070 Ti ran the same run's first 10 steps**
+  (`rtx4070tis_and_cpu/rtx4070tis_steps10.json`): the T4's sampled tokens,
+  sampler integers and p(target) at all 10, the same adapters at step 10
+  (04d7c90285a11156) and the same held-out tokens at step 0.
+- **Speed** (steps 6 to 10, both graphed with every switch): the T4 9.5 s
+  sampling and 6.8 s training a step, the 4070 Ti 2.8 s and 1.5 s. On the
+  T4 a step took 8.8 s sampling and 6.6 s training after step 10; the 150
+  steps and seven evaluations took 66 minutes. Peak GPU memory 10.4 GB of
+  the T4's 15 (`--sample-rows 256` ran a 16 GB card out of memory: 256 rows
+  of int64 numerators over Llama's 128,256 tokens).
+
+Two things the T4 found, fixed before or after the runs:
+
+- The fused adapter product (`qmm`, 7accac9) is Triton's int8 dot, which
+  does not build for sm_75; `qmm.available` now asks for sm_80 or later, so
+  on a T4 the adapters keep `exact_product` on Y's GEMM (the same bits; a
+  test reports sm_75 and fails without the check).
+- A model converted on the CPU and moved to the T4 still called the Triton
+  GEMM, which does not compile there: five GPU training tests failed on the
+  T4 (`t4_kaggle/exact_tests_t4_before_fix.log`; `load` on the GPU was not
+  affected, nor were the runs above). `ExactLinear._apply` now decides again
+  on the move (726cc1b; a test, which fails without it). The other failures
+  in that log are a proof file the job's source lacked and the GEMM tile
+  cache placed as for an installed package (the job points `Y_LIB_PATH` at
+  the wheel's library).
+
 ## Not covered
 
 - Meta's own checkpoint is gated; `unsloth/Llama-3.2-1B-Instruct` holds the
   same weights ungated. Larger Llamas (8B) and the low-memory loader
   (`low_memory=True`, which builds Qwen2 layers by hand, refuses Llama).
-- No training run past 3 steps, no T4/A100/H100 run of Llama yet.
+- No A100/H100 run of Llama; the T4's later steps (11 to 150) were not
+  replayed elsewhere.
+- No stock control on Llama here: whether stock bf16 changes its tokens
+  between these machines was measured for Qwen2.5 (`../exact_cross_gpu_t4_2026-11-11/`),
+  not for Llama.

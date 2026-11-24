@@ -1,0 +1,252 @@
+{
+ "config": {
+  "device": "cuda",
+  "steps": 10,
+  "prompts": 8,
+  "group": 8,
+  "new": 128,
+  "lr": 0.0001,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 600,
+  "eval_every": 25,
+  "eval_batch": 100,
+  "checkpoint": 10,
+  "log": 1,
+  "record": "docs/benchmarks/exact_llama_2026-11-24/rtx4070tis_and_cpu/rtx4070tis_steps10.json",
+  "save": null,
+  "load": null,
+  "compile": true,
+  "model": "unsloth/Llama-3.2-1B-Instruct",
+  "mode": "steps",
+  "digits": 2,
+  "eval_new": 160,
+  "sample_prompts": 32,
+  "early_stop": true,
+  "graphed": true,
+  "sample_rows": 64,
+  "chunk_tokens": 1024,
+  "dump": null,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.14.8",
+  "torch": "2.13.0+cu130",
+  "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "cuda": "13.0",
+  "transformers": "5.15.0",
+  "gemm": "torch"
+ },
+ "steps": [
+  {
+   "step": 1,
+   "tokens": "af7b4567b8fd73b6",
+   "ints": "aed2d8c3b76a98c5",
+   "reward": 0.4375,
+   "groups": {
+    "sampled": 32,
+    "all_right": 2,
+    "all_wrong": 4,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "08c20c11f4604bf7",
+   "n": 3281,
+   "sample_s": 33.357,
+   "train_s": 38.261,
+   "peak_gb": 9.33
+  },
+  {
+   "step": 2,
+   "tokens": "89a42dd71d5d5112",
+   "ints": "17332ea570e6db9a",
+   "reward": 0.49609375,
+   "groups": {
+    "sampled": 32,
+    "all_right": 4,
+    "all_wrong": 4,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "d0763871175b2f25",
+   "n": 3776,
+   "sample_s": 3.645,
+   "train_s": 15.2,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 3,
+   "tokens": "c695e62d639deca1",
+   "ints": "e20d220ab9e1a64b",
+   "reward": 0.51171875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 4,
+    "all_wrong": 4,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "77a730fc08ba0607",
+   "n": 2815,
+   "sample_s": 3.378,
+   "train_s": 11.121,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 4,
+   "tokens": "eb864e84f81c11d0",
+   "ints": "256c88ceca293ff6",
+   "reward": 0.64453125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 9,
+    "all_wrong": 1,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "83714d7b53624de5",
+   "n": 3021,
+   "sample_s": 3.449,
+   "train_s": 1.39,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 5,
+   "tokens": "138bb1bad63c5cf5",
+   "ints": "b737c6b8ce3c4272",
+   "reward": 0.60546875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 8,
+    "all_wrong": 5,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "761d64cc52b21e70",
+   "n": 2902,
+   "sample_s": 2.699,
+   "train_s": 53.353,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 6,
+   "tokens": "501aaf181ec08b62",
+   "ints": "a259f215fb091cde",
+   "reward": 0.57421875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 6,
+    "all_wrong": 0,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "6807d82bcfff1ca2",
+   "n": 3232,
+   "sample_s": 3.409,
+   "train_s": 1.425,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 7,
+   "tokens": "a33558189dbaedc5",
+   "ints": "b7dfb0ea65ad0bf0",
+   "reward": 0.640625,
+   "groups": {
+    "sampled": 32,
+    "all_right": 11,
+    "all_wrong": 4,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "00965a570f673556",
+   "n": 2659,
+   "sample_s": 2.648,
+   "train_s": 1.349,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 8,
+   "tokens": "308c7752b0f0f046",
+   "ints": "dc3c552eed991e4b",
+   "reward": 0.7109375,
+   "groups": {
+    "sampled": 32,
+    "all_right": 14,
+    "all_wrong": 1,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "20a82bb52407e16e",
+   "n": 2995,
+   "sample_s": 2.647,
+   "train_s": 1.359,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 9,
+   "tokens": "fd84c84826b09f38",
+   "ints": "60c6670bdf2f4e45",
+   "reward": 0.65234375,
+   "groups": {
+    "sampled": 32,
+    "all_right": 10,
+    "all_wrong": 3,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "2f4fac17f9ee79b1",
+   "n": 3195,
+   "sample_s": 2.646,
+   "train_s": 1.39,
+   "peak_gb": 10.38
+  },
+  {
+   "step": 10,
+   "tokens": "e8e3485ca92e2815",
+   "ints": "f82421aa69987629",
+   "reward": 0.765625,
+   "groups": {
+    "sampled": 32,
+    "all_right": 15,
+    "all_wrong": 2,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "6dc6199377cd1f76",
+   "n": 3062,
+   "sample_s": 2.675,
+   "train_s": 2.132,
+   "peak_gb": 10.38
+  }
+ ],
+ "checkpoints": {
+  "10": "04d7c90285a11156"
+ },
+ "evals": {
+  "0": {
+   "right": 421,
+   "clean": 421,
+   "n": 600,
+   "acc": 0.7016666666666667,
+   "tokens": "dbd9689c5c427133",
+   "seconds": 62.08
+  },
+  "10": {
+   "right": 463,
+   "clean": 463,
+   "n": 600,
+   "acc": 0.7716666666666666,
+   "tokens": "2c9e1888d96724cb",
+   "seconds": 32.6
+  }
+ },
+ "init": "0900e113c70ec6df",
+ "seconds_per_step": {
+  "sample": 2.881946325302124,
+  "train": 8.913859503609794
+ },
+ "final": "04d7c90285a11156",
+ "mismatches": 0
+}

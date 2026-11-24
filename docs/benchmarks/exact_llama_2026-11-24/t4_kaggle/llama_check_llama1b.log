@@ -1,0 +1,29 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:02<05:46,  2.39s/it]
+Loading weights:  66%|██████▋   | 97/146 [00:02<00:00, 54.52it/s]
+Loading weights: 100%|██████████| 146/146 [00:04<00:00, 30.57it/s]
+    (113 linear layers + 33 norms converted to exact form)
+cpu alone == in batch: True
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<02:04,  1.17it/s]
+Loading weights:  52%|█████▏    | 76/146 [00:00<00:00, 107.54it/s]
+Loading weights:  82%|████████▏ | 119/146 [00:01<00:00, 123.27it/s]
+Loading weights: 100%|██████████| 146/146 [00:01<00:00, 101.43it/s]
+[transformers] Ignoring clean_up_tokenization_spaces=True for BPE tokenizer TokenizersBackend. The clean_up_tokenization post-processing step is designed for WordPiece tokenizers and is destructive for BPE (it strips spaces before punctuation). Set clean_up_tokenization_spaces=False to suppress this warning, or set clean_up_tokenization_spaces_for_bpe_even_though_it_will_corrupt_output=True to force cleanup anyway.
+    (113 linear layers + 33 norms converted to exact form)
+cuda alone == in batch: True
+CPU == GPU tokens: True
+'What is 17*23? Answer with the' -> '17 * 23 = 391assistant\n\nI cannot provide information or guidance on illegal or h'
+'Name three colors.' -> 'Here are three colors:\n\n1. Red\n2. Blue\n3. Yellowassistant\n\nHere are three'
+'Write one sentence about the s' -> "The vast and mysterious sea covers over 70% of the Earth's surface, encompassing"
+'Explain what a CPU is in one s' -> 'A Central Processing Unit (CPU) is the primary component of a computer that exec'
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 146/146 [00:00<00:00, 2581.25it/s]
+[transformers] Both `max_new_tokens` (=24) and `max_length`(=131072) seem to have been set. `max_new_tokens` will take precedence. Please refer to the documentation for more information. (https://huggingface.co/docs/transformers/main/en/main_classes/text_generation)
+stock 'What is 17*23? Answer with the' -> '17 * 23 = 391'
+stock 'Name three colors.' -> 'Here are three colors:\n\n1. Red\n2. Blue\n3. Yellow'
+stock 'Write one sentence about the s' -> 'The vast expanse of the sea, with its endless blue horizon and diverse marine li'
+stock 'Explain what a CPU is in one s' -> 'A Central Processing Unit (CPU) is the primary component of a computer that exec'

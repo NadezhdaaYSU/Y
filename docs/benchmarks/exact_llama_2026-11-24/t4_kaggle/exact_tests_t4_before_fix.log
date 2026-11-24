@@ -1,0 +1,1344 @@
+test_the_model_is_the_code_on_the_cpu (test_exact_decode_check.EndToEnd.test_the_model_is_the_code_on_the_cpu) ... skipped 'Qwen2.5-0.5B-Instruct@7ae5576 is not in the local Hugging Face cache; the end-to-end check needs it'
+test_a_wrong_transcription_is_noticed (test_exact_decode_check.Transcriptions.test_a_wrong_transcription_is_noticed)
+The comparison above can fail: an exp2 off by one at one argument. ... ERROR
+test_exp2 (test_exact_decode_check.Transcriptions.test_exp2) ... ERROR
+test_widths (test_exact_decode_check.Transcriptions.test_widths) ... ERROR
+test_committed_file_is_what_the_python_generates (test_exact_decode_constants.ExactDecodeConstants.test_committed_file_is_what_the_python_generates) ... ERROR
+test_the_file_holds_the_constants_the_bounds_read (test_exact_decode_constants.ExactDecodeConstants.test_the_file_holds_the_constants_the_bounds_read)
+A file with the constants deleted would compare equal to nothing ... ERROR
+test_a_k_past_int32_is_refused (test_exact_int8_bmm.OnTheCpu.test_a_k_past_int32_is_refused) ... ok
+test_the_kernel_is_exact_under_the_interpreter (test_exact_int8_bmm.OnTheCpu.test_the_kernel_is_exact_under_the_interpreter) ... ok
+test_the_same_integers_as_the_float32_product (test_exact_int8_bmm.OnTheGpu.test_the_same_integers_as_the_float32_product) ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_training_with_it_gives_the_cpu_weights (test_exact_int8_bmm.OnTheGpu.test_training_with_it_gives_the_cpu_weights) ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_compile_flags_hold_in_every_thread (test_exact_lora.Flags.test_compile_flags_hold_in_every_thread)
+model.py's Inductor flags and CompiledOps' `specialize_int`, read ... ok
+test_a_llamas_adapters_on_the_cpu_and_compiled_on_the_gpu (test_exact_lora.OnTheGpu.test_a_llamas_adapters_on_the_cpu_and_compiled_on_the_gpu)
+A Llama (Llama 3's rotary scaling): its attention has the exact ... /usr/local/lib/python3.13/dist-packages/torch/jit/_script.py:365: DeprecationWarning: `torch.jit.script_method` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+/usr/local/lib/python3.13/dist-packages/triton/compiler/code_generator.py:629: DeprecationWarning: AnnAssign.__init__ missing 1 required positional argument: 'simple'. This will become an error in Python 3.15.
+  init_node = ast.AnnAssign(target=st_target, value=default_value, annotation=annotation)
+/usr/local/lib/python3.13/dist-packages/triton/language/semantic.py:1680: UserWarning: tl.where with a non-boolean condition is deprecated and will error out in a future triton release. Got int8
+  warnings.warn(
+ERROR
+test_any_shape_on_ys_gemm (test_exact_lora.OnTheGpu.test_any_shape_on_ys_gemm) ... ok
+test_compiled_products_keep_the_clamp (test_exact_lora.OnTheGpu.test_compiled_products_keep_the_clamp)
+A 12-bit gradient at the clamp, 2047 / 2048 times a weight of 1: ... ok
+test_compiled_steps_are_the_eager_ones (test_exact_lora.OnTheGpu.test_compiled_steps_are_the_eager_ones)
+Every compiled call of five steps (three batch lengths, so the ... /kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:146:25: error: 'arith.extf' op operand #0 must be floating-point-like, but got 'tensor<64x128xi8, #ttg.dot_op<{opIdx = 0, parent = #ttg.blocked<{sizePerThread = [4, 4], threadsPerWarp = [2, 16], warpsPerCTA = [4, 1], order = [1, 0]}>}>>'
+        acc += tl.dot(a, b, out_dtype=tl.int32)
+                        ^
+module {
+  tt.func public @_w8a8_gemm(%arg0: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg3: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg4: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg5: i32, %arg6: i32 {tt.divisibility = 16 : i32}, %arg7: i32 {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %cst = arith.constant dense<0> : tensor<128x64xi8>
+    %cst_0 = arith.constant dense<0> : tensor<64x128xi8>
+    %c128_i32 = arith.constant 128 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %cst_1 = arith.constant dense<0.000000e+00> : tensor<64xf32>
+    %cst_2 = arith.constant dense<0> : tensor<64x64xi32>
+    %c64_i32 = arith.constant 64 : i32
+    %0 = tt.get_program_id x : i32
+    %1 = tt.get_program_id y : i32
+    %2 = arith.muli %1, %c64_i32 : i32
+    %3 = tt.make_range {end = 64 : i32, start = 0 : i32} : tensor<64xi32>
+    %4 = tt.splat %2 : i32 -> tensor<64xi32>
+    %5 = arith.addi %4, %3 : tensor<64xi32>
+    %6 = arith.muli %0, %c64_i32 : i32
+    %7 = tt.splat %6 : i32 -> tensor<64xi32>
+    %8 = arith.addi %7, %3 : tensor<64xi32>
+    %9 = scf.for %arg8 = %c0_i32 to %arg7 step %c128_i32 iter_args(%arg9 = %cst_2) -> (tensor<64x64xi32>)  : i32 {
+      %43 = tt.make_range {end = 128 : i32, start = 0 : i32} : tensor<128xi32>
+      %44 = tt.splat %arg8 : i32 -> tensor<128xi32>
+      %45 = arith.addi %44, %43 : tensor<128xi32>
+      %46 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+      %47 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+      %48 = arith.cmpi slt, %46, %47 : tensor<64x1xi32>
+      %49 = tt.expand_dims %45 {axis = 0 : i32} : tensor<128xi32> -> tensor<1x128xi32>
+      %50 = tt.splat %arg7 : i32 -> tensor<1x128xi32>
+      %51 = arith.cmpi slt, %49, %50 : tensor<1x128xi32>
+      %52 = tt.broadcast %48 : tensor<64x1xi1> -> tensor<64x128xi1>
+      %53 = tt.broadcast %51 : tensor<1x128xi1> -> tensor<64x128xi1>
+      %54 = arith.andi %52, %53 : tensor<64x128xi1>
+      %55 = tt.splat %arg7 : i32 -> tensor<64x1xi32>
+      %56 = arith.muli %46, %55 : tensor<64x1xi32>
+      %57 = tt.splat %arg0 : !tt.ptr<i8> -> tensor<64x1x!tt.ptr<i8>>
+      %58 = tt.addptr %57, %56 : tensor<64x1x!tt.ptr<i8>>, tensor<64x1xi32>
+      %59 = tt.broadcast %58 : tensor<64x1x!tt.ptr<i8>> -> tensor<64x128x!tt.ptr<i8>>
+      %60 = tt.broadcast %49 : tensor<1x128xi32> -> tensor<64x128xi32>
+      %61 = tt.addptr %59, %60 : tensor<64x128x!tt.ptr<i8>>, tensor<64x128xi32>
+      %62 = tt.load %61, %54, %cst_0 : tensor<64x128x!tt.ptr<i8>>
+      %63 = tt.expand_dims %45 {axis = 1 : i32} : tensor<128xi32> -> tensor<128x1xi32>
+      %64 = tt.splat %arg7 : i32 -> tensor<128x1xi32>
+      %65 = arith.cmpi slt, %63, %64 : tensor<128x1xi32>
+      %66 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+      %67 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+      %68 = arith.cmpi slt, %66, %67 : tensor<1x64xi32>
+      %69 = tt.broadcast %65 : tensor<128x1xi1> -> tensor<128x64xi1>
+      %70 = tt.broadcast %68 : tensor<1x64xi1> -> tensor<128x64xi1>
+      %71 = arith.andi %69, %70 : tensor<128x64xi1>
+      %72 = tt.splat %arg6 : i32 -> tensor<128x1xi32>
+      %73 = arith.muli %63, %72 : tensor<128x1xi32>
+      %74 = tt.splat %arg1 : !tt.ptr<i8> -> tensor<128x1x!tt.ptr<i8>>
+      %75 = tt.addptr %74, %73 : tensor<128x1x!tt.ptr<i8>>, tensor<128x1xi32>
+      %76 = tt.broadcast %75 : tensor<128x1x!tt.ptr<i8>> -> tensor<128x64x!tt.ptr<i8>>
+      %77 = tt.broadcast %66 : tensor<1x64xi32> -> tensor<128x64xi32>
+      %78 = tt.addptr %76, %77 : tensor<128x64x!tt.ptr<i8>>, tensor<128x64xi32>
+      %79 = tt.load %78, %71, %cst : tensor<128x64x!tt.ptr<i8>>
+      %80 = tt.dot %62, %79, %arg9, inputPrecision = tf32 : tensor<64x128xi8> * tensor<128x64xi8> -> tensor<64x64xi32>
+      scf.yield %80 : tensor<64x64xi32>
+    }
+    %10 = tt.splat %arg5 : i32 -> tensor<64xi32>
+    %11 = arith.cmpi slt, %5, %10 : tensor<64xi32>
+    %12 = tt.splat %arg2 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %13 = tt.addptr %12, %5 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %14 = tt.load %13, %11, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %15 = tt.splat %arg6 : i32 -> tensor<64xi32>
+    %16 = arith.cmpi slt, %8, %15 : tensor<64xi32>
+    %17 = tt.splat %arg3 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %18 = tt.addptr %17, %8 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %19 = tt.load %18, %16, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %20 = arith.sitofp %9 : tensor<64x64xi32> to tensor<64x64xf32>
+    %21 = tt.expand_dims %14 {axis = 1 : i32} : tensor<64xf32> -> tensor<64x1xf32>
+    %22 = tt.broadcast %21 : tensor<64x1xf32> -> tensor<64x64xf32>
+    %23 = arith.mulf %20, %22 : tensor<64x64xf32>
+    %24 = tt.expand_dims %19 {axis = 0 : i32} : tensor<64xf32> -> tensor<1x64xf32>
+    %25 = tt.broadcast %24 : tensor<1x64xf32> -> tensor<64x64xf32>
+    %26 = arith.mulf %23, %25 : tensor<64x64xf32>
+    %27 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+    %28 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+    %29 = arith.cmpi slt, %27, %28 : tensor<64x1xi32>
+    %30 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+    %31 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+    %32 = arith.cmpi slt, %30, %31 : tensor<1x64xi32>
+    %33 = tt.broadcast %29 : tensor<64x1xi1> -> tensor<64x64xi1>
+    %34 = tt.broadcast %32 : tensor<1x64xi1> -> tensor<64x64xi1>
+    %35 = arith.andi %33, %34 : tensor<64x64xi1>
+    %36 = tt.splat %arg6 : i32 -> tensor<64x1xi32>
+    %37 = arith.muli %27, %36 : tensor<64x1xi32>
+    %38 = tt.splat %arg4 : !tt.ptr<f32> -> tensor<64x1x!tt.ptr<f32>>
+    %39 = tt.addptr %38, %37 : tensor<64x1x!tt.ptr<f32>>, tensor<64x1xi32>
+    %40 = tt.broadcast %39 : tensor<64x1x!tt.ptr<f32>> -> tensor<64x64x!tt.ptr<f32>>
+    %41 = tt.broadcast %30 : tensor<1x64xi32> -> tensor<64x64xi32>
+    %42 = tt.addptr %40, %41 : tensor<64x64x!tt.ptr<f32>>, tensor<64x64xi32>
+    tt.store %42, %26, %35 : tensor<64x64x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(convert-triton-to-tritongpu{enable-source-remat=false num-ctas=1 num-warps=4 target=cuda:75 threads-per-warp=32}, tritongpu-coalesce, tritongpu-F32DotTC{emu-tf32=false}, triton-nvidia-gpu-plan-cta, tritongpu-remove-layout-conversions, tritongpu-optimize-thread-locality, tritongpu-accelerate-matmul, tritongpu-remove-layout-conversions, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, triton-nvidia-optimize-descriptor-encoding, triton-loop-aware-cse, triton-licm, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, triton-loop-aware-cse, tritongpu-prefetch, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, tritongpu-coalesce-async-copy, triton-nvidia-optimize-tmem-layouts, tritongpu-remove-layout-conversions, triton-nvidia-interleave-tmem, tritongpu-reduce-data-duplication, tritongpu-reorder-instructions, triton-loop-aware-cse, symbol-dce, triton-nvidia-gpu-fence-insertion{compute-capability=75}, triton-nvidia-mma-lowering, sccp, cse, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true})",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: error: Failures have been detected while processing an MLIR pass pipeline
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: note: Pipeline failed while executing [`TritonGPUAccelerateMatmul` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+ERROR
+test_the_cpus_adapters_on_the_gpu (test_exact_lora.OnTheGpu.test_the_cpus_adapters_on_the_gpu) ... /kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:146:25: error: 'arith.extf' op operand #0 must be floating-point-like, but got 'tensor<64x128xi8, #ttg.dot_op<{opIdx = 0, parent = #ttg.blocked<{sizePerThread = [4, 4], threadsPerWarp = [2, 16], warpsPerCTA = [4, 1], order = [1, 0]}>}>>'
+        acc += tl.dot(a, b, out_dtype=tl.int32)
+                        ^
+module {
+  tt.func public @_w8a8_gemm(%arg0: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg3: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg4: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg5: i32, %arg6: i32 {tt.divisibility = 16 : i32}, %arg7: i32 {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %cst = arith.constant dense<0> : tensor<128x64xi8>
+    %cst_0 = arith.constant dense<0> : tensor<64x128xi8>
+    %c128_i32 = arith.constant 128 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %cst_1 = arith.constant dense<0.000000e+00> : tensor<64xf32>
+    %cst_2 = arith.constant dense<0> : tensor<64x64xi32>
+    %c64_i32 = arith.constant 64 : i32
+    %0 = tt.get_program_id x : i32
+    %1 = tt.get_program_id y : i32
+    %2 = arith.muli %1, %c64_i32 : i32
+    %3 = tt.make_range {end = 64 : i32, start = 0 : i32} : tensor<64xi32>
+    %4 = tt.splat %2 : i32 -> tensor<64xi32>
+    %5 = arith.addi %4, %3 : tensor<64xi32>
+    %6 = arith.muli %0, %c64_i32 : i32
+    %7 = tt.splat %6 : i32 -> tensor<64xi32>
+    %8 = arith.addi %7, %3 : tensor<64xi32>
+    %9 = scf.for %arg8 = %c0_i32 to %arg7 step %c128_i32 iter_args(%arg9 = %cst_2) -> (tensor<64x64xi32>)  : i32 {
+      %43 = tt.make_range {end = 128 : i32, start = 0 : i32} : tensor<128xi32>
+      %44 = tt.splat %arg8 : i32 -> tensor<128xi32>
+      %45 = arith.addi %44, %43 : tensor<128xi32>
+      %46 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+      %47 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+      %48 = arith.cmpi slt, %46, %47 : tensor<64x1xi32>
+      %49 = tt.expand_dims %45 {axis = 0 : i32} : tensor<128xi32> -> tensor<1x128xi32>
+      %50 = tt.splat %arg7 : i32 -> tensor<1x128xi32>
+      %51 = arith.cmpi slt, %49, %50 : tensor<1x128xi32>
+      %52 = tt.broadcast %48 : tensor<64x1xi1> -> tensor<64x128xi1>
+      %53 = tt.broadcast %51 : tensor<1x128xi1> -> tensor<64x128xi1>
+      %54 = arith.andi %52, %53 : tensor<64x128xi1>
+      %55 = tt.splat %arg7 : i32 -> tensor<64x1xi32>
+      %56 = arith.muli %46, %55 : tensor<64x1xi32>
+      %57 = tt.splat %arg0 : !tt.ptr<i8> -> tensor<64x1x!tt.ptr<i8>>
+      %58 = tt.addptr %57, %56 : tensor<64x1x!tt.ptr<i8>>, tensor<64x1xi32>
+      %59 = tt.broadcast %58 : tensor<64x1x!tt.ptr<i8>> -> tensor<64x128x!tt.ptr<i8>>
+      %60 = tt.broadcast %49 : tensor<1x128xi32> -> tensor<64x128xi32>
+      %61 = tt.addptr %59, %60 : tensor<64x128x!tt.ptr<i8>>, tensor<64x128xi32>
+      %62 = tt.load %61, %54, %cst_0 : tensor<64x128x!tt.ptr<i8>>
+      %63 = tt.expand_dims %45 {axis = 1 : i32} : tensor<128xi32> -> tensor<128x1xi32>
+      %64 = tt.splat %arg7 : i32 -> tensor<128x1xi32>
+      %65 = arith.cmpi slt, %63, %64 : tensor<128x1xi32>
+      %66 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+      %67 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+      %68 = arith.cmpi slt, %66, %67 : tensor<1x64xi32>
+      %69 = tt.broadcast %65 : tensor<128x1xi1> -> tensor<128x64xi1>
+      %70 = tt.broadcast %68 : tensor<1x64xi1> -> tensor<128x64xi1>
+      %71 = arith.andi %69, %70 : tensor<128x64xi1>
+      %72 = tt.splat %arg6 : i32 -> tensor<128x1xi32>
+      %73 = arith.muli %63, %72 : tensor<128x1xi32>
+      %74 = tt.splat %arg1 : !tt.ptr<i8> -> tensor<128x1x!tt.ptr<i8>>
+      %75 = tt.addptr %74, %73 : tensor<128x1x!tt.ptr<i8>>, tensor<128x1xi32>
+      %76 = tt.broadcast %75 : tensor<128x1x!tt.ptr<i8>> -> tensor<128x64x!tt.ptr<i8>>
+      %77 = tt.broadcast %66 : tensor<1x64xi32> -> tensor<128x64xi32>
+      %78 = tt.addptr %76, %77 : tensor<128x64x!tt.ptr<i8>>, tensor<128x64xi32>
+      %79 = tt.load %78, %71, %cst : tensor<128x64x!tt.ptr<i8>>
+      %80 = tt.dot %62, %79, %arg9, inputPrecision = tf32 : tensor<64x128xi8> * tensor<128x64xi8> -> tensor<64x64xi32>
+      scf.yield %80 : tensor<64x64xi32>
+    }
+    %10 = tt.splat %arg5 : i32 -> tensor<64xi32>
+    %11 = arith.cmpi slt, %5, %10 : tensor<64xi32>
+    %12 = tt.splat %arg2 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %13 = tt.addptr %12, %5 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %14 = tt.load %13, %11, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %15 = tt.splat %arg6 : i32 -> tensor<64xi32>
+    %16 = arith.cmpi slt, %8, %15 : tensor<64xi32>
+    %17 = tt.splat %arg3 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %18 = tt.addptr %17, %8 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %19 = tt.load %18, %16, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %20 = arith.sitofp %9 : tensor<64x64xi32> to tensor<64x64xf32>
+    %21 = tt.expand_dims %14 {axis = 1 : i32} : tensor<64xf32> -> tensor<64x1xf32>
+    %22 = tt.broadcast %21 : tensor<64x1xf32> -> tensor<64x64xf32>
+    %23 = arith.mulf %20, %22 : tensor<64x64xf32>
+    %24 = tt.expand_dims %19 {axis = 0 : i32} : tensor<64xf32> -> tensor<1x64xf32>
+    %25 = tt.broadcast %24 : tensor<1x64xf32> -> tensor<64x64xf32>
+    %26 = arith.mulf %23, %25 : tensor<64x64xf32>
+    %27 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+    %28 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+    %29 = arith.cmpi slt, %27, %28 : tensor<64x1xi32>
+    %30 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+    %31 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+    %32 = arith.cmpi slt, %30, %31 : tensor<1x64xi32>
+    %33 = tt.broadcast %29 : tensor<64x1xi1> -> tensor<64x64xi1>
+    %34 = tt.broadcast %32 : tensor<1x64xi1> -> tensor<64x64xi1>
+    %35 = arith.andi %33, %34 : tensor<64x64xi1>
+    %36 = tt.splat %arg6 : i32 -> tensor<64x1xi32>
+    %37 = arith.muli %27, %36 : tensor<64x1xi32>
+    %38 = tt.splat %arg4 : !tt.ptr<f32> -> tensor<64x1x!tt.ptr<f32>>
+    %39 = tt.addptr %38, %37 : tensor<64x1x!tt.ptr<f32>>, tensor<64x1xi32>
+    %40 = tt.broadcast %39 : tensor<64x1x!tt.ptr<f32>> -> tensor<64x64x!tt.ptr<f32>>
+    %41 = tt.broadcast %30 : tensor<1x64xi32> -> tensor<64x64xi32>
+    %42 = tt.addptr %40, %41 : tensor<64x64x!tt.ptr<f32>>, tensor<64x64xi32>
+    tt.store %42, %26, %35 : tensor<64x64x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(convert-triton-to-tritongpu{enable-source-remat=false num-ctas=1 num-warps=4 target=cuda:75 threads-per-warp=32}, tritongpu-coalesce, tritongpu-F32DotTC{emu-tf32=false}, triton-nvidia-gpu-plan-cta, tritongpu-remove-layout-conversions, tritongpu-optimize-thread-locality, tritongpu-accelerate-matmul, tritongpu-remove-layout-conversions, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, triton-nvidia-optimize-descriptor-encoding, triton-loop-aware-cse, triton-licm, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, triton-loop-aware-cse, tritongpu-prefetch, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, tritongpu-coalesce-async-copy, triton-nvidia-optimize-tmem-layouts, tritongpu-remove-layout-conversions, triton-nvidia-interleave-tmem, tritongpu-reduce-data-duplication, tritongpu-reorder-instructions, triton-loop-aware-cse, symbol-dce, triton-nvidia-gpu-fence-insertion{compute-capability=75}, triton-nvidia-mma-lowering, sccp, cse, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true})",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: error: Failures have been detected while processing an MLIR pass pipeline
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: note: Pipeline failed while executing [`TritonGPUAccelerateMatmul` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+ERROR
+test_attention_backward_reads_the_forwards_weights (test_exact_lora.Pieces.test_attention_backward_reads_the_forwards_weights) ... ok
+test_attention_with_grouped_heads (test_exact_lora.Pieces.test_attention_with_grouped_heads) ... ok
+test_frozen_linear (test_exact_lora.Pieces.test_frozen_linear) ... ok
+test_lora_linear (test_exact_lora.Pieces.test_lora_linear) ... ok
+test_norm (test_exact_lora.Pieces.test_norm) ... ok
+test_silu (test_exact_lora.Pieces.test_silu) ... ok
+test_a_non_finite_value_is_refused_at_verify (test_exact_lora.TinyModel.test_a_non_finite_value_is_refused_at_verify) ... ok
+test_the_kv_cache_flag_is_refused (test_exact_lora.TinyModel.test_the_kv_cache_flag_is_refused) ... ok
+test_trainer_logits_are_a_cached_decodes (test_exact_lora.TinyModel.test_trainer_logits_are_a_cached_decodes)
+What an RL trainer computes is what its sampler computed: the ... ok
+test_training_learns_and_repeats (test_exact_lora.TinyModel.test_training_learns_and_repeats) ... ok
+test_whole_model_gradient_is_the_float_ones (test_exact_lora.TinyModel.test_whole_model_gradient_is_the_float_ones)
+The adapters' gradients against float64 autograd of the stock ... ok
+test_zero_b_is_the_base_model_and_gradients_change_nothing_forward (test_exact_lora.TinyModel.test_zero_b_is_the_base_model_and_gradients_change_nothing_forward) ... ok
+test_a_tiny_llama3_is_converted_close_and_batch_invariant (test_exact_package.TestLoad.test_a_tiny_llama3_is_converted_close_and_batch_invariant)
+A Llama with Llama 3's scaled rotary embedding: every layer exact, ... Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]
+Writing model shards: 100%|██████████| 1/1 [00:00<00:00, 50.68it/s]
+
+Loading weights:   0%|          | 0/20 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 20/20 [00:00<00:00, 2374.63it/s]
+    (15 linear layers + 5 norms converted to exact form)
+
+Loading weights:   0%|          | 0/20 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 20/20 [00:00<00:00, 2812.99it/s]
+ok
+test_a_tiny_qwen2_is_converted_close_and_batch_invariant (test_exact_package.TestLoad.test_a_tiny_qwen2_is_converted_close_and_batch_invariant) ... 
+Writing model shards:   0%|          | 0/1 [00:00<?, ?it/s]
+Writing model shards: 100%|██████████| 1/1 [00:00<00:00, 73.35it/s]
+
+Loading weights:   0%|          | 0/26 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 26/26 [00:00<00:00, 2730.12it/s]
+    (15 linear layers + 5 norms converted to exact form)
+
+Loading weights:   0%|          | 0/26 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 26/26 [00:00<00:00, 2388.97it/s]
+
+Loading weights:   0%|          | 0/26 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 26/26 [00:00<00:00, 2555.46it/s]
+ok
+test_append_layer_matches_dynamic_layer (test_exact_package.TestLoad.test_append_layer_matches_dynamic_layer)
+kv.AppendLayer against transformers' DynamicLayer, through every ... [transformers] Calling `crop` with a positive value is deprecated and will be removed in version 5.18. Please use a negative integer to remove that number of tokens from the cache instead.
+ok
+test_convert_refuses_another_architecture_before_touching_it (test_exact_package.TestLoad.test_convert_refuses_another_architecture_before_touching_it) ... ok
+test_packed_rows_are_the_documented_bytes (test_exact_package.TestLoad.test_packed_rows_are_the_documented_bytes)
+Every int16 K value and every int8 V value, with edge and random ... ok
+test_packed_rows_round_trip_bit_for_bit (test_exact_package.TestLoad.test_packed_rows_round_trip_bit_for_bit) ... ok
+test_refuses_another_architecture (test_exact_package.TestLoad.test_refuses_another_architecture) ... ok
+test_the_kernel_sources_are_the_tests_ones (test_exact_package.TestOldNames.test_the_kernel_sources_are_the_tests_ones) ... ok
+test_tools_names_are_the_package_modules (test_exact_package.TestOldNames.test_tools_names_are_the_package_modules) ... FAIL
+test_a_frozen_int8_weight (test_exact_qmm.FusedProduct.test_a_frozen_int8_weight) ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_extreme_scales (test_exact_qmm.FusedProduct.test_extreme_scales)
+Scales whose product leaves float32's range: results that are ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_not_below_sm_80 (test_exact_qmm.FusedProduct.test_not_below_sm_80)
+On sm_75 (a T4) Triton's int8 dot does not build: `available` is ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_the_adapters_products_use_it (test_exact_qmm.FusedProduct.test_the_adapters_products_use_it)
+`lora._exact_mm` on a GPU takes the fused path (and gives ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_training_shapes (test_exact_qmm.FusedProduct.test_training_shapes) ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_transposed_operands (test_exact_qmm.FusedProduct.test_transposed_operands)
+Operands that are transposed views (the adapters' gradients over ... skipped 'needs a CUDA GPU of sm_80 or later'
+test_a_sampler_one_update_behind_is_caught (test_exact_rl.Agreement.test_a_sampler_one_update_behind_is_caught)
+The control: tokens sampled before an update, trained on after ... ok
+test_an_early_stop_keeps_every_drawn_token (test_exact_rl.Agreement.test_an_early_stop_keeps_every_drawn_token)
+Stopping once every row has drawn the end token, checked every ... ok
+test_one_changed_integer_is_caught (test_exact_rl.Agreement.test_one_changed_integer_is_caught) ... ok
+test_the_draw_in_row_pieces_is_the_same (test_exact_rl.Agreement.test_the_draw_in_row_pieces_is_the_same) ... ok
+test_the_trainer_has_the_samplers_integers (test_exact_rl.Agreement.test_the_trainer_has_the_samplers_integers)
+Prompts of three lengths, left padded for the sampler and right ... ok
+test_draw_frequencies_are_p_over_l (test_exact_rl.Draw.test_draw_frequencies_are_p_over_l) ... ok
+test_draw_is_the_integer_inverse_cdf (test_exact_rl.Draw.test_draw_is_the_integer_inverse_cdf) ... ok
+test_the_two_level_draw_is_the_running_sum (test_exact_rl.Draw.test_the_two_level_draw_is_the_running_sum)
+`draw` (block sums, then one block) against `draw_flat` (one ... ok
+test_uniforms_are_fixed_and_batch_free (test_exact_rl.Draw.test_uniforms_are_fixed_and_batch_free) ... ok
+test_advantages (test_exact_rl.Learning.test_advantages) ... ok
+test_an_update_moves_probability_toward_the_rewarded (test_exact_rl.Learning.test_an_update_moves_probability_toward_the_rewarded)
+One step raises the objective it follows, sum A log p over the ... ok
+test_the_cpus_samples_and_adapters_on_the_gpu (test_exact_rl.OnTheGpu.test_the_cpus_samples_and_adapters_on_the_gpu) ... /kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:146:25: error: 'arith.extf' op operand #0 must be floating-point-like, but got 'tensor<64x128xi8, #ttg.dot_op<{opIdx = 0, parent = #ttg.blocked<{sizePerThread = [4, 4], threadsPerWarp = [2, 16], warpsPerCTA = [4, 1], order = [1, 0]}>}>>'
+        acc += tl.dot(a, b, out_dtype=tl.int32)
+                        ^
+module {
+  tt.func public @_w8a8_gemm(%arg0: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg3: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg4: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg5: i32 {tt.divisibility = 16 : i32}, %arg6: i32 {tt.divisibility = 16 : i32}, %arg7: i32 {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %cst = arith.constant dense<0> : tensor<128x64xi8>
+    %cst_0 = arith.constant dense<0> : tensor<64x128xi8>
+    %c128_i32 = arith.constant 128 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %cst_1 = arith.constant dense<0.000000e+00> : tensor<64xf32>
+    %cst_2 = arith.constant dense<0> : tensor<64x64xi32>
+    %c64_i32 = arith.constant 64 : i32
+    %0 = tt.get_program_id x : i32
+    %1 = tt.get_program_id y : i32
+    %2 = arith.muli %1, %c64_i32 : i32
+    %3 = tt.make_range {end = 64 : i32, start = 0 : i32} : tensor<64xi32>
+    %4 = tt.splat %2 : i32 -> tensor<64xi32>
+    %5 = arith.addi %4, %3 : tensor<64xi32>
+    %6 = arith.muli %0, %c64_i32 : i32
+    %7 = tt.splat %6 : i32 -> tensor<64xi32>
+    %8 = arith.addi %7, %3 : tensor<64xi32>
+    %9 = scf.for %arg8 = %c0_i32 to %arg7 step %c128_i32 iter_args(%arg9 = %cst_2) -> (tensor<64x64xi32>)  : i32 {
+      %43 = tt.make_range {end = 128 : i32, start = 0 : i32} : tensor<128xi32>
+      %44 = tt.splat %arg8 : i32 -> tensor<128xi32>
+      %45 = arith.addi %44, %43 : tensor<128xi32>
+      %46 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+      %47 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+      %48 = arith.cmpi slt, %46, %47 : tensor<64x1xi32>
+      %49 = tt.expand_dims %45 {axis = 0 : i32} : tensor<128xi32> -> tensor<1x128xi32>
+      %50 = tt.splat %arg7 : i32 -> tensor<1x128xi32>
+      %51 = arith.cmpi slt, %49, %50 : tensor<1x128xi32>
+      %52 = tt.broadcast %48 : tensor<64x1xi1> -> tensor<64x128xi1>
+      %53 = tt.broadcast %51 : tensor<1x128xi1> -> tensor<64x128xi1>
+      %54 = arith.andi %52, %53 : tensor<64x128xi1>
+      %55 = tt.splat %arg7 : i32 -> tensor<64x1xi32>
+      %56 = arith.muli %46, %55 : tensor<64x1xi32>
+      %57 = tt.splat %arg0 : !tt.ptr<i8> -> tensor<64x1x!tt.ptr<i8>>
+      %58 = tt.addptr %57, %56 : tensor<64x1x!tt.ptr<i8>>, tensor<64x1xi32>
+      %59 = tt.broadcast %58 : tensor<64x1x!tt.ptr<i8>> -> tensor<64x128x!tt.ptr<i8>>
+      %60 = tt.broadcast %49 : tensor<1x128xi32> -> tensor<64x128xi32>
+      %61 = tt.addptr %59, %60 : tensor<64x128x!tt.ptr<i8>>, tensor<64x128xi32>
+      %62 = tt.load %61, %54, %cst_0 : tensor<64x128x!tt.ptr<i8>>
+      %63 = tt.expand_dims %45 {axis = 1 : i32} : tensor<128xi32> -> tensor<128x1xi32>
+      %64 = tt.splat %arg7 : i32 -> tensor<128x1xi32>
+      %65 = arith.cmpi slt, %63, %64 : tensor<128x1xi32>
+      %66 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+      %67 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+      %68 = arith.cmpi slt, %66, %67 : tensor<1x64xi32>
+      %69 = tt.broadcast %65 : tensor<128x1xi1> -> tensor<128x64xi1>
+      %70 = tt.broadcast %68 : tensor<1x64xi1> -> tensor<128x64xi1>
+      %71 = arith.andi %69, %70 : tensor<128x64xi1>
+      %72 = tt.splat %arg6 : i32 -> tensor<128x1xi32>
+      %73 = arith.muli %63, %72 : tensor<128x1xi32>
+      %74 = tt.splat %arg1 : !tt.ptr<i8> -> tensor<128x1x!tt.ptr<i8>>
+      %75 = tt.addptr %74, %73 : tensor<128x1x!tt.ptr<i8>>, tensor<128x1xi32>
+      %76 = tt.broadcast %75 : tensor<128x1x!tt.ptr<i8>> -> tensor<128x64x!tt.ptr<i8>>
+      %77 = tt.broadcast %66 : tensor<1x64xi32> -> tensor<128x64xi32>
+      %78 = tt.addptr %76, %77 : tensor<128x64x!tt.ptr<i8>>, tensor<128x64xi32>
+      %79 = tt.load %78, %71, %cst : tensor<128x64x!tt.ptr<i8>>
+      %80 = tt.dot %62, %79, %arg9, inputPrecision = tf32 : tensor<64x128xi8> * tensor<128x64xi8> -> tensor<64x64xi32>
+      scf.yield %80 : tensor<64x64xi32>
+    }
+    %10 = tt.splat %arg5 : i32 -> tensor<64xi32>
+    %11 = arith.cmpi slt, %5, %10 : tensor<64xi32>
+    %12 = tt.splat %arg2 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %13 = tt.addptr %12, %5 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %14 = tt.load %13, %11, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %15 = tt.splat %arg6 : i32 -> tensor<64xi32>
+    %16 = arith.cmpi slt, %8, %15 : tensor<64xi32>
+    %17 = tt.splat %arg3 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %18 = tt.addptr %17, %8 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %19 = tt.load %18, %16, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %20 = arith.sitofp %9 : tensor<64x64xi32> to tensor<64x64xf32>
+    %21 = tt.expand_dims %14 {axis = 1 : i32} : tensor<64xf32> -> tensor<64x1xf32>
+    %22 = tt.broadcast %21 : tensor<64x1xf32> -> tensor<64x64xf32>
+    %23 = arith.mulf %20, %22 : tensor<64x64xf32>
+    %24 = tt.expand_dims %19 {axis = 0 : i32} : tensor<64xf32> -> tensor<1x64xf32>
+    %25 = tt.broadcast %24 : tensor<1x64xf32> -> tensor<64x64xf32>
+    %26 = arith.mulf %23, %25 : tensor<64x64xf32>
+    %27 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+    %28 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+    %29 = arith.cmpi slt, %27, %28 : tensor<64x1xi32>
+    %30 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+    %31 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+    %32 = arith.cmpi slt, %30, %31 : tensor<1x64xi32>
+    %33 = tt.broadcast %29 : tensor<64x1xi1> -> tensor<64x64xi1>
+    %34 = tt.broadcast %32 : tensor<1x64xi1> -> tensor<64x64xi1>
+    %35 = arith.andi %33, %34 : tensor<64x64xi1>
+    %36 = tt.splat %arg6 : i32 -> tensor<64x1xi32>
+    %37 = arith.muli %27, %36 : tensor<64x1xi32>
+    %38 = tt.splat %arg4 : !tt.ptr<f32> -> tensor<64x1x!tt.ptr<f32>>
+    %39 = tt.addptr %38, %37 : tensor<64x1x!tt.ptr<f32>>, tensor<64x1xi32>
+    %40 = tt.broadcast %39 : tensor<64x1x!tt.ptr<f32>> -> tensor<64x64x!tt.ptr<f32>>
+    %41 = tt.broadcast %30 : tensor<1x64xi32> -> tensor<64x64xi32>
+    %42 = tt.addptr %40, %41 : tensor<64x64x!tt.ptr<f32>>, tensor<64x64xi32>
+    tt.store %42, %26, %35 : tensor<64x64x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(convert-triton-to-tritongpu{enable-source-remat=false num-ctas=1 num-warps=4 target=cuda:75 threads-per-warp=32}, tritongpu-coalesce, tritongpu-F32DotTC{emu-tf32=false}, triton-nvidia-gpu-plan-cta, tritongpu-remove-layout-conversions, tritongpu-optimize-thread-locality, tritongpu-accelerate-matmul, tritongpu-remove-layout-conversions, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, triton-nvidia-optimize-descriptor-encoding, triton-loop-aware-cse, triton-licm, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, triton-loop-aware-cse, tritongpu-prefetch, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, tritongpu-coalesce-async-copy, triton-nvidia-optimize-tmem-layouts, tritongpu-remove-layout-conversions, triton-nvidia-interleave-tmem, tritongpu-reduce-data-duplication, tritongpu-reorder-instructions, triton-loop-aware-cse, symbol-dce, triton-nvidia-gpu-fence-insertion{compute-capability=75}, triton-nvidia-mma-lowering, sccp, cse, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true})",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: error: Failures have been detected while processing an MLIR pass pipeline
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: note: Pipeline failed while executing [`TritonGPUAccelerateMatmul` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+ERROR
+test_the_graphed_sampler_is_the_sampler (test_exact_rl.OnTheGpu.test_the_graphed_sampler_is_the_sampler)
+Each decode step replayed from a CUDA graph (compiled with the ... /kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:146:25: error: 'arith.extf' op operand #0 must be floating-point-like, but got 'tensor<64x128xi8, #ttg.dot_op<{opIdx = 0, parent = #ttg.blocked<{sizePerThread = [4, 4], threadsPerWarp = [2, 16], warpsPerCTA = [4, 1], order = [1, 0]}>}>>'
+        acc += tl.dot(a, b, out_dtype=tl.int32)
+                        ^
+module {
+  tt.func public @_w8a8_gemm(%arg0: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg1: !tt.ptr<i8> {tt.divisibility = 16 : i32}, %arg2: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg3: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg4: !tt.ptr<f32> {tt.divisibility = 16 : i32}, %arg5: i32 {tt.divisibility = 16 : i32}, %arg6: i32 {tt.divisibility = 16 : i32}, %arg7: i32 {tt.divisibility = 16 : i32}) attributes {noinline = false} {
+    %cst = arith.constant dense<0> : tensor<128x64xi8>
+    %cst_0 = arith.constant dense<0> : tensor<64x128xi8>
+    %c128_i32 = arith.constant 128 : i32
+    %c0_i32 = arith.constant 0 : i32
+    %cst_1 = arith.constant dense<0.000000e+00> : tensor<64xf32>
+    %cst_2 = arith.constant dense<0> : tensor<64x64xi32>
+    %c64_i32 = arith.constant 64 : i32
+    %0 = tt.get_program_id x : i32
+    %1 = tt.get_program_id y : i32
+    %2 = arith.muli %1, %c64_i32 : i32
+    %3 = tt.make_range {end = 64 : i32, start = 0 : i32} : tensor<64xi32>
+    %4 = tt.splat %2 : i32 -> tensor<64xi32>
+    %5 = arith.addi %4, %3 : tensor<64xi32>
+    %6 = arith.muli %0, %c64_i32 : i32
+    %7 = tt.splat %6 : i32 -> tensor<64xi32>
+    %8 = arith.addi %7, %3 : tensor<64xi32>
+    %9 = scf.for %arg8 = %c0_i32 to %arg7 step %c128_i32 iter_args(%arg9 = %cst_2) -> (tensor<64x64xi32>)  : i32 {
+      %43 = tt.make_range {end = 128 : i32, start = 0 : i32} : tensor<128xi32>
+      %44 = tt.splat %arg8 : i32 -> tensor<128xi32>
+      %45 = arith.addi %44, %43 : tensor<128xi32>
+      %46 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+      %47 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+      %48 = arith.cmpi slt, %46, %47 : tensor<64x1xi32>
+      %49 = tt.expand_dims %45 {axis = 0 : i32} : tensor<128xi32> -> tensor<1x128xi32>
+      %50 = tt.splat %arg7 : i32 -> tensor<1x128xi32>
+      %51 = arith.cmpi slt, %49, %50 : tensor<1x128xi32>
+      %52 = tt.broadcast %48 : tensor<64x1xi1> -> tensor<64x128xi1>
+      %53 = tt.broadcast %51 : tensor<1x128xi1> -> tensor<64x128xi1>
+      %54 = arith.andi %52, %53 : tensor<64x128xi1>
+      %55 = tt.splat %arg7 : i32 -> tensor<64x1xi32>
+      %56 = arith.muli %46, %55 : tensor<64x1xi32>
+      %57 = tt.splat %arg0 : !tt.ptr<i8> -> tensor<64x1x!tt.ptr<i8>>
+      %58 = tt.addptr %57, %56 : tensor<64x1x!tt.ptr<i8>>, tensor<64x1xi32>
+      %59 = tt.broadcast %58 : tensor<64x1x!tt.ptr<i8>> -> tensor<64x128x!tt.ptr<i8>>
+      %60 = tt.broadcast %49 : tensor<1x128xi32> -> tensor<64x128xi32>
+      %61 = tt.addptr %59, %60 : tensor<64x128x!tt.ptr<i8>>, tensor<64x128xi32>
+      %62 = tt.load %61, %54, %cst_0 : tensor<64x128x!tt.ptr<i8>>
+      %63 = tt.expand_dims %45 {axis = 1 : i32} : tensor<128xi32> -> tensor<128x1xi32>
+      %64 = tt.splat %arg7 : i32 -> tensor<128x1xi32>
+      %65 = arith.cmpi slt, %63, %64 : tensor<128x1xi32>
+      %66 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+      %67 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+      %68 = arith.cmpi slt, %66, %67 : tensor<1x64xi32>
+      %69 = tt.broadcast %65 : tensor<128x1xi1> -> tensor<128x64xi1>
+      %70 = tt.broadcast %68 : tensor<1x64xi1> -> tensor<128x64xi1>
+      %71 = arith.andi %69, %70 : tensor<128x64xi1>
+      %72 = tt.splat %arg6 : i32 -> tensor<128x1xi32>
+      %73 = arith.muli %63, %72 : tensor<128x1xi32>
+      %74 = tt.splat %arg1 : !tt.ptr<i8> -> tensor<128x1x!tt.ptr<i8>>
+      %75 = tt.addptr %74, %73 : tensor<128x1x!tt.ptr<i8>>, tensor<128x1xi32>
+      %76 = tt.broadcast %75 : tensor<128x1x!tt.ptr<i8>> -> tensor<128x64x!tt.ptr<i8>>
+      %77 = tt.broadcast %66 : tensor<1x64xi32> -> tensor<128x64xi32>
+      %78 = tt.addptr %76, %77 : tensor<128x64x!tt.ptr<i8>>, tensor<128x64xi32>
+      %79 = tt.load %78, %71, %cst : tensor<128x64x!tt.ptr<i8>>
+      %80 = tt.dot %62, %79, %arg9, inputPrecision = tf32 : tensor<64x128xi8> * tensor<128x64xi8> -> tensor<64x64xi32>
+      scf.yield %80 : tensor<64x64xi32>
+    }
+    %10 = tt.splat %arg5 : i32 -> tensor<64xi32>
+    %11 = arith.cmpi slt, %5, %10 : tensor<64xi32>
+    %12 = tt.splat %arg2 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %13 = tt.addptr %12, %5 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %14 = tt.load %13, %11, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %15 = tt.splat %arg6 : i32 -> tensor<64xi32>
+    %16 = arith.cmpi slt, %8, %15 : tensor<64xi32>
+    %17 = tt.splat %arg3 : !tt.ptr<f32> -> tensor<64x!tt.ptr<f32>>
+    %18 = tt.addptr %17, %8 : tensor<64x!tt.ptr<f32>>, tensor<64xi32>
+    %19 = tt.load %18, %16, %cst_1 : tensor<64x!tt.ptr<f32>>
+    %20 = arith.sitofp %9 : tensor<64x64xi32> to tensor<64x64xf32>
+    %21 = tt.expand_dims %14 {axis = 1 : i32} : tensor<64xf32> -> tensor<64x1xf32>
+    %22 = tt.broadcast %21 : tensor<64x1xf32> -> tensor<64x64xf32>
+    %23 = arith.mulf %20, %22 : tensor<64x64xf32>
+    %24 = tt.expand_dims %19 {axis = 0 : i32} : tensor<64xf32> -> tensor<1x64xf32>
+    %25 = tt.broadcast %24 : tensor<1x64xf32> -> tensor<64x64xf32>
+    %26 = arith.mulf %23, %25 : tensor<64x64xf32>
+    %27 = tt.expand_dims %5 {axis = 1 : i32} : tensor<64xi32> -> tensor<64x1xi32>
+    %28 = tt.splat %arg5 : i32 -> tensor<64x1xi32>
+    %29 = arith.cmpi slt, %27, %28 : tensor<64x1xi32>
+    %30 = tt.expand_dims %8 {axis = 0 : i32} : tensor<64xi32> -> tensor<1x64xi32>
+    %31 = tt.splat %arg6 : i32 -> tensor<1x64xi32>
+    %32 = arith.cmpi slt, %30, %31 : tensor<1x64xi32>
+    %33 = tt.broadcast %29 : tensor<64x1xi1> -> tensor<64x64xi1>
+    %34 = tt.broadcast %32 : tensor<1x64xi1> -> tensor<64x64xi1>
+    %35 = arith.andi %33, %34 : tensor<64x64xi1>
+    %36 = tt.splat %arg6 : i32 -> tensor<64x1xi32>
+    %37 = arith.muli %27, %36 : tensor<64x1xi32>
+    %38 = tt.splat %arg4 : !tt.ptr<f32> -> tensor<64x1x!tt.ptr<f32>>
+    %39 = tt.addptr %38, %37 : tensor<64x1x!tt.ptr<f32>>, tensor<64x1xi32>
+    %40 = tt.broadcast %39 : tensor<64x1x!tt.ptr<f32>> -> tensor<64x64x!tt.ptr<f32>>
+    %41 = tt.broadcast %30 : tensor<1x64xi32> -> tensor<64x64xi32>
+    %42 = tt.addptr %40, %41 : tensor<64x64x!tt.ptr<f32>>, tensor<64x64xi32>
+    tt.store %42, %26, %35 : tensor<64x64x!tt.ptr<f32>>
+    tt.return
+  }
+}
+
+{-#
+  external_resources: {
+    mlir_reproducer: {
+      pipeline: "builtin.module(convert-triton-to-tritongpu{enable-source-remat=false num-ctas=1 num-warps=4 target=cuda:75 threads-per-warp=32}, tritongpu-coalesce, tritongpu-F32DotTC{emu-tf32=false}, triton-nvidia-gpu-plan-cta, tritongpu-remove-layout-conversions, tritongpu-optimize-thread-locality, tritongpu-accelerate-matmul, tritongpu-remove-layout-conversions, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, triton-nvidia-optimize-descriptor-encoding, triton-loop-aware-cse, triton-licm, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true}, triton-loop-aware-cse, tritongpu-prefetch, tritongpu-optimize-dot-operands{hoist-layout-conversion=false}, tritongpu-coalesce-async-copy, triton-nvidia-optimize-tmem-layouts, tritongpu-remove-layout-conversions, triton-nvidia-interleave-tmem, tritongpu-reduce-data-duplication, tritongpu-reorder-instructions, triton-loop-aware-cse, symbol-dce, triton-nvidia-gpu-fence-insertion{compute-capability=75}, triton-nvidia-mma-lowering, sccp, cse, canonicalize{  max-iterations=10 max-num-rewrites=-1 region-simplify=normal test-convergence=false top-down=true})",
+      disable_threading: true,
+      verify_each: true
+    }
+  }
+#-}
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: error: Failures have been detected while processing an MLIR pass pipeline
+/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py:127:0: note: Pipeline failed while executing [`TritonGPUAccelerateMatmul` on 'builtin.module' operation]: reproducer generated at `std::errs, please share the reproducer above with Triton project.`
+ERROR
+test_a_batch_in_pieces_is_one_update (test_exact_rl.Pieces.test_a_batch_in_pieces_is_one_update)
+Eight rows in pieces of at most 24 tokens (three or more pieces): ... ok
+test_pieces_cover_every_row_once (test_exact_rl.Pieces.test_pieces_cover_every_row_once) ... ok
+test_the_kernel_is_the_python_under_the_interpreter (test_exact_softmax_kernel.OnTheCpu.test_the_kernel_is_the_python_under_the_interpreter) ... ok
+test_unsupported_rows_are_refused (test_exact_softmax_kernel.OnTheCpu.test_unsupported_rows_are_refused) ... ok
+test_the_kernel_is_the_python_on_the_gpu (test_exact_softmax_kernel.OnTheGpu.test_the_kernel_is_the_python_on_the_gpu) ... ok
+test_training_uses_it_and_gives_the_cpu_weights (test_exact_softmax_kernel.OnTheGpu.test_training_uses_it_and_gives_the_cpu_weights) ... ok
+test_bit_length (test_exact_train.Arithmetic.test_bit_length) ... ok
+test_quantize_rows_power_of_two_scale (test_exact_train.Arithmetic.test_quantize_rows_power_of_two_scale) ... ok
+test_shift_refuses_to_wrap (test_exact_train.Arithmetic.test_shift_refuses_to_wrap) ... ok
+test_shift_rounds_to_nearest_ties_up (test_exact_train.Arithmetic.test_shift_rounds_to_nearest_ties_up) ... ok
+test_cublas_gives_the_cpu_weights (test_exact_train.OnTheGpu.test_cublas_gives_the_cpu_weights) ... ok
+test_float_twin_differs_across_devices (test_exact_train.OnTheGpu.test_float_twin_differs_across_devices) ... ok
+test_y_gemm_gives_the_cpu_weights (test_exact_train.OnTheGpu.test_y_gemm_gives_the_cpu_weights) ... ok
+test_chunk_order_does_not_change_exact_weights (test_exact_train.Training.test_chunk_order_does_not_change_exact_weights) ... ok
+test_float_twin_depends_on_chunk_order (test_exact_train.Training.test_float_twin_depends_on_chunk_order) ... ok
+test_it_trains_and_keeps_moving (test_exact_train.Training.test_it_trains_and_keeps_moving) ... ok
+test_refuses_a_bad_split (test_exact_train.Training.test_refuses_a_bad_split) ... ok
+test_matches_autograd (test_exact_train_lm.Backward.test_matches_autograd) ... ok
+test_a_deferred_refusal_raises_from_a_graph (test_exact_train_lm.OnTheGpu.test_a_deferred_refusal_raises_from_a_graph) ... ok
+test_compiled_graph_gives_the_cpu_weights (test_exact_train_lm.OnTheGpu.test_compiled_graph_gives_the_cpu_weights) ... W1124 07:09:27.987000 1769 torch/_inductor/utils.py:1953] [14/0] Not enough SMs to use max_autotune_gemm mode
+ok
+test_compiled_kernels_reload_only_after_a_barrier (test_exact_train_lm.OnTheGpu.test_compiled_kernels_reload_only_after_a_barrier) ... ok
+test_compiled_step_at_width_512_gives_the_cpu_weights (test_exact_train_lm.OnTheGpu.test_compiled_step_at_width_512_gives_the_cpu_weights) ... ok
+test_cublas_gives_the_cpu_weights (test_exact_train_lm.OnTheGpu.test_cublas_gives_the_cpu_weights) ... ok
+test_det_sqrt_same_bits_on_both (test_exact_train_lm.OnTheGpu.test_det_sqrt_same_bits_on_both) ... ok
+test_float32_activations_give_the_cpu_weights (test_exact_train_lm.OnTheGpu.test_float32_activations_give_the_cpu_weights) ... ok
+test_float_twin_differs_across_devices (test_exact_train_lm.OnTheGpu.test_float_twin_differs_across_devices) ... ok
+test_int8_gradients_on_y_gemm_give_the_cpu_weights (test_exact_train_lm.OnTheGpu.test_int8_gradients_on_y_gemm_give_the_cpu_weights) ... ok
+test_scalar_divide_is_written_as_a_multiply (test_exact_train_lm.OnTheGpu.test_scalar_divide_is_written_as_a_multiply) ... ok
+test_wide_operands_on_both_sides_give_the_cpu_weights (test_exact_train_lm.OnTheGpu.test_wide_operands_on_both_sides_give_the_cpu_weights) ... ok
+test_y_gemm_gives_the_cpu_weights (test_exact_train_lm.OnTheGpu.test_y_gemm_gives_the_cpu_weights) ... ok
+test_det_sqrt_is_close_and_scaled_exactly (test_exact_train_lm.Pieces.test_det_sqrt_is_close_and_scaled_exactly) ... ok
+test_digits_rebuild_the_value (test_exact_train_lm.Pieces.test_digits_rebuild_the_value) ... ok
+test_exact_softmax_rows_sum_to_one (test_exact_train_lm.Pieces.test_exact_softmax_rows_sum_to_one) ... ok
+test_exact_sum_ignores_order (test_exact_train_lm.Pieces.test_exact_sum_ignores_order) ... ok
+test_float32_formula_is_the_integer_definition (test_exact_train_lm.Pieces.test_float32_formula_is_the_integer_definition) ... ok
+test_float32_quantizer_is_round_half_even (test_exact_train_lm.Pieces.test_float32_quantizer_is_round_half_even) ... ok
+test_float64_formula_is_the_integer_definition (test_exact_train_lm.Pieces.test_float64_formula_is_the_integer_definition) ... ok
+test_integer_quantizer_is_round_half_even (test_exact_train_lm.Pieces.test_integer_quantizer_is_round_half_even) ... ok
+test_isqrt_is_the_floor_square_root (test_exact_train_lm.Pieces.test_isqrt_is_the_floor_square_root) ... ok
+test_matmul_is_the_product_of_the_int8_copies (test_exact_train_lm.Pieces.test_matmul_is_the_product_of_the_int8_copies) ... ok
+test_ndigits_is_the_proofs (test_exact_train_lm.Pieces.test_ndigits_is_the_proofs) ... ok
+test_non_finite_values_are_refused (test_exact_train_lm.Pieces.test_non_finite_values_are_refused) ... ok
+test_pow2_is_exact (test_exact_train_lm.Pieces.test_pow2_is_exact) ... ok
+test_wide_matmul_is_the_exact_product (test_exact_train_lm.Pieces.test_wide_matmul_is_the_exact_product) ... ok
+test_a_deferred_refusal_still_raises (test_exact_train_lm.Training.test_a_deferred_refusal_still_raises) ... ok
+test_float32_activations_train_and_ignore_row_order (test_exact_train_lm.Training.test_float32_activations_train_and_ignore_row_order) ... ok
+test_float_twin_depends_on_row_order (test_exact_train_lm.Training.test_float_twin_depends_on_row_order) ... ok
+test_it_trains (test_exact_train_lm.Training.test_it_trains) ... ok
+test_row_order_does_not_change_exact_weights (test_exact_train_lm.Training.test_row_order_does_not_change_exact_weights) ... ok
+test_trainer_gives_the_same_weights (test_exact_train_lm.Training.test_trainer_gives_the_same_weights) ... ok
+
+======================================================================
+ERROR: test_a_wrong_transcription_is_noticed (test_exact_decode_check.Transcriptions.test_a_wrong_transcription_is_noticed)
+The comparison above can fail: an exp2 off by one at one argument.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_decode_check.py", line 35, in setUp
+    chk.C = chk.coq_constants(str(CONSTS))
+            ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/kaggle/working/Y/tools/exact_decode_check.py", line 53, in coq_constants
+    text = open(path).read()
+           ~~~~^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/kaggle/working/Y/proofs/ExactDecodeConstants.v'
+
+======================================================================
+ERROR: test_exp2 (test_exact_decode_check.Transcriptions.test_exp2)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_decode_check.py", line 35, in setUp
+    chk.C = chk.coq_constants(str(CONSTS))
+            ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/kaggle/working/Y/tools/exact_decode_check.py", line 53, in coq_constants
+    text = open(path).read()
+           ~~~~^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/kaggle/working/Y/proofs/ExactDecodeConstants.v'
+
+======================================================================
+ERROR: test_widths (test_exact_decode_check.Transcriptions.test_widths)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_decode_check.py", line 35, in setUp
+    chk.C = chk.coq_constants(str(CONSTS))
+            ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/kaggle/working/Y/tools/exact_decode_check.py", line 53, in coq_constants
+    text = open(path).read()
+           ~~~~^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/kaggle/working/Y/proofs/ExactDecodeConstants.v'
+
+======================================================================
+ERROR: test_committed_file_is_what_the_python_generates (test_exact_decode_constants.ExactDecodeConstants.test_committed_file_is_what_the_python_generates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_decode_constants.py", line 39, in test_committed_file_is_what_the_python_generates
+    self.assertEqual(run.stdout, COMMITTED.read_text(),
+                                 ~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 546, in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_abc.py", line 632, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 537, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/kaggle/working/Y/proofs/ExactDecodeConstants.v'
+
+======================================================================
+ERROR: test_the_file_holds_the_constants_the_bounds_read (test_exact_decode_constants.ExactDecodeConstants.test_the_file_holds_the_constants_the_bounds_read)
+A file with the constants deleted would compare equal to nothing
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_decode_constants.py", line 46, in test_the_file_holds_the_constants_the_bounds_read
+    text = COMMITTED.read_text()
+  File "/usr/lib/python3.13/pathlib/_local.py", line 546, in read_text
+    return PathBase.read_text(self, encoding, errors, newline)
+           ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_abc.py", line 632, in read_text
+    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
+         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 537, in open
+    return io.open(self, mode, buffering, encoding, errors, newline)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/kaggle/working/Y/proofs/ExactDecodeConstants.v'
+
+======================================================================
+ERROR: test_a_llamas_adapters_on_the_cpu_and_compiled_on_the_gpu (test_exact_lora.OnTheGpu.test_a_llamas_adapters_on_the_cpu_and_compiled_on_the_gpu)
+A Llama (Llama 3's rotary scaling): its attention has the exact
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_lora.py", line 396, in test_a_llamas_adapters_on_the_cpu_and_compiled_on_the_gpu
+    got = train_tiny("cuda", compile=True, arch="llama", lengths=(30, 27))
+  File "/kaggle/working/Y/python/tests/test_exact_lora.py", line 85, in train_tiny
+    tps.append(lora.tp_digest(sft.step(ids.to(device), labels.to(device))))
+                              ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 749, in step
+    return self.run(ids, labels)[0]
+           ~~~~~~~~^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 758, in run
+    return self.run_chunks([(ids, labels, weights, check)])
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 773, in run_chunks
+    outs.append(self._accumulate(ids, labels, weights, check, bad))
+                ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 810, in _accumulate
+    hidden = self.forward(ids)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 740, in forward
+    return self.model.model(input_ids=ids, use_cache=False).last_hidden_state
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/output_capturing.py", line 262, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/llama/modeling_llama.py", line 403, in forward
+    hidden_states = decoder_layer(
+        hidden_states,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
+    return super().__call__(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/llama/modeling_llama.py", line 308, in forward
+    hidden_states, _ = self.self_attn(
+                       ~~~~~~~~~~~~~~^
+        hidden_states=hidden_states,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 913, in _merged_attention_forward
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 355, in forward
+    return _LoRAFn.apply(x, self.A, self.B, self)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/autograd/function.py", line 625, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 252, in forward
+    y, xf, u = mod._forward(x, A, B)
+               ~~~~~~~~~~~~^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 350, in _forward
+    return _run(self.ops, _lora_forward, x.detach(), A.detach(), B.detach(), self.base, self.scale,
+                *_widths(self.ops))
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 331, in _run
+    out, conds, msgs = fn(*args)
+                       ~~^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_dynamo/eval_frame.py", line 1183, in compile_wrapper
+    raise e.remove_dynamo_frames() from None  # see TORCHDYNAMO_VERBOSE=1
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/compile_fx.py", line 1079, in _compile_fx_inner
+    raise InductorError(e, currentframe()).with_traceback(
+        e.__traceback__
+    ) from None
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/compile_fx.py", line 1059, in _compile_fx_inner
+    mb_compiled_graph = fx_codegen_and_compile(
+        gm,
+    ...<3 lines>...
+        **graph_kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/compile_fx.py", line 1847, in fx_codegen_and_compile
+    return scheme.codegen_and_compile(gm, example_inputs, inputs_to_check, graph_kwargs)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/compile_fx.py", line 1608, in codegen_and_compile
+    compiled_module = graph.compile_to_module()
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/graph.py", line 2669, in compile_to_module
+    return self._compile_to_module()
+           ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/graph.py", line 2679, in _compile_to_module
+    mod = self._compile_to_module_lines(wrapper_code)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/graph.py", line 2754, in _compile_to_module_lines
+    mod = PyCodeCache.load_by_key_path(
+        key,
+    ...<6 lines>...
+        },
+    )
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/codecache.py", line 4622, in load_by_key_path
+    mod = _reload_python_module(key, path, set_sys_modules=set_sys_modules)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/runtime/compile_tasks.py", line 35, in _reload_python_module
+    exec(code, mod.__dict__, mod.__dict__)
+    ~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/torchinductor_root/25/c25gml3vghfqzu2iz6ogjty3bq7lhi2fgyp35cezs62ioeojpcgh.py", line 93, in <module>
+    async_compile.wait(globals())
+    ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/async_compile.py", line 818, in wait
+    self._wait_futures(scope)
+    ~~~~~~~~~~~~~~~~~~^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/async_compile.py", line 848, in _wait_futures
+    kernel = result.result(timeout=wait_timeout)
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/codecache.py", line 5306, in result
+    return self.result_fn()
+           ~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/async_compile.py", line 500, in get_result
+    raise e.with_name(kernel_name) from e
+torch._inductor.exc.InductorError: SubprocException: An exception occurred in a subprocess:
+
+Name=_w8a8_gemm
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/compile_worker/subproc_pool.py", line 475, in do_job
+    result = job()
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/runtime/compile_tasks.py", line 204, in _worker_compile_triton
+    kernel.precompile(warm_cache_only=True)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/runtime/triton_heuristics.py", line 648, in precompile
+    self._precompile_worker()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/runtime/triton_heuristics.py", line 687, in _precompile_worker
+    compile_results.append(self._precompile_config(c))
+                           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/_inductor/runtime/triton_heuristics.py", line 1156, in _precompile_config
+    binary = triton.compile(*compile_args, **compile_kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/triton/compiler/compiler.py", line 327, in compile
+    next_module = compile_ir(module, metadata)
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 549, in <lambda>
+    stages["ttgir"] = lambda src, metadata: self.make_ttgir(src, metadata, options, capability)
+                                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 321, in make_ttgir
+    pm.run(mod, 'make_ttgir')
+    ~~~~~~^^^^^^^^^^^^^^^^^^^
+RuntimeError: PassManager::run failed
+
+
+Set TORCHDYNAMO_VERBOSE=1 for the internal stack trace (please do this especially if you're reporting a bug to PyTorch). For even more developer context, set TORCH_LOGS="+dynamo"
+
+
+======================================================================
+ERROR: test_compiled_steps_are_the_eager_ones (test_exact_lora.OnTheGpu.test_compiled_steps_are_the_eager_ones)
+Every compiled call of five steps (three batch lengths, so the
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_lora.py", line 433, in test_compiled_steps_are_the_eager_ones
+    got = train_tiny("cuda", steps=5, compile=True, lengths=lengths)
+  File "/kaggle/working/Y/python/tests/test_exact_lora.py", line 85, in train_tiny
+    tps.append(lora.tp_digest(sft.step(ids.to(device), labels.to(device))))
+                              ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 749, in step
+    return self.run(ids, labels)[0]
+           ~~~~~~~~^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 758, in run
+    return self.run_chunks([(ids, labels, weights, check)])
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 773, in run_chunks
+    outs.append(self._accumulate(ids, labels, weights, check, bad))
+                ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 810, in _accumulate
+    hidden = self.forward(ids)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 740, in forward
+    return self.model.model(input_ids=ids, use_cache=False).last_hidden_state
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/output_capturing.py", line 262, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+        hidden_states,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
+    return super().__call__(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ~~~~~~~~~~~~~~^
+        hidden_states=hidden_states,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 913, in _merged_attention_forward
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 355, in forward
+    return _LoRAFn.apply(x, self.A, self.B, self)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/autograd/function.py", line 625, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 252, in forward
+    y, xf, u = mod._forward(x, A, B)
+               ~~~~~~~~~~~~^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 350, in _forward
+    return _run(self.ops, _lora_forward, x.detach(), A.detach(), B.detach(), self.base, self.scale,
+                *_widths(self.ops))
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 331, in _run
+    out, conds, msgs = fn(*args)
+                       ~~^^^^^^^
+  File "/kaggle/working/Y/python/tests/test_exact_lora.py", line 428, in run
+    want, got = fn(*args), c(*args)
+                ~~^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 291, in _lora_forward
+    y = base(x)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 501, in forward
+    y = w8a8_matmul(x8.contiguous(), sx.reshape(-1).float(),
+                    self.w8t, self.sw, self.bias)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py", line 583, in w8a8_matmul
+    _w8a8_gemm[(triton.cdiv(n, bn), triton.cdiv(m, block_m))](
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        x8, w8t, sx, sw, y, m, n, k, BLOCK_M=block_m, BLOCK_N=bn,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        BLOCK_K=bk, num_warps=warps, num_stages=stages,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 370, in <lambda>
+    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+                                   ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 739, in run
+    kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup)
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 884, in _do_compile
+    kernel = self.compile(src, target=target, options=options.__dict__)
+  File "/usr/local/lib/python3.13/dist-packages/triton/compiler/compiler.py", line 327, in compile
+    next_module = compile_ir(module, metadata)
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 549, in <lambda>
+    stages["ttgir"] = lambda src, metadata: self.make_ttgir(src, metadata, options, capability)
+                                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 321, in make_ttgir
+    pm.run(mod, 'make_ttgir')
+    ~~~~~~^^^^^^^^^^^^^^^^^^^
+RuntimeError: PassManager::run failed
+
+======================================================================
+ERROR: test_the_cpus_adapters_on_the_gpu (test_exact_lora.OnTheGpu.test_the_cpus_adapters_on_the_gpu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_lora.py", line 387, in test_the_cpus_adapters_on_the_gpu
+    self.assertEqual(train_tiny("cuda")[:2], ref)
+                     ~~~~~~~~~~^^^^^^^^
+  File "/kaggle/working/Y/python/tests/test_exact_lora.py", line 85, in train_tiny
+    tps.append(lora.tp_digest(sft.step(ids.to(device), labels.to(device))))
+                              ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 749, in step
+    return self.run(ids, labels)[0]
+           ~~~~~~~~^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 758, in run
+    return self.run_chunks([(ids, labels, weights, check)])
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 773, in run_chunks
+    outs.append(self._accumulate(ids, labels, weights, check, bad))
+                ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 810, in _accumulate
+    hidden = self.forward(ids)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 740, in forward
+    return self.model.model(input_ids=ids, use_cache=False).last_hidden_state
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/output_capturing.py", line 262, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+        hidden_states,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
+    return super().__call__(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ~~~~~~~~~~~~~~^
+        hidden_states=hidden_states,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 913, in _merged_attention_forward
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 355, in forward
+    return _LoRAFn.apply(x, self.A, self.B, self)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/autograd/function.py", line 625, in apply
+    return super().apply(*args, **kwargs)  # type: ignore[misc]
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 252, in forward
+    y, xf, u = mod._forward(x, A, B)
+               ~~~~~~~~~~~~^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 350, in _forward
+    return _run(self.ops, _lora_forward, x.detach(), A.detach(), B.detach(), self.base, self.scale,
+                *_widths(self.ops))
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 331, in _run
+    out, conds, msgs = fn(*args)
+                       ~~^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 291, in _lora_forward
+    y = base(x)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 501, in forward
+    y = w8a8_matmul(x8.contiguous(), sx.reshape(-1).float(),
+                    self.w8t, self.sw, self.bias)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py", line 583, in w8a8_matmul
+    _w8a8_gemm[(triton.cdiv(n, bn), triton.cdiv(m, block_m))](
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        x8, w8t, sx, sw, y, m, n, k, BLOCK_M=block_m, BLOCK_N=bn,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        BLOCK_K=bk, num_warps=warps, num_stages=stages,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 370, in <lambda>
+    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+                                   ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 739, in run
+    kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup)
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 884, in _do_compile
+    kernel = self.compile(src, target=target, options=options.__dict__)
+  File "/usr/local/lib/python3.13/dist-packages/triton/compiler/compiler.py", line 327, in compile
+    next_module = compile_ir(module, metadata)
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 549, in <lambda>
+    stages["ttgir"] = lambda src, metadata: self.make_ttgir(src, metadata, options, capability)
+                                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 321, in make_ttgir
+    pm.run(mod, 'make_ttgir')
+    ~~~~~~^^^^^^^^^^^^^^^^^^^
+RuntimeError: PassManager::run failed
+
+======================================================================
+ERROR: test_the_cpus_samples_and_adapters_on_the_gpu (test_exact_rl.OnTheGpu.test_the_cpus_samples_and_adapters_on_the_gpu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_rl.py", line 307, in test_the_cpus_samples_and_adapters_on_the_gpu
+    self.assertEqual(run_rl("cuda"), ref)
+                     ~~~~~~^^^^^^^^
+  File "/kaggle/working/Y/python/tests/test_exact_rl.py", line 52, in run_rl
+    sampled = rl.sample(m, ad.ops, ids.to(device), mask.to(device), 4, rand)
+  File "/usr/local/lib/python3.13/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/rl.py", line 127, in sample
+    out = model(input_ids=input_ids, attention_mask=attention_mask, position_ids=position,
+                past_key_values=cache, use_cache=True, logits_to_keep=1, return_dict=True)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 939, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 452, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ~~~~~~~~~~^
+        input_ids=input_ids,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/output_capturing.py", line 262, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+        hidden_states,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
+    return super().__call__(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ~~~~~~~~~~~~~~^
+        hidden_states=hidden_states,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 913, in _merged_attention_forward
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 356, in forward
+    return self._forward(x, self.A, self.B)[0]
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 350, in _forward
+    return _run(self.ops, _lora_forward, x.detach(), A.detach(), B.detach(), self.base, self.scale,
+                *_widths(self.ops))
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 331, in _run
+    out, conds, msgs = fn(*args)
+                       ~~^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 291, in _lora_forward
+    y = base(x)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 501, in forward
+    y = w8a8_matmul(x8.contiguous(), sx.reshape(-1).float(),
+                    self.w8t, self.sw, self.bias)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py", line 583, in w8a8_matmul
+    _w8a8_gemm[(triton.cdiv(n, bn), triton.cdiv(m, block_m))](
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        x8, w8t, sx, sw, y, m, n, k, BLOCK_M=block_m, BLOCK_N=bn,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        BLOCK_K=bk, num_warps=warps, num_stages=stages,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 370, in <lambda>
+    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+                                   ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 739, in run
+    kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup)
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 884, in _do_compile
+    kernel = self.compile(src, target=target, options=options.__dict__)
+  File "/usr/local/lib/python3.13/dist-packages/triton/compiler/compiler.py", line 327, in compile
+    next_module = compile_ir(module, metadata)
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 549, in <lambda>
+    stages["ttgir"] = lambda src, metadata: self.make_ttgir(src, metadata, options, capability)
+                                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 321, in make_ttgir
+    pm.run(mod, 'make_ttgir')
+    ~~~~~~^^^^^^^^^^^^^^^^^^^
+RuntimeError: PassManager::run failed
+
+======================================================================
+ERROR: test_the_graphed_sampler_is_the_sampler (test_exact_rl.OnTheGpu.test_the_graphed_sampler_is_the_sampler)
+Each decode step replayed from a CUDA graph (compiled with the
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_rl.py", line 288, in test_the_graphed_sampler_is_the_sampler
+    want = rl.sample(m, ad.ops, ids, mask, 12, rand)
+  File "/usr/local/lib/python3.13/dist-packages/torch/utils/_contextlib.py", line 124, in decorate_context
+    return func(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/rl.py", line 127, in sample
+    out = model(input_ids=input_ids, attention_mask=attention_mask, position_ids=position,
+                past_key_values=cache, use_cache=True, logits_to_keep=1, return_dict=True)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 939, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 452, in forward
+    outputs: BaseModelOutputWithPast = self.model(
+                                       ~~~~~~~~~~^
+        input_ids=input_ids,
+        ^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/generic.py", line 1068, in wrapper
+    output = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/utils/output_capturing.py", line 262, in wrapper
+    outputs = func(self, *args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 388, in forward
+    hidden_states = decoder_layer(
+        hidden_states,
+    ...<5 lines>...
+        **kwargs,
+    )
+  File "/usr/local/lib/python3.13/dist-packages/transformers/modeling_layers.py", line 114, in __call__
+    return super().__call__(*args, **kwargs)
+           ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/usr/local/lib/python3.13/dist-packages/transformers/models/qwen2/modeling_qwen2.py", line 282, in forward
+    hidden_states, _ = self.self_attn(
+                       ~~~~~~~~~~~~~~^
+        hidden_states=hidden_states,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+        **kwargs,
+        ^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 913, in _merged_attention_forward
+    q, k, v = self.qkv_proj(hidden_states).split(self.qkv_sizes, dim=-1)
+              ~~~~~~~~~~~~~^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 356, in forward
+    return self._forward(x, self.A, self.B)[0]
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 350, in _forward
+    return _run(self.ops, _lora_forward, x.detach(), A.detach(), B.detach(), self.base, self.scale,
+                *_widths(self.ops))
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 331, in _run
+    out, conds, msgs = fn(*args)
+                       ~~^^^^^^^
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/lora.py", line 291, in _lora_forward
+    y = base(x)
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1778, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/torch/nn/modules/module.py", line 1789, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/model.py", line 501, in forward
+    y = w8a8_matmul(x8.contiguous(), sx.reshape(-1).float(),
+                    self.w8t, self.sw, self.bias)
+  File "/kaggle/working/Y/python/tests/../../python/y_lang/exact/w8a8_gemv.py", line 583, in w8a8_matmul
+    _w8a8_gemm[(triton.cdiv(n, bn), triton.cdiv(m, block_m))](
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        x8, w8t, sx, sw, y, m, n, k, BLOCK_M=block_m, BLOCK_N=bn,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        BLOCK_K=bk, num_warps=warps, num_stages=stages,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 370, in <lambda>
+    return lambda *args, **kwargs: self.run(grid=grid, warmup=False, *args, **kwargs)
+                                   ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 739, in run
+    kernel = self._do_compile(key, signature, device, constexprs, options, attrs, warmup)
+  File "/usr/local/lib/python3.13/dist-packages/triton/runtime/jit.py", line 884, in _do_compile
+    kernel = self.compile(src, target=target, options=options.__dict__)
+  File "/usr/local/lib/python3.13/dist-packages/triton/compiler/compiler.py", line 327, in compile
+    next_module = compile_ir(module, metadata)
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 549, in <lambda>
+    stages["ttgir"] = lambda src, metadata: self.make_ttgir(src, metadata, options, capability)
+                                            ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.13/dist-packages/triton/backends/nvidia/compiler.py", line 321, in make_ttgir
+    pm.run(mod, 'make_ttgir')
+    ~~~~~~^^^^^^^^^^^^^^^^^^^
+RuntimeError: PassManager::run failed
+
+======================================================================
+FAIL: test_tools_names_are_the_package_modules (test_exact_package.TestOldNames.test_tools_names_are_the_package_modules)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/kaggle/working/Y/python/tests/test_exact_package.py", line 79, in test_tools_names_are_the_package_modules
+    self.assertEqual(out["exact_gemm_profile"], str(ROOT / ".ysu_exact_gemm"))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '/root/.cache/y-lang/exact_gemm' != '/kaggle/working/Y/.ysu_exact_gemm'
+- /root/.cache/y-lang/exact_gemm
++ /kaggle/working/Y/.ysu_exact_gemm
+
+
+----------------------------------------------------------------------
+Ran 106 tests in 975.662s
+
+FAILED (failures=1, errors=10, skipped=9)

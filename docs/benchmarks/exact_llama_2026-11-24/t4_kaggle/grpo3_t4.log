@@ -1,0 +1,13 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<02:17,  1.06it/s]
+Loading weights:  71%|███████   | 104/146 [00:01<00:00, 132.73it/s]
+Loading weights: 100%|██████████| 146/146 [00:01<00:00, 112.23it/s]
+/usr/local/lib/python3.13/dist-packages/triton/language/semantic.py:1680: UserWarning: tl.where with a non-boolean condition is deprecated and will error out in a future triton release. Got int8
+  warnings.warn(
+W1124 02:52:46.399000 626 torch/_inductor/utils.py:1953] [1/0] Not enough SMs to use max_autotune_gemm mode
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    (113 linear layers + 33 norms converted to exact form)
+step 1: reward 0.062 mismatch 0 tokens 2021b626e027f335 groups {'sampled': 4, 'all_right': 0, 'all_wrong': 3} sample 578.74 s train 206.63 s
+step 2: reward 0.312 mismatch 0 tokens 4dfddeb0520f0f50 groups {'sampled': 4, 'all_right': 1, 'all_wrong': 2} sample 0.61 s train 57.44 s
+step 3: reward 0.125 mismatch 0 tokens ffcc8b78a5da0b9f groups {'sampled': 4, 'all_right': 0, 'all_wrong': 3} sample 0.60 s train 0.58 s
