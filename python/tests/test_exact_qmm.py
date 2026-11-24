@@ -15,10 +15,11 @@ sys.path.insert(0, os.path.join(HERE, "..", "..", "python"))
 
 from test_exact_lora import bits_equal  # noqa: E402
 
-GPU = torch.cuda.is_available()
+# The kernel is Triton's int8 dot, which does not build below sm_80 (a T4).
+GPU = torch.cuda.is_available() and torch.cuda.get_device_capability() >= (8, 0)
 
 
-@unittest.skipUnless(GPU, "needs a CUDA GPU")
+@unittest.skipUnless(GPU, "needs a CUDA GPU of sm_80 or later")
 class FusedProduct(unittest.TestCase):
     def setUp(self):
         from y_lang.exact import lora, qmm, train_lm
