@@ -124,7 +124,12 @@ _OP = _register()
 
 
 def available(device) -> bool:
-    return _OP is not None and torch.device(device).type == "cuda"
+    """Whether the kernel runs on `device`: CUDA, sm_80 or later. Triton's
+    int8 `tl.dot` does not build for sm_75 (a Tesla T4; `model.triton_int8_dot_ok`),
+    where `lora._exact_mm` keeps `exact_product` on Y's GEMM: the same bits."""
+    device = torch.device(device)
+    return (_OP is not None and device.type == "cuda"
+            and torch.cuda.get_device_capability(device) >= (8, 0))
 
 
 def qmm(qa, sa, qb, sb, bits_a, bits_b):

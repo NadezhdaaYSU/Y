@@ -169,8 +169,18 @@ def run(args):
         print(f"eval @{step}: {e['right']}/{e['n']} right, {e['clean']} clean, tokens "
               f"{e['tokens']} ({e['seconds']} s)", flush=True)
 
+    def save_partial(step):
+        """The record so far, written at each checkpoint and evaluation, so a
+        run stopped early (a time limit) keeps its steps; the last write is
+        the whole record, without `partial_through`."""
+        if args.record:
+            part = dict(rec, partial_through=step, mismatches=sum(s["mismatch"] for s in rec["steps"]))
+            with open(args.record, "w") as f:
+                json.dump(part, f, indent=1)
+
     if args.eval and args.eval_every:
         do_eval(0)
+        save_partial(0)
     times = []
     samplers = {}
     dump = [] if args.dump else None
@@ -224,6 +234,7 @@ def run(args):
         if not args.sample_prompts:
             del entry["groups"]["kept"]
         times.append((t1 - t0, time.time() - t1))
+        entry.update(sample_s=round(times[-1][0], 3), train_s=round(times[-1][1], 3))
         if dump is not None:
             dump.append({"step": step, "ids": ids, "mask": mask, "tokens": sampled[0].cpu(),
                          "p": sampled[1].cpu(), "l": sampled[2].cpu(), "rewards": rewards,
@@ -232,12 +243,14 @@ def run(args):
         if step % args.checkpoint == 0 or step == args.steps:
             grpo.verify()
             rec["checkpoints"][str(step)] = ad.digest()
+            save_partial(step)
         if step % args.log == 0 or step == args.steps:
             s = rec["steps"][-1]
             print(f"step {step}: reward {s['reward']:.3f} mismatch {mism} tokens {s['tokens']} "
                   f"groups {s['groups']} sample {times[-1][0]:.2f} s train {times[-1][1]:.2f} s", flush=True)
         if args.eval and args.eval_every and (step % args.eval_every == 0 or step == args.steps):
             do_eval(step)
+            save_partial(step)
     grpo.verify()
     skip = min(3, len(times) - 1)
     if times:

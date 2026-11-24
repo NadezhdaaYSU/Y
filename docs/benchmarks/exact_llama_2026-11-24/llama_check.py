@@ -2,8 +2,12 @@
 of four chat prompts in one batch on each (the same?), each prompt alone
 (the batch's tokens?), and stock bf16's text beside them.
 
-    python3 llama_check.py MODEL [NEW_TOKENS]
+    python3 llama_check.py MODEL [NEW_TOKENS [OUT.json]]
+
+OUT.json keeps both devices' tokens and the machine, to compare with another
+machine's.
 """
+import json
 import os
 import sys
 
@@ -33,6 +37,11 @@ for dev in ("cpu", "cuda"):
     print(dev, "alone == in batch:", torch.equal(alone, outs[dev]))
     del m
 print("CPU == GPU tokens:", torch.equal(outs["cpu"], outs["cuda"]))
+if len(sys.argv) > 3:
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "tools"))
+    from exact_lora_sft import machine
+    json.dump({"model": MODEL, "new": N, "prompts": prompts, "machine": machine("cuda"),
+               "tokens": {d: t.tolist() for d, t in outs.items()}}, open(sys.argv[3], "w"), indent=1)
 for p, row in zip(prompts, outs["cuda"].tolist()):
     print(repr(p[:30]), "->", repr(tok.decode(row, skip_special_tokens=True)[:80]))
 from transformers import AutoModelForCausalLM

@@ -105,6 +105,25 @@ class FusedProduct(unittest.TestCase):
             self.assertEqual(len(calls), 1)
         self.assertTrue(bits_equal(got, ref))
 
+    def test_not_below_sm_80(self):
+        """On sm_75 (a T4) Triton's int8 dot does not build: `available` is
+        False there, and the adapters' products keep `exact_product`."""
+        from unittest import mock
+        a, b = self.operands(64, 16, 896)
+        calls = []
+        real = self.qmm.qmm
+
+        def spy(*args):
+            calls.append(1)
+            return real(*args)
+        self.assertTrue(self.qmm.available("cuda"))
+        with mock.patch.object(torch.cuda, "get_device_capability", lambda *_: (7, 5)), \
+                mock.patch.object(self.qmm, "qmm", spy):
+            self.assertFalse(self.qmm.available("cuda"))
+            got = self.lora._exact_mm(a, b, "a", 12, 8, self.lora.mm_y_any, torch.float32, None)
+        self.assertEqual(calls, [])
+        self.assertTrue(bits_equal(got, self.qmm.qmm(*self.T.q8(a, bits=12), *self.T.q8(b, bits=8), 12, 8)))
+
 
 if __name__ == "__main__":
     unittest.main()
