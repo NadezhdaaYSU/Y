@@ -140,6 +140,27 @@ exact runs; no sampled token's trainer integers differ from the sampler's.
 Exact sampling is now faster than stock PyTorch's own, eager or graphed;
 vLLM is 1.65 times faster. Training is now the larger gap (3.75x).
 
+## After the kernel work (2026-11-24, later)
+
+The adapters' products in one kernel with a float32 epilogue and decode
+tiles (`qmm`), the vocabulary's softmax and draw in one kernel
+(`vocab_draw`), and the graphed sampler's prefill attention compiled
+(`../exact_rl_train_profile_2026-11-24/README.md` has the profiles).
+`run.sh` again, the same settings (`RUN=rtx4070tis_fast2`):
+
+| | exact | stock | exact takes |
+|---|---|---|---|
+| sampling, vLLM | **1.53** (was 1.82) | 1.10 | **1.39x** the time |
+| sampling, bf16 PyTorch eager | | 1.99 | 0.77x |
+| sampling, bf16 PyTorch graphed | | 3.08 | 0.50x |
+| training, compiled | 1.00 (was 1.08) | 0.295 | 3.38x |
+| a whole step (vLLM + compiled) | **2.53** (was 2.90) | 1.39 | **1.82x** |
+
+The same sampled tokens, sampler integers, p(target) and adapters at all
+10 steps as the run before (`rtx4070tis_fast2/vs_fast_compare.txt`) and
+between its two exact runs. Training is limited by the host now (GPU busy
+0.63 s of 1.0 s): about 3,000 compiled calls a step.
+
 ## Not covered
 
 - One GPU, one model size, 10 steps. Exact's training time includes the

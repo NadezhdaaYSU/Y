@@ -1,0 +1,18 @@
+Loading weights:   0%|          | 0/290 [00:00<?, ?it/s]Loading weights:  84%|████████▍ | 243/290 [00:00<00:00, 2406.50it/s]Loading weights: 100%|██████████| 290/290 [00:00<00:00, 2576.53it/s]
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+W1124 20:27:33.579000 423328 /home/yumin/NVME files/YSU-engine-main/YSU-engine-main/src/Y_lang/Y/venv/lib/python3.14/site-packages/torch/_inductor/utils.py:1953] [1/0] Not enough SMs to use max_autotune_gemm mode
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+/tmp/y_exact_nospace/venv/lib/python3.14/site-packages/torch/_inductor/compile_fx.py:321: UserWarning: TensorFloat32 tensor cores for float32 matrix multiplication available but not enabled. Consider setting `torch.set_float32_matmul_precision('high')` for better performance.
+  warnings.warn(
+    (169 linear layers + 49 norms converted to exact form)
+step 1: reward 0.195 mismatch 0 tokens 623601f41f103988 groups {'sampled': 32, 'all_right': 0, 'all_wrong': 7, 'kept': 8} sample 139.46 s train 80.14 s peak 6.56 GB
+step 2: reward 0.535 mismatch 0 tokens 1cf84fa4ad680d5f groups {'sampled': 32, 'all_right': 5, 'all_wrong': 6, 'kept': 8} sample 1.62 s train 2.29 s peak 6.32 GB
+step 3: reward 0.508 mismatch 0 tokens c6f55c58fe648623 groups {'sampled': 32, 'all_right': 10, 'all_wrong': 8, 'kept': 8} sample 1.62 s train 12.83 s peak 6.35 GB
+step 4: reward 0.539 mismatch 0 tokens 0143a7b2b94e7109 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 6, 'kept': 8} sample 1.63 s train 1.13 s peak 6.24 GB
+step 5: reward 0.656 mismatch 0 tokens 19e09c6ccb295cdb groups {'sampled': 32, 'all_right': 16, 'all_wrong': 5, 'kept': 8} sample 1.46 s train 0.98 s peak 6.35 GB
+step 6: reward 0.508 mismatch 0 tokens b5b1c5161c17a9f9 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 9, 'kept': 8} sample 1.93 s train 0.96 s peak 6.5 GB
+step 7: reward 0.633 mismatch 0 tokens 64281adf95dbaa44 groups {'sampled': 32, 'all_right': 14, 'all_wrong': 8, 'kept': 8} sample 1.47 s train 0.99 s peak 6.79 GB
+step 8: reward 0.609 mismatch 0 tokens a1befc5fa3ce7b06 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 5, 'kept': 8} sample 1.65 s train 1.11 s peak 6.62 GB
+step 9: reward 0.574 mismatch 0 tokens f99d876e9589d2af groups {'sampled': 32, 'all_right': 14, 'all_wrong': 9, 'kept': 8} sample 1.65 s train 1.73 s peak 6.87 GB
+step 10: reward 0.637 mismatch 0 tokens 6e57dbc82c1fac2c groups {'sampled': 32, 'all_right': 18, 'all_wrong': 8, 'kept': 6} sample 1.64 s train 0.83 s peak 6.53 GB

@@ -1,0 +1,169 @@
+{
+ "vllm": "0.21.0",
+ "torch": "2.11.0+cu130",
+ "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+ "python": "3.14.8",
+ "eager": false,
+ "times": [
+  {
+   "round": 0,
+   "step": 1,
+   "arm": "sample_vllm",
+   "s": 1.2552961590008636,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 0,
+   "step": 2,
+   "arm": "sample_vllm",
+   "s": 1.2298407969992695,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 0,
+   "step": 3,
+   "arm": "sample_vllm",
+   "s": 1.2177494520001346,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 0,
+   "step": 4,
+   "arm": "sample_vllm",
+   "s": 1.20928004200141,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 0,
+   "step": 5,
+   "arm": "sample_vllm",
+   "s": 1.0515158039997914,
+   "rows": 256,
+   "new": 112
+  },
+  {
+   "round": 0,
+   "step": 6,
+   "arm": "sample_vllm",
+   "s": 0.9042129640001804,
+   "rows": 256,
+   "new": 96
+  },
+  {
+   "round": 0,
+   "step": 7,
+   "arm": "sample_vllm",
+   "s": 1.0338201959984872,
+   "rows": 256,
+   "new": 112
+  },
+  {
+   "round": 0,
+   "step": 8,
+   "arm": "sample_vllm",
+   "s": 1.1809894329999224,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 0,
+   "step": 9,
+   "arm": "sample_vllm",
+   "s": 1.1781720350008982,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 0,
+   "step": 10,
+   "arm": "sample_vllm",
+   "s": 1.183465713998885,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 1,
+   "step": 1,
+   "arm": "sample_vllm",
+   "s": 1.1740733849983371,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 1,
+   "step": 2,
+   "arm": "sample_vllm",
+   "s": 1.1826358449998224,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 1,
+   "step": 3,
+   "arm": "sample_vllm",
+   "s": 1.1731062740000198,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 1,
+   "step": 4,
+   "arm": "sample_vllm",
+   "s": 1.176447186000587,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 1,
+   "step": 5,
+   "arm": "sample_vllm",
+   "s": 1.031258295999578,
+   "rows": 256,
+   "new": 112
+  },
+  {
+   "round": 1,
+   "step": 6,
+   "arm": "sample_vllm",
+   "s": 0.8880719059998228,
+   "rows": 256,
+   "new": 96
+  },
+  {
+   "round": 1,
+   "step": 7,
+   "arm": "sample_vllm",
+   "s": 1.0314997069999663,
+   "rows": 256,
+   "new": 112
+  },
+  {
+   "round": 1,
+   "step": 8,
+   "arm": "sample_vllm",
+   "s": 1.1853868669986696,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 1,
+   "step": 9,
+   "arm": "sample_vllm",
+   "s": 1.1829511630003253,
+   "rows": 256,
+   "new": 128
+  },
+  {
+   "round": 1,
+   "step": 10,
+   "arm": "sample_vllm",
+   "s": 1.179270947999612,
+   "rows": 256,
+   "new": 128
+  }
+ ]
+}

@@ -1,0 +1,235 @@
+{
+ "config": {
+  "device": "cuda",
+  "steps": 10,
+  "prompts": 8,
+  "group": 8,
+  "new": 128,
+  "lr": 0.0001,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 0,
+  "eval_every": 0,
+  "eval_batch": 100,
+  "checkpoint": 10,
+  "log": 1,
+  "record": "/tmp/y_exact_nospace/docs/benchmarks/exact_rl_vs_stock_2026-11-23/rtx4070tis_fast2/exact_a.json",
+  "save": null,
+  "load": null,
+  "compile": true,
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "mode": "steps",
+  "digits": 2,
+  "eval_new": 6,
+  "sample_prompts": 32,
+  "early_stop": true,
+  "graphed": true,
+  "sample_rows": 256,
+  "chunk_tokens": 1024,
+  "dump": "/tmp/y_exact_nospace/docs/benchmark_data/exact_rl_vs_stock/rtx4070tis_fast2/exact_a.pt",
+  "compare": null
+ },
+ "machine": {
+  "python": "3.14.8",
+  "torch": "2.13.0+cu130",
+  "cpu": "AMD Ryzen 9 9950X 16-Core Processor",
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "cuda": "13.0",
+  "transformers": "5.15.0",
+  "gemm": "torch"
+ },
+ "steps": [
+  {
+   "step": 1,
+   "tokens": "623601f41f103988",
+   "ints": "ff22a429643d7cfc",
+   "reward": 0.1953125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 0,
+    "all_wrong": 7,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "dea0cad41bed0627",
+   "n": 3804,
+   "sample_s": 139.464,
+   "train_s": 80.136,
+   "peak_gb": 6.56
+  },
+  {
+   "step": 2,
+   "tokens": "1cf84fa4ad680d5f",
+   "ints": "af073daaff631826",
+   "reward": 0.53515625,
+   "groups": {
+    "sampled": 32,
+    "all_right": 5,
+    "all_wrong": 6,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "e38133962156ca03",
+   "n": 3403,
+   "sample_s": 1.619,
+   "train_s": 2.29,
+   "peak_gb": 6.32
+  },
+  {
+   "step": 3,
+   "tokens": "c6f55c58fe648623",
+   "ints": "7063c86f6a1fb029",
+   "reward": 0.5078125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 10,
+    "all_wrong": 8,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "d293f53f7729ab6d",
+   "n": 2687,
+   "sample_s": 1.618,
+   "train_s": 12.834,
+   "peak_gb": 6.35
+  },
+  {
+   "step": 4,
+   "tokens": "0143a7b2b94e7109",
+   "ints": "b8909f9fe41e4d41",
+   "reward": 0.5390625,
+   "groups": {
+    "sampled": 32,
+    "all_right": 8,
+    "all_wrong": 6,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "3a7c0cd0c830ec3c",
+   "n": 3012,
+   "sample_s": 1.628,
+   "train_s": 1.134,
+   "peak_gb": 6.24
+  },
+  {
+   "step": 5,
+   "tokens": "19e09c6ccb295cdb",
+   "ints": "b892cc81c503973d",
+   "reward": 0.65625,
+   "groups": {
+    "sampled": 32,
+    "all_right": 16,
+    "all_wrong": 5,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "16694a166f1c1f88",
+   "n": 2507,
+   "sample_s": 1.462,
+   "train_s": 0.981,
+   "peak_gb": 6.35
+  },
+  {
+   "step": 6,
+   "tokens": "b5b1c5161c17a9f9",
+   "ints": "dc69043ebe0652db",
+   "reward": 0.5078125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 8,
+    "all_wrong": 9,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "373f62be47fb1fb2",
+   "n": 2547,
+   "sample_s": 1.931,
+   "train_s": 0.96,
+   "peak_gb": 6.5
+  },
+  {
+   "step": 7,
+   "tokens": "64281adf95dbaa44",
+   "ints": "e0fbce0e5c85ae31",
+   "reward": 0.6328125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 14,
+    "all_wrong": 8,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "acfe6158f8e24c01",
+   "n": 2974,
+   "sample_s": 1.47,
+   "train_s": 0.99,
+   "peak_gb": 6.79
+  },
+  {
+   "step": 8,
+   "tokens": "a1befc5fa3ce7b06",
+   "ints": "d91f9ebcc20baef1",
+   "reward": 0.609375,
+   "groups": {
+    "sampled": 32,
+    "all_right": 13,
+    "all_wrong": 5,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "e587716c3bc77c66",
+   "n": 3172,
+   "sample_s": 1.651,
+   "train_s": 1.112,
+   "peak_gb": 6.62
+  },
+  {
+   "step": 9,
+   "tokens": "f99d876e9589d2af",
+   "ints": "90237577ca71abec",
+   "reward": 0.57421875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 14,
+    "all_wrong": 9,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "04ec617ad04565da",
+   "n": 3269,
+   "sample_s": 1.652,
+   "train_s": 1.728,
+   "peak_gb": 6.87
+  },
+  {
+   "step": 10,
+   "tokens": "6e57dbc82c1fac2c",
+   "ints": "ec85b547b2caef8b",
+   "reward": 0.63671875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 18,
+    "all_wrong": 8,
+    "kept": 6
+   },
+   "mismatch": 0,
+   "tp": "876e72fd545fac7d",
+   "n": 2306,
+   "sample_s": 1.642,
+   "train_s": 0.83,
+   "peak_gb": 6.53
+  }
+ ],
+ "checkpoints": {
+  "10": "aff2f8de68b44170"
+ },
+ "evals": {},
+ "init": "46d5ebab8e5370de",
+ "seconds_per_step": {
+  "sample": 1.633615527834211,
+  "train": 1.1049281869615828
+ },
+ "final": "aff2f8de68b44170",
+ "mismatches": 0
+}

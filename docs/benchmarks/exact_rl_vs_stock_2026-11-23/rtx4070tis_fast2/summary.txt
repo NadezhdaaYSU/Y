@@ -1,0 +1,22 @@
+steps 4 to 10, each the minimum over its repetitions; seconds a step
+
+sample:
+  exact_sample       1.528
+  sample_eager       1.990   exact takes 0.77x its time
+  sample_graphed     3.080   exact takes 0.50x its time
+  sample_vllm        1.095   exact takes 1.39x its time
+
+train:
+  exact_train        0.998
+  train_autotune     0.300   exact takes 3.33x its time
+  train_compile      0.295   exact takes 3.38x its time
+  train_eager        0.380   exact takes 2.63x its time
+
+a whole step: exact 2.525 s; stock's fastest sampler (sample_vllm) plus fastest trainer (train_compile) 1.390 s; exact takes 1.82x its time
+
+checks:
+  sample_graphed: its draw equals the exact token at 64.3% of positions
+  sample_eager: its draw equals the exact token at 64.1% of positions
+  stock log p of the exact tokens against the exact p / l: median |difference| 2.93e-04 (per-step medians 1.4e-04 to 1.3e-02)
+  training arms' mean log p of the labelled tokens against eager's, same step and round: largest difference 0.0379
+  compile and record times (first call): {'sample_graphed': 18.741378634000284, 'train_autotune': 80.32936100400002, 'train_compile': 17.035611180999695}
