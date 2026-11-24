@@ -14,7 +14,10 @@ hi * 128 + lo: the exact integer, whatever split computed it. That integer
 is below 2^53 (`Ops.matmul` refuses wider products), so its float64 is exact;
 2^(sa + sb) is built from its bits (|sa|, |sb| <= 511, `q8` refuses others),
 so the product is exact; the one rounding is float64 to float32,
-round-to-nearest-even, as `.to(torch.float32)` rounds.
+round-to-nearest-even, as `.to(torch.float32)` rounds. Where 2^(sa + sb) is
+a normal float32 the kernel gets the same bits in float32 (the integer
+rounded once, then scaled exactly; see the kernel), and only other tiles
+compute in float64, which GeForce cards run at 1/64 speed.
 
 Tests compare it with `exact_product` bit for bit
 (python/tests/test_exact_qmm.py).
@@ -32,6 +35,19 @@ except ImportError:                                        # pragma: no cover
     triton = None
 
 
+def _fitting(configs, args):
+    """The tiles worth timing for a shape (fewer to time on each new shape's
+    first call): K-tiles of 32 for K <= 32 and of 64 or more otherwise;
+    16-column tiles only for 32 or fewer columns, and no tile wider than
+    max(32, columns). Any tile gives the same bits (exact integer sums, the
+    same epilogue)."""
+    short_k = args["K_BUCKET"] <= 32
+    n = args["N_BUCKET"]
+    kept = [c for c in configs if (c.kwargs["BK"] == 32) == short_k
+            and (c.kwargs["BN"] > 16 or n <= 32) and c.kwargs["BN"] <= max(32, n)]
+    return kept or configs
+
+
 if triton is not None:
     @triton.autotune(
         configs=[
@@ -42,8 +58,18 @@ if triton is not None:
             triton.Config({"BM": 32, "BN": 64, "BK": 128}, num_warps=4, num_stages=3),
             triton.Config({"BM": 64, "BN": 32, "BK": 128}, num_warps=4, num_stages=3),
             triton.Config({"BM": 32, "BN": 32, "BK": 64}, num_warps=2, num_stages=2),
+            # Decode's adapter products: 16 outputs over a long K (few row
+            # blocks), or K = 16 into many outputs.
+            triton.Config({"BM": 16, "BN": 16, "BK": 128}, num_warps=2, num_stages=4),
+            triton.Config({"BM": 16, "BN": 16, "BK": 256}, num_warps=4, num_stages=3),
+            triton.Config({"BM": 32, "BN": 16, "BK": 256}, num_warps=4, num_stages=3),
+            triton.Config({"BM": 16, "BN": 32, "BK": 128}, num_warps=2, num_stages=4),
+            triton.Config({"BM": 32, "BN": 64, "BK": 32}, num_warps=2, num_stages=2),
+            triton.Config({"BM": 64, "BN": 128, "BK": 32}, num_warps=4, num_stages=2),
+            triton.Config({"BM": 128, "BN": 128, "BK": 32}, num_warps=8, num_stages=2),
         ],
         key=["M_BUCKET", "N_BUCKET", "K_BUCKET", "TWO"],
+        prune_configs_by={"early_config_prune": lambda configs, named_args, **kw: _fitting(configs, named_args)},
     )
     @triton.jit
     def _qmm_kernel(a_ptr, b_ptr, sa_ptr, sb_ptr, o_ptr, M, N, K,
@@ -76,8 +102,19 @@ if triton is not None:
         ea = tl.load(sa_ptr + rm * s_sa, mask=rm < M, other=0).to(tl.int64)
         eb = tl.load(sb_ptr + rn * s_sb, mask=rn < N, other=0).to(tl.int64)
         e = ea[:, None] + eb[None, :]
-        two_e = ((e + 1023) << 52).to(tl.float64, bitcast=True)   # 2^e, exact
-        out = (c.to(tl.float64) * two_e).to(tl.float32)
+        # float32 first: c rounded once to 24 bits (round to nearest even),
+        # then times 2^e, which is exact while the product is a normal
+        # float32 or overflows (rounding to 24 bits commutes with a power of
+        # two there), so the bits are float32(c * 2^e). With 2^e a normal
+        # float32 (-126 <= e <= 127) and c a nonzero integer, |c 2^e| >=
+        # 2^-126, never subnormal; a tile with any other e takes the float64
+        # product. GeForce cards run float64 at 1/64 of float32.
+        ok = (e >= -126) & (e <= 127)
+        two_e32 = ((tl.where(ok, e, 0) + 127) << 23).to(tl.int32).to(tl.float32, bitcast=True)
+        out = c.to(tl.float32) * two_e32
+        if tl.max((ok == 0).to(tl.int32)) > 0:
+            two_e = ((e + 1023) << 52).to(tl.float64, bitcast=True)   # 2^e, exact
+            out = tl.where(ok, out, (c.to(tl.float64) * two_e).to(tl.float32))
         tl.store(o_ptr + rm[:, None] * s_om + rn[None, :] * s_on, out,
                  mask=(rm[:, None] < M) & (rn[None, :] < N))
 

@@ -68,6 +68,32 @@ class FusedProduct(unittest.TestCase):
             for bits_a in (8, 12):
                 self.check(a, b, bits_a)
 
+    def test_scale_exponents_at_float32s_edges(self):
+        """Products whose scale 2^(sa + sb) is on either side of float32's
+        normal exponents (-126 to 127), where the kernel moves between its
+        float32 and float64 epilogues: the exact integer sum times the scale
+        in float64, rounded once to float32 (subnormals, infinities, zeros
+        included), bit for bit."""
+        g = self.g
+        K = 64
+        edges = (-160, -150, -149, -128, -127, -126, -125, -60, 0, 60, 125, 126, 127, 128, 129, 200)
+        for bits_a in (8, 12):
+            top = (1 << (bits_a - 1)) - 1
+            qa = torch.randint(-top, top + 1, (48, K), device="cuda", generator=g, dtype=torch.int64)
+            qa[0] = 0                                   # c = 0 for the whole row
+            qa[1] = top                                 # the largest sums
+            qa[2] = 0
+            qa[2, 0] = 1                                # c = qb[n][0]: small integers
+            qb = torch.randint(-127, 128, (len(edges) * 3, K), device="cuda", generator=g, dtype=torch.int64)
+            qb[0::3] = 127
+            sa = torch.randint(-3, 4, (48, 1), device="cuda", generator=g, dtype=torch.int64)
+            sb = torch.tensor([e for e in edges for _ in range(3)], device="cuda").reshape(-1, 1) - 1
+            c = qa.cpu() @ qb.cpu().t()
+            e = sa.cpu() + sb.cpu().t()
+            want = (c.to(torch.float64) * torch.pow(2.0, e.to(torch.float64))).to(torch.float32)
+            got = self.qmm.qmm(qa.to(torch.int32), sa, qb.to(torch.int32), sb, bits_a, 8).cpu()   # q8's types
+            self.assertTrue(bits_equal(want, got), f"{bits_a} bits: {int((want.view(torch.int32) != got.view(torch.int32)).sum())} differ")
+
     def test_transposed_operands(self):
         """Operands that are transposed views (the adapters' gradients over
         tokens: dyc.t(), u.t(), du.t(), xf.t())."""
