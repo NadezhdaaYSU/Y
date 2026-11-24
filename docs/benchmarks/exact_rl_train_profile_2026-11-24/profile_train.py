@@ -6,7 +6,7 @@ Replays the exact run's training steps from its dump (`exact_lora_grpo.py
 the next: each phase's wall time, the GPU's busy time, the number of kernels
 and the kernels that take the most time.
 
-    python3 profile_train.py DUMP RECORD [--steps 5] [--out profile.txt]
+    python3 profile_train.py DUMP RECORD [--steps 5] [--shapes] [--out profile.txt]
 """
 import argparse
 import os
@@ -30,6 +30,8 @@ ap.add_argument("record")
 ap.add_argument("--steps", type=int, default=5, help="the last is profiled, the one before timed bare")
 ap.add_argument("--out")
 ap.add_argument("--eager", action="store_true", help="products eager too (no --compile)")
+ap.add_argument("--shapes", action="store_true", help="also each product's GPU time by operand shapes "
+                "(the profiler's record_shapes)")
 ap.add_argument("--chunk-tokens", type=int, help="pieces of this many tokens, not the run's (a different "
                 "exact function: p(target) is then not compared with the record)")
 args = ap.parse_args()
@@ -96,7 +98,7 @@ for s in d["steps"][:args.steps]:
     torch.cuda.synchronize()
     t0 = time.perf_counter()
     if st == args.steps:
-        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA], record_shapes=args.shapes) as prof:
             tp, mism = train(s)
             torch.cuda.synchronize()
     else:
@@ -115,7 +117,7 @@ if not args.chunk_tokens:
 
 ev = prof.events()
 kernels = [e for e in ev if e.device_type == torch.autograd.DeviceType.CUDA
-           and not e.name.startswith(("phase:", "part:"))]
+           and not e.name.startswith(("phase:", "part:", "## "))]   # "## Call CompiledFxGraph": spans, not kernels
 busy = sum(e.time_range.elapsed_us() for e in kernels) / 1e6
 say(f"\nprofiled step: {len(kernels)} GPU kernels and copies, GPU busy {busy:.3f} s "
     f"(sum of their times; the step's wall time is above)")
@@ -150,10 +152,26 @@ for e in ev:
         i = bisect.bisect_right(starts, e.time_range.start) - 1
         if i >= 0 and parts[i][0] <= e.time_range.start <= parts[i][1]:
             plaunch[parts[i][2]] += 1
-say("\nparts (host time inside, calls, kernel launches):")
+# GPU time of the kernels each part launched (the profiler attaches a kernel
+# to the host op that launched it; a part's total includes its children's).
+pgpu = defaultdict(float)
+for e in ev:
+    if e.name.startswith("part:") and e.device_type == torch.autograd.DeviceType.CPU:
+        pgpu[e.name[5:]] += e.device_time_total / 1e6
+say("\nparts (host time inside, GPU time of their kernels, calls, kernel launches):")
 for name in sorted(ptime, key=lambda n: -ptime[n]):
-    say(f"  {name:26} {ptime[name]:7.3f} s {pcalls[name]:6d} calls {plaunch[name]:8d} launches "
+    say(f"  {name:26} {ptime[name]:7.3f} s {pgpu[name]:7.3f} s GPU {pcalls[name]:6d} calls {plaunch[name]:8d} launches "
         f"({plaunch[name] / max(pcalls[name], 1):.0f} a call)")
+if args.shapes:
+    prods = defaultdict(lambda: [0.0, 0])
+    for e in ev:
+        if e.device_type == torch.autograd.DeviceType.CPU and e.name.startswith("y_lang::"):
+            k = (e.name, str(e.input_shapes))
+            prods[k][0] += e.device_time_total / 1e6
+            prods[k][1] += 1
+    say("\nY's ops by operand shapes (GPU time of their kernels, calls):")
+    for (name, shp), (t, n) in sorted(prods.items(), key=lambda x: -x[1][0])[:40]:
+        say(f"  {t * 1e3:9.2f} ms {n:6d}x  {name} {shp[:120]}")
 by = defaultdict(lambda: [0.0, 0])
 for e in kernels:
     by[e.name][0] += e.time_range.elapsed_us() / 1e6

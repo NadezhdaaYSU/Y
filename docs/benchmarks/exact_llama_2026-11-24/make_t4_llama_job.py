@@ -17,6 +17,13 @@ PART b: liby.so built here, then the worked-answer GRPO run of Llama 3.2 1B
         wall-clock limit; the record is written at every checkpoint, so a
         stopped run keeps its steps. Out of memory: again with 512-token pieces
         and 32 draw rows.
+PART ab: the whole-layer training path (Y_EXACT_LAYER=1) and the per-module
+        one, 20 steps of PART b's settings each, in the order layer, module,
+        layer (each step against PART b's record).
+PART rc: each path for 6 steps with dynamo's recompile reasons, each with its
+        own cold compile caches, and PyTorch's compile time breakdown.
+PART pf: 8 steps with a dump, then profile_train.py on the T4 (the
+        per-module path; each part's GPU time and Y's ops by operand shape).
 Y's source comes from the y-lang-src dataset, liby.so from y-lang-wheel (then
 rebuilt here). Models pinned to the revisions the local records used.
 """
@@ -140,6 +147,76 @@ assert os.path.exists(f'{REPO}/proofs/ExactDecodeConstants.v'), 'no proofs in th
     build_liby()
     run("exact_tests_t4", "cd {REPO} && PYTHONPATH={REPO}/python:{REPO}/python/tests " + PY
         + ' -m unittest discover -v -s python/tests -p "test_exact_*.py"', None)
+elif PART == "ab":
+    # The whole-layer training path (4f0f63f) against the per-module one on
+    # the T4's host, paired: new, old, new; 20 steps each of the overnight
+    # run's settings, so every arm's steps compare with that record.
+    code("DEADLINE = START + 4 * 3600")
+    code("""
+assert 'class _LayerFn' in open(f'{REPO}/python/y_lang/exact/lora.py').read(), 'no whole-layer path in the source'
+assert os.path.exists(f'{REPO}/python/y_lang/exact/vocab_draw.py'), 'no fused draw in the source'
+""")
+    build_liby()
+    AB = (FAST + GRPO + " --device cuda --model {LLAMA} --mode steps --new 128 --eval 0 --sample-prompts 32"
+          " --early-stop --compile --graphed --sample-rows 64 --chunk-tokens 1024 --steps 20 --checkpoint 10 --log 1")
+    for name, layer in (("layer_a", "1"), ("module", "0"), ("layer_b", "1")):
+        run(f"ab_{name}", f"Y_EXACT_LAYER={layer} " + AB + " --record {OUT}/t4_ab_" + name + ".json", 3600)
+elif PART == "rc":
+    # Why training recompiles at steps 2, 3 and 5 on the T4 (the ab job: the
+    # whole-layer path 2,955 s cold, the per-module 874 s): each path for 6
+    # steps with dynamo's recompile reasons, each with its own cold caches,
+    # and PyTorch's compile time breakdown at exit.
+    code("DEADLINE = START + 3.5 * 3600")
+    code("""
+assert 'class _LayerFn' in open(f'{REPO}/python/y_lang/exact/lora.py').read(), 'no whole-layer path in the source'
+open(f'{OUT}/ct.py', 'w').write('''import atexit, os, runpy, sys, time
+T0 = time.time()
+def report():
+    import torch._dynamo.utils as u
+    print("== compile_times", f"{time.time() - T0:.0f} s since start", flush=True)
+    for f in ("compile_times", "calculate_time_spent"):
+        try:
+            r = u.compile_times(repr="str", aggregate=True) if f == "compile_times" else u.calculate_time_spent()
+            print(f, r, flush=True)
+        except Exception as e:
+            print(f, "unavailable:", repr(e), flush=True)
+atexit.register(report)
+sys.argv = sys.argv[1:]
+sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[0])))
+runpy.run_path(sys.argv[0], run_name="__main__")
+''')
+""")
+    build_liby()
+    RC = (FAST + PY + " {OUT}/ct.py exact_lora_grpo.py --device cuda --model {LLAMA} --mode steps --new 128 --eval 0"
+          " --sample-prompts 32 --early-stop --compile --graphed --sample-rows 64 --chunk-tokens 1024 --steps 6"
+          " --checkpoint 6 --log 1")
+    for name, layer in (("layer", "1"), ("module", "0")):
+        env = (f"Y_EXACT_LAYER={layer} PYTHONUNBUFFERED=1 TORCH_LOGS=recompiles,graph_breaks"
+               f" TORCHINDUCTOR_CACHE_DIR=/tmp/ind_{name} TRITON_CACHE_DIR=/tmp/tri_{name} ")
+        run(f"rc_{name}", env + RC + " --record {OUT}/t4_rc_" + name + ".json", 5400)
+elif PART == "pf":
+    # Where the T4's 6.5 s of training a step goes: 8 steps of PART ab's
+    # settings with a dump, then profile_train.py replays them (each step's
+    # p(target) against the record) and profiles step 8. The per-module path:
+    # it compiles about 3x faster on this host and its parts are timed.
+    code("DEADLINE = START + 3.5 * 3600")
+    # profile_train.py is not in the source dataset: the job writes the copy
+    # named by PROFILE_TRAIN (docs/benchmarks/exact_rl_train_profile_2026-11-24/).
+    src = open(os.environ["PROFILE_TRAIN"]).read()
+    code(f"""
+d = f'{{REPO}}/docs/benchmarks/exact_rl_train_profile_2026-11-24'
+os.makedirs(d, exist_ok=True)
+open(f'{{d}}/profile_train.py', 'w').write({src!r})
+print('profile_train.py', hashlib.sha256(open(f'{{d}}/profile_train.py', 'rb').read()).hexdigest()[:16])
+""")
+    build_liby()
+    PF = (FAST + "Y_EXACT_LAYER=0 PYTHONUNBUFFERED=1 " + GRPO + " --device cuda --model {LLAMA} --mode steps --new 128"
+          " --eval 0 --sample-prompts 32 --early-stop --compile --graphed --sample-rows 64 --chunk-tokens 1024"
+          " --steps 8 --checkpoint 8 --log 1 --record {OUT}/t4_pf.json --dump /kaggle/working/t4_pf_dump.pt")
+    run("pf_dump", PF, 5400)
+    run("pf_profile", FAST + "Y_EXACT_LAYER=0 PYTHONUNBUFFERED=1 " + PY
+        + " {REPO}/docs/benchmarks/exact_rl_train_profile_2026-11-24/profile_train.py /kaggle/working/t4_pf_dump.pt"
+        " {OUT}/t4_pf.json --steps 8 --shapes --out {OUT}/t4_profile_train.log", 5400)
 elif PART == "b":
     code("DEADLINE = START + 11.2 * 3600")
     build_liby()

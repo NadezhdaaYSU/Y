@@ -120,6 +120,56 @@ GEMMs 15%, the vocabulary softmax 12%, the adapters' products 6%.
 - Measuring needs the GPU to itself: while a browser tab used it, Y's GEMM
   alone took 4 to 8 times as long.
 
+## Where the GPU time goes now, 2026-11-25
+
+After the whole-layer path (4f0f63f), training waits on the GPU on both
+cards measured, so the next gains are GPU time. `profile_train.py` now also
+prints each part's GPU time (the kernels its host code launched) and, with
+`--shapes`, Y's ops by operand shape. Kernels are attributed to parts only on
+the per-module path (`Y_EXACT_LAYER=0`), whose GPU time is within 10% of the
+whole-layer path's (0.630 against 0.691 s on the 4070 Ti,
+`rtx4070tis/profile_train_layer.txt`).
+
+- **RTX 4070 Ti SUPER, Qwen2.5-0.5B** (`rtx4070tis/profile_train_parts_gpu.txt`,
+  the fast2 record's step 10; 0.624 s of GPU time):
+
+  | part | GPU s |
+  |---|---|
+  | adapters' layers (`lora_linear`), forward and backward | 0.249 |
+  | attention, forward and backward | 0.176 |
+  | LM head (`frozen_linear`) | 0.061 |
+  | norms and SiLU | 0.035 |
+  | between the parts (residuals, rotary, loss) | 0.103 |
+
+  The products themselves (`_qmm_kernel` 122 ms, cuBLAS int8 18 ms, Y's GEMM
+  10 ms, `exact_pv` 14 ms) are about a quarter; the rest is the quantizers'
+  passes (each tensor's maximum, then its rounding and digits) and the
+  softmax's.
+- **Tesla T4, Llama 3.2 1B** (`t4_kaggle/t4_profile_train.log`, step 8 of the
+  T4 runs' settings, `make_t4_llama_job.py pf`; 5.83 s of GPU time). There
+  the fused product does not build (sm_75), so every product is Y's int8
+  GEMM with its digits made in separate kernels. The 30 largest kernels hold
+  4.46 s: Y's GEMM 1.22 s (5,120 calls: 8 for each of the 640 adapter
+  layer calls, 3 forward and 5 backward), quantizer
+  reductions 1.22 s, digits and int8 packing for the GEMM 0.78 s, other
+  fused pointwise 0.55 s, PyTorch's elementwise kernels and copies 0.30 s,
+  attention's P·V 0.28 s, float32 GEMMs 0.12 s.
+- **Attention's softmax runs in float64.** The largest attention kernel (the
+  forward's softmax, fused by Inductor: the logits, the row maxima, the exp,
+  the row sums and the V scales' products; recomputed in the backward)
+  forms the logits `s_int * (sq * sc * log2e * 2^16) * sk` in float64, rounds
+  `m - logit` in float64, and stores two float64 tensors. GeForce cards run
+  float64 at 1/64 of float32's rate, the T4 at 1/32. On the 4070 Ti, one
+  layer's call (6 x 14 heads x 163 x 163 scores) took 305 us; the same kernel
+  with float32 in place of float64 (a timing copy, wrong values) 95 us; the
+  softmax chain alone in float32, 26 us. The exp itself (five int64
+  products a score) is about 6 of those 26 us. This kernel family is about 9%
+  of a training step on the 4070 Ti and 10% on the T4 (0.59 of 5.83 s).
+  Keeping the bits while dropping float64 means each float64 product built
+  from 32-bit integer pieces; power-of-two scales for Q and K would make the
+  logits cheap, but are a different function (every record and the accuracy
+  measured again).
+
 ## Not done
 
 - The adapters' backward still launches 44 kernels a call: each of its five

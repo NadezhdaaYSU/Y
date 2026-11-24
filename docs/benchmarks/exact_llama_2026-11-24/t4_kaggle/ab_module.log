@@ -1,0 +1,31 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<02:08,  1.13it/s]
+Loading weights:  70%|██████▉   | 102/146 [00:01<00:00, 135.40it/s]
+Loading weights: 100%|██████████| 146/146 [00:01<00:00, 111.55it/s]
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+[transformers] Ignoring clean_up_tokenization_spaces=True for BPE tokenizer TokenizersBackend. The clean_up_tokenization post-processing step is designed for WordPiece tokenizers and is destructive for BPE (it strips spaces before punctuation). Set clean_up_tokenization_spaces=False to suppress this warning, or set clean_up_tokenization_spaces_for_bpe_even_though_it_will_corrupt_output=True to force cleanup anyway.
+W1124 20:43:05.235000 4101 torch/_inductor/utils.py:1953] [2/1] Not enough SMs to use max_autotune_gemm mode
+    (113 linear layers + 33 norms converted to exact form)
+step 1: reward 0.438 mismatch 0 tokens af7b4567b8fd73b6 groups {'sampled': 32, 'all_right': 2, 'all_wrong': 4, 'kept': 8} sample 104.17 s train 243.01 s peak 9.32 GB
+step 2: reward 0.496 mismatch 0 tokens 89a42dd71d5d5112 groups {'sampled': 32, 'all_right': 4, 'all_wrong': 4, 'kept': 8} sample 12.96 s train 64.34 s peak 9.4 GB
+step 3: reward 0.512 mismatch 0 tokens c695e62d639deca1 groups {'sampled': 32, 'all_right': 4, 'all_wrong': 4, 'kept': 8} sample 11.01 s train 8.99 s peak 9.4 GB
+step 4: reward 0.645 mismatch 0 tokens eb864e84f81c11d0 groups {'sampled': 32, 'all_right': 9, 'all_wrong': 1, 'kept': 8} sample 11.75 s train 7.30 s peak 9.59 GB
+[W1124 20:49:07.045456766 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 492830720 bytes (free: 40697856, total: 15636037632).
+step 5: reward 0.605 mismatch 0 tokens 138bb1bad63c5cf5 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 5, 'kept': 8} sample 8.98 s train 149.61 s peak 9.6 GB
+step 6: reward 0.574 mismatch 0 tokens 501aaf181ec08b62 groups {'sampled': 32, 'all_right': 6, 'all_wrong': 0, 'kept': 8} sample 11.84 s train 8.20 s peak 9.62 GB
+step 7: reward 0.641 mismatch 0 tokens a33558189dbaedc5 groups {'sampled': 32, 'all_right': 11, 'all_wrong': 4, 'kept': 8} sample 9.09 s train 6.64 s peak 9.3 GB
+step 8: reward 0.711 mismatch 0 tokens 308c7752b0f0f046 groups {'sampled': 32, 'all_right': 14, 'all_wrong': 1, 'kept': 8} sample 8.02 s train 6.39 s peak 9.55 GB
+step 9: reward 0.652 mismatch 0 tokens fd84c84826b09f38 groups {'sampled': 32, 'all_right': 10, 'all_wrong': 3, 'kept': 8} sample 7.83 s train 7.81 s peak 9.51 GB
+step 10: reward 0.766 mismatch 0 tokens e8e3485ca92e2815 groups {'sampled': 32, 'all_right': 15, 'all_wrong': 2, 'kept': 8} sample 7.94 s train 6.57 s peak 9.43 GB
+step 11: reward 0.613 mismatch 0 tokens df0ad2100b5d57a4 groups {'sampled': 32, 'all_right': 7, 'all_wrong': 0, 'kept': 8} sample 8.50 s train 7.09 s peak 9.58 GB
+step 12: reward 0.680 mismatch 0 tokens e1a2a74fa44213b0 groups {'sampled': 32, 'all_right': 11, 'all_wrong': 0, 'kept': 8} sample 8.73 s train 6.98 s peak 9.46 GB
+step 13: reward 0.766 mismatch 0 tokens ecb0f676084f21e5 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 1, 'kept': 8} sample 7.52 s train 7.05 s peak 9.51 GB
+step 14: reward 0.637 mismatch 0 tokens eeb6aab26b4d610d groups {'sampled': 32, 'all_right': 11, 'all_wrong': 4, 'kept': 8} sample 9.04 s train 6.62 s peak 9.48 GB
+step 15: reward 0.715 mismatch 0 tokens 76cea62c3e1c5772 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 4, 'kept': 8} sample 7.16 s train 6.35 s peak 9.52 GB
+step 16: reward 0.723 mismatch 0 tokens dde7140c6952fcc2 groups {'sampled': 32, 'all_right': 16, 'all_wrong': 2, 'kept': 8} sample 7.22 s train 7.63 s peak 9.29 GB
+step 17: reward 0.676 mismatch 0 tokens 90f790bfacc3b43f groups {'sampled': 32, 'all_right': 8, 'all_wrong': 2, 'kept': 8} sample 7.43 s train 6.48 s peak 9.41 GB
+step 18: reward 0.602 mismatch 0 tokens 7d2c2aeb133d6643 groups {'sampled': 32, 'all_right': 13, 'all_wrong': 4, 'kept': 8} sample 10.49 s train 6.09 s peak 9.25 GB
+step 19: reward 0.617 mismatch 0 tokens 9d6e5addeaba88cb groups {'sampled': 32, 'all_right': 13, 'all_wrong': 4, 'kept': 8} sample 7.43 s train 5.47 s peak 9.07 GB
+step 20: reward 0.602 mismatch 0 tokens 4604511329dcda8e groups {'sampled': 32, 'all_right': 10, 'all_wrong': 2, 'kept': 8} sample 8.32 s train 5.49 s peak 9.13 GB

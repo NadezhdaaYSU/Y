@@ -1,0 +1,76 @@
+step 1: 291.913 s, 3804 tokens, mismatch 0, p(target) the record
+step 2: 1.290 s, 3403 tokens, mismatch 0, p(target) the record
+step 3: 12.506 s, 2687 tokens, mismatch 0, p(target) the record
+step 4: 1.139 s, 3012 tokens, mismatch 0, p(target) the record
+step 5: 0.916 s, 2507 tokens, mismatch 0, p(target) the record
+step 6: 2.129 s, 2547 tokens, mismatch 0, p(target) the record
+step 7: 0.938 s, 2974 tokens, mismatch 0, p(target) the record
+step 8: 1.042 s, 3172 tokens, mismatch 0, p(target) the record
+step 9: 0.974 s, 3269 tokens, mismatch 0, p(target) the record
+step 10: 1.203 s, 2306 tokens, mismatch 0, p(target) the record
+
+profiled step: 34310 GPU kernels and copies, GPU busy 0.691 s (sum of their times; the step's wall time is above)
+
+phases (wall time on the host, calls):
+  backward          0.556 s  6 calls
+  forward           0.184 s  6 calls
+  lm_head           0.002 s  6 calls
+  host_batch        0.002 s  6 calls
+  adam              0.002 s  1 calls
+
+kernel launches by phase: {'forward': 12075, 'backward': 21774, 'lm_head': 16, 'adam': 103}
+
+parts (host time inside, calls, kernel launches):
+  frozen_linear.backward       0.005 s      6 calls       72 launches (12 a call)
+  frozen_linear.forward        0.002 s      6 calls       90 launches (15 a call)
+  norm.backward                0.001 s      6 calls        6 launches (1 a call)
+  norm.forward                 0.001 s      6 calls        6 launches (1 a call)
+
+kernels by GPU time:
+     120.58 ms   5028x  _qmm_kernel
+      32.64 ms    144x  triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_clamp_max_di
+      25.76 ms    144x  triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_in
+      22.81 ms    144x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_clamp_max_eq_exa
+      21.11 ms    115x  triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_in
+      18.21 ms    144x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_exact_qmm_gt_
+      17.63 ms    624x  void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_128x64_128x3_tn_align16>(cutlass_80_tensorop_i16832gem
+      14.14 ms    144x  exact_pv
+      13.73 ms     18x  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float
+      13.69 ms    144x  triton_poi_fused__to_copy_add_clamp_div_eq_exact_pv_gt_mul_ones_like_reciprocal_round_slice_split_with_sizes_t
+      11.98 ms    120x  triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_exact_qmm_mul_neg_round_scalar_tensor_sub
+      11.63 ms    120x  triton_per_fused___lshift_____rshift____to_copy_add_amax_any_bitwise_and_bitwise_left_shift_bitwise_or_clamp_d
+      10.59 ms    115x  triton_poi_fused__to_copy__unsafe_view_add_cat_clone_mul_neg_slice_transpose_unsqueeze_view_49
+       9.91 ms    120x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_lt_mul_round_scalar
+       9.53 ms    115x  triton_per_fused___lshift_____rshift____to_copy_add_amax_any_bitwise_and_bitwise_left_shift_bitwise_or_clamp_d
+       9.24 ms      6x  triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_round_sub_1
+       9.21 ms     12x  y_int8_mm
+       9.14 ms    102x  void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16>(cutlass_80_tensorop_i16832gem
+       9.05 ms     23x  triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_in
+       8.96 ms    144x  triton_poi_fused__to_copy_add_clamp_constant_pad_nd_div_eq_mul_ones_like_round_slice_unsqueeze_view_where_25
+       8.18 ms    144x  triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_left_shift_bitwise_or_cla
+       7.50 ms    115x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_gt_lt_mul_neg
+       7.29 ms      6x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_gt_lt_mul_neg
+       6.89 ms    144x  triton_red_fused__to_copy_abs_amax_clamp_clone_div_gt_mul_ones_like_transpose_view_where_13
+       6.80 ms    144x  triton_poi_fused__to_copy_clamp_clone_constant_pad_nd_div_eq_gt_mul_ones_like_round_transpose_view_where_15
+       6.52 ms    144x  triton_per_fused___lshift_____rshift____to_copy_abs_add_amax_any_bitwise_and_bitwise_left_shift_bitwise_or_cla
+       6.48 ms     39x  triton_poi_fused__to_copy_arange_div_eq_expand_masked_fill_mul_scalar_tensor_scatter_sub_unsqueeze_view_zeros_
+       5.92 ms    576x  _int8_bmm_kernel
+       5.37 ms      6x  triton_poi_fused__to_copy_clone_int8_mm_slice_2
+       5.29 ms     39x  triton_poi_fused___lshift_____rshift____to_copy_add_bitwise_and_clamp_expand_ge_index_masked_fill_mul_ones_lik
+
+kernels by count:
+    5028x    120.58 ms  _qmm_kernel
+    1203x      3.39 ms  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctor_add<double>, std::array<char*, 3ul> 
+     720x      1.00 ms  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_exact_qmm_gt_
+     720x      0.80 ms  triton_poi_fused__to_copy_81
+     624x     17.63 ms  void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_128x64_128x3_tn_align16>(cutlass_80_tensorop_i16832gem
+     595x      1.15 ms  triton_red_fused_amax_bitwise_and_t_view_60
+     595x      0.57 ms  triton_per_fused___rshift____to_copy_amax_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_lt_round_scalar_tensor_
+     579x      0.67 ms  triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_exact_qmm_mul_neg_round_scalar_tensor_sub
+     576x      0.79 ms  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_exact_qmm_gt_
+     576x      5.92 ms  _int8_bmm_kernel
+     575x      0.55 ms  triton_per_fused___rshift____to_copy_amax_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_lt_round_scalar_tensor_
+     564x      1.01 ms  triton_red_fused___rshift____to_copy_amax_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_lt_round_scalar_tensor_
+     564x      0.74 ms  triton_poi_fused___lshift_____rshift____to_copy_add_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_le_lt_neg_one
+     465x      0.53 ms  triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_exact_qmm_mul_neg_round_scalar_tensor_sub
+     460x      4.29 ms  triton_red_fused_amax_bitwise_and_t_view_57

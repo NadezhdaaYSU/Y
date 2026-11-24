@@ -1,0 +1,26 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<01:58,  1.22it/s]
+Loading weights:  46%|████▌     | 67/146 [00:01<00:01, 76.73it/s]
+Loading weights:  55%|█████▌    | 81/146 [00:01<00:01, 56.62it/s]
+Loading weights:  62%|██████▏   | 90/146 [00:01<00:01, 51.24it/s]
+Loading weights:  70%|██████▉   | 102/146 [00:01<00:00, 57.49it/s]
+Loading weights:  76%|███████▌  | 111/146 [00:02<00:00, 61.85it/s]
+Loading weights:  83%|████████▎ | 121/146 [00:02<00:00, 68.00it/s]
+Loading weights:  95%|█████████▌| 139/146 [00:02<00:00, 87.89it/s]
+Loading weights: 100%|██████████| 146/146 [00:02<00:00, 63.76it/s]
+    (113 linear layers + 33 norms converted to exact form)
+y: no hardware profile at /root/.cache/y-lang/hw_profile; measuring this machine once (ysu_gpu_probe) and saving it there
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+W1124 21:34:04.061000 520 torch/_inductor/utils.py:1953] [2/0] Not enough SMs to use max_autotune_gemm mode
+[transformers] Ignoring clean_up_tokenization_spaces=True for BPE tokenizer TokenizersBackend. The clean_up_tokenization post-processing step is designed for WordPiece tokenizers and is destructive for BPE (it strips spaces before punctuation). Set clean_up_tokenization_spaces=False to suppress this warning, or set clean_up_tokenization_spaces_for_bpe_even_though_it_will_corrupt_output=True to force cleanup anyway.
+step 1: reward 0.438 mismatch 0 tokens af7b4567b8fd73b6 groups {'sampled': 32, 'all_right': 2, 'all_wrong': 4, 'kept': 8} sample 335.79 s train 257.85 s peak 9.32 GB
+step 2: reward 0.496 mismatch 0 tokens 89a42dd71d5d5112 groups {'sampled': 32, 'all_right': 4, 'all_wrong': 4, 'kept': 8} sample 9.51 s train 66.78 s peak 9.4 GB
+step 3: reward 0.512 mismatch 0 tokens c695e62d639deca1 groups {'sampled': 32, 'all_right': 4, 'all_wrong': 4, 'kept': 8} sample 9.66 s train 8.28 s peak 9.4 GB
+step 4: reward 0.645 mismatch 0 tokens eb864e84f81c11d0 groups {'sampled': 32, 'all_right': 9, 'all_wrong': 1, 'kept': 8} sample 9.99 s train 6.60 s peak 9.59 GB
+[W1124 21:45:33.694513401 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 492830720 bytes (free: 40632320, total: 15636037632).
+step 5: reward 0.605 mismatch 0 tokens 138bb1bad63c5cf5 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 5, 'kept': 8} sample 7.55 s train 156.70 s peak 9.6 GB
+step 6: reward 0.574 mismatch 0 tokens 501aaf181ec08b62 groups {'sampled': 32, 'all_right': 6, 'all_wrong': 0, 'kept': 8} sample 9.74 s train 6.48 s peak 9.62 GB
+step 7: reward 0.641 mismatch 0 tokens a33558189dbaedc5 groups {'sampled': 32, 'all_right': 11, 'all_wrong': 4, 'kept': 8} sample 7.46 s train 5.97 s peak 9.3 GB
+step 8: reward 0.711 mismatch 0 tokens 308c7752b0f0f046 groups {'sampled': 32, 'all_right': 14, 'all_wrong': 1, 'kept': 8} sample 7.59 s train 6.30 s peak 9.55 GB

@@ -1,0 +1,124 @@
+step 1: 61.692 s, 3804 tokens, mismatch 0, p(target) the record
+step 2: 1.330 s, 3403 tokens, mismatch 0, p(target) the record
+step 3: 12.493 s, 2687 tokens, mismatch 0, p(target) the record
+step 4: 1.454 s, 3012 tokens, mismatch 0, p(target) the record
+step 5: 0.893 s, 2507 tokens, mismatch 0, p(target) the record
+step 6: 0.882 s, 2547 tokens, mismatch 0, p(target) the record
+step 7: 1.327 s, 2974 tokens, mismatch 0, p(target) the record
+step 8: 1.022 s, 3172 tokens, mismatch 0, p(target) the record
+step 9: 1.356 s, 3269 tokens, mismatch 0, p(target) the record
+step 10: 2.263 s, 2306 tokens, mismatch 0, p(target) the record
+
+profiled step: 40736 GPU kernels and copies, GPU busy 0.624 s (sum of their times; the step's wall time is above)
+
+phases (wall time on the host, calls):
+  backward          0.737 s  6 calls
+  forward           0.385 s  6 calls
+  lm_head           0.002 s  6 calls
+  host_batch        0.002 s  6 calls
+  adam              0.002 s  1 calls
+
+kernel launches by phase: {'forward': 10416, 'lm_head': 96, 'backward': 29448, 'adam': 103}
+
+parts (host time inside, GPU time of their kernels, calls, kernel launches):
+  lora_linear.backward         0.466 s   0.191 s GPU    720 calls    17970 launches (25 a call)
+  lora_linear.forward          0.236 s   0.058 s GPU    720 calls     6480 launches (9 a call)
+  attention.backward           0.127 s   0.110 s GPU    144 calls     5880 launches (41 a call)
+  attention.forward            0.050 s   0.066 s GPU    144 calls     1584 launches (11 a call)
+  norm.backward                0.038 s   0.011 s GPU    288 calls      288 launches (1 a call)
+  norm.forward                 0.025 s   0.011 s GPU    288 calls      288 launches (1 a call)
+  silu.backward                0.014 s   0.010 s GPU    144 calls      144 launches (1 a call)
+  silu.forward                 0.013 s   0.003 s GPU    144 calls      144 launches (1 a call)
+  frozen_linear.backward       0.005 s   0.043 s GPU      6 calls       72 launches (12 a call)
+  frozen_linear.forward        0.002 s   0.018 s GPU      6 calls       90 launches (15 a call)
+
+Y's ops by operand shapes (GPU time of their kernels, calls):
+      11.35 ms     96x  y_lang::exact_qmm [[990, 4864], [990], [896, 4864], [896], []]
+       6.34 ms     48x  y_lang::exact_qmm [[990, 896], [990], [4864, 896], [4864], []]
+       5.97 ms     48x  y_lang::exact_qmm [[918, 4864], [918], [896, 4864], [896], []]
+       5.67 ms     48x  y_lang::exact_qmm [[950, 4864], [950], [896, 4864], [896], []]
+       5.62 ms     48x  y_lang::exact_qmm [[910, 4864], [910], [896, 4864], [896], []]
+       5.00 ms    144x  y_lang::exact_qmm [[990, 16], [990], [4864, 16], [4864], []]
+       4.70 ms     96x  y_lang::exact_qmm [[4864, 990], [4864], [16, 990], [16], []]
+       4.58 ms    144x  y_lang::exact_qmm [[990, 4864], [990], [16, 4864], [16], []]
+       3.16 ms    286x  y_lang::exact_qmm [[990, 16], [990], [896, 16], [896], []]
+       2.95 ms     24x  y_lang::exact_qmm [[910, 896], [910], [4864, 896], [4864], []]
+       2.93 ms     24x  y_lang::exact_qmm [[950, 896], [950], [4864, 896], [4864], []]
+       2.93 ms      1x  y_lang::int8_mm [[944, 131040], [896, 131040]]
+       2.87 ms     24x  y_lang::exact_qmm [[918, 896], [918], [4864, 896], [4864], []]
+       2.79 ms    192x  y_lang::exact_qmm [[16, 990], [16], [896, 990], [896], []]
+       2.69 ms     48x  y_lang::exact_qmm [[4864, 950], [4864], [16, 950], [16], []]
+       2.42 ms      1x  y_lang::int8_mm [[962, 131040], [896, 131040]]
+       2.40 ms      1x  y_lang::int8_mm [[854, 131040], [896, 131040]]
+       2.34 ms     72x  y_lang::exact_qmm [[950, 16], [950], [4864, 16], [4864], []]
+       2.23 ms     72x  y_lang::exact_qmm [[910, 4864], [910], [16, 4864], [16], []]
+       2.23 ms     48x  y_lang::exact_qmm [[4864, 918], [4864], [16, 918], [16], []]
+       2.23 ms      1x  y_lang::int8_mm [[978, 131040], [896, 131040]]
+       2.22 ms     48x  y_lang::exact_qmm [[4864, 910], [4864], [16, 910], [16], []]
+       2.18 ms     72x  y_lang::exact_qmm [[910, 16], [910], [4864, 16], [4864], []]
+       2.17 ms     72x  y_lang::exact_qmm [[918, 16], [918], [4864, 16], [4864], []]
+       2.14 ms     72x  y_lang::exact_qmm [[950, 4864], [950], [16, 4864], [16], []]
+       2.04 ms     72x  y_lang::exact_qmm [[918, 4864], [918], [16, 4864], [16], []]
+       1.99 ms     48x  y_lang::exact_qmm [[190, 4864], [190], [896, 4864], [896], []]
+       1.79 ms      1x  y_lang::int8_mm [[678, 131040], [896, 131040]]
+       1.75 ms     46x  y_lang::exact_qmm [[990, 1152], [990], [896, 1152], [896], []]
+       1.60 ms     48x  y_lang::exact_qmm [[16, 990], [16], [4864, 990], [4864], []]
+       1.58 ms    288x  y_lang::exact_qmm [[990, 896], [990], [16, 896], [16], []]
+       1.56 ms    143x  y_lang::exact_qmm [[918, 16], [918], [896, 16], [896], []]
+       1.56 ms    143x  y_lang::exact_qmm [[950, 16], [950], [896, 16], [896], []]
+       1.55 ms    143x  y_lang::exact_qmm [[910, 16], [910], [896, 16], [896], []]
+       1.44 ms     48x  y_lang::exact_qmm [[990, 896], [990], [896, 896], [896], []]
+       1.40 ms     96x  y_lang::exact_qmm [[16, 950], [16], [896, 950], [896], []]
+       1.39 ms     96x  y_lang::exact_qmm [[16, 918], [16], [896, 918], [896], []]
+       1.38 ms     96x  y_lang::exact_qmm [[16, 910], [16], [896, 910], [896], []]
+       1.27 ms     72x  y_lang::exact_qmm [[190, 4864], [190], [16, 4864], [16], []]
+       0.91 ms     23x  y_lang::exact_qmm [[950, 1152], [950], [896, 1152], [896], []]
+
+kernels by GPU time:
+     121.76 ms   5028x  _qmm_kernel
+      28.48 ms    432x  void at::native::vectorized_elementwise_kernel<4, at::native::BinaryFunctor<float, float, float, at::native::b
+      26.82 ms    720x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_exact_qmm_gt_
+      25.64 ms    144x  triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_in
+      21.36 ms    120x  triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_in
+      17.41 ms    624x  void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_128x64_128x3_tn_align16>(cutlass_80_tensorop_i16832gem
+      17.37 ms   1170x  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float
+      14.22 ms    714x  triton_red_fused_amax_bitwise_and_t_view_12
+      13.83 ms    144x  exact_pv
+      13.66 ms    720x  triton_red_fused_amax_bitwise_and_mul_t_view_0
+      11.70 ms    294x  triton_per_fused___lshift_____rshift____to_copy_add_amax_any_bitwise_and_bitwise_or_clamp_div_eq_le_mul_ones_l
+      10.55 ms    288x  triton_per_fused___lshift_____rshift____to_copy_add_amax_any_bitwise_and_bitwise_left_shift_bitwise_or_clamp_d
+      10.33 ms    144x  triton_poi_fused___rshift____to_copy_add_bitwise_and_clamp_clamp_max_ge_index_le_mul_nan_to_num_ones_like_roun
+       9.97 ms     12x  y_int8_mm
+       9.62 ms    144x  triton_poi_fused__to_copy_clamp_div_eq_exact_pv_gt_mul_ones_like_reciprocal_round_view_where_6
+       9.40 ms      6x  triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_round_sub_1
+       9.17 ms    102x  void cutlass::Kernel2<cutlass_80_tensorop_i16832gemm_s8_256x128_64x3_tn_align16>(cutlass_80_tensorop_i16832gem
+       8.86 ms     24x  triton_per_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_expand_full_like_ge_in
+       8.06 ms    144x  triton_poi_fused__to_copy_clamp_clone_div_gt_mul_ones_like_transpose_view_where_7
+       7.56 ms    720x  triton_poi_fused__to_copy_add_div_eq_mul_ones_like_slice_unsqueeze_where_5
+       7.32 ms    264x  triton_poi_fused__unsafe_view_bmm_clamp_clone_div_eq_ones_like_round_transpose_view_where_2
+       6.82 ms     39x  triton_poi_fused__to_copy_arange_div_eq_expand_masked_fill_mul_scalar_tensor_scatter_sub_unsqueeze_view_zeros_
+       6.79 ms    120x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_gt_lt_mul_neg
+       6.77 ms   1290x  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul> >
+       6.65 ms      6x  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_gt_lt_mul_neg
+       6.57 ms    714x  triton_poi_fused_add_11
+       5.96 ms    714x  triton_poi_fused___rshift____to_copy_add_bitwise_left_shift_clamp_eq_exact_qmm_mul_neg_round_scalar_tensor_sub
+       5.78 ms    576x  _int8_bmm_kernel
+       5.51 ms     39x  triton_poi_fused___lshift_____rshift____to_copy_add_bitwise_and_clamp_expand_ge_index_masked_fill_mul_ones_lik
+       5.19 ms    144x  triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_clone_int8_bmm_round_sub_view_27
+
+kernels by count:
+    5028x    121.76 ms  _qmm_kernel
+    1290x      6.77 ms  void at::native::vectorized_elementwise_kernel<4, at::native::CUDAFunctor_add<float>, std::array<char*, 3ul> >
+    1203x      3.22 ms  void at::native::vectorized_elementwise_kernel<2, at::native::CUDAFunctor_add<double>, std::array<char*, 3ul> 
+    1170x     17.37 ms  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float
+    1008x      2.22 ms  void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_
+     744x      0.87 ms  triton_poi_fused__to_copy_15
+     720x      4.58 ms  triton_poi_fused__to_copy_clamp_constant_pad_nd_div_eq_ones_like_round_view_where_1
+     720x      0.99 ms  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_exact_qmm_gt_
+     720x      1.86 ms  triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_le_lt_ne
+     720x      7.56 ms  triton_poi_fused__to_copy_add_div_eq_mul_ones_like_slice_unsqueeze_where_5
+     720x     13.66 ms  triton_red_fused_amax_bitwise_and_mul_t_view_0
+     720x      0.81 ms  triton_per_fused___rshift____to_copy_amax_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_lt_mul_round_scalar_ten
+     720x     26.82 ms  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_clamp_eq_exact_qmm_gt_
+     720x      2.20 ms  triton_red_fused_amax_bitwise_and_t_view_3
+     720x      0.72 ms  triton_per_fused___rshift____to_copy_amax_bitwise_and_bitwise_or_clamp_eq_exact_qmm_gt_lt_round_scalar_tensor_

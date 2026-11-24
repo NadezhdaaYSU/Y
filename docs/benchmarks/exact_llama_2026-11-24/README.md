@@ -96,7 +96,53 @@ Two things the T4 found, fixed before or after the runs:
   on the move (726cc1b; a test, which fails without it). The other failures
   in that log are a proof file the job's source lacked and the GEMM tile
   cache placed as for an installed package (the job points `Y_LIB_PATH` at
-  the wheel's library).
+  the wheel's library). After the fix (`t4_kaggle/exact_tests_t4_after_fix.log`,
+  `make_t4_llama_job.py t`) 106 of the 107 tests pass on the T4, the five GPU training
+  tests among them; the one failure is that tile cache's place.
+
+## The whole-layer training path on the T4, 2026-11-25
+
+`make_t4_llama_job.py ab` (Y at 4f0f63f) ran the whole-layer training path
+(`Y_EXACT_LAYER=1`, the default since 4f0f63f) and the per-module one
+(`Y_EXACT_LAYER=0`) in one Kaggle job, in the order layer, module, layer:
+20 steps each of the 150-step run's settings, without the evaluations
+(`t4_kaggle/t4_ab_*.json`, `t4_kaggle/ab_*.log`).
+
+- **The same bits.** All three arms are the 150-step run's first 20 steps:
+  the sampled tokens, 0 tokens whose trainer integers differ from the
+  sampler's, p(target) at 20 of 20 steps, and the adapters at step 10
+  (04d7c90285a11156) and step 20 (8286674d24f45099).
+- **No faster.** Seconds a step, steps 6 to 20 (median, with the minimum):
+
+  | arm | training | sampling |
+  |---|---|---|
+  | layer, first | 6.67 (5.55) | 8.07 (7.20) |
+  | per-module | 6.62 (5.47) | 8.02 (7.16) |
+  | layer, second | 6.49 (5.49) | 8.09 (7.25) |
+  | the 150-step run (44dc9df, another session) | 6.44 (5.16) | 9.17 (8.29) |
+
+  The whole-layer path halves the host's time a step (measured on the RTX
+  4070 Ti SUPER), but the T4's step waits on its GPU, as the 4070 Ti's does,
+  so the step does not change. Sampling is faster than in the 150-step run
+  (the fused draw, 9b4bfe8, and the compiled prefill attention, bbc3625), but
+  that run was another Kaggle session, so the 1.1 s is not a paired number.
+- **Slower to compile.** The T4's host is a 2.0 GHz Xeon with 4 CPUs.
+  Training seconds of the steps that compiled, and each arm's whole run:
+
+  | arm | step 1 | 2 | 3 | 5 | whole run |
+  |---|---|---|---|---|---|
+  | layer, cold caches | 826 | 652 | 417 | 409 | 2,955 s |
+  | per-module | 243 | 64 | 9 | 150 | 874 s |
+  | layer, warm caches | 206 | 182 | 98 | 81 | 972 s |
+
+  The per-module arm ran second, so its sampler came from the cache (step 1
+  sampled in 104 s, the first arm in 326 s). A later job with its own cold
+  caches (`../exact_rl_train_profile_2026-11-24/t4_kaggle/pf_dump.log`)
+  compiled its training in 258, 67 and 157 s at steps 1, 2 and 5: about
+  480 s, against about 2,300 s for the whole-layer path. Both paths compile
+  again at steps 2 and 5 (and the layer path at 3); see below.
+- Each arm printed one CUDA allocator warning in step 5 (a 470 MiB request
+  failed with 40 to 250 MB free) and went on; the bits above are unchanged.
 
 ## Not covered
 
