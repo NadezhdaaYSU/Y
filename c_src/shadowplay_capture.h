@@ -35,6 +35,18 @@
 #define SP_NAME_LEN  192
 #define SP_LABEL_LEN 128
 
+// `-thread_queue_size` before a live audio input lets ffmpeg 9.0 and older
+// queue more of it while the video encoder is busy (a source read too slowly
+// drops samples). ffmpeg 9.1 keeps the option only for outputs and refuses
+// the whole command when it comes before an input (found 2026-11-26, after a
+// system update: voice and audio recording both stopped). So the builders add
+// it only when told this ffmpeg takes it there, which the application finds
+// out by running this probe: the option in the same place before a generated
+// input. Left out, the command works on every version.
+#define SP_FFMPEG_INPUT_QUEUE_PROBE \
+    "ffmpeg -nostdin -hide_banner -loglevel error -thread_queue_size 8 " \
+    "-f lavfi -i anullsrc=d=0.01 -f null - >/dev/null 2>&1"
+
 typedef struct {
     char name[SP_NAME_LEN];    // the audio-server source name every recorder is given
     char label[SP_LABEL_LEN];  // its description, for the HUD and the log
@@ -342,6 +354,7 @@ typedef struct {
     int screen_w, screen_h;
     int has_gsr, has_wf, has_ffmpeg;
     int ffmpeg_pulse;      // ffmpeg can open audio-server sources at all
+    int ffmpeg_input_queue; // ffmpeg takes -thread_queue_size before an input (SP_FFMPEG_INPUT_QUEUE_PROBE)
     // Test seams, left NULL by the application. The tests feed ffmpeg lavfi
     // generators in place of a screen and a sound card THROUGH THIS BUILDER,
     // so the command they run is the command the application runs.
@@ -438,8 +451,9 @@ static sp_backend sp_build_capture(sp_argv* a, const sp_capture* c, char* note, 
         }
         for (int i = 0; i < n_audio; i++) {
             // A live audio source that is not read quickly enough drops
-            // samples while the video encoder is busy.
-            sp_arg(a, "-thread_queue_size"); sp_arg(a, "1024");
+            // samples while the video encoder is busy (ffmpeg 9.0 and older;
+            // see SP_FFMPEG_INPUT_QUEUE_PROBE).
+            if (c->ffmpeg_input_queue) { sp_arg(a, "-thread_queue_size"); sp_arg(a, "1024"); }
             sp_arg(a, "-f"); sp_arg(a, fmt);
             sp_arg(a, "-i"); sp_arg(a, inputs[i]);
         }
@@ -488,6 +502,7 @@ typedef struct {
     const char* mic;           // required
     const char* out_base;      // output path WITHOUT an extension
     int has_ffmpeg, has_parecord;
+    int ffmpeg_input_queue;    // as in sp_capture
     const char* audio_format;  // test seam: "pulse" when NULL
 } sp_voice;
 
@@ -509,7 +524,7 @@ static sp_backend sp_build_voice(sp_argv* a, const sp_voice* v, char* path, size
     if (v->has_ffmpeg) {
         if (snprintf(path, path_cap, "%s.m4a", v->out_base) >= (int)path_cap) return SP_NONE;
         sp_arg(a, "ffmpeg"); sp_arg(a, "-n"); sp_arg(a, "-nostdin");
-        sp_arg(a, "-thread_queue_size"); sp_arg(a, "1024");
+        if (v->ffmpeg_input_queue) { sp_arg(a, "-thread_queue_size"); sp_arg(a, "1024"); }
         sp_arg(a, "-f"); sp_arg(a, v->audio_format ? v->audio_format : "pulse");
         sp_arg(a, "-i"); sp_arg(a, v->mic);
         sp_arg(a, "-vn");

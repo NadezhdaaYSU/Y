@@ -118,6 +118,10 @@ int main(int argc, char** argv) {
     g_argv = argv;
     if (argc < 2) return 2;
 
+    if (!strcmp(argv[1], "probe")) {
+        printf("%s\n", SP_FFMPEG_INPUT_QUEUE_PROBE);
+        return 0;
+    }
     if (!strcmp(argv[1], "pactl") || !strcmp(argv[1], "gsr")) {
         char* text = slurp(kv("list"));
         sp_mic m[SP_MAX_MICS];
@@ -158,6 +162,7 @@ int main(int argc, char** argv) {
         c.has_wf = kvi("wf", 0);
         c.has_ffmpeg = kvi("ffmpeg", 0);
         c.ffmpeg_pulse = kvi("pulse", 1);
+        c.ffmpeg_input_queue = kvi("input_queue", 0);
         c.audio_format = kv("audio_format");
         const char* video[5] = {"-f", "lavfi", "-i", NULL, NULL};
         if (kv("video_lavfi")) {
@@ -178,6 +183,7 @@ int main(int argc, char** argv) {
         v.out_base = kv("out_base");
         v.has_ffmpeg = kvi("ffmpeg", 0);
         v.has_parecord = kvi("parecord", 0);
+        v.ffmpeg_input_queue = kvi("input_queue", 0);
         v.audio_format = kv("audio_format");
         sp_argv a;
         char path[512];
@@ -747,6 +753,63 @@ fn voice_recording_uses_ffmpeg_then_parecord() {
     // A voice recording without a microphone is not a recording.
     let Some(no_mic) = build("voice", &["ffmpeg=1", "mic=", "out_base=/v/Voice_1"]) else { return };
     assert_eq!((no_mic.backend.as_str(), no_mic.args.len()), ("none", 0));
+}
+
+/// `-thread_queue_size` comes before each live audio input only when the
+/// application was told this ffmpeg takes it there: ffmpeg 9.1 keeps it for
+/// outputs only and refuses the whole command, which stopped every voice and
+/// audio recording after a system update (2026-11-26).
+#[test]
+fn the_input_queue_option_is_there_only_when_asked_for() {
+    let mic = format!("mic={}", HEADSET);
+    for q in [0, 1] {
+        let qa = format!("input_queue={}", q);
+        let Some(c) = build("capture", &["ffmpeg=1", "pulse=1", &mic, "desktop=sink.monitor", "out=/v/a.mp4", &qa]) else { return };
+        let a = &c.args;
+        let before_inputs: Vec<bool> = (0..a.len())
+            .filter(|&i| a[i] == "-f" && a.get(i + 1).map(String::as_str) == Some("pulse"))
+            .map(|i| i >= 2 && a[i - 2] == "-thread_queue_size" && a[i - 1] == "1024")
+            .collect();
+        assert_eq!(before_inputs, [q == 1, q == 1], "{:?}", a);
+        assert_eq!(a.iter().filter(|x| *x == "-thread_queue_size").count(), 2 * q as usize, "{:?}", a);
+
+        let Some(v) = build("voice", &["ffmpeg=1", &mic, "out_base=/v/Voice_1", &qa]) else { return };
+        let at = v.args.iter().position(|x| x == "-f").expect("an input format");
+        assert_eq!(&v.args[at - 2..at] == ["-thread_queue_size", "1024"], q == 1, "{:?}", v.args);
+        assert_eq!(v.args.iter().filter(|x| *x == "-thread_queue_size").count(), q as usize, "{:?}", v.args);
+    }
+}
+
+/// The probe the application runs (`SP_FFMPEG_INPUT_QUEUE_PROBE`) tells the
+/// installed ffmpeg's two behaviours apart: the voice command built with the
+/// probe's answer RUNS. When the probe says no, the command with the option
+/// must fail, so the probe is not saying no for some other reason; when it
+/// says yes, the command without the option still runs.
+#[test]
+fn the_probe_answers_for_the_installed_ffmpeg() {
+    if !have("ffmpeg") {
+        eprintln!("SKIP: ffmpeg not installed");
+        return;
+    }
+    let Some(probe) = run_harness(&["probe"]) else { return };
+    let takes = Command::new("sh").arg("-c").arg(probe.trim()).status().expect("run the probe").success();
+    eprintln!("this ffmpeg takes -thread_queue_size before an input: {}", takes);
+    let dir = workdir("queue");
+    let mut ran = Vec::new();
+    for (i, q) in [takes, !takes].into_iter().enumerate() {
+        let base = format!("out_base={}", dir.join(format!("Voice_{}", i)).display());
+        let qa = format!("input_queue={}", q as i32);
+        let Some(b) = build("voice", &["ffmpeg=1", "audio_format=lavfi", "mic=sine=f=880:d=0.3", &base, &qa]) else { return };
+        let r = run(&b.args);
+        let made = Path::new(&b.path).exists();
+        ran.push((r.status.success() && made, String::from_utf8_lossy(&r.stderr).into_owned(), b.args));
+    }
+    assert!(ran[0].0, "the command built with the probe's answer ({}) failed:\n{:?}\n{}", takes, ran[0].2, ran[0].1);
+    if takes {
+        assert!(ran[1].0, "without the option the command failed:\n{:?}\n{}", ran[1].2, ran[1].1);
+    } else {
+        assert!(!ran[1].0, "the probe said no, but ffmpeg ran the command with the option:\n{:?}", ran[1].2);
+    }
 }
 
 // ------------------------------------------------------- the tone reaches it

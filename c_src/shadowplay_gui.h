@@ -472,6 +472,16 @@ static int ffmpeg_can_record_audio(void) {
     return ffmpeg_pulse_state;
 }
 
+// Does this ffmpeg take -thread_queue_size before an input? Asked once, like
+// the probe above: ffmpeg 9.1 refuses a command with it there.
+static int ffmpeg_input_queue_state = -1;
+static int ffmpeg_takes_input_queue(void) {
+    if (ffmpeg_input_queue_state < 0) {
+        ffmpeg_input_queue_state = system(SP_FFMPEG_INPUT_QUEUE_PROBE) == 0;
+    }
+    return ffmpeg_input_queue_state;
+}
+
 static const char* home_dir(void) {
     const char* h = getenv("HOME");
     return (h && h[0]) ? h : "/tmp";
@@ -545,6 +555,7 @@ static void fill_capture(sp_capture* c, int replay, const char* out) {
     c->has_wf = has_wf_recorder;
     c->has_ffmpeg = has_ffmpeg;
     c->ffmpeg_pulse = (!has_gpu_screen_recorder && has_ffmpeg) ? ffmpeg_can_record_audio() : 0;
+    c->ffmpeg_input_queue = (!has_gpu_screen_recorder && has_ffmpeg) ? ffmpeg_takes_input_queue() : 0;
 }
 
 // Build the screen-recorder command and start it. Returns its pid, or 0 when
@@ -763,6 +774,7 @@ static void start_voice_recording(void) {
     v.out_base = base;
     v.has_ffmpeg = has_ffmpeg;
     v.has_parecord = has_parecord;
+    v.ffmpeg_input_queue = has_ffmpeg ? ffmpeg_takes_input_queue() : 0;
 
     sp_argv cmd;
     sp_backend b = sp_build_voice(&cmd, &v, voice_path, sizeof voice_path);
