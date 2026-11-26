@@ -1036,6 +1036,18 @@ class SFT:
             raise ValueError("lora: a batch with no labelled token")
         if weights is not None and weights.shape != (n,):
             raise ValueError(f"lora: {tuple(weights.shape)} weights for {n} labelled tokens")
+        if ids.shape[0] == 1 and isinstance(self.ops, CompiledOps) and ids.is_cuda:
+            # A piece of one row runs as two: the row and a copy that no
+            # target reads. Compiled with dynamic shapes, a size of 1 is a
+            # special case (PyTorch's 0/1 specialization), and so is the
+            # causal mask's stride then: every compiled function of the
+            # layers compiled again, 432 s on a T4 (2026-11-25: GRPO.step's
+            # pieces of 9 rows, the last one of 1). The copy has the row's
+            # values, so each tensor's maximum, and so each quantizer's
+            # scale, is the row's. It has no target, so its gradients are 0
+            # and every integer sum is the same. The same bits (tests: the
+            # CPU's, which runs the row alone).
+            ids = ids.expand(2, -1).contiguous()
         hidden = self.forward(ids)
         logits = self.logits_at(hidden, pos)
         if weights is not None and isinstance(self.ops, CompiledOps) and logits.is_cuda:

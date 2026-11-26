@@ -436,6 +436,40 @@ class Recompiles(unittest.TestCase):
         for o, w in zip(outs, want):
             self.assertTrue(torch.equal(o, w))
 
+    def test_a_piece_of_one_row_compiles_nothing_new(self):
+        """Steps of one row after steps of three (`GRPO.step`'s pieces can
+        end in one row): no new graph on either path, and the adapters and
+        every step's p(target) the CPU's, which runs the row alone. Without
+        the copy the first such step compiled 10 graphs on the layer path;
+        with a row of zeros as the copy, the bits changed."""
+        from unittest import mock
+
+        from torch._dynamo.utils import counters
+        from y_lang.exact import lora
+        torch.backends.cuda.matmul.allow_tf32 = False
+        plan = [(3, 30, 0), (3, 30, 1), (1, 30, 2), (1, 26, 3), (2, 24, 4)]
+
+        def run(device, fused=True):
+            torch._dynamo.reset()    # graphs other tests made would hide a new one
+            m = tiny_model(arch="llama").to(device)
+            ad = lora.attach(m, r=8, alpha=8, compile=device == "cuda")
+            sft = lora.SFT(m, ad, lr=3e-3)
+            tps, graphs = [], []
+            with mock.patch.object(lora, "LAYER_FUSED", fused):
+                for B, T, seed in plan:
+                    ids, labels = batch(seed=seed, B=B, T=T)
+                    n0 = counters["stats"]["unique_graphs"]
+                    tps.append(lora.tp_digest(sft.step(ids.to(device), labels.to(device))))
+                    graphs.append(counters["stats"]["unique_graphs"] - n0)
+            sft.verify()
+            return ad.digest(), tps, graphs
+        cpu = run("cpu")
+        for fused in (True, False):
+            digest, tps, graphs = run("cuda", fused)
+            self.assertGreater(graphs[0], 0, f"fused={fused}")
+            self.assertEqual(graphs[2:4], [0, 0], f"fused={fused}")
+            self.assertEqual((digest, tps), cpu[:2], f"fused={fused}")
+
     def test_device_decisions_made_before_any_compile(self):
         from y_lang.exact import lora, train_lm
         dev = torch.device("cuda", torch.cuda.current_device())

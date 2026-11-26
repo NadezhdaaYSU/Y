@@ -220,18 +220,42 @@ step 6 (fcdf1cbf742fd812):
 | per-module, before | 266, 69, 7, 169 | 787 s | 34 | 951 s |
 | per-module, after | 231, 8, 7, 150 | 672 s | 26 | 825 s |
 
-`_layer_backward` now compiles 6 times. At step 1 it compiles 4 versions:
-`need_dh` times two length ranges. At step 5 it compiles 2 more: `need_dh`
-again, for a piece of one row.
+With these fixes, `_layer_backward` compiled 6 times. At step 1 it compiled
+4 versions: `need_dh` times two length ranges. At step 5 it compiled 2
+more: `need_dh` again, for a piece of one row.
 
 Why step 5: `GRPO.step` cuts the 64 rows into pieces of at most 1,024
 tokens (rows times the longest row). At step 5 that gave pieces of 9 rows
 and a last piece of 1. With one row, PyTorch specializes on the size 1, and
 the causal mask has a real stride where it had 0. So every function
-compiles again: 432 s on the T4. Cutting the rows evenly would avoid it.
-But each piece quantizes on its own scales, so a different cut is a
-different function, and the bits of every such step would change. This is
-not done.
+compiled again: 432 s on the T4. Cutting the rows evenly would avoid it,
+but each piece quantizes on its own scales, so a different cut is a
+different function. PyTorch's `backed_size_oblivious` (no special case for
+a size of 1) made Inductor fail (`CantSplit`) on the tiny test model.
+
+So `SFT._accumulate` now runs a piece of one row as two rows, on a GPU when
+compiled: the row and a copy that no target reads. The copy has the row's
+values, so each tensor's maximum, and so each quantizer's scale, is the
+row's. It has no target, so its gradients are exactly 0 and every integer
+sum is the same. The test (`test_a_piece_of_one_row_compiles_nothing_new`)
+trains a tiny Llama on steps of 3, 1, 1 and 2 rows: no new graph on a step
+of one row on either path, and the adapters and every p(target) the CPU's,
+which runs the row alone. Without the copy, the first such step compiled 10
+graphs; with a row of zeros as the copy, the bits changed. Both fail it.
+
+`make_t4_llama_job.py rc4` ran the same 6 steps with the copy
+(`t4_kaggle/recompiles/rc4_*`). Its tokens, sampler integers, p(target) at
+every step (step 5 among them, with its piece of one row) and its adapters
+at step 6 were `rc`'s:
+
+| arm | training s, steps 1, 2, 3, 5 | Dynamo's compile total | recompiles | the arm's wall time |
+|---|---|---|---|---|
+| whole-layer, with the copy | 909, 9, 8, 13 | 1,182 s | 8 | 1,360 s |
+| per-module, with the copy | 230, 8, 7, 9 | 527 s | 11 | 667 s |
+
+Against the first run, the whole-layer arm takes 46% of its time (2,930 to
+1,360 s) and the per-module arm 70% (951 to 667 s). `_layer_backward` now
+compiles 4 times, all at step 1: `need_dh` times two length ranges.
 
 `make_t4_llama_job.py rc2` ran the fixed code a day later
 (`t4_kaggle/recompiles/rc2_*`). It had other prompts: Llama 3's chat
@@ -241,8 +265,8 @@ and its counts (16 and 28 recompiles) are not a paired comparison.
 
 ## Not done
 
-- A piece of one row compiles every training function again (above). An
-  even cut of the rows would change the bits of the steps it changes.
+- `_layer_backward` still compiles once for each power-of-two length range
+  a run reaches (the exact sums' widths are constants of each version).
 - The adapters' backward still launches 44 kernels a call: each of its five
   products calls Y's int8 GEMM as its own op, which Inductor cannot fuse
   into. The whole step is not one CUDA graph (its shapes change every step).

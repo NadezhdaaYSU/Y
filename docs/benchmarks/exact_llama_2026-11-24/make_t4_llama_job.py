@@ -27,6 +27,8 @@ PART rc3: PART rc2 with the prompts' date pinned to 24 Nov 2026 (asserted):
         rc ran on 24 Nov and rc2 on 25 Nov, and Llama 3's template writes
         the day's date into each prompt, so their inputs differed; rc3's are
         rc's.
+PART rc4: PART rc3 with a piece of one row run as two (the row and a copy
+        no target reads; asserted), so step 5 compiles nothing new.
 PART pf: 8 steps with a dump, then profile_train.py on the T4 (the
         per-module path; each part's GPU time and Y's ops by operand shape).
 Y's source comes from the y-lang-src dataset, liby.so from y-lang-wheel (then
@@ -166,7 +168,7 @@ assert os.path.exists(f'{REPO}/python/y_lang/exact/vocab_draw.py'), 'no fused dr
           " --early-stop --compile --graphed --sample-rows 64 --chunk-tokens 1024 --steps 20 --checkpoint 10 --log 1")
     for name, layer in (("layer_a", "1"), ("module", "0"), ("layer_b", "1")):
         run(f"ab_{name}", f"Y_EXACT_LAYER={layer} " + AB + " --record {OUT}/t4_ab_" + name + ".json", 3600)
-elif PART in ("rc", "rc2", "rc3"):
+elif PART in ("rc", "rc2", "rc3", "rc4"):
     # Why training recompiles at steps 2, 3 and 5 on the T4 (the ab job: the
     # whole-layer path 2,955 s cold, the per-module 874 s): each path for 6
     # steps with dynamo's recompile reasons, each with its own cold caches,
@@ -174,12 +176,14 @@ elif PART in ("rc", "rc2", "rc3"):
     code(f"DEADLINE = START + 3.5 * 3600\nPART = {PART!r}")
     code("""
 assert 'class _LayerFn' in open(f'{REPO}/python/y_lang/exact/lora.py').read(), 'no whole-layer path in the source'
-if PART in ('rc2', 'rc3'):
+if PART in ('rc2', 'rc3', 'rc4'):
     assert 'mix_order_reduction_non_strict_mode", True' in open(f'{REPO}/python/y_lang/exact/model.py').read(), 'no recompile fixes in the source'
     assert 'not torch.compiler.is_compiling() and not extra' in open(f'{REPO}/python/y_lang/exact/lora.py').read(), 'no recompile fixes in the source'
-if PART == 'rc3':
+if PART in ('rc3', 'rc4'):
     assert 'date_string=PROMPT_DATE' in open(f'{REPO}/tools/exact_lora_sft.py').read(), 'the prompt date is not pinned'
     assert 'S.chat_text(' in open(f'{REPO}/tools/exact_lora_grpo.py').read(), 'the prompt date is not pinned'
+if PART == 'rc4':
+    assert 'ids = ids.expand(2, -1).contiguous()' in open(f'{REPO}/python/y_lang/exact/lora.py').read(), 'no copy for a piece of one row'
 open(f'{OUT}/ct.py', 'w').write('''import atexit, os, runpy, sys, time
 T0 = time.time()
 def report():
