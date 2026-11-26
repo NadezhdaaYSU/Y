@@ -144,6 +144,25 @@ Two things the T4 found, fixed before or after the runs:
 - Each arm printed one CUDA allocator warning in step 5 (a 470 MiB request
   failed with 40 to 250 MB free) and went on; the bits above are unchanged.
 
+## The prompts' date, 2026-11-26
+
+Llama 3's chat template writes today's date into the system turn of every
+prompt ("Today Date: 24 Nov 2026"). Every Llama record in this directory
+was made on 24 Nov 2026 (both on the PC, at UTC+3, and on Kaggle, at UTC),
+so they agree with each other. The same run made on 25 Nov had other
+prompts, so other tokens from step 1. A T4 job found it: on 25 Nov it gave
+step 1 tokens 7d697678cf78f462, where the records have af7b4567b8fd73b6
+(`../exact_rl_train_profile_2026-11-24/t4_kaggle/recompiles/rc2_*`).
+
+The tools now pin the date to 24 Nov 2026 (`exact_lora_sft.chat_text`;
+`Y_EXACT_PROMPT_DATE` changes it; `llama_check.py` pins it too), so these
+records replay on any day. On 26 Nov, the RTX 4070 Ti sampled step 1 with
+the pin and got the records' tokens and sampler integers (af7b4567b8fd73b6,
+aed2d8c3b76a98c5). Without the pin it got c0e6b6892b112d79. A T4 job run on 25 Nov
+(UTC) with the pin gave the records' tokens, sampler integers and p(target)
+at all 6 of its steps (`rc3_*` there). The Qwen2.5 and SmolLM2 templates have no date, so their
+prompts are unchanged. Test: `test_exact_rl.PromptDate`.
+
 ## Not covered
 
 - Meta's own checkpoint is gated; `unsloth/Llama-3.2-1B-Instruct` holds the

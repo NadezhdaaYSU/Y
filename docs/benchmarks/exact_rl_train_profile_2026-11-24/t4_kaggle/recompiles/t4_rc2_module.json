@@ -1,0 +1,163 @@
+{
+ "config": {
+  "device": "cuda",
+  "steps": 6,
+  "prompts": 8,
+  "group": 8,
+  "new": 128,
+  "lr": 0.0001,
+  "r": 16,
+  "alpha": 16,
+  "seed": 0,
+  "eval": 0,
+  "eval_every": 0,
+  "eval_batch": 100,
+  "checkpoint": 6,
+  "log": 1,
+  "record": "/kaggle/working/t4_rc_module.json",
+  "save": null,
+  "load": null,
+  "compile": true,
+  "model": "/tmp/models/llama1b",
+  "mode": "steps",
+  "digits": 2,
+  "eval_new": 6,
+  "sample_prompts": 32,
+  "early_stop": true,
+  "graphed": true,
+  "sample_rows": 64,
+  "chunk_tokens": 1024,
+  "dump": null,
+  "compare": null
+ },
+ "machine": {
+  "python": "3.13.16",
+  "torch": "2.13.0+cu126",
+  "cpu": "Intel(R) Xeon(R) CPU @ 2.00GHz",
+  "gpu": "Tesla T4",
+  "cuda": "12.6",
+  "transformers": "5.15.0",
+  "gemm": "y"
+ },
+ "steps": [
+  {
+   "step": 1,
+   "tokens": "7d697678cf78f462",
+   "ints": "462ce338bd920242",
+   "reward": 0.41796875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 1,
+    "all_wrong": 3,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "8ddf1c308077c94a",
+   "n": 3524,
+   "sample_s": 326.896,
+   "train_s": 274.093,
+   "peak_gb": 9.41
+  },
+  {
+   "step": 2,
+   "tokens": "0426e679879659e8",
+   "ints": "a068622777c4c4fe",
+   "reward": 0.51953125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 2,
+    "all_wrong": 3,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "ba172eebac4edffa",
+   "n": 3150,
+   "sample_s": 10.507,
+   "train_s": 9.245,
+   "peak_gb": 9.38
+  },
+  {
+   "step": 3,
+   "tokens": "560ef27f36dc1f1e",
+   "ints": "d3847cf66a4f0975",
+   "reward": 0.51171875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 5,
+    "all_wrong": 2,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "e9ae8a6296475408",
+   "n": 2713,
+   "sample_s": 9.762,
+   "train_s": 6.439,
+   "peak_gb": 9.62
+  },
+  {
+   "step": 4,
+   "tokens": "4508bfa80650f6ed",
+   "ints": "4cd1b7ea3679de0c",
+   "reward": 0.703125,
+   "groups": {
+    "sampled": 32,
+    "all_right": 10,
+    "all_wrong": 0,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "77210ffca0bc1c32",
+   "n": 2862,
+   "sample_s": 9.334,
+   "train_s": 149.679,
+   "peak_gb": 9.51
+  },
+  {
+   "step": 5,
+   "tokens": "680840ac89a566e8",
+   "ints": "b6bc15930230a61f",
+   "reward": 0.57421875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 9,
+    "all_wrong": 5,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "58921751cf580447",
+   "n": 3091,
+   "sample_s": 10.165,
+   "train_s": 6.754,
+   "peak_gb": 9.41
+  },
+  {
+   "step": 6,
+   "tokens": "ad6973bb34558c16",
+   "ints": "e2061fa9151d0ab4",
+   "reward": 0.54296875,
+   "groups": {
+    "sampled": 32,
+    "all_right": 5,
+    "all_wrong": 2,
+    "kept": 8
+   },
+   "mismatch": 0,
+   "tp": "2b8222b98aca2489",
+   "n": 3185,
+   "sample_s": 8.803,
+   "train_s": 6.915,
+   "peak_gb": 9.46
+  }
+ ],
+ "checkpoints": {
+  "6": "8ef13ab293187a4d"
+ },
+ "evals": {},
+ "init": "0900e113c70ec6df",
+ "seconds_per_step": {
+  "sample": 9.434130271275839,
+  "train": 54.44947552680969
+ },
+ "final": "8ef13ab293187a4d",
+ "mismatches": 0
+}

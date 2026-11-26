@@ -312,5 +312,55 @@ class OnTheGpu(unittest.TestCase):
 UNIFORM_0_0 = 202160430523473325   # blake2b of 'y-exact-rl/0/0/0/0', top 62 bits
 
 
+class PromptDate(unittest.TestCase):
+    """Llama 3's chat template writes today's date into every prompt
+    (strftime_now). The RL and SFT tools pin it, so a run's prompts, and so
+    its tokens, are the same on any day: unpinned, the runs of 2026-11-24
+    and 2026-11-25 differed from step 1."""
+
+    # The part of Llama 3's template that writes the date.
+    TEMPLATE = ('{%- if not date_string is defined %}{%- set date_string = strftime_now("%d %b %Y") %}'
+                '{%- endif %}Today Date: {{ date_string }}|{% for m in messages %}{{ m.content }}|{% endfor %}')
+
+    def test_the_date_is_pinned(self):
+        import datetime
+        from unittest import mock
+
+        from tokenizers import Tokenizer, models
+        from transformers import PreTrainedTokenizerFast
+        from transformers.utils import chat_template_utils
+
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "tools"))
+        import exact_lora_grpo as G
+        import exact_lora_sft as S
+
+        tok = PreTrainedTokenizerFast(tokenizer_object=Tokenizer(models.WordLevel({"[UNK]": 0}, unk_token="[UNK]")))
+        tok.chat_template = self.TEMPLATE
+
+        class Clock(datetime.datetime):
+            day = datetime.datetime(2030, 1, 2)
+
+            @classmethod
+            def now(cls, tz=None):
+                return cls.day
+
+        texts = {}
+        with mock.patch.object(chat_template_utils, "datetime", Clock), \
+                mock.patch.object(S, "ids", lambda tok, text: text):
+            for day in (datetime.datetime(2030, 1, 2), datetime.datetime(2031, 5, 6)):
+                Clock.day = day
+                bare = tok.apply_chat_template([{"role": "user", "content": "x"}], tokenize=False,
+                                               add_generation_prompt=True)
+                texts[day] = (bare, S.prompt_ids(tok, 12, 34), G.Task(tok, mode="steps").prompt(12, 34))
+        (bare1, sft1, grpo1), (bare2, sft2, grpo2) = texts.values()
+        # The control: unpinned, the template writes the clock's day.
+        self.assertTrue(bare1.startswith("Today Date: 02 Jan 2030|"), bare1)
+        self.assertTrue(bare2.startswith("Today Date: 06 May 2031|"), bare2)
+        for a, b in ((sft1, sft2), (grpo1, grpo2)):
+            self.assertEqual(a, b)
+            self.assertTrue(a.startswith(f"Today Date: {S.PROMPT_DATE}|"), a)
+        self.assertEqual(S.PROMPT_DATE, "24 Nov 2026")    # the day the Llama records were made
+
+
 if __name__ == "__main__":
     unittest.main()

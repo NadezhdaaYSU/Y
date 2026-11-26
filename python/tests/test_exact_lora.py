@@ -349,12 +349,12 @@ class Flags(unittest.TestCase):
 
         def read():
             return (ic.eager_numerics.division_rounding, ic.emulate_precision_casts,
-                    torch._dynamo.config.specialize_int)
+                    torch._dynamo.config.specialize_int, ic.triton.mix_order_reduction_non_strict_mode)
         out = {}
         t = threading.Thread(target=lambda: out.update(thread=read()))
         t.start()
         t.join()
-        self.assertEqual(out["thread"], (True, True, True))
+        self.assertEqual(out["thread"], (True, True, True, True))
         if torch.cuda.is_available():
             class F(torch.autograd.Function):
                 @staticmethod
@@ -367,7 +367,86 @@ class Flags(unittest.TestCase):
                     return g * 2
             x = torch.ones(4, device="cuda", requires_grad=True)
             F.apply(x).sum().backward()
-            self.assertEqual(out["backward"], ((True, True, True), False))
+            self.assertEqual(out["backward"], ((True, True, True, True), False))
+
+
+def _graphs(fn, calls):
+    """How many graphs `torch.compile(fn, dynamic=True)` makes over `calls`
+    (argument tuples), and its results."""
+    from torch._dynamo.utils import counters
+    f = torch.compile(fn, dynamic=True)
+    n0 = counters["stats"]["unique_graphs"]
+    outs = [f(*a) for a in calls]
+    return counters["stats"]["unique_graphs"] - n0, outs
+
+
+@unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA GPU")
+class Recompiles(unittest.TestCase):
+    """What made compiled training compile again (2026-11-25, a T4 job: the
+    whole-layer backward 12 times, 3 to 4 minutes each): each fix one graph
+    over the lengths that split it, and the old form two (the control that
+    the count can see it)."""
+
+    def test_padding_compiles_once_for_every_length(self):
+        from y_lang.exact import lora
+
+        def old(t, dim, mult):
+            extra = (-t.shape[dim]) % mult
+            if not extra:
+                return t
+            return torch.nn.functional.pad(t, [0, extra])
+        calls = [(torch.randint(-127, 128, (5, k), dtype=torch.int8, device="cuda"),) for k in (40, 64, 50, 96)]
+        n, outs = _graphs(lambda a: lora._pad_to(a, 1, 32) * 1, calls)
+        self.assertEqual(n, 1)
+        for (a,), o in zip(calls, outs):
+            k = a.shape[1]
+            self.assertEqual(o.shape, (5, -(-k // 32) * 32))
+            self.assertTrue(torch.equal(o[:, :k], a) and not o[:, k:].any())
+        n_old, _ = _graphs(lambda a: old(a, 1, 32) * 1, calls)
+        self.assertEqual(n_old, 2)
+
+    def test_exp2_table_is_not_tied_to_another_size(self):
+        from y_lang.exact import attention as A
+        table = A._table("cuda")
+        plain = torch.tensor(table.tolist(), device="cuda")
+        calls = [torch.ones(n, 80, dtype=torch.int64, device="cuda") for n in (64, 32, 48)]
+        n, _ = _graphs(lambda x, t: (x[:, :64] * t).sum(-1), [(x, table) for x in calls])
+        self.assertEqual(n, 1)
+        n_plain, _ = _graphs(lambda x, t: (x[:, :64] * t).sum(-1), [(x, plain) for x in calls])
+        self.assertEqual(n_plain, 2)
+
+    def test_int_mm_rows_padded_for_every_count(self):
+        """`ExactLinear` on `torch._int_mm` pads its rows to a multiple of
+        32: compiled, one graph over counts on both sides of that (40, 64,
+        50), each the eager forward's bits."""
+        from y_lang.exact import model as M
+        torch.manual_seed(0)
+        lin = M.ExactLinear(nn.Linear(64, 48)).cuda()
+        xs = [(torch.randn(n, 64, device="cuda"),) for n in (40, 64, 50)]
+        old = M.GEMM
+        M.GEMM = "torch"
+        try:
+            # Eager first: it makes the quantizer's divisor, which
+            # `model.divisor` refuses to make while compiling.
+            want = [lin.forward(x) for (x,) in xs]
+            n, outs = _graphs(lin.forward, xs)
+        finally:
+            M.GEMM = old
+        self.assertEqual(n, 1)
+        for o, w in zip(outs, want):
+            self.assertTrue(torch.equal(o, w))
+
+    def test_device_decisions_made_before_any_compile(self):
+        from y_lang.exact import lora, train_lm
+        dev = torch.device("cuda", torch.cuda.current_device())
+        key = (dev.type, dev.index)
+        train_lm._F64_OK.pop(key, None)
+        train_lm._BMM_OK.pop(key, None)
+        q = torch.zeros(1, 4, 2, 16, device=dev)
+        k = torch.zeros(1, 2, 2, 16, device=dev)
+        lora._warm_attention(q, k, None, lora.CompiledOps(exact=True, mm=lora.mm_f64, act=torch.float32))
+        self.assertIn(key, train_lm._F64_OK)
+        self.assertIn(key, train_lm._BMM_OK)
 
 
 @unittest.skipUnless(torch.cuda.is_available(), "needs a CUDA GPU")

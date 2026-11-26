@@ -22,7 +22,11 @@ N = int(sys.argv[2]) if len(sys.argv) > 2 else 24
 prompts = ["What is 17*23? Answer with the number.", "Name three colors.", "Write one sentence about the sea.",
            "Explain what a CPU is in one sentence."]
 def batch(tok, ps, device):
-    seqs = [tok.apply_chat_template([{"role": "user", "content": p}], add_generation_prompt=True) for p in ps]
+    # The date pinned: Llama 3's template writes today's into the prompt, so
+    # a run that crossed midnight between the devices compared two prompts.
+    seqs = [tok.apply_chat_template([{"role": "user", "content": p}], add_generation_prompt=True,
+                                    date_string=os.environ.get("Y_EXACT_PROMPT_DATE", "24 Nov 2026"))
+            for p in ps]
     seqs = [s if isinstance(s, list) else s["input_ids"] for s in seqs]
     T = max(map(len, seqs))
     ids = torch.tensor([[tok.pad_token_id or 0] * (T - len(s)) + s for s in seqs], device=device)

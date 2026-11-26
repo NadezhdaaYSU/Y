@@ -50,8 +50,8 @@ from . import attention as _attn
 from . import kv as _kv
 from . import model as _model
 from . import qmm as _qmm
-from .train_lm import (F64_EXACT, Adam, Ops, det_sqrt, exact_product, exact_sum, int8_bmm_ok, mm_f64,
-                       product_widths, q8, reduce_checks, refuse, softmax_ints)
+from .train_lm import (F64_EXACT, Adam, Ops, det_sqrt, exact_product, exact_sum, f64_formula_ok, int8_bmm_ok,
+                       mm_f64, product_widths, q8, reduce_checks, refuse, softmax_ints)
 
 TARGETS = ("qkv_proj", "o_proj", "gate_proj", "up_proj", "down_proj", "gate_up_proj",
            "q_proj", "k_proj", "v_proj")
@@ -65,7 +65,11 @@ Y_MAX_K = 131040
 def _pad_to(t, dim, mult):
     n = t.shape[dim]
     extra = (-n) % mult
-    if not extra:
+    # Under torch.compile n is symbolic and `if not extra` guards on n mod
+    # `mult`: a length that is a multiple of 32 compiled its own version
+    # (2026-11-25, a T4: the whole-layer backward 12 times, 3 to 4 minutes
+    # each). Compiled, every length is padded, a pad of 0 the same values.
+    if not torch.compiler.is_compiling() and not extra:
         return t
     pad = [0, 0] * (t.dim() - 1 - (dim % t.dim())) + [0, extra]
     return torch.nn.functional.pad(t, pad)
@@ -494,6 +498,13 @@ def _warm_attention(q, k, scaling, ops):
     make while compiling (a constant there would become a reciprocal
     multiply), sending the rest of that call eager, with a recompile per
     length (measured 2026-11-24)."""
+    if q.is_cuda:
+        # The device's two decisions made here, before any compiled call (as
+        # `Trainer` makes them): made first inside a traced call, each filled
+        # its cache dict there, and the next call failed that guard and
+        # compiled the whole layer again (2026-11-25).
+        f64_formula_ok(q.device)
+        int8_bmm_ok(q.device)
     key = (q.device, q.dtype, q.shape[1], k.shape[1], q.shape[-1], scaling, _kv.PACK)
     if key in _WARM or not isinstance(ops, CompiledOps):
         return

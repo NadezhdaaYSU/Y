@@ -170,8 +170,79 @@ whole-layer path's (0.630 against 0.691 s on the 4070 Ti,
   logits cheap, but are a different function (every record and the accuracy
   measured again).
 
+## Why training compiled again at steps 2, 3 and 5 on the T4, and the fixes, 2026-11-25
+
+`make_t4_llama_job.py rc` ran each training path for 6 steps of the T4 runs'
+settings with `TORCH_LOGS=recompiles`, each path with its own cold caches,
+and printed PyTorch's compile time breakdown at exit
+(`t4_kaggle/recompiles/rc_*`). Most of the whole-layer path's compile time
+was one function: `_layer_backward` compiled 12 times, 3 to 4 minutes each
+on the T4's host. Its guards:
+
+- `need_dh`: whether the layer passes a gradient to its input (the first
+  layer does not). Two versions, as expected.
+- `(B * T) % 32 == 0`: `_pad_to`'s `if not extra:` (the K padding for Y's
+  GEMM). A piece whose length was a multiple of 32 got its own version.
+- `B * T * 8192 >= 5,242,880`: Inductor fuses a "mix-order" reduction only
+  past 5 * 2^20 elements, and with dynamic shapes that test is a guard.
+- The length's power-of-two range (`_ceil_log2`). This one is by design:
+  the exact sums' widths depend on it.
+- A piece of one row (step 5, below).
+
+The per-module path had the same causes in `_lora_backward` (13
+recompiles). There were two smaller ones. Duck sizing tied the exp2 table's
+64 entries to the 64 sampled rows (`_vocab_rows`). And the device's float64
+and int8 decisions were first made inside a traced call, so their cache
+dicts failed a guard on the next call.
+
+The fixes:
+
+- `_pad_to`, and `ExactLinear`'s `_int_mm` path, pad every length when
+  compiled. A pad of 0 gives the same values.
+- Inductor's `triton.mix_order_reduction_non_strict_mode` is on, so there
+  is no size test. The reductions it fuses here are integer sums and maxima,
+  the same in any order.
+- The exp2 table is marked static.
+- `_warm_attention` makes both device decisions before any compiled call.
+
+The tests (`test_exact_lora.Recompiles`) check that one compiled graph
+serves lengths in and out of each class. Each test fails with its fix undone.
+
+`make_t4_llama_job.py rc3` ran the same 6 steps with the fixes
+(`t4_kaggle/recompiles/rc3_*`). Its inputs were `rc`'s, and so were its
+tokens, sampler integers and p(target) at every step, and the adapters at
+step 6 (fcdf1cbf742fd812):
+
+| arm | training s, steps 1, 2, 3, 5 | Dynamo's compile total | recompiles | the arm's wall time |
+|---|---|---|---|---|
+| whole-layer, before | 901, 703, 445, 431 | 2,701 s | 21 | 2,930 s |
+| whole-layer, after | 955, 9, 8, 432 | 1,659 s | 13 | 1,846 s |
+| per-module, before | 266, 69, 7, 169 | 787 s | 34 | 951 s |
+| per-module, after | 231, 8, 7, 150 | 672 s | 26 | 825 s |
+
+`_layer_backward` now compiles 6 times. At step 1 it compiles 4 versions:
+`need_dh` times two length ranges. At step 5 it compiles 2 more: `need_dh`
+again, for a piece of one row.
+
+Why step 5: `GRPO.step` cuts the 64 rows into pieces of at most 1,024
+tokens (rows times the longest row). At step 5 that gave pieces of 9 rows
+and a last piece of 1. With one row, PyTorch specializes on the size 1, and
+the causal mask has a real stride where it had 0. So every function
+compiles again: 432 s on the T4. Cutting the rows evenly would avoid it.
+But each piece quantizes on its own scales, so a different cut is a
+different function, and the bits of every such step would change. This is
+not done.
+
+`make_t4_llama_job.py rc2` ran the fixed code a day later
+(`t4_kaggle/recompiles/rc2_*`). It had other prompts: Llama 3's chat
+template writes the day's date into each prompt (see
+`../exact_llama_2026-11-24/README.md`). So its tokens differed from step 1,
+and its counts (16 and 28 recompiles) are not a paired comparison.
+
 ## Not done
 
+- A piece of one row compiles every training function again (above). An
+  even cut of the rows would change the bits of the steps it changes.
 - The adapters' backward still launches 44 kernels a call: each of its five
   products calls Y's int8 GEMM as its own op, which Inductor cannot fuse
   into. The whole step is not one CUDA graph (its shapes change every step).

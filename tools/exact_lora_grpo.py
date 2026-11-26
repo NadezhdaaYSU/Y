@@ -73,9 +73,8 @@ class Task:
         self.system = S.SYSTEM if mode == "number" else STEPS_SYSTEM
 
     def prompt(self, a, b):
-        text = self.tok.apply_chat_template([{"role": "system", "content": self.system},
-                                             {"role": "user", "content": f"{a}*{b}"}],
-                                            tokenize=False, add_generation_prompt=True)
+        text = S.chat_text(self.tok, [{"role": "system", "content": self.system},
+                                      {"role": "user", "content": f"{a}*{b}"}])
         return S.ids(self.tok, text)
 
     def reward(self, a, b, row):

@@ -129,9 +129,18 @@ INDUCTOR_DEFAULTS = {
     "eager_numerics.division_rounding":
         _inductor_config.eager_numerics.division_rounding,
     "emulate_precision_casts": _inductor_config.emulate_precision_casts,
+    "triton.mix_order_reduction_non_strict_mode":
+        _inductor_config.triton.mix_order_reduction_non_strict_mode,
 }
 set_in_every_thread(_inductor_config, "eager_numerics.division_rounding", True)
 set_in_every_thread(_inductor_config, "emulate_precision_casts", True)
+# Not rounding but compile time: Inductor fuses a "mix-order" reduction only
+# past 5 * 2^20 elements, and with dynamic shapes that test is a guard, so a
+# short piece and a long one were two compiled versions (the whole-layer
+# backward 12 times on a T4, 2026-11-25). Non-strict mode skips the test.
+# The reductions it fuses here are exact (integers, maxima): any order is the
+# same result, which the compiled-against-eager tests check.
+set_in_every_thread(_inductor_config, "triton.mix_order_reduction_non_strict_mode", True)
 
 
 # A fourth way, which is not rounding but a data race (torch 2.13.0, Triton
@@ -530,7 +539,11 @@ class ExactLinear(nn.Module):
             # whether it may be used at all).
             pad = (-m) % 32 if x.is_cuda else 0
             try:
-                xp = x8 if pad == 0 else torch.nn.functional.pad(x8, (0, 0, 0, pad))
+                # Compiled, m is symbolic and `pad == 0` would guard on m
+                # mod 32 (a version of each compiled layer for each class,
+                # 2026-11-25): there every m is padded, a pad of 0 the same.
+                xp = (x8 if not torch.compiler.is_compiling() and pad == 0
+                      else torch.nn.functional.pad(x8, (0, 0, 0, pad)))
                 acc = torch._int_mm(xp, self.w8t)[:m].to(torch.float32)
             except Exception:
                 acc = None
@@ -582,7 +595,9 @@ class ExactLinear(nn.Module):
             pad = (-m) % 32 if x.is_cuda else 0
             try:
                 def mm(t):
-                    tp = t if pad == 0 else torch.nn.functional.pad(t, (0, 0, 0, pad))
+                    # Compiled, padded for every m (as above: no guard on m mod 32).
+                    tp = (t if not torch.compiler.is_compiling() and pad == 0
+                          else torch.nn.functional.pad(t, (0, 0, 0, pad)))
                     return torch._int_mm(tp, self.w8t)[:m]
                 acc = mm(hi) * 128 + mm(lo)
             except Exception:                        # noqa: BLE001

@@ -94,10 +94,15 @@ EXP2_DOMAIN_DIGEST = 0x7170CD39B442D506
 
 
 def _table(device):
-    return torch.tensor(
+    t = torch.tensor(
         [round((1 << 30) * 2 ** (-i / 64)) for i in range(64)],
         dtype=torch.int64, device=device,
     )
+    # Its size is a constant. Passed to a function compiled with dynamic
+    # shapes it was a symbol, and "duck sizing" tied it to any other size
+    # of 64 (64 sampled rows, 2026-11-25): the next row count compiled again.
+    torch._dynamo.mark_static(t)
+    return t
 
 
 def exp2_neg_q16_16(t, table):

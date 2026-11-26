@@ -62,10 +62,25 @@ def ids(tok, text):
     return tok(text, add_special_tokens=False).input_ids
 
 
+# Llama 3's chat template writes today's date into the system turn ("Today
+# Date: 25 Nov 2026", from strftime_now), so the same run's prompts, and so
+# its tokens, changed at midnight: the records of 2026-11-24 and those of
+# 2026-11-25 differed from step 1 (found 2026-11-26). The date is pinned to
+# the one the Llama records here were made under, so they replay on any day;
+# templates without a date (Qwen2, SmolLM2) ignore it.
+PROMPT_DATE = os.environ.get("Y_EXACT_PROMPT_DATE", "24 Nov 2026")
+
+
+def chat_text(tok, messages):
+    """The chat template's text for `messages`, the turn to answer opened,
+    with the date pinned (`PROMPT_DATE`)."""
+    return tok.apply_chat_template(messages, tokenize=False, add_generation_prompt=True,
+                                   date_string=PROMPT_DATE)
+
+
 def prompt_ids(tok, a, b):
-    text = tok.apply_chat_template([{"role": "system", "content": SYSTEM},
-                                    {"role": "user", "content": f"{a}*{b}"}],
-                                   tokenize=False, add_generation_prompt=True)
+    text = chat_text(tok, [{"role": "system", "content": SYSTEM},
+                           {"role": "user", "content": f"{a}*{b}"}])
     return ids(tok, text)
 
 

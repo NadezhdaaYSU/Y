@@ -1,0 +1,282 @@
+
+Loading weights:   0%|          | 0/146 [00:00<?, ?it/s]
+Loading weights:   1%|          | 1/146 [00:00<02:01,  1.19it/s]
+Loading weights:  58%|█████▊    | 84/146 [00:00<00:00, 120.92it/s]
+Loading weights:  90%|████████▉ | 131/146 [00:01<00:00, 119.90it/s]
+Loading weights: 100%|██████████| 146/146 [00:01<00:00, 102.66it/s]
+    (113 linear layers + 33 norms converted to exact form)
+/usr/local/lib/python3.13/dist-packages/triton/language/semantic.py:1680: UserWarning: tl.where with a non-boolean condition is deprecated and will error out in a future triton release. Got int8
+  warnings.warn(
+    [Warning] Line 238: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+    [Warning] Line 303: [Barrier Optimization] Redundant barrier synchronization. No shared memory writes occurred since the last barrier.
+W1125 21:46:20.786000 2680 torch/_inductor/utils.py:1953] [2/0] Not enough SMs to use max_autotune_gemm mode
+V1125 21:46:29.523000 2680 torch/_dynamo/guards.py:5396] [1/1] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:46:29.523000 2680 torch/_dynamo/guards.py:5396] [1/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:46:29.523000 2680 torch/_dynamo/guards.py:5396] [1/1] [__recompiles]     - 1/0: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:46:35.363000 2680 torch/_dynamo/guards.py:5396] [1/2] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:46:35.363000 2680 torch/_dynamo/guards.py:5396] [1/2] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:46:35.363000 2680 torch/_dynamo/guards.py:5396] [1/2] [__recompiles]     - 1/1: tensor 'B' size mismatch at index 0. expected 2048, actual 8192
+V1125 21:46:35.363000 2680 torch/_dynamo/guards.py:5396] [1/2] [__recompiles]     - 1/0: tensor 'B' size mismatch at index 0. expected 3072, actual 8192
+V1125 21:46:43.487000 2680 torch/_dynamo/guards.py:5396] [1/3] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:46:43.487000 2680 torch/_dynamo/guards.py:5396] [1/3] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:46:43.487000 2680 torch/_dynamo/guards.py:5396] [1/3] [__recompiles]     - 1/2: tensor 'A' size mismatch at index 1. expected 2048, actual 8192
+V1125 21:46:43.487000 2680 torch/_dynamo/guards.py:5396] [1/3] [__recompiles]     - 1/1: tensor 'A' size mismatch at index 1. expected 2048, actual 8192
+V1125 21:46:43.487000 2680 torch/_dynamo/guards.py:5396] [1/3] [__recompiles]     - 1/0: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     - 1/3: tensor 'B' size mismatch at index 0. expected 2048, actual 3072
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     - 1/2: tensor 'B' size mismatch at index 0. expected 8192, actual 3072
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     - 1/1: tensor 'B' size mismatch at index 0. expected 2048, actual 3072
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     - 1/0: not ___dict_contains(('cuda', 0), G['__import_y_lang_dot_exact_dot_train_lm']._F64_OK)  # if key not in _F64_OK:  # aggle/working/Y/tools/../python/y_lang/exact/train_lm.py:206 in f64_formula_ok
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     - User stack trace:
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 297, in _lora_forward
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -     u = _exact_mm(xf, A, None, grad_bits, bwd_bits, mm, act, bad)              # [M][r]
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 288, in _exact_mm
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -     return exact_product(a, b, bits_a, bits_b, mm, False, False, act, None, qb, bad)
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 423, in exact_product
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -     qb, sb = q8(b, bits=bits_b, bad=bad) if qb is None else qb
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 269, in q8
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -     return scaled_round(x, s).clamp(-top, top).to(torch.int32), s
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 243, in scaled_round
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -     if x.is_cuda and f64_formula_ok(x.device):
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 206, in f64_formula_ok
+V1125 21:46:49.759000 2680 torch/_dynamo/guards.py:5396] [1/4] [__recompiles]     -     if key not in _F64_OK:
+[transformers] Ignoring clean_up_tokenization_spaces=True for BPE tokenizer TokenizersBackend. The clean_up_tokenization post-processing step is designed for WordPiece tokenizers and is destructive for BPE (it strips spaces before punctuation). Set clean_up_tokenization_spaces=False to suppress this warning, or set clean_up_tokenization_spaces_for_bpe_even_though_it_will_corrupt_output=True to force cleanup anyway.
+V1125 21:51:36.475000 2680 torch/_dynamo/guards.py:5396] [0/1] [__recompiles] Recompiling function _module_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:432
+V1125 21:51:36.475000 2680 torch/_dynamo/guards.py:5396] [0/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:51:36.475000 2680 torch/_dynamo/guards.py:5396] [0/1] [__recompiles]     - 0/0: GLOBAL_STATE changed: grad_mode 
+V1125 21:51:37.724000 2680 torch/_dynamo/guards.py:5396] [2/1] [__recompiles] Recompiling function _attn_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:530
+V1125 21:51:37.724000 2680 torch/_dynamo/guards.py:5396] [2/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:51:37.724000 2680 torch/_dynamo/guards.py:5396] [2/1] [__recompiles]     - 2/0: tensor 'k' dtype mismatch. expected Char, actual Float
+V1125 21:53:22.042000 2680 torch/_dynamo/guards.py:5396] [8/1] [__recompiles] Recompiling function _lora_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:303
+V1125 21:53:22.042000 2680 torch/_dynamo/guards.py:5396] [8/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:53:22.042000 2680 torch/_dynamo/guards.py:5396] [8/1] [__recompiles]     - 8/0: 'NoneType' object has no attribute 'size'
+V1125 21:53:46.994000 2680 torch/_dynamo/guards.py:5396] [8/2] [__recompiles] Recompiling function _lora_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:303
+V1125 21:53:46.994000 2680 torch/_dynamo/guards.py:5396] [8/2] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:53:46.994000 2680 torch/_dynamo/guards.py:5396] [8/2] [__recompiles]     - 8/1: 2 <= A.storage_offset()  # + _exact_mm(du, A.t(), "a", grad_bits, bwd_bits, mm, act, bad))  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:317 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:53:46.994000 2680 torch/_dynamo/guards.py:5396] [8/2] [__recompiles]     - 8/0: 2 <= A.storage_offset()  # + _exact_mm(du, A.t(), "a", grad_bits, bwd_bits, mm, act, bad))  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:317 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles] Recompiling function _lora_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:303
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     - 8/2: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     - User stack trace:
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     -     if need_dx:
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     - 8/1: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     - User stack trace:
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     -     if need_dx:
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     - 8/0: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     - User stack trace:
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:54:10.146000 2680 torch/_dynamo/guards.py:5396] [8/3] [__recompiles]     -     if need_dx:
+V1125 21:54:21.839000 2680 torch/_dynamo/guards.py:5396] [10/1] [__recompiles] Recompiling function _attn_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:536
+V1125 21:54:21.839000 2680 torch/_dynamo/guards.py:5396] [10/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:54:21.839000 2680 torch/_dynamo/guards.py:5396] [10/1] [__recompiles]     - 10/0: 129 <= q.size()[2] <= 256  # while (1 << k) < n:  # aggle/working/Y/tools/../python/y_lang/exact/train_lm.py:351 in _ceil_log2 (_dynamo/variables/tensor.py:2606 in evaluate_expr) and while (1 << k) < n:  # aggle/working/Y/tools/../python/y_lang/exact/train_lm.py:351 in _ceil_log2 (_dynamo/variables/tensor.py:2606 in evaluate_expr)
+step 1: reward 0.438 mismatch 0 tokens af7b4567b8fd73b6 groups {'sampled': 32, 'all_right': 2, 'all_wrong': 4, 'kept': 8} sample 337.67 s train 231.35 s peak 9.32 GB
+step 2: reward 0.496 mismatch 0 tokens 89a42dd71d5d5112 groups {'sampled': 32, 'all_right': 4, 'all_wrong': 4, 'kept': 8} sample 9.57 s train 8.01 s peak 9.41 GB
+step 3: reward 0.512 mismatch 0 tokens c695e62d639deca1 groups {'sampled': 32, 'all_right': 4, 'all_wrong': 4, 'kept': 8} sample 10.05 s train 7.29 s peak 9.4 GB
+step 4: reward 0.645 mismatch 0 tokens eb864e84f81c11d0 groups {'sampled': 32, 'all_right': 9, 'all_wrong': 1, 'kept': 8} sample 10.74 s train 8.25 s peak 9.6 GB
+[W1125 21:56:33.801551578 CUDACachingAllocator.cpp:3933] memory allocation failed with OOM on device 0 while trying to allocate 492830720 bytes (free: 355270656, total: 15636037632).
+V1125 21:56:37.186000 2680 torch/_dynamo/guards.py:5396] [0/2] [__recompiles] Recompiling function _module_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:432
+V1125 21:56:37.186000 2680 torch/_dynamo/guards.py:5396] [0/2] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:56:37.186000 2680 torch/_dynamo/guards.py:5396] [0/2] [__recompiles]     - 0/0: GLOBAL_STATE changed: grad_mode 
+V1125 21:56:37.186000 2680 torch/_dynamo/guards.py:5396] [0/2] [__recompiles]     - 0/1: 2 <= x.size()[0]  # xd = x.to(torch.float64)  # aggle/working/Y/tools/../python/y_lang/exact/model.py:703 in forward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     - 1/3: tensor 'B' size mismatch at index 0. expected 2048, actual 3072
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     - 1/2: tensor 'B' size mismatch at index 0. expected 8192, actual 3072
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     - 1/1: tensor 'B' size mismatch at index 0. expected 2048, actual 3072
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     - 1/4: x.size()[1]*x.size()[0] > 128  # if m <= 128:  # aggle/working/Y/tools/../python/y_lang/int8_gemm.py:84 in rows_bucket (_dynamo/variables/tensor.py:2606 in evaluate_expr)
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     - 1/0: not ___dict_contains(('cuda', 0), G['__import_y_lang_dot_exact_dot_train_lm']._F64_OK)  # if key not in _F64_OK:  # aggle/working/Y/tools/../python/y_lang/exact/train_lm.py:206 in f64_formula_ok
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     - User stack trace:
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 297, in _lora_forward
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -     u = _exact_mm(xf, A, None, grad_bits, bwd_bits, mm, act, bad)              # [M][r]
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 288, in _exact_mm
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -     return exact_product(a, b, bits_a, bits_b, mm, False, False, act, None, qb, bad)
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 423, in exact_product
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -     qb, sb = q8(b, bits=bits_b, bad=bad) if qb is None else qb
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 269, in q8
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -     return scaled_round(x, s).clamp(-top, top).to(torch.int32), s
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 243, in scaled_round
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -     if x.is_cuda and f64_formula_ok(x.device):
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/train_lm.py", line 206, in f64_formula_ok
+V1125 21:56:39.228000 2680 torch/_dynamo/guards.py:5396] [1/5] [__recompiles]     -     if key not in _F64_OK:
+V1125 21:56:45.247000 2680 torch/_dynamo/guards.py:5396] [2/2] [__recompiles] Recompiling function _attn_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:530
+V1125 21:56:45.247000 2680 torch/_dynamo/guards.py:5396] [2/2] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:56:45.247000 2680 torch/_dynamo/guards.py:5396] [2/2] [__recompiles]     - 2/1: tensor 'mask' stride mismatch at index 0. expected 0, actual 10609
+V1125 21:56:45.247000 2680 torch/_dynamo/guards.py:5396] [2/2] [__recompiles]     - 2/0: tensor 'k' dtype mismatch. expected Char, actual Float
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles]     - 1/5: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles]     - 1/3: tensor 'x' size mismatch at index 2. expected 8192, actual 2048
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles]     - 1/2: tensor 'B' size mismatch at index 0. expected 8192, actual 2048
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles]     - 1/1: x.size()[1]*x.size()[0] > 128  # if m <= 128:  # aggle/working/Y/tools/../python/y_lang/int8_gemm.py:84 in rows_bucket (_dynamo/variables/tensor.py:2606 in evaluate_expr)
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles]     - 1/4: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:56:56.767000 2680 torch/_dynamo/guards.py:5396] [1/6] [__recompiles]     - 1/0: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:57:02.189000 2680 torch/_dynamo/guards.py:5396] [0/3] [__recompiles] Recompiling function _module_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:432
+V1125 21:57:02.189000 2680 torch/_dynamo/guards.py:5396] [0/3] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:02.189000 2680 torch/_dynamo/guards.py:5396] [0/3] [__recompiles]     - 0/2: GLOBAL_STATE changed: grad_mode 
+V1125 21:57:02.189000 2680 torch/_dynamo/guards.py:5396] [0/3] [__recompiles]     - 0/0: 2 <= x.size()[0]  # xd = x.to(torch.float64)  # aggle/working/Y/tools/../python/y_lang/exact/model.py:703 in forward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:57:02.189000 2680 torch/_dynamo/guards.py:5396] [0/3] [__recompiles]     - 0/1: GLOBAL_STATE changed: grad_mode 
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     - 1/6: tensor 'B' size mismatch at index 0. expected 2048, actual 8192
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     - 1/5: tensor 'B' size mismatch at index 0. expected 3072, actual 8192
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     - 1/3: tensor 'B' size mismatch at index 0. expected 2048, actual 8192
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     - 1/2: x.size()[1]*x.size()[0] > 128  # if m <= 128:  # aggle/working/Y/tools/../python/y_lang/int8_gemm.py:84 in rows_bucket (_dynamo/variables/tensor.py:2606 in evaluate_expr)
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     - 1/1: tensor 'B' size mismatch at index 0. expected 2048, actual 8192
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     - 1/4: tensor 'B' size mismatch at index 0. expected 3072, actual 8192
+V1125 21:57:03.039000 2680 torch/_dynamo/guards.py:5396] [1/7] [__recompiles]     - 1/0: tensor 'B' size mismatch at index 0. expected 3072, actual 8192
+V1125 21:57:09.918000 2680 torch/_dynamo/guards.py:5396] [3/1] [__recompiles] Recompiling function _silu_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:437
+V1125 21:57:09.918000 2680 torch/_dynamo/guards.py:5396] [3/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:09.918000 2680 torch/_dynamo/guards.py:5396] [3/1] [__recompiles]     - 3/0: 2 <= x.size()[0]  # return (x.to(torch.float32) * self.sigmoid(x)).to(x.dtype)  # aggle/working/Y/tools/../python/y_lang/exact/model.py:809 in forward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles] Recompiling function _lora_forward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:291
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/7: tensor 'B' size mismatch at index 0. expected 8192, actual 2048
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/6: tensor 'x' size mismatch at index 2. expected 2048, actual 8192
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/5: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/3: x.size()[1]*x.size()[0] > 128  # if m <= 128:  # aggle/working/Y/tools/../python/y_lang/int8_gemm.py:84 in rows_bucket (_dynamo/variables/tensor.py:2606 in evaluate_expr)
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/2: tensor 'B' size mismatch at index 0. expected 8192, actual 2048
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/1: tensor 'A' size mismatch at index 1. expected 2048, actual 8192
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/4: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:57:10.761000 2680 torch/_dynamo/guards.py:5396] [1/8] [__recompiles]     - 1/0: tensor 'B' size mismatch at index 0. expected 3072, actual 2048
+V1125 21:57:16.664000 2680 torch/_dynamo/guards.py:5396] [6/1] [__recompiles] Recompiling function _checked_product in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:132
+V1125 21:57:16.664000 2680 torch/_dynamo/guards.py:5396] [6/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:16.664000 2680 torch/_dynamo/guards.py:5396] [6/1] [__recompiles]     - 6/0: 65 <= a.size()[0] <= 65536  # if m <= 128:  # aggle/working/Y/tools/../python/y_lang/int8_gemm.py:84 in rows_bucket (_dynamo/variables/tensor.py:2606 in evaluate_expr) and elif cond.numel() > _KEEP_WHOLE:  # aggle/working/Y/tools/../python/y_lang/exact/train_lm.py:73 in refuse (_dynamo/variables/tensor.py:2606 in evaluate_expr)
+V1125 21:57:19.557000 2680 torch/_dynamo/guards.py:5396] [7/1] [__recompiles] Recompiling function _norm_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:379
+V1125 21:57:19.557000 2680 torch/_dynamo/guards.py:5396] [7/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:19.557000 2680 torch/_dynamo/guards.py:5396] [7/1] [__recompiles]     - 7/0: 2 <= x.size()[0]  # H = x.shape[-1]  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:386 in _norm_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles] Recompiling function _lora_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:303
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     - 8/3: need_dx == False                                         # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     - User stack trace:
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     -     if need_dx:
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     - 8/2: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     - 8/1: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:57:25.041000 2680 torch/_dynamo/guards.py:5396] [8/4] [__recompiles]     - 8/0: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:57:49.402000 2680 torch/_dynamo/guards.py:5396] [9/1] [__recompiles] Recompiling function _silu_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:441
+V1125 21:57:49.402000 2680 torch/_dynamo/guards.py:5396] [9/1] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:49.402000 2680 torch/_dynamo/guards.py:5396] [9/1] [__recompiles]     - 9/0: 2 <= x.size()[0]  # xf = torch.nan_to_num(x.to(torch.float32), nan=0.0).clamp(-SILU_LIM, SILU_LIM)  # aggle/working/Y/tools/../python/y_lang/exact/model.py:799 in sigmoid (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:57:50.428000 2680 torch/_dynamo/guards.py:5396] [10/2] [__recompiles] Recompiling function _attn_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:536
+V1125 21:57:50.428000 2680 torch/_dynamo/guards.py:5396] [10/2] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:57:50.428000 2680 torch/_dynamo/guards.py:5396] [10/2] [__recompiles]     - 10/1: tensor 'mask' stride mismatch at index 0. expected 0, actual 10609
+V1125 21:57:50.428000 2680 torch/_dynamo/guards.py:5396] [10/2] [__recompiles]     - 10/0: tensor 'mask' stride mismatch at index 0. expected 0, actual 10609
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles] Recompiling function _lora_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:303
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     - 8/4: 'NoneType' object has no attribute 'size'
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     - 8/3: need_dx == False                                         # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     - User stack trace:
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     -     if need_dx:
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     - 8/2: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     - 8/1: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:32.119000 2680 torch/_dynamo/guards.py:5396] [8/5] [__recompiles]     - 8/0: 'NoneType' object has no attribute 'size'
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles] Recompiling function _lora_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:303
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     - 8/5: 2 <= A.storage_offset()  # + _exact_mm(du, A.t(), "a", grad_bits, bwd_bits, mm, act, bad))  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:317 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     - 8/4: 2 <= A.storage_offset()  # + _exact_mm(du, A.t(), "a", grad_bits, bwd_bits, mm, act, bad))  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:317 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     - 8/3: need_dx == False                                         # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     - User stack trace:
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     -     if need_dx:
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     - 8/2: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     - 8/1: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:36.174000 2680 torch/_dynamo/guards.py:5396] [8/6] [__recompiles]     - 8/0: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles] Recompiling function _lora_backward in /kaggle/working/Y/tools/../python/y_lang/exact/lora.py:303
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     triggered by the following guard failure(s):
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - 8/6: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - User stack trace:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -     if need_dx:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - 8/5: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - User stack trace:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -     if need_dx:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - 8/4: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - User stack trace:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -     if need_dx:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - 8/3: 2 <= dy.size()[0]  # dyc = dy.reshape(-1, N).to(torch.float32) * scale                         # a power of two: exact  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:309 in _lora_backward (user code shown is first use of this value--the guard itself is not due user code but due to 0/1 specialization in the framework; to avoid specialization try torch._dynamo.decorators.mark_unbacked(tensor, dim))
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - 8/2: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - User stack trace:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -     if need_dx:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - 8/1: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - User stack trace:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -     if need_dx:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - 8/0: need_dx == True                                          # if need_dx:  # aggle/working/Y/tools/../python/y_lang/exact/lora.py:314 in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     - User stack trace:
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -   File "/kaggle/working/Y/tools/../python/y_lang/exact/lora.py", line 314, in _lora_backward
+V1125 21:58:49.502000 2680 torch/_dynamo/guards.py:5396] [8/7] [__recompiles]     -     if need_dx:
+step 5: reward 0.605 mismatch 0 tokens 138bb1bad63c5cf5 groups {'sampled': 32, 'all_right': 8, 'all_wrong': 5, 'kept': 8} sample 8.44 s train 150.19 s peak 9.6 GB
+step 6: reward 0.574 mismatch 0 tokens 501aaf181ec08b62 groups {'sampled': 32, 'all_right': 6, 'all_wrong': 0, 'kept': 8} sample 11.36 s train 9.53 s peak 9.62 GB
+== compile_times 819 s since start
+compile_times TorchDynamo compilation metrics:
+Function                                                            Runtimes (s)
+----------------------------------------------------------------  --------------
+_compile.compile_inner                                                  671.679
+compile_attempt_0                                                       664.306
+bytecode_tracing                                                        153.69
+get_fake_value                                                           82.1162
+create_proxy                                                             46.0121
+wrap_to_fake_tensor_and_record                                            1.8632
+variable_builder_call                                                     4.0053
+insert_deferred_runtime_asserts                                           1.5767
+OutputGraph.call_user_compiler                                          508.308
+inductor_codecache_torch_key                                              0.2846
+CacheBase.get_system.triton_key                                           1.3578
+_recursive_pre_grad_passes                                                0.352
+pass.pre_grad_passes.group_batch_fusion_passes                            0.0016
+pass.pre_grad_passes.efficient_conv_bn_eval_pass                          0.0621
+pass.pre_grad_passes.apply_gumbel_max_trick_pass                          0.0012
+create_aot_dispatcher_function                                          503.56
+aot_collect_metadata                                                     47.3626
+compile_fx.<locals>.fw_compiler_base                                    378.588
+_recursive_joint_graph_passes                                             4.9653
+pass.joint_graph_passes.remove_noop_ops                                   0.9571
+pass.joint_graph_passes.constant_fold_uniform_value                       1.2809
+pass.joint_graph_passes.pass_pattern_0                                    1.4898
+pass.joint_graph_passes.pass_pattern_1                                    0.2684
+compile_fx_inner                                                        373.568
+fx_codegen_and_compile                                                  371.672
+additional_fake_tensor_prop                                              18.62
+_recursive_post_grad_passes                                               6.7561
+pass.post_grad_passes.reorder_for_locality                                0.1774
+pass.post_grad_passes.remove_profiler_ops                                 0.0112
+pass.post_grad_passes.post_grad_custom_pre_pass                           0.0011
+pass.post_grad_passes.remove_noop_ops                                     0.4199
+pass.post_grad_passes.remove_assert_ops                                   0.0011
+pass.post_grad_passes.pass_pattern_0                                      0.0005
+pass.post_grad_passes.pass_pattern_1                                      2.2826
+pass.post_grad_passes.pass_pattern_2                                      0.1701
+pass.post_grad_passes.stable_sort                                         0.0628
+pass.post_grad_passes.move_constructors_to_cuda                           0.0867
+pass.post_grad_passes.reinplace_inplaceable_ops                           1.7445
+pass.post_grad_passes.fix_auto_functionalized_dtype_views                 0.0024
+pass.post_grad_passes.decompose_triton_kernel_wrapper_functional          0.0025
+pass.post_grad_passes.decompose_auto_functionalized                       0.069
+pass.post_grad_passes.decompose_scan_to_while_loop                        0.002
+pass.post_grad_passes.decompose_map_to_while_loop                         0.0015
+GraphLowering.run                                                        61.2911
+GraphLowering.compile_to_fn                                             272.909
+GraphLowering.compile_to_module                                         272.907
+GraphLowering.codegen                                                   231.711
+Scheduler.__init__                                                       73.6049
+Scheduler.fused_nodes                                                    39.5695
+Scheduler.codegen                                                       155.492
+PythonWrapperCodegen.generate                                             2.5384
+PyCodeCache.load_by_key_path                                             41.1149
+async_compile.precompile                                                  0.6738
+async_compile.wait                                                       39.9986
+TritonBundler.collect                                                     0.4166
+build_guards                                                              6.6312
+gc                                                                        0.1581
+CachingAutotuner.benchmark_all_configs                                   20.2306
+pgo.dynamic_whitelist                                                     0.001
+TritonBundler.read_and_emit                                               0.0044
+TritonBundler.load_cached_static_autotuners                               0.0018
+StaticAutotunerFuture.warm_precompile                                     0.0195
+AOTAutogradCache.inductor_load                                            0.0604
+calculate_time_spent {'_recursive_pre_grad_passes': 0.352040256, '_recursive_joint_graph_passes': 4.965293142, '_recursive_post_grad_passes': 6.756091308, 'async_compile.precompile': 0.673769028, 'async_compile.wait': 39.998649985, 'code_gen': 272.907429746, 'inductor_compile': 373.568216421, 'backend_compile': 508.308199739, 'gc': 0.158082955, 'entire_frame_compile': 671.679374472, 'CachingAutotuner.benchmark_all_configs': 20.230566339, 'total_wall_time': 671.679374472}
