@@ -238,7 +238,8 @@ def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
     whose round is 0 either way; `round` of an exact value is the round-half-
     even of x * 2^-s, an integer below 2^62 that converts exactly. Checked
     against `scaled_round_int` on ties, zeros, subnormals and extreme scales
-    (python/tests/test_exact_train_lm.py)."""
+    (python/tests/test_exact_train_lm.py), and proved for -126 <= -s <= 254
+    in proofs/ExactScaledRound.v."""
     if x.dtype != torch.float32:
         if x.is_cuda and f64_formula_ok(x.device):
             return _scaled_round_f64(x, s, wide)

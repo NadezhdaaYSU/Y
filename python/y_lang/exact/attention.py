@@ -108,10 +108,12 @@ def _table(device):
 def exp2_neg_q16_16(t, table):
     """Vectorised `2^-t` for Q16.16 `t`, returning Q0.28. Integer throughout.
 
-    Carried in int64 rather than float64. Every intermediate here is an integer
-    below 2^60, so both types represent it exactly and the two agree bit for
-    bit - but float64 arithmetic runs at 1/64 rate on a GeForce part, and this
-    chain is a dozen elementwise ops over the whole score tensor.
+    Carried in int64. Every intermediate is a non-negative integer below 2^62
+    (`base * corr` reaches 2^60 and the rounding constant 2^61), so int64 holds
+    each one exactly (proofs/ExactExp2Int64.v). float64 would not: every
+    `base * corr` is past 2^53, and most of them are not float64s. It is also
+    slower: float64 runs at 1/64 rate on a GeForce part, and this chain is a
+    dozen elementwise ops over the whole score tensor.
     """
     t = t.to(torch.int64).clamp(min=0)
     n = t >> 16

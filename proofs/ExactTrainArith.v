@@ -54,11 +54,11 @@
 
     ** Not proved here.
 
-    That float32's `round(x * 2^a * 2^b)` is the integer rounding of
-    `scaled_round_int` (it is IEEE arithmetic on powers of two; checked on
-    6.5M values and ties by python/tests/test_exact_train_lm.py), that the
-    floats' bit fields are what [shift_round] is given, the elementwise IEEE
-    operations, and the int8 GEMM itself (`Int8GemmExact.v`).
+    That the floats' bit fields are what [shift_round] is given, the
+    elementwise IEEE operations, and the int8 GEMM itself
+    (`Int8GemmExact.v`). That float32's `round(x * 2^a * 2^b)` is
+    [shift_round] is in `ExactScaledRound.v` (checked also on 6.5M values
+    and ties by python/tests/test_exact_train_lm.py).
 
     Checked with Rocq 9.1:  coqc -Q . "" ExactTrainArith.v  *)
 

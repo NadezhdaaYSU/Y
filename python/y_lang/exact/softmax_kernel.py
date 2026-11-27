@@ -23,7 +23,9 @@ in PyTorch. The roundings to an integer are of values x >= 0: (x + 2^23) -
 2^23 below 2^23, where the sum's spacing is 1 and so the addition rounds to
 nearest, ties to even, and x itself above (a float32 there is an integer);
 a negative x is clamped to 0, as in the Python, whatever it rounds to.
-python/tests/test_exact_softmax_kernel.py checks it against the Python under
+proofs/ExactSoftmaxKernel.v proves the rounding, that no operand or result
+of the divide is subnormal, and that the row's quantizer scale is 2^6 to
+2^16. python/tests/test_exact_softmax_kernel.py checks it against the Python under
 Triton's interpreter on the CPU and on a GPU.
 """
 

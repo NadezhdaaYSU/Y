@@ -818,7 +818,7 @@ class ExactSiLU(nn.Module):
 # 2^28, the pattern of a midpoint, as in `norm_kernel`) and decides them in
 # mpmath (ROPE_MP_BITS). Every entry is then the correctly rounded
 # float32 of cos(arg) * scale, on any host whose float64 cos/sin errs by less
-# than ROPE_LIBM_ULPS ulps (libms claim 1).
+# than ROPE_LIBM_ULPS ulps (libms claim 1; proofs/ExactRopeTable.v).
 ROPE_LIBM_ULPS = 4
 ROPE_MARGIN = 2 * ROPE_LIBM_ULPS + 2          # float64 ulps: libm, the scale's rounding
 ROPE_MP_BITS = (160, 320, 640, 1280, 2560)   # tried in turn until the rounding is decided

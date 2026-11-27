@@ -338,7 +338,8 @@ Qed.
 (* ------------------------------------------------------------------ *)
 
 (** `2^-t` for Q16.16 `t`, as a Q0.28 integer. Transcribed line for line;
-    the Python runs it in int64, where no intermediate reaches 2^61. *)
+    the Python runs it in int64, where every intermediate stays in
+    0 .. 2^62 - 1 (`ExactExp2Int64.v`), so this model is the code. *)
 Definition exp2_neg_q16_16 (t0 : Z) : Z :=
   let t := Z.max t0 0 in
   let n := Z.shiftr t 16 in

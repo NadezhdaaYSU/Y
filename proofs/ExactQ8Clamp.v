@@ -23,10 +23,10 @@
 
     ** Not proved here.
 
-    The float formula `round(x * 2^a * 2^b)` the GPU path computes, which
-    `scaled_round` documents and the tests check against the integer
-    rounding on ties, zeros and subnormals; the scale range check (|s| <=
-    511, `ExactTrainArith.a_scale_of_512_could_leave_float64`).
+    The scale range check (|s| <= 511,
+    `ExactTrainArith.a_scale_of_512_could_leave_float64`). The float formula
+    `round(x * 2^a * 2^b)` the GPU path computes is this rounding by
+    `ExactScaledRound.v`.
 
     Checked with Rocq 9.1:  coqc -Q . "" ExactQ8Clamp.v  *)
 

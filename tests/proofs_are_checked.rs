@@ -1270,6 +1270,112 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // The RMS norm kernel's bits (`norm_kernel.py`): the guarded
+            // multiply's float32 is the divide's, the guard's cases, x widened
+            // by its bits, the row's scale. The refutations: a guard of two
+            // misses a tie, a subnormal x does not widen by its bits.
+            "ExactNormKernel.v",
+            &[
+                "Print Assumptions the_sign_does_not_reach_the_guard_bits",
+                "Print Assumptions the_rounding_is_a_normal_float32",
+                "Print Assumptions the_gap_is_the_guard_distance",
+                "Print Assumptions the_kernel_float32_is_the_nearest_to_every_value_within_four_ulps",
+                "Print Assumptions the_multiply_is_within_three_ulps_of_the_divide",
+                "Print Assumptions the_multiply_rounds_as_the_divide",
+                "Print Assumptions the_guard_admits_only_zero_and_the_normal_binades",
+                "Print Assumptions zero_passes_and_rounds_to_zero",
+                "Print Assumptions a_normal_x_widens_by_its_bits",
+                "Print Assumptions the_scale_is_a_power_of_two",
+                "Print Assumptions a_guard_of_two_would_miss_a_tie",
+                "Print Assumptions a_subnormal_x_does_not_widen_by_its_bits",
+            ][..],
+        ),
+        (
+            // The integer exp2 in int64 (`attention.exp2_neg_q16_16`): every
+            // intermediate in 0 .. 2^63 - 1, the largest values, the model's
+            // result. The refutations: 2^60 and 2^61 are reached, and the
+            // product is no float64.
+            "ExactExp2Int64.v",
+            &[
+                "Print Assumptions every_intermediate_fits_int64",
+                "Print Assumptions the_reciprocal_multiply_is_division_by_six",
+                "Print Assumptions the_series_divides_by_six",
+                "Print Assumptions the_reciprocal_multiply_fails_past_2_31",
+                "Print Assumptions the_largest_values",
+                "Print Assumptions the_steps_are_the_model",
+                "Print Assumptions the_product_reaches_2_60",
+                "Print Assumptions the_rounding_constant_reaches_2_61",
+                "Print Assumptions every_product_is_past_the_float64_exact_range",
+                "Print Assumptions float64_would_round_the_product",
+            ][..],
+        ),
+        (
+            // `scaled_round`'s float32 formula is the exact round-half-even,
+            // for any monotone rounding that keeps float32s. The refutations:
+            // one factor alone, a rounding that is not monotone.
+            "ExactScaledRound.v",
+            &[
+                "Print Assumptions the_two_factors_are_the_scale",
+                "Print Assumptions an_integer_times_a_power_of_two_is_a_float32",
+                "Print Assumptions the_float32_formula_is_the_exact_rounding",
+                "Print Assumptions one_factor_alone_loses_the_value",
+                "Print Assumptions a_rounding_that_is_not_monotone_breaks_it",
+            ][..],
+        ),
+        (
+            // The softmax kernel's float32 claims (`softmax_kernel.py`): the
+            // 2^23 rounding is round-half-even, the row sum is 2^28 .. 2^38 so
+            // no divide operand or result is subnormal, the row's q8 scale is
+            // small. The refutations: no branch, a row of 2048 keys.
+            "ExactSoftmaxKernel.v",
+            &[
+                "Print Assumptions the_magic_add_rounds_half_even",
+                "Print Assumptions without_the_branch_an_odd_integer_moves",
+                "Print Assumptions the_row_sum_is_between_2_28_and_2_38",
+                "Print Assumptions a_row_of_2048_keys_can_pass_2_38",
+                "Print Assumptions the_converted_operands_are_normal",
+                "Print Assumptions the_rounded_quotient_is_zero_or_normal",
+                "Print Assumptions the_softmax_row_scale_is_small",
+            ][..],
+        ),
+        (
+            // The RoPE table (`model.cos_sin_f32`): the guard's window, the
+            // libm's error budget, every kept entry correctly rounded. The
+            // refutation: a margin of the libm's error alone admits a tie.
+            "ExactRopeTable.v",
+            &[
+                "Print Assumptions the_float32_is_the_nearest_to_every_fraction_within_the_margin",
+                "Print Assumptions the_libm_error_moves_y_by_less_than_eleven_ulps",
+                "Print Assumptions the_rope_entry_is_correctly_rounded",
+                "Print Assumptions a_margin_of_the_libm_error_alone_admits_a_tie",
+            ][..],
+        ),
+        (
+            // The per-row quantizers' clamp: with a normal scale every rounded
+            // quotient is within -L .. L. The refutations: a subnormal scale
+            // needs the clamp, the margin is gone at L = 2^23.
+            "ExactRowClamp.v",
+            &[
+                "Print Assumptions the_quotient_stays_below_L_and_a_half",
+                "Print Assumptions the_clamp_does_nothing_when_the_scale_is_normal",
+                "Print Assumptions a_subnormal_scale_needs_the_clamp",
+                "Print Assumptions the_margin_is_gone_at_L_2_23",
+            ][..],
+        ),
+        (
+            // The V scale fold (`kv.fold_scale_into_weights`): p * sv is a
+            // float64, and the rounded weights are within 0 .. 2^28. The
+            // refutation: in float32 the bound would pass 2^28.
+            "ExactVFold.v",
+            &[
+                "Print Assumptions an_integer_times_a_power_of_two_is_a_float",
+                "Print Assumptions the_weight_product_is_exact_in_float64",
+                "Print Assumptions the_scaled_weight_is_below_2_28_and_a_half",
+                "Print Assumptions the_fold_stays_within_2_28",
+                "Print Assumptions in_float32_the_fold_could_pass_2_28",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

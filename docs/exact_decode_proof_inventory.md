@@ -895,9 +895,9 @@ tie, two terms of 2^62 wrap int64, a scale bound of 512 could leave float64.
 - On the training path: every product (`Ops.matmul`), every fixed-point sum
   (`Ops.sum`, `scatter_rows`) and every quantizer's rounding, as integer
   arithmetic. Not modelled: that the floats' bit fields are what the
-  rounding is given, the float32 formula of `scaled_round` (tested against
-  the integer one), the elementwise IEEE operations, the int8 GEMM itself
-  (`Int8GemmExact.v`).
+  rounding is given, the elementwise IEEE operations, the int8 GEMM itself
+  (`Int8GemmExact.v`). The float32 formula of `scaled_round` is this
+  rounding by `ExactScaledRound.v`.
 - Theorems and corollaries: 24. Quoted below: 5.
 
 ```coq
@@ -1207,6 +1207,231 @@ Theorem k_bytes_rebuild_the_value : forall r, -32768 <= r <= 32767 ->
 Theorem v_scale_bytes_rebuild_the_bits : forall b, -2 ^ 31 <= b <= 2 ^ 31 - 1 ->
   rebuild8 (signed_byte b) (signed_byte (Z.shiftr b 8)) (signed_byte (Z.shiftr b 16))
            (signed_byte (Z.shiftr b 24)) = b.
+```
+
+### `proofs/ExactNormKernel.v`
+
+The RMS norm kernel (`python/y_lang/exact/norm_kernel.py`) divides once
+per row, multiplies per element, rounds the product q to float32 by adding
+2^28 to its bits, and sends an element to the true divide when its bits fail
+a guard. The guard passes only 0 and q's in float32's normal binades whose
+dropped bits are more than 3 from a tie; there the kernel's float32 is
+strictly the nearest to every value within 4 ulp64(q) of q. With each
+float64 operation within 2^-53 of its exact result, q is within 3.0001 ulps
+of the divide, so both round to the kernel's float32. Also: a normal x
+widened by its bits keeps its value, and the row's scale `(e + 691) << 52`
+is a finite 2^(e - 332). Refutations: with the dropped bits 3 from a tie
+the divide can sit on the tie and round the other way, so the guard's 3
+cannot be 2; a subnormal x does not widen by its bits.
+
+- On the decode and training paths: every CUDA `ExactRMSNorm` row. Not
+  modelled: that each float64 operation rounds to nearest (IEEE, |d| <=
+  2^-53 in float64's normal range), the sign bit's plumbing, and Triton's
+  bitcasts (tested against the divide on inputs built to sit on midpoints).
+- Theorems and lemmas: 25. Quoted below: 2.
+
+```coq
+Theorem the_multiply_rounds_as_the_divide : forall E N P (t d1 d2 d3 : Q),
+  897 <= E <= 1149 -> 0 <= N < 2 ^ 52 -> 3 < dist (FO.bits 52 E N) ->
+  (0 < t)%Q -> (- u64 <= d1 <= u64)%Q -> (- u64 <= d2 <= u64)%Q -> (- u64 <= d3 <= u64)%Q ->
+  (inject_Z (v64 E N) == t * (1 + d1) * (1 + d2))%Q ->
+  (inject_Z P == t * (1 + d3))%Q ->
+  forall e' m', FO.finite 23 e' m' -> FO.bits 23 e' m' <> f32 (FO.bits 52 E N) ->
+  Z.abs (v64 E N - G E N) < Z.abs (v64 E N - v32 e' m') /\
+  Z.abs (P - G E N) < Z.abs (P - v32 e' m').
+```
+
+```coq
+Theorem the_guard_admits_only_zero_and_the_normal_binades : forall b, 0 <= b < 2 ^ 63 ->
+  unsafe b = false ->
+  b = 0 \/ (897 <= b / 2 ^ 52 <= 1149 /\ 0 <= b mod 2 ^ 52 < 2 ^ 52 /\
+            b = FO.bits 52 (b / 2 ^ 52) (b mod 2 ^ 52) /\ 3 < dist b).
+```
+
+### `proofs/ExactExp2Int64.v`
+
+The integer exp2 (`attention.exp2_neg_q16_16`) runs on torch int64, which
+wraps past 2^63, while `ExactDecodeWidths.v` models it on unbounded
+integers. For every int64 argument each value the code forms (the clamps,
+each product before its shift, the series' partial sums, the rounding
+constant and its sum) is in 0 .. 2^63 - 1, so the int64 code computes the
+model's integers; `base * corr` is at most 2^60 and the rounded sum below
+2^62. `(y * RECIP6_Q32) >> 32` is y / 6 for every y below 2^30 (the Rust
+copy's comment claims it below 2^12), so the series' third term is y3 / 6;
+at y = 2147483651 it gives one more. Refutations: the product reaches 2^60 (t = 0) and the rounding
+constant 2^61 (n >= 60), so the docstring's "below 2^60" and the comment's
+"no intermediate reaches 2^61" were both wrong; every product is past
+float64's exact range 2^53, and at t = 1025 it is no float64, so the
+docstring's "both types represent it exactly" was wrong too (both texts
+are corrected with this file).
+
+- On the decode and training paths: every attention weight. Not
+  modelled: torch's `>>` as an arithmetic shift and `clamp` as min and max,
+  and the table's values (pinned by the whole domain's digest).
+- Theorems and lemmas: 23. Quoted below: 2.
+
+```coq
+  Theorem every_intermediate_fits_int64 : Forall int64_ok (steps t0).
+```
+
+```coq
+Theorem every_product_is_past_the_float64_exact_range : forall t0, -2 ^ 63 <= t0 < 2 ^ 63 ->
+  2 ^ 53 < base t0 * corr t0.
+```
+
+### `proofs/ExactScaledRound.v`
+
+Every float32 quantizer of exact training rounds x * 2^ns by
+`scaled_round`'s float32 formula: a = clamp(ns, -126, 127), b = clamp(ns -
+a, -126, 127), `round((x * 2^a) * 2^b)`, each product rounded to float32
+(2^ns itself is no float32 past 2^127). For every finite float32 x >= 0,
+-126 <= ns <= 254 and x * 2^ns below 2^62, the formula is the
+round-half-even of x * 2^ns, for every rounding that keeps a float32
+unchanged and is monotone (IEEE round to nearest is one): a + b = ns, the
+products are exact when the first one is at least 2^-126 (any K * 2^j with
+K below 2^24 is a float32), and otherwise both sides are 0. Refutations:
+without b, at ns = 140 the product rounds to 0 where the value is 1024; a
+rounding that keeps every float32 but is not monotone breaks it.
+
+- On the training path: every float32 quantizer (`q8` and the scaled
+  sums). Not modelled: torch's float32 `*` as IEEE round to nearest and
+  `round` as half to even (documented; tested against `scaled_round_int`),
+  the sign.
+- Theorems and lemmas: 9. Quoted below: 2.
+
+```coq
+  Theorem the_float32_formula_is_the_exact_rounding : forall E M ns,
+    0 <= E <= 254 -> 0 <= M < 2 ^ 23 -> -126 <= ns <= 254 ->
+    FO.value 23 E M * 2 ^ (126 + ns) < 2 ^ 62 * 2 ^ 275 ->
+    formula E M ns = TA.shift_round (FO.value 23 E M * 2 ^ (126 + ns)) 275.
+```
+
+```coq
+Theorem one_factor_alone_loses_the_value :
+  TA.shift_round (FO.value 23 0 (2 ^ 19) * 2 ^ (126 + 127)) 275 = 0 /\
+  TA.shift_round (FO.value 23 0 (2 ^ 19) * 2 ^ (126 + 140)) 275 = 1024.
+```
+
+### `proofs/ExactSoftmaxKernel.v`
+
+Exact training's softmax kernel (`python/y_lang/exact/softmax_kernel.py`)
+rests on three float32 claims. `_rne_nonneg`'s `(x + 2^23) - 2^23` below
+2^23, and x itself above, is the round-half-even of every finite float32
+x >= 0 (for a rounding that keeps float32s and rounds to the nearest
+integer, ties to even, in [2^23, 2^24)). A row's weights are each in
+0 .. 2^28 and sum to 2^28 .. 2^38 (its maximum key gives 2^28, at most 1024
+keys), so after any monotone conversion each divide operand is 0 or at
+least 1, the divisor at least 2^28, and the rounded quotient 0 or in
+2^-38 .. 1: `div_rn`'s subnormal flush has nothing to act on. The row
+maximum of P is in 2^-10 .. 1, so q8's scale is s = -16 .. -6, the range
+flag cannot fire and `scaled_round`'s factors are a = -s, b = 0.
+Refutations: without the branch, x = 2^23 + 1 rounds to 2^23; a row of
+2048 keys can sum to 2^39.
+
+- On the training path: every attention softmax on a GPU with Triton.
+  Not modelled: IEEE's rounding itself (float32 `+`, `-`, the conversions
+  and `div_rn` round to nearest, ties to even), that the row's maximum key
+  gets t = 0, and a negative x's sign (the callers clamp it to 0).
+- Theorems and lemmas: 15. Quoted below: 2.
+
+```coq
+  Theorem the_magic_add_rounds_half_even : forall E M, 0 <= E <= 254 -> 0 <= M < 2 ^ 23 ->
+    rne_nonneg (FO.value 23 E M) = TA.shift_round (FO.value 23 E M) 149 * 2 ^ 149.
+```
+
+```coq
+Theorem the_row_sum_is_between_2_28_and_2_38 : forall ts,
+  Forall (fun t => 0 <= t) ts -> In 0 ts -> (length ts <= 1024)%nat ->
+  let ps := map DW.exp2_neg_q16_16 ts in
+  Forall (fun p => 0 <= p <= 2 ^ 28) ps /\ 2 ^ 28 <= zsum ps <= 2 ^ 38.
+```
+
+### `proofs/ExactRopeTable.v`
+
+The RoPE table (`model.cos_sin_f32`) keeps y = fn(arg) * scale, computed
+in float64 with the host's cos or sin, rounded to float32, and sends to
+mpmath every entry whose y has its low 29 fraction bits within
+`ROPE_MARGIN` = 10 of 2^28, is below 2^-126 or is not finite. A libm within
+`ROPE_LIBM_ULPS` = 4 ulps and the multiply's rounding leave y less than 11
+of its ulps from the true cos(arg) * scale (just above 9), and an entry the
+guard passes has its float32 strictly the nearest to every value that
+close: each entry is the correctly rounded float32, with no tie. The
+window theorem reuses `ExactNormKernel.v`'s neighbours and holds for every
+fraction. Refutation: with the distance 4, a libm error within the bound
+can put the true value on the midpoint, so a margin of the libm's error
+alone would not do.
+
+- On the decode and training paths: every RoPE table entry. Not
+  modelled: that the host's libm meets its bound (libms claim 1 ulp), the
+  float64 multiply and the rounding to float32 as IEEE's, mpmath's answers
+  for the entries it decides, and scale below 2^126.
+- Theorems and lemmas: 6. Quoted below: 1.
+
+```coq
+Theorem the_rope_entry_is_correctly_rounded : forall E N (c cs s d : Q),
+  897 <= E <= 1149 -> 0 <= N < 2 ^ 52 -> rope_margin < NK.dist (FO.bits 52 E N) ->
+  (0 < cs)%Q -> (0 < s)%Q -> (- u64 <= d <= u64)%Q ->
+  (Qabs (c - cs) <= 4 * (2 * u64) * cs)%Q ->
+  (inject_Z (NK.v64 E N) == c * s * (1 + d))%Q ->
+  forall e' m', FO.finite 23 e' m' -> FO.bits 23 e' m' <> NK.f32 (FO.bits 52 E N) ->
+  (Qabs (cs * s - inject_Z (NK.G E N)) < Qabs (cs * s - inject_Z (NK.v32 e' m')))%Q.
+```
+
+### `proofs/ExactRowClamp.v`
+
+Decode's per-row quantizers (`attention.quantize_queries`,
+`kv.quantize_rows`, `model._q_per_row`, the W8A8 kernel's `_quant_rows`)
+compute s = amax / L and round(x / s), clamped to -L .. L, with IEEE
+divides. For a row whose scale is normal and L <= 2^21, every rounded
+quotient stays below L + 1/2, so every integer within 1/2 of it is in
+-L .. L: the clamp never changes a value. Refutations: with amax = 190 *
+2^-149 and L = 127 the scale rounds to the smallest subnormal and x / s is
+190, so the clamp is load-bearing exactly for a subnormal scale (the case
+the W8A8 kernel's comment records); at L = 2^23 the margin is gone.
+
+- On the decode path: every quantized query, K and V row and
+  activation row. Not modelled: IEEE's division (the standard model, in
+  the normal range), `round` and `rint` as round to nearest, the zero
+  scale's replacement by 1, and the max (`exponent`'s order is
+  `ExactFloatOrder.v`'s; this max is a float max).
+- Theorems and lemmas: 6. Quoted below: 2.
+
+```coq
+  Theorem the_clamp_does_nothing_when_the_scale_is_normal : forall k : Z,
+    Qabs (q - inject_Z k) <= 1 # 2 -> (- L <= k <= L)%Z.
+```
+
+```coq
+Theorem a_subnormal_scale_needs_the_clamp :
+  (2 * Z.abs (190 - 127 * 1) < 127 /\ 1 < 2 ^ 23 /\ 190 / 1 > 127)%Z.
+```
+
+### `proofs/ExactVFold.v`
+
+`kv.fold_scale_into_weights` turns a query's Q0.28 weights p and the
+keys' float32 V scales sv into integer weights W = round(w * 2^28 / wmax),
+w = p * sv in float64, clamped to 0 .. 2^28. Any K * 2^j with K below
+2^(p + 1) is a float of mantissa width p, so p * sv (29 bits times 24) is
+itself a float64: w and its maximum are exact. With the two float64
+roundings, w * c stays below 2^28 + 1/2, so every rounding of it is in
+0 .. 2^28 and the clamp never changes a value. Refutation: with float32's
+u the same bound reaches 2^28 + 32, so the fold needs float64.
+
+- On the decode path: every attention row's V weights. Not modelled:
+  IEEE's float64 multiply and divide (the standard model, in the normal
+  range), `round` as round to nearest.
+- Theorems and lemmas: 5. Quoted below: 2.
+
+```coq
+Theorem the_weight_product_is_exact_in_float64 : forall P e m,
+  0 <= P <= 2 ^ 28 -> 0 <= e <= 254 -> 0 <= m < 2 ^ 23 ->
+  exists E N, 0 <= E <= 2046 /\ 0 <= N < 2 ^ 52 /\
+    FO.value 52 E N = P * (FO.value 23 e m * 2 ^ 925).
+```
+
+```coq
+  Theorem the_fold_stays_within_2_28 : forall W : Z,
+    Qabs (y - inject_Z W) <= 1 # 2 -> (0 <= W <= 2 ^ 28)%Z.
 ```
 
 ## Still open

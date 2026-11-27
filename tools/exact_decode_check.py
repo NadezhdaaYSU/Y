@@ -151,7 +151,7 @@ def divisor(value, like):
 
 
 def quant_ref(x, lv):
-    """`_q_per_row` / `quantize_rows` / `q8_per_tensor` on one row x (float32 [n]).
+    """`_q_per_row` / `quantize_rows` / `quantize_queries` on one row x (float32 [n]).
     Returns (python int list, float32 0-d scale)."""
     absbits = f32_bits(x.abs())
     amax = from_bits_f32(max(absbits))                   # the max, by its integer key
