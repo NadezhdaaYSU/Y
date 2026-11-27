@@ -934,6 +934,58 @@ Theorem fixed_point_sums_are_exact : forall c terms t,
   ER.teval (ER.cadd ER.I64) terms t = ER.zsum terms.
 ```
 
+## Added for exact training's bytes (2026-11-27)
+
+### `proofs/ExactTrainWidths.v`
+
+The machine types of `python/y_lang/exact/train_lm.py`'s quantized values,
+narrowed on 2026-11-27 (`q_dtype`: int8 to 8 bits, int16 to 15, int32
+above). A clamped value fits its type; every value the digit split forms
+stays in int16 up to 15 bits, joined to `q_dtype`'s cut; every digit fits
+the int8 stack. Refutations: at 16 bits the split leaves int16, and int8
+cannot hold 9 bits.
+
+- On the training path: every `q8` and `digits` call and `exact_product`'s
+  digit stacks. Not modelled: that torch's int8 and int16 arithmetic is two's
+  complement with an arithmetic shift (tested on the CPU and the GPU).
+- Theorems and corollaries: 11. Quoted below: 2.
+
+```coq
+Theorem q8_fits_its_type : forall bits q,
+  1 <= bits <= 32 -> - TA.top bits <= q <= TA.top bits -> fits (q_width bits) q.
+```
+
+```coq
+Theorem the_split_is_safe_wherever_q_dtype_gives_int16 : forall bits q n,
+  9 <= bits -> q_width bits = 16 -> - TA.top bits <= q <= TA.top bits -> split_in_int16 n q.
+```
+
+### `proofs/ExactRowCopy.v`
+
+A training piece of one row runs as two, the row and a copy no target reads
+(`lora.SFT._accumulate`, 2026-11-26). Row-wise results, maxima over the rows
+with a copy of a row, the values quantized on those maxima and integer sums
+with a zero gradient row are the row alone's. Refutations: a scale that
+depends on the row count (`exact_sum`'s) changes, and a row that is not a
+copy can move the maximum.
+
+- On the training path: the three kinds of operation a piece is made of.
+  Not modelled: that no length-dependent sum runs over a piece's rows (a fact
+  about the code, checked by the tiny-model test against the CPU and by the
+  T4 run's step 5).
+- Theorems and lemmas: 10. Quoted below: 2.
+
+```coq
+Theorem a_copy_keeps_the_quantized : forall (q : Z -> Z -> Z) xs c, In c xs ->
+  firstn (length xs) (map (fun x => q x (maxl (xs ++ [c]))) (xs ++ [c]))
+  = map (fun x => q x (maxl xs)) xs.
+```
+
+```coq
+Theorem a_zero_row_keeps_the_sum : forall xs gs c, length xs = length gs ->
+  dot (xs ++ [c]) (gs ++ [0]) = dot xs gs.
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.

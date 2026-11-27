@@ -1,0 +1,14 @@
+sampled us    n  us/call  MB/call   GB/s  DRAM%   SM%  kernel
+      3001   15    200.1   121.65      0   92.8  21.8  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cl
+      1326   64     20.7     6.37      0   47.0  27.2  _qmm_kernel
+      1288    5    257.5   153.78      0   91.1  10.1  triton_red_fused___rshift____to_copy_abs_add_amax_bitwise_and_bitwise_left_shift_bitwise_o
+      1237   15     82.5    36.34      0   67.3  64.7  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cl
+      1141    1   1141.2   700.68      0   93.7  29.4  triton_poi_fused___lshift_____rshift____to_copy_add_cat_clamp_round_sub_1
+      1134    4    283.6     8.89      0    4.8  28.6  exact_pv
+       877    1    876.8   513.78      0   89.4   7.8  triton_red_fused___rshift____to_copy_add_amax_bitwise_and_bitwise_left_shift_bitwise_or_cl
+       779    5    155.7    95.95      0   94.0  33.9  triton_poi_fused__to_copy_arange_div_eq_expand_masked_fill_mul_scalar_tensor_scatter_sub_u
+       761    4    190.4    18.35      0   14.7  80.4  triton_red_fused___lshift_____rshift____to_copy_add_amax_bitwise_and_clamp_clone_div_eq_ex
+       749    5    149.7    84.25      0   85.9  34.6  triton_poi_fused___lshift_____rshift____to_copy_add_bitwise_and_clamp_expand_ge_index_mask
+       620    1    619.7   385.68      0   95.0  10.9  triton_poi_fused__to_copy_clone_constant_pad_nd_int8_mm_slice_2
+       607    5    121.4    74.26      0   93.4   9.7  triton_red_fused_expand_masked_fill_sum_zeros_3
+all: 19.40 ms over 400 launches; time-weighted DRAM 66.5%, SM 33.1%

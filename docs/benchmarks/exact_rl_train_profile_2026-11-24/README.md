@@ -263,8 +263,53 @@ template writes the day's date into each prompt (see
 `../exact_llama_2026-11-24/README.md`). So its tokens differed from step 1,
 and its counts (16 and 28 recompiles) are not a paired comparison.
 
+## The glue is bytes, and narrower types, 2026-11-27
+
+Measured on the RTX 4070 Ti SUPER: the fast2 dump's training, the
+whole-layer path, step 6 profiled, each run with cold caches
+(`rtx4070tis/bytes_2026-11-27/`). Every run gave the record's p(target) at
+every step.
+
+- **What the time is.** Of 0.806 s of GPU time a step, about 60% is the
+  fused glue around the products (quantizers, digits, the MLP's SiLU and
+  sums), about 25% the products. Nsight Compute on 400 of the glue's
+  launches (`ncu_glue.csv`, `ncu_glue_summary.txt`): the large glue
+  kernels run at 85 to 95% of the card's DRAM bandwidth and 10 to 35% of
+  its compute. So they are slow because of the bytes they move, not their
+  arithmetic (the quantizer has been float32 since 2026-11-21). The
+  exceptions are attention's float64 softmax kernels (80% of compute, 15%
+  of bandwidth) and `exact_pv` (5% and 29%). The MLP's forward glue reads
+  and writes about 40 bytes an element: int32 products, float32 copies of
+  g, a = silu(g), yu and m = a * yu kept for the backward, and the
+  quantized m as int32 for values that fit a byte.
+- **Narrower types.** `q8` returns the narrowest integer type for its width
+  (`q_dtype`: int8 to 8 bits, int16 to 15, int32 above), and
+  `exact_product` stacks its digits as int8. Every reader converts the
+  values anyway, so only the bytes change. `proofs/ExactTrainWidths.v`
+  proves that the machine types hold every value the code forms (at 16
+  bits the digit split would leave int16, so `q_dtype` gives int32 there).
+
+  | run | GPU time a step | `_qmm_kernel` |
+  |---|---|---|
+  | before | 0.806 s | 143.9 ms |
+  | `q8` narrow | 0.758 s | 109.5 ms |
+  | and int8 digit stacks | 0.754 s | 109.0 ms |
+
+  6.5% less GPU time, and the step is GPU-bound. Run to run, a kernel's
+  total moves by about 2% (`_qmm_kernel` 143.9 against 148.7 ms in two runs
+  of the same code).
+- **Recomputing instead of saving lost.** Making a and m again in the
+  backward from g and yu, rather than saving them, gave 0.800 s (both) and
+  0.817 s (a only): the backward kernel that forms dm * a and quantizes it
+  is a two-pass reduction, so it ran the table SiLU twice per element and
+  took 62 to 65 ms where it took 27. Not kept.
+
 ## Not done
 
+- The MLP's glue in the gate and up products' epilogue (the products, the
+  adapters' rank-r terms, the table SiLU and a * yu in one kernel, with the
+  row maxima for the down projection's quantizers): about 58 bytes an
+  element moved now against about 22. Being built as a probe first.
 - `_layer_backward` still compiles once for each power-of-two length range
   a run reaches (the exact sums' widths are constants of each version).
 - The adapters' backward still launches 44 kernels a call: each of its five

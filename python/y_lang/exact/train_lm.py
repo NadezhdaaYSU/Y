@@ -250,14 +250,25 @@ def scaled_round(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tensor:
     return y.to(torch.int64 if wide else torch.int32)
 
 
+def q_dtype(bits: int) -> torch.dtype:
+    """The integer type `q8` returns for `bits`: the narrowest that holds
+    |q| <= 2^(bits-1) - 1 and `digits`' r + 64 of it, int8 to 8 bits, int16
+    to 15, else int32. Every reader converts it (to int8 digits, int32 in
+    `qmm`, a float for BLAS), so the type is storage only: 1 or 2 bytes an
+    element where int32 was 4, written by the quantizer and read by the
+    product (2026-11-27: these kernels run at 85-95% of the card's memory
+    bandwidth, so the bytes are their time)."""
+    return torch.int8 if bits <= 8 else torch.int16 if bits <= 15 else torch.int32
+
+
 def q8(x: torch.Tensor, dim: int = -1, bits: int = 8, bad=None):
-    """Integers q (int32) and exponents s with x ~ q * 2^s, one s per slice
-    along `dim` (the summed dimension), |q| <= 2^(bits-1) - 1 (int8: 127):
-    q = round-half-even(x * 2^-s), clamped; float64 or float32 x. A slice
-    whose scale is outside 2^-511 .. 2^511 is refused, so the scale of a
-    product of two quantized operands, 2^(sa + sb), is always a normal
-    float64 and needs no check of its own (a slice that small or large is
-    not a training value)."""
+    """Integers q (`q_dtype(bits)`) and exponents s with x ~ q * 2^s, one s
+    per slice along `dim` (the summed dimension), |q| <= 2^(bits-1) - 1
+    (int8: 127): q = round-half-even(x * 2^-s), clamped; float64 or float32
+    x. A slice whose scale is outside 2^-511 .. 2^511 is refused, so the
+    scale of a product of two quantized operands, 2^(sa + sb), is always a
+    normal float64 and needs no check of its own (a slice that small or
+    large is not a training value)."""
     top = (1 << (bits - 1)) - 1
     s = exponent(x, dim, bad) - (bits - 1)
     refuse(bad, (s < -Q_SCALE_RANGE) | (s > Q_SCALE_RANGE),
@@ -265,8 +276,8 @@ def q8(x: torch.Tensor, dim: int = -1, bits: int = 8, bad=None):
     if x.dtype == torch.float32 and bits <= 16:
         # Every element's shift is at least 24 - bits >= 8 (its exponent is
         # at most the max's), so the int32 path never shifts left.
-        return scaled_round(x, s, wide=False).clamp(-top, top), s
-    return scaled_round(x, s).clamp(-top, top).to(torch.int32), s
+        return scaled_round(x, s, wide=False).clamp(-top, top).to(q_dtype(bits)), s
+    return scaled_round(x, s).clamp(-top, top).to(q_dtype(bits)), s
 
 
 def isqrt(n: torch.Tensor, bad=None) -> torch.Tensor:
@@ -427,8 +438,12 @@ def exact_product(a, b, bits_a, bits_b, mm, batched=False, int8=False, act=None,
     # digits stacked along the rows of each operand, block (i, j) of the
     # result the product of digit i of a and digit j of b.
     M, N = qa.shape[-2], qb.shape[-2]
-    A = da[0] if len(da) == 1 else torch.cat(da, dim=-2)
-    B = db[0] if len(db) == 1 else torch.cat(db, dim=-2)
+    # Several digits are each in [-64, 63], stacked as int8: every product
+    # below reads int8 (or converts to a float), and the stack was the
+    # quantizer's width, 2 to 4 bytes an element (the LM head's backward:
+    # 944 x 151,936 twice, 2026-11-27).
+    A = da[0] if len(da) == 1 else torch.cat([d.to(torch.int8) for d in da], dim=-2)
+    B = db[0] if len(db) == 1 else torch.cat([d.to(torch.int8) for d in db], dim=-2)
     if batched:
         if int8:
             P = _exact_int8_bmm(A, B)

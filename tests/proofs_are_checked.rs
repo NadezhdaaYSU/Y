@@ -1109,6 +1109,39 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // The quantizer's storage types (`train_lm.q_dtype`, 2026-11-27):
+            // a clamped value fits the type its width gets; every value the
+            // digit split forms stays in int16 up to 15 bits, joined to
+            // `q_dtype`'s cut; every digit fits int8. The refutations: at 16
+            // bits the split leaves int16, and int8 cannot hold 9 bits.
+            "ExactTrainWidths.v",
+            &[
+                "Print Assumptions q8_fits_its_type",
+                "Print Assumptions int16_holds_every_step",
+                "Print Assumptions the_split_is_safe_wherever_q_dtype_gives_int16",
+                "Print Assumptions the_stacked_digits_fit_int8",
+                "Print Assumptions int16_wraps_at_16_bits",
+                "Print Assumptions int8_cannot_hold_9_bits",
+            ][..],
+        ),
+        (
+            // A piece of one row runs as two (`lora.SFT._accumulate`,
+            // 2026-11-26): row-wise results, maxima over the rows with a copy
+            // of a row, quantized values and integer sums with a zero gradient
+            // row are the row alone's. The refutations: a scale that depends
+            // on the row count (`exact_sum`'s) changes, and a row that is not
+            // a copy can move the maximum.
+            "ExactRowCopy.v",
+            &[
+                "Print Assumptions rowwise_keeps_the_rows",
+                "Print Assumptions a_copy_keeps_the_max",
+                "Print Assumptions a_copy_keeps_the_quantized",
+                "Print Assumptions a_zero_row_keeps_the_sum",
+                "Print Assumptions a_length_scale_does_not_survive",
+                "Print Assumptions a_different_copy_moves_the_max",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

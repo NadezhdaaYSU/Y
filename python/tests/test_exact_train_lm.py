@@ -187,7 +187,8 @@ class Pieces(unittest.TestCase):
             for scale in (1.0, 2.0 ** -7, 2.0 ** -3):
                 xs = x * scale
                 q, s = L.q8(xs, bits=bits)
-                self.assertEqual(q.dtype, torch.int32)
+                # The narrowest type for the width (`q_dtype`): storage only.
+                self.assertEqual(q.dtype, {8: torch.int8, 12: torch.int16, 16: torch.int32}[bits])
                 top = (1 << (bits - 1)) - 1
                 ref = torch.round(xs.double() * L.pow2(-s)).clamp(-top, top)
                 self.assertTrue(torch.equal(q.double(), ref), (bits, scale))
