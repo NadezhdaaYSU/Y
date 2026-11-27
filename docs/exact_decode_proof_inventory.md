@@ -1532,6 +1532,92 @@ Theorem isqrt_is_the_floor_square_root : forall n x0, 0 <= n < 2 ^ 62 -> 0 <= x0
     s * s <= n < (s + 1) * (s + 1) /\ 2 ^ 30 <= s < 2 ^ 31.
 ```
 
+### `proofs/ExactSiluTable.v`
+
+`ExactSiLU.sigmoid` interpolates a host-built table: s = t[i] +
+(d[i] * f) >> 12 with d[i] = t[i+1] - t[i] and a 12-bit offset f. For a
+non-decreasing step, t[i] <= s <= t[i+1], so with the table in 0 .. 2^24 s
+is too, and s * 2^-24 is a float32: the conversion and the scale are exact,
+as the docstring says. The quantized q = round(x * 2^20) of a float32
+|x| <= 16 is the round-half-even of x * 2^20 (`ExactScaledRound.v` at
+ns = 20). `ExactMlpKernel.v` has the index bound and int32. Refutation:
+without the 12-bit mask an offset of 2^13 overshoots the next knot.
+
+- On the decode and training paths: every SiLU. Not modelled: the
+  table's values (0 .. 2^24, non-decreasing; checked by
+  `exact_selftest.check_silu_table` and the tests), the final multiply.
+- Theorems and lemmas: 4. Quoted below: 1.
+
+```coq
+Theorem the_interpolation_is_between_the_knots : forall t d f,
+  0 <= d -> 0 <= f < 2 ^ 12 ->
+  t <= interp t d f <= t + d /\ (0 <= t -> t + d <= 2 ^ 24 -> 0 <= interp t d f <= 2 ^ 24).
+```
+
+### `proofs/ExactScaledRoundF64.v`
+
+On a GPU with fast float64 (`FAST_FLOAT64`), `scaled_round` of a
+float64 x computes `round((x * 2^a) * 2^b)` in float64, a = clamp(ns,
+-1022, 1023), b = clamp(ns - a, -1022, 1023). For every finite float64
+x >= 0, -1022 <= ns <= 2046 and x * 2^ns below 2^62, it is the
+round-half-even of x * 2^ns, for any monotone rounding that keeps float64s:
+`ExactScaledRound.v`'s argument at float64's widths. Refutation: without b,
+at det_sqrt's ns = 1084, x = 2^-1072 rounds to 0 where the value is 2^12.
+
+- On the training path on P100, V100, A100, H100 and B200: every
+  float64 quantizer and det_sqrt's scaling. Not modelled: the GPU's
+  float64 `*` and `round` as IEEE's (tested against `scaled_round_int`
+  under `FORCE_F64_FORMULA`), the sign.
+- Theorems and lemmas: 8. Quoted below: 1.
+
+```coq
+  Theorem the_float64_formula_is_the_exact_rounding : forall E M ns,
+    0 <= E <= 2046 -> 0 <= M < 2 ^ 52 -> -1022 <= ns <= 2046 ->
+    FO.value 52 E M * 2 ^ (1022 + ns) < 2 ^ 62 * 2 ^ 2096 ->
+    formula E M ns = TA.shift_round (FO.value 52 E M * 2 ^ (1022 + ns)) 2096.
+```
+
+### `proofs/ExactPow2Bits.v`
+
+`pow2(k)` builds 2^k as the float64 bits `(k + 1023) << 52` and
+`_pow2_f32(k)` as the float32 bits `(k + 127) << 23`. For -1022 <= k <= 1023
+(-126 <= k <= 127) these are the normal float with field k + 1023 (k + 127)
+and mantissa 0, whose value is 2^k: the exact factors the scaled-rounding
+proofs take. Refutation: one past either clamp, the bits are +0 or
+infinity.
+
+- On the training path: every factor of `scaled_round` and `det_sqrt`.
+  Not modelled: the bit view as IEEE storage.
+- Theorems and lemmas: 3. Quoted below: 1.
+
+```coq
+Theorem pow2_is_two_to_the_k : forall k, -1022 <= k <= 1023 ->
+  Z.shiftl (k + 1023) 52 = FO.bits 52 (k + 1023) 0 /\ 1 <= k + 1023 <= 2046 /\
+  FO.value 52 (k + 1023) 0 = 2 ^ (k + 1074).
+```
+
+### `proofs/ExactInt8BmmBound.v`
+
+`int8_bmm` refuses K past `MAX_K = (2^31 - 1) // (128 * 128)` = 131,071.
+Any int8 product is at most 2^14 in magnitude (-128 * -128), so within
+MAX_K every schedule of the K products in ExactReduce's int32 carrier gives
+the integer dot product, whatever order the tensor cores add in. 131,071 is
+the largest such K. Refutations: at 131,072 the products of -128 sum to
+2^31 and int32's last addition wraps to -2^31; a bound from 127 * 127
+(133,144) would admit that K.
+
+- On the training path: every attention product of `int8_bmm`. Not
+  modelled: Triton's `tl.dot` as a schedule of exact int8 products (tested
+  against the float32 product).
+- Theorems and lemmas: 6. Quoted below: 1.
+
+```coq
+Theorem every_order_gives_the_int32_sum : forall a b t,
+  Forall int8 a -> Forall int8 b -> length a = length b -> Z.of_nat (length a) <= MAX_K ->
+  ER.covers t (length (products a b)) ->
+  ER.teval (ER.cadd ER.I32) (products a b) t = ER.zsum (products a b).
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.

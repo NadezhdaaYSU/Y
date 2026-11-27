@@ -214,7 +214,7 @@ def _scaled_round_f64(x: torch.Tensor, s: torch.Tensor, wide=True) -> torch.Tens
     integer one, for the reason the float32 path is (each factor a normal
     power of two; b in [0, 61] for every s the callers make: q8 |s| <= 511,
     sums -s >= -1022, det_sqrt -s <= 1084; an underflow loses bits only of a
-    value whose round is 0)."""
+    value whose round is 0). Proved in proofs/ExactScaledRoundF64.v."""
     ns = -s
     a = torch.clamp(ns, -1022, 1023)
     b = torch.clamp(ns - a, -1022, 1023)

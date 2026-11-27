@@ -1427,6 +1427,52 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // The SiLU table's interpolation: between the knots, a float32
+            // after the 2^-24 scale, q the exact rounding of x * 2^20. The
+            // refutation: without the mask the offset overshoots.
+            "ExactSiluTable.v",
+            &[
+                "Print Assumptions the_interpolation_is_between_the_knots",
+                "Print Assumptions the_interpolated_sigmoid_is_a_float32",
+                "Print Assumptions the_quantized_x_is_the_exact_rounding",
+                "Print Assumptions without_the_mask_the_offset_overshoots",
+            ][..],
+        ),
+        (
+            // `_scaled_round_f64`: the float64 two-factor formula is the exact
+            // round-half-even. The refutation: one factor alone.
+            "ExactScaledRoundF64.v",
+            &[
+                "Print Assumptions the_two_factors_are_the_scale",
+                "Print Assumptions rep64",
+                "Print Assumptions the_float64_formula_is_the_exact_rounding",
+                "Print Assumptions one_factor_alone_loses_the_value",
+            ][..],
+        ),
+        (
+            // The power-of-two factors from their bits, float64 and float32.
+            // The refutation: past the clamps the bits are 0 or infinity.
+            "ExactPow2Bits.v",
+            &[
+                "Print Assumptions pow2_is_two_to_the_k",
+                "Print Assumptions pow2_f32_is_two_to_the_k",
+                "Print Assumptions past_the_clamps_the_bits_are_not_the_power",
+            ][..],
+        ),
+        (
+            // `int8_bmm`'s K bound: every int32 schedule exact within MAX_K,
+            // the largest safe K. The refutations: one more term wraps, the
+            // 127 * 127 bound would admit it.
+            "ExactInt8BmmBound.v",
+            &[
+                "Print Assumptions an_int8_product_is_at_most_2_14",
+                "Print Assumptions max_k_is_the_largest_safe_k",
+                "Print Assumptions every_order_gives_the_int32_sum",
+                "Print Assumptions one_more_term_wraps",
+                "Print Assumptions the_127_bound_would_admit_a_wrap",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.
@@ -1734,11 +1780,21 @@ fn only_the_capstone_states_a_global_negative() {
         "only {} proof files were scanned; the sweep is not looking where it thinks",
         files.len()
     );
+    // The parse must find the graph: proofs that another proof `Require`s. A
+    // count, not a share of the files: every standalone proof added (one that
+    // nothing else needs) is a capstone by this rule, and at 29 of 57 the old
+    // share check failed with the parse intact (2026-11-27, 28 required).
+    let required_files = files.iter().filter(|(n, _)| required.contains(n)).count();
     assert!(
-        capstones.len() < files.len() / 2,
-        "{} of {} proofs came out as capstones - the `Require` scan is not parsing \
-         the dependency graph, so nearly every file would be exempt",
-        capstones.len(),
+        required_files >= 20,
+        "only {} of {} proofs are `Require`d by another - the `Require` scan is not \
+         parsing the dependency graph, so nearly every file would be exempt",
+        required_files,
+        files.len()
+    );
+    assert!(
+        capstones.len() < files.len(),
+        "every one of {} proofs came out as a capstone - the `Require` scan found no edge",
         files.len()
     );
 

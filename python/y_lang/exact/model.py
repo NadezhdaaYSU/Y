@@ -781,7 +781,8 @@ class ExactSiLU(nn.Module):
     scale are exact; the one rounding is `x * sigmoid`, an IEEE multiply with no
     add after it for an FMA to absorb. Error against float64 SiLU: <= 2e-6
     absolute, <= 7.3e-4 relative where |SiLU| > 1e-3 (bf16 rounds at 2e-3);
-    `exact_selftest.check_silu_table` holds it to that.
+    `exact_selftest.check_silu_table` holds it to that. The integer steps:
+    proofs/ExactSiluTable.v and proofs/ExactMlpKernel.v.
     """
 
     def __init__(self):
