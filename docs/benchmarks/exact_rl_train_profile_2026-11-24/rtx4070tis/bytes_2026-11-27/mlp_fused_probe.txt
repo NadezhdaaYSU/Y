@@ -1,0 +1,18 @@
+NVIDIA GeForce RTX 4070 Ti SUPER, 620.73.04, 210 MHz, 51.85
+torch 2.13.0+cu130 triton 3.7.1
+W1127 19:03:25.206000 305961 torch/_inductor/utils.py:1953] [0/0] Not enough SMs to use max_autotune_gemm mode
+g: the same bits
+yu: the same bits
+a: the same bits
+m: the same bits
+row max of |m| bits: the same
+fused kernel: 262.1 us
+   tile (64, 64, 64, 4, 3): 330.8 us
+   tile (64, 128, 64, 8, 3): 245.8 us
+   tile (128, 64, 64, 8, 3): 1056.8 us
+   tile (128, 128, 64, 8, 3): 4287.5 us
+   tile (64, 128, 128, 8, 2): 2070.5 us
+eager pieces (not the compiled glue): 2549.8 us
+compiled pieces' m: the same bits
+compiled pieces (the glue fused by Inductor): 538.2 us
+   two frozen products alone: 505.9 us

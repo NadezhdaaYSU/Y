@@ -48,6 +48,7 @@ import torch.nn as nn
 
 from . import attention as _attn
 from . import kv as _kv
+from . import mlp_kernel as _mlp
 from . import model as _model
 from . import qmm as _qmm
 from .train_lm import (F64_EXACT, Adam, Ops, det_sqrt, exact_product, exact_sum, f64_formula_ok, int8_bmm_ok,
@@ -651,10 +652,16 @@ def _layer_forward(h, cos, sin, mask, Aq, Bq, Ao, Bo, Ag, Bg, Au, Bu, Ad, Bd,
     yo, xf_o, u_o = run(_lora_forward, a2, Ao, Bo, o, so, *w)
     h2 = h + yo
     x2 = run(_module_forward, h2, n2)
-    g, xf_g, u_g = run(_lora_forward, x2, Ag, Bg, gate, sg, *w)
-    yu, xf_u, u_u = run(_lora_forward, x2, Au, Bu, up, su, *w)
-    a = run(_silu_forward, g, act)
-    m = a * yu
+    if _mlp.usable(gate, up, act, x2, *w):
+        # Both projections and their glue in one kernel (`mlp_kernel`): the
+        # same bits, without the int32 and float32 intermediates in memory.
+        g, yu, a, m, xf_g, u_g, u_u = run(_mlp.gate_up_silu, x2, Ag, Bg, Au, Bu, gate, up, act, sg, su, *w)
+        xf_u = xf_g
+    else:
+        g, xf_g, u_g = run(_lora_forward, x2, Ag, Bg, gate, sg, *w)
+        yu, xf_u, u_u = run(_lora_forward, x2, Au, Bu, up, su, *w)
+        a = run(_silu_forward, g, act)
+        m = a * yu
     yd, xf_d, u_d = run(_lora_forward, m, Ad, Bd, down, sd, *w)
     out = h2 + yd
     saved = (h, xf_q, u_q, q, k, v, xf_o, u_o, h2, xf_g, u_g, xf_u, u_u, g, a, yu, xf_d, u_d)

@@ -986,6 +986,229 @@ Theorem a_zero_row_keeps_the_sum : forall xs gs c, length xs = length gs ->
   dot (xs ++ [c]) (gs ++ [0]) = dot xs gs.
 ```
 
+### `proofs/ExactMlpKernel.v`
+
+The integer and bit-field arithmetic of `python/y_lang/exact/mlp_kernel.py`,
+the MLP's gate and up projections and their glue in one kernel (2026-11-27).
+The K loop of masked BK-wide blocks is the dot product for every BK; every
+partial sum, in any order, fits int32 to K = 133,144 (`usable` refuses K past
+`qmm.MAX_K`); the sigmoid table's index stays in bounds, the lower clamp
+being the load-bearing one; the interpolation fits int32 for the table's
+bounds (checked on the built table by python/tests/test_exact_mlp_kernel.py);
+the scale's float32 field is normal exactly when the kernel's `ok` holds.
+Refutations: one more term can overflow, the index without the lower clamp
+is negative, one step outside `ok` the field is zero or all ones.
+
+- On the training path: `_mlp_kernel`'s integer work. Not modelled: its
+  float32 roundings (the separate path's operations, tested bit for bit).
+- Theorems and lemmas: 19. Quoted below: 3.
+
+```coq
+Theorem the_blocked_loop_is_the_dot : forall K BK f, (0 < BK)%nat ->
+  sumto ((K + BK - 1) / BK) (fun b => sumto BK (fun j => masked K f (b * BK + j)%nat)) = sumto K f.
+```
+
+```coq
+Theorem every_partial_sum_fits_int32 : forall ts : list Z,
+  Forall (fun t => -16129 <= t <= 16129) ts -> Z.of_nat (length ts) <= 133144 ->
+  in_int32 (fold_right Z.add 0 ts).
+```
+
+```coq
+Theorem the_table_index_is_in_bounds : forall r TN,
+  - 2 ^ 24 <= r <= 2 ^ 24 -> 1 <= TN -> 0 <= table_index r TN <= TN - 1.
+```
+
+### `proofs/ExactQmmSplit.v`
+
+`python/y_lang/exact/qmm.py`'s in-register split of a 12-bit operand,
+`lo = ((a + 64) & 127) - 64`, `hi = (a - lo) >> 7`, is `ExactTrainArith.v`'s
+digit split, and `hi * 128 + lo` gives the value back; for |a| <= 2047 both
+digits are int8. With K <= `MAX_K` = 131,040 the int32 accumulators hold
+their sums in both modes, and the int64 join is below 2^53, so the float64
+branch converts it exactly. Refutation: one-digit sums of 133,145 terms of
+127 * 127 leave int32.
+
+- On the training path: every `qmm` product. Not modelled: the float32
+  epilogue's rounding and Triton's `tl.dot` itself (tested against
+  `exact_product` by python/tests/test_exact_qmm.py). The join's margin is
+  wide: its largest value reaches 2^53 only between K = 2^35 and 2^36.
+- Theorems and lemmas: 9. Quoted below: 3.
+
+```coq
+Theorem qmm_lo_is_the_digit : forall a, lo a = TA.digit a.
+```
+
+```coq
+Theorem the_accumulators_fit_int32 : forall K s,
+  0 <= K <= 131040 ->
+  (- (K * (64 * 127)) <= s <= K * (64 * 127) -> in_int32 s) /\
+  (- (K * (16 * 127)) <= s <= K * (16 * 127) -> in_int32 s) /\
+  (- (K * (127 * 127)) <= s <= K * (127 * 127) -> in_int32 s).
+```
+
+```coq
+Theorem the_join_fails_only_past_2_35 :
+  2 ^ 35 * (2047 * 127) < 2 ^ 53 /\ ~ (2 ^ 36 * (2047 * 127) < 2 ^ 53).
+```
+
+### `proofs/ExactDrawSearch.v`
+
+`python/y_lang/exact/vocab_draw.py`'s draw never stores p: it sums blocks of
+1,024 entries, counts the blocks whose running sum is at most u = r mod l,
+recomputes that block and counts its entries the same way. For every block
+size, number of blocks and p >= 0 with 0 <= u < l, the token k * B + j is the
+flat count `rl.draw_rows` defines, and k and j are in range (the second pass
+reads a block that exists). Underneath: a prefix predicate holds below its
+count exactly. Refutations: one negative weight makes the two differ;
+without `mod l`, u = l counts every block.
+
+- On the sampling path: every fused draw. Not modelled: that the kernel's p
+  are `softmax_ints`' (tested bit for bit by
+  python/tests/test_exact_vocab_draw.py), int64 overflow of the sums (p <=
+  2^28).
+- Theorems and lemmas: 23. Quoted below: 1.
+
+```coq
+  Theorem the_two_level_search_is_the_flat_one : (k * B + j)%nat = flat.
+```
+
+### `proofs/ExactMmPadding.v`
+
+`lora.mm_y_any` and `ExactLinear` pad K, rows and columns with zeros and
+slice the result back, and `mm_y_any` runs K past 131,040 in pieces whose
+int32 results it adds in int64; the code's reasons were comments. Zero
+entries past K add nothing; padded rows and columns change no output the
+slice keeps; the pieces add to the whole sum for every K; a piece fits
+int32 and the total int64 below 2^43 terms. Refutation: a piece one term
+longer than 133,144 can overflow int32.
+
+- On the training path: every product on Y's GEMM or `torch._int_mm`. Not
+  modelled: the GEMM itself (`Int8GemmExact.v` for Y's).
+- Theorems and lemmas: 8. Quoted below: 2.
+
+```coq
+Theorem zero_padding_k_changes_no_sum : forall K e a b a' b' m n,
+  (forall k, (k < K)%nat -> a' m k = a m k /\ b' n k = b n k) ->
+  (forall k, (K <= k)%nat -> a' m k = 0 \/ b' n k = 0) ->
+  dot (K + e) a' b' m n = dot K a b m n.
+```
+
+```coq
+Theorem the_pieces_of_k_are_the_whole_sum : forall K (f : nat -> Z) (Y : nat), (0 < Y)%nat ->
+  MK.sumto ((K + Y - 1) / Y) (fun c => MK.sumto Y (fun x => MK.masked K f (c * Y + x)%nat)) = MK.sumto K f.
+```
+
+### `proofs/ExactFloatOrder.v`
+
+The exact quantizers take maxima of |x| on its bits (`exponent`, `q8`, the
+fused MLP kernel's row maxima). For every mantissa width (float32 and
+float64), finite non-negative floats' bits compare as their values do, so
+the maximum of the bits is the bits of the maximum; and the exponent read
+from the field bounds the value above, subnormals included, tightly within
+a factor of 2 for normal floats. Refutations: with the sign bit the order
+breaks; the all-ones field is no finite value.
+
+- On the training path: every quantizer's scale. Not modelled: that
+  `.view(int)` gives IEEE's bits (tested on ties, zeros and subnormals).
+- Theorems and lemmas: 9. Quoted below: 2.
+
+```coq
+Theorem the_bits_are_ordered_as_the_values : forall p E1 M1 E2 M2, 0 <= p ->
+  finite p E1 M1 -> finite p E2 M2 ->
+  (bits p E1 M1 <= bits p E2 M2 <-> value p E1 M1 <= value p E2 M2).
+```
+
+```coq
+Theorem the_field_bounds_the_value : forall p E M, 0 <= p -> finite p E M ->
+  value p E M < 2 ^ (p + E).
+```
+
+### `proofs/ExactCeilLog2.v`
+
+`exact_sum`'s scale uses `_ceil_log2(n)`, computed eagerly as
+`(n - 1).bit_length()` and, compiled, by a loop of comparisons. Both are the
+least k with 2^k >= n for every n >= 1, so a compiled step and an eager one
+get the same scale; the loop ends within n steps. Refutation: floor(log2 n)
+differs at n = 3.
+
+- On the training path: every `exact_sum`. Not modelled: Python's
+  `bit_length` (its specification) and torch.compile's tracing of the loop
+  (compiled-against-eager tests).
+- Theorems and lemmas: 6. Quoted below: 1.
+
+```coq
+Theorem the_two_definitions_agree : forall n, 1 <= n -> loop (Z.to_nat n) n 0 = bit_length (n - 1).
+```
+
+### `proofs/ExactPieces.v`
+
+`rl.pieces` cuts a batch's rows into pieces for `GRPO.step`. For every batch
+and bound, the pieces joined are the rows 0 .. n - 1 in order (every row in
+exactly one piece, each piece consecutive), none is empty, a piece of two or
+more rows is within `chunk_tokens`, and with no bound there is one piece.
+Refutation: a single row longer than the bound is a piece past it, which is
+all the code promises.
+
+- On the training path: every GRPO step's pieces. Not modelled: that the
+  step runs each piece once in order.
+- Theorems and lemmas: 9. Quoted below: 2.
+
+```coq
+  Theorem the_pieces_are_the_rows_in_order : forall n, concat (pieces n) = seq 0 n.
+```
+
+```coq
+  Theorem every_piece_of_two_or_more_rows_is_within_the_bound : forall n,
+    Forall within (pieces n).
+```
+
+### `proofs/ExactQ8Clamp.v`
+
+`q8`'s scale s = e - (bits - 1), with every |x| below 2^e, rounds each
+x * 2^-s to the nearest even integer and clamps it to 2^(bits-1) - 1. The
+rounding reaches at most one past that top; after the clamp the value is in
+range and its error stays below one step 2^s (below half a step where the
+clamp does nothing). Refutation: 8 bits, x = 127.5 * 2^s rounds to 128, so
+without the clamp top is passed.
+
+- On the training path: every quantizer, as integer rounding. Not modelled:
+  the float formula the GPU computes (tested against the integer rounding).
+- Theorems and lemmas: 7. Quoted below: 1.
+
+```coq
+  Theorem the_clamped_error_is_below_one_step : Z.abs (m - q8_mag bits m r * 2 ^ r) < 2 ^ r.
+```
+
+### `proofs/ExactKvPack.v`
+
+The packed KV cache (`python/y_lang/exact/kv.py`, `Y_EXACT_KV_PACK=inplace`)
+stores K's int16 values as bytes and each row's float32 scale as four bytes,
+made by `_signed_byte` and shifts and read back as int16 or int8. The byte
+is the low byte, signed (the `^ 0x80` checked on all 256 bytes) and kept on
+a byte; every int16 K value's two bytes are int8 and rebuild it; every
+scale's 32 bits rebuild from its four bytes (V) and from two int16 pieces
+of them (K). Refutations: an unsigned top piece rebuilds -1 as 2^32 - 1; a
+value past int16 has a high byte that is no int8 (`pack_k` refuses such
+K_LEVELS).
+
+- On the cached path: every packed K and V row. Not modelled: the float32
+  bits' view, the storage's byte order (little-endian on x86 and CUDA), and
+  `quantize_rows`' clamp.
+- Theorems and lemmas: 13. Quoted below: 2.
+
+```coq
+Theorem k_bytes_rebuild_the_value : forall r, -32768 <= r <= 32767 ->
+  (-128 <= Z.shiftr r 8 <= 127) /\ (-128 <= signed_byte r <= 127) /\
+  Z.shiftr r 8 * 256 + ubyte (signed_byte r) = r.
+```
+
+```coq
+Theorem v_scale_bytes_rebuild_the_bits : forall b, -2 ^ 31 <= b <= 2 ^ 31 - 1 ->
+  rebuild8 (signed_byte b) (signed_byte (Z.shiftr b 8)) (signed_byte (Z.shiftr b 16))
+           (signed_byte (Z.shiftr b 24)) = b.
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.

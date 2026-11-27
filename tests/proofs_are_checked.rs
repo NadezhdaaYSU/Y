@@ -1142,6 +1142,134 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // The MLP kernel's integer arithmetic (`mlp_kernel.py`,
+            // 2026-11-27): the masked K loop is the dot product, every
+            // partial sum fits int32 inside `usable`'s K bound, the sigmoid
+            // table index stays in bounds and its interpolation in int32,
+            // the scale's float32 field is normal exactly when `ok` holds.
+            // The refutations: one more term can overflow, no lower clamp
+            // makes the index negative.
+            "ExactMlpKernel.v",
+            &[
+                "Print Assumptions the_blocked_loop_is_the_dot",
+                "Print Assumptions every_partial_sum_fits_int32",
+                "Print Assumptions past_133144_a_sum_can_overflow",
+                "Print Assumptions the_table_index_is_in_bounds",
+                "Print Assumptions without_the_lower_clamp_the_index_is_negative",
+                "Print Assumptions the_interpolation_fits_int32",
+                "Print Assumptions the_float32_field_is_normal_exactly_when_ok",
+            ][..],
+        ),
+        (
+            // qmm's in-register split (`qmm.py`) is ExactTrainArith's digit
+            // split, its digits are int8, its int32 accumulators hold their
+            // sums to MAX_K and the int64 join is exact in float64. The
+            // refutation: one-digit sums past 133,144 terms can overflow.
+            "ExactQmmSplit.v",
+            &[
+                "Print Assumptions qmm_lo_is_the_digit",
+                "Print Assumptions qmm_hi_is_the_carry",
+                "Print Assumptions the_join_is_the_value",
+                "Print Assumptions the_12_bit_digits",
+                "Print Assumptions the_accumulators_fit_int32",
+                "Print Assumptions one_digit_past_133144_can_overflow",
+                "Print Assumptions the_join_fails_only_past_2_35",
+            ][..],
+        ),
+        (
+            // The fused draw's two-level search (`vocab_draw.py`) is the flat
+            // inverse CDF `rl.draw_rows` defines, its block and offset in
+            // range. The refutations: a negative weight, and u = l.
+            "ExactDrawSearch.v",
+            &[
+                "Print Assumptions count_spec",
+                "Print Assumptions the_block_is_in_range",
+                "Print Assumptions the_offset_is_in_range",
+                "Print Assumptions the_two_level_search_is_the_flat_one",
+                "Print Assumptions a_negative_weight_breaks_it",
+                "Print Assumptions u_at_the_total_leaves_the_blocks",
+            ][..],
+        ),
+        (
+            // Zero padding of K, rows and columns and K's pieces in
+            // `lora.mm_y_any` change no product; a piece fits int32, the total
+            // int64. The refutation: a piece one term longer can overflow.
+            "ExactMmPadding.v",
+            &[
+                "Print Assumptions zero_padding_k_changes_no_sum",
+                "Print Assumptions a_padded_row_leaves_the_real_rows",
+                "Print Assumptions the_pieces_of_k_are_the_whole_sum",
+                "Print Assumptions each_piece_fits_int32",
+                "Print Assumptions the_int64_total_holds",
+                "Print Assumptions a_piece_one_term_longer_can_overflow",
+            ][..],
+        ),
+        (
+            // Float bits compare as the values (any mantissa width), and the
+            // field's exponent bounds the value: the quantizers' maxima. The
+            // refutations: the sign bit, and the all-ones field.
+            "ExactFloatOrder.v",
+            &[
+                "Print Assumptions the_bits_are_ordered_as_the_values",
+                "Print Assumptions the_max_of_the_bits_is_the_bits_of_the_max",
+                "Print Assumptions the_field_bounds_the_value",
+                "Print Assumptions a_normal_value_reaches_half_its_bound",
+                "Print Assumptions with_the_sign_bit_the_order_breaks",
+                "Print Assumptions an_infinite_field_is_not_ordered_by_the_formula",
+            ][..],
+        ),
+        (
+            // `_ceil_log2`'s eager and compiled definitions agree, both the
+            // least power reaching n. The refutation: floor(log2) at 3.
+            "ExactCeilLog2.v",
+            &[
+                "Print Assumptions the_loop_is_the_least_power",
+                "Print Assumptions bit_length_is_the_least_power",
+                "Print Assumptions the_two_definitions_agree",
+                "Print Assumptions floor_log2_is_not_it",
+            ][..],
+        ),
+        (
+            // `rl.pieces`: the rows in order, none empty, multi-row pieces
+            // within the bound, one piece with none. The refutation: a single
+            // long row.
+            "ExactPieces.v",
+            &[
+                "Print Assumptions the_pieces_are_the_rows_in_order",
+                "Print Assumptions no_piece_is_empty",
+                "Print Assumptions every_piece_of_two_or_more_rows_is_within_the_bound",
+                "Print Assumptions no_bound_is_one_piece",
+                "Print Assumptions a_single_long_row_passes_the_bound",
+            ][..],
+        ),
+        (
+            // q8's rounding reaches at most one past top, the clamped value is
+            // in range with an error below one step. The refutation: without
+            // the clamp 127.5 rounds to 128.
+            "ExactQ8Clamp.v",
+            &[
+                "Print Assumptions the_rounding_reaches_at_most_one_past_top",
+                "Print Assumptions the_clamped_value_is_in_range",
+                "Print Assumptions the_clamped_error_is_below_one_step",
+                "Print Assumptions without_the_clamp_top_is_passed",
+            ][..],
+        ),
+        (
+            // The packed KV cache's bytes (`kv.py`): the signed low byte, K's
+            // int16 values and the scales' bits rebuilt exactly. The
+            // refutations: an unsigned top piece, a value past int16.
+            "ExactKvPack.v",
+            &[
+                "Print Assumptions signed_byte_is_the_low_byte",
+                "Print Assumptions a_byte_is_kept",
+                "Print Assumptions k_bytes_rebuild_the_value",
+                "Print Assumptions v_scale_bytes_rebuild_the_bits",
+                "Print Assumptions k_scale_halves_rebuild_the_bits",
+                "Print Assumptions an_unsigned_top_piece_breaks_a_negative_scale",
+                "Print Assumptions a_value_past_int16_loses_its_high_byte",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

@@ -304,12 +304,49 @@ every step.
   is a two-pass reduction, so it ran the table SiLU twice per element and
   took 62 to 65 ms where it took 27. Not kept.
 
+## The MLP's forward in one kernel, 2026-11-27
+
+`python/y_lang/exact/mlp_kernel.py` computes the whole-layer path's MLP
+forward in one Triton kernel. Per output tile it runs both frozen int8
+products (gate, up) on the shared int8 x tile, the adapters' rank-r products
+from their q8 operands, the same float32 operations as the separate path in
+the same order (`acc * sx * sw + z * scale`, the table SiLU, `a * yu`, FMA
+contraction off), and writes only g, yu, a and m. The int32 products and
+float32 adapter terms no longer go through memory.
+
+- **The same bits.** `python/tests/test_exact_mlp_kernel.py` compares every
+  output with the separate path bit for bit: shapes that do not divide the
+  tiles, an all-zero row, inputs past the table's +-16 clamp, and adapter
+  scales whose product takes qmm's float64 branch (the test checks that the
+  branch is reached). Mutants that fail it: FMA contraction on, the two
+  scale multiplies swapped, floor in place of round-half-even in the table,
+  the float32 scale's exponent off by one. Training with the kernel and
+  without it gives the CPU's adapters and p(target), and a profiler check
+  confirms the layer calls it. `proofs/ExactMlpKernel.v` proves its integer
+  and bit-field arithmetic (the masked K loop is the dot product, no int32
+  overflow inside `usable`'s K bound, the table index in bounds, the scale's
+  field normal exactly when its `ok` holds); `proofs/ExactQmmSplit.v` proves
+  the same of qmm's digit split.
+- **Speed.** On Qwen2.5-0.5B's MLP shape (990 x 896 into 4864, rank 16;
+  best of 20 CUDA-event timings): 246 to 262 us (the same tile timed
+  twice) against 538 us for the compiled separate path, whose two frozen
+  products alone take 506 us (`mlp_fused_probe.py`, the kernel's first
+  version, which also writes the row maxima of m;
+  `rtx4070tis/bytes_2026-11-27/mlp_fused_probe.txt`).
+  In training (the same step as above, `fused_mlp.txt`): 0.754 -> 0.729 s of
+  GPU time a step, the kernel's 30 ms in place of about 70 ms (the two
+  products, the glue kernel, two adapter products, a pointwise kernel).
+  Since the morning's 0.806 s, 9.6% less GPU time a step, the same bits.
+- **Where it runs.** CUDA with Triton's int8 dot (sm_80 or later), gate and
+  up `ExactLinear`s without a bias or split activations, `qmm` on, K at most
+  `qmm.MAX_K`. A Tesla T4 (sm_75) keeps the separate path, as does
+  `Y_EXACT_MLP_FUSED=0`.
+
 ## Not done
 
-- The MLP's glue in the gate and up products' epilogue (the products, the
-  adapters' rank-r terms, the table SiLU and a * yu in one kernel, with the
-  row maxima for the down projection's quantizers): about 58 bytes an
-  element moved now against about 22. Being built as a probe first.
+- The fused MLP kernel does not yet form the row maxima of m for the down
+  projection's two quantizers, so they still read m again. The MLP's
+  backward glue (about 37 ms a step) is not fused.
 - `_layer_backward` still compiles once for each power-of-two length range
   a run reaches (the exact sums' widths are constants of each version).
 - The adapters' backward still launches 44 kernels a call: each of its five
