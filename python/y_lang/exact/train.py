@@ -75,7 +75,8 @@ def shift(v: torch.Tensor, e) -> torch.Tensor:
 def quantize_rows(v: torch.Tensor):
     """`v` [R][C] int64 -> (q [R][C] int8, s [R][1] int64) with q = v / 2^s
     rounded and s >= 0 the least shift putting the row's largest |v| below
-    128 (q is then within [-127, 127] after one clamp of a rounded-up 128)."""
+    128 (q is then within [-127, 127] after one clamp: the rounding can reach
+    128 above and -128 below, proofs/ExactTrainShift.v)."""
     m = v.abs().amax(dim=1, keepdim=True)
     s = (bit_length(m) - 7).clamp(min=0)
     q = shift(v, -s).clamp(-127, 127).to(torch.int8)

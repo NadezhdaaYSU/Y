@@ -1376,6 +1376,57 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // The sampler's draw probabilities (`rl.py`): each token owns its
+            // block of u, the residue count, the bias below p_t / N and below
+            // 2^-16. The refutation: the modulo's bias is real.
+            "ExactDrawBias.v",
+            &[
+                "Print Assumptions the_token_is_the_block_holding_u",
+                "Print Assumptions the_count_in_a_residue_block",
+                "Print Assumptions each_token_is_drawn_p_over_l_up_to_the_bias",
+                "Print Assumptions the_bias_is_below_2_minus_16",
+                "Print Assumptions the_modulo_has_a_bias",
+            ][..],
+        ),
+        (
+            // GRPO's advantages: the reward sum, the mean over a power-of-two
+            // group and each advantage are exact. The refutation: a group of
+            // three rounds the mean.
+            "ExactGroupMean.v",
+            &[
+                "Print Assumptions the_reward_sum_is_exact",
+                "Print Assumptions the_mean_is_exact",
+                "Print Assumptions every_advantage_is_exact",
+                "Print Assumptions a_group_of_three_rounds_the_mean",
+            ][..],
+        ),
+        (
+            // `train.py`'s helpers: the binary length, the right shift rounds
+            // half up, a quantized row is within 128. The refutations: the
+            // clamp acts at both ends, a right shift can leave int64.
+            "ExactTrainShift.v",
+            &[
+                "Print Assumptions bit_length_is_the_binary_length",
+                "Print Assumptions the_right_shift_rounds_half_up",
+                "Print Assumptions the_quantized_row_is_within_128",
+                "Print Assumptions the_clamp_acts_at_both_ends",
+                "Print Assumptions a_right_shift_can_leave_int64",
+            ][..],
+        ),
+        (
+            // `det_sqrt`: one correction moves one step, two give the floor
+            // square root, the scaling is exact, the result within 2^-30. The
+            // refutation: one correction is not enough at two.
+            "ExactDetSqrt.v",
+            &[
+                "Print Assumptions one_correction_moves_one_step",
+                "Print Assumptions isqrt_is_the_floor_square_root",
+                "Print Assumptions one_correction_is_not_enough_at_two",
+                "Print Assumptions the_scaled_value_is_an_integer_in_2_60_2_62",
+                "Print Assumptions det_sqrt_is_within_2_minus_30",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

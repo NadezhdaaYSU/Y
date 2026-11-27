@@ -16,7 +16,7 @@ integer inverse CDF: u = r mod l for a 62-bit integer r hashed on the host
 from (seed, step, row, position) (`uniforms`), and the token is the first i
 with p_0 + ... + p_i > u. Every operation is an integer one, so the draw is
 the same on every device; P(i) = p_i / l to within the modulo's bias, below
-l / 2^62 < 2^-16 (l < 2^28 times the vocabulary).
+l / 2^62 < 2^-16 (l < 2^28 times the vocabulary; proofs/ExactDrawBias.v).
 
 **The trainer** runs the batch the sampler produced through the training
 forward (`lora.SFT.forward`, the served model's own code) and recomputes
@@ -169,7 +169,8 @@ def completion_lengths(tokens: torch.Tensor, end: int) -> list:
 def advantages(rewards, group: int) -> list:
     """Dr. GRPO's: reward - the mean of its group of `group` consecutive
     rows, in float64 on the host (the mean of rewards in {0, 1} over a
-    power-of-two group is exact)."""
+    power-of-two group is exact, and so is each advantage:
+    proofs/ExactGroupMean.v)."""
     if len(rewards) % group:
         raise ValueError(f"rl: {len(rewards)} rewards are not groups of {group}")
     out = []

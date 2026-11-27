@@ -299,7 +299,8 @@ def det_sqrt(v: torch.Tensor, bad=None) -> torch.Tensor:
     [2^60, 2^62), its integer square root, scaled back. Takes 0 and
     2^-962 <= v < 2^1024; below that the scaling leaves float64's normal
     range and `pow2` refuses. A negative v, an inf or a NaN is refused (a NaN
-    used to become 0 on CUDA, which converts NaN to the integer 0)."""
+    used to become 0 on CUDA, which converts NaN to the integer 0). The
+    integers and the 2^-30 bound: proofs/ExactDetSqrt.v."""
     a, field = _fields(v)
     refuse(bad, (field == _INF_FIELD) | (v < 0), "exact train: det_sqrt takes a finite v >= 0")
     k = torch.where(a == 0, 0, field - 1022) - 61       # frexp's exponent - 61

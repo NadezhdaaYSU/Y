@@ -1434,6 +1434,104 @@ Theorem the_weight_product_is_exact_in_float64 : forall P e m,
     Qabs (y - inject_Z W) <= 1 # 2 -> (0 <= W <= 2 ^ 28)%Z.
 ```
 
+### `proofs/ExactDrawBias.v`
+
+The exact sampler (`rl.py`) draws from integer weights p (sum l) by
+u = r mod l for a 62-bit r, the token the first index whose running sum
+passes u. For 0 <= u < l the token is t exactly when S_t <= u < S_(t+1),
+so each token owns p_t consecutive values of u; the r in 0 .. N - 1 with
+r mod l in a block of width w number w (N / l) plus at most w more; so
+the count c_t of r drawing t has |c_t l - p_t N| <= p_t l, which is
+|c_t / N - p_t / l| <= p_t / N. At N = 2^62 and l below 2^46 (a vocabulary
+below 2^18) that is below 2^-16, the docstring's bound. Refutation: three
+weights of 1 and N = 4 draw token 0 twice as often, so the bias is real.
+
+- On the RL path: every sampled token. Not modelled: blake2b's 62-bit
+  values as uniform (the hash's assumption), and the sampler's p and l
+  (`ExactDrawSearch.v` and the tests).
+- Theorems and lemmas: 10. Quoted below: 1.
+
+```coq
+  Theorem each_token_is_drawn_p_over_l_up_to_the_bias : forall t, (t < V)%nat ->
+    Z.abs (Z.of_nat (drawn t) * l p V - p t * Z.of_nat N) <= p t * l p V.
+```
+
+### `proofs/ExactGroupMean.v`
+
+Dr. GRPO's advantages (`rl.advantages`) are reward - the group's mean,
+in float64 on the host. For rewards in {0, 1}, the float64 sum (left to
+right, ExactReduce's carrier) is the integer count of ones; over a group
+of 2^k rows (k <= 52) the mean s / 2^k is a float64 and so exact, and
+each advantage x - m is (x 2^k - s) / 2^k exactly. Refutation: the code
+does not check the power of two, and a group of 3 has the mean 1/3, no
+float64 (the host's float64 is the same everywhere, so this costs
+exactness, not determinism).
+
+- On the RL path: every advantage. Not modelled: Python's float64 as
+  IEEE round to nearest, rewards outside {0, 1}.
+- Theorems and lemmas: 8. Quoted below: 1.
+
+```coq
+  Theorem every_advantage_is_exact : forall x, In x xs ->
+    rn (x * 2 ^ 1074 - s * 2 ^ (1074 - k)) = (x * 2 ^ k - s) * 2 ^ (1074 - k).
+```
+
+### `proofs/ExactTrainShift.v`
+
+Exact training T1's helpers (`train.py`): `bit_length`'s count of the
+powers 2^0 .. 2^62 at most m is the binary length for 0 <= m < 2^63;
+`shift`'s right shift `(v + 2^(d-1)) >> d` is the nearest integer to
+v / 2^d with ties toward +inf, negative v included; `quantize_rows`' rounded
+values are in -128 .. 128, so the clamp leaves -127 .. 127. Refutations:
+v = 511 and v = -511 round to 128 and -128 (the docstring named only "a
+rounded-up 128"; corrected); `shift` checks no bound for a right shift,
+and v + 2^(d-1) leaves int64 for v near 2^63.
+
+- On exact training T1's path (`train.py`, its tests and tools). Not
+  modelled: torch's int64 `>>` as floor division, the callers'
+  magnitudes.
+- Theorems and lemmas: 5. Quoted below: 2.
+
+```coq
+Theorem the_right_shift_rounds_half_up : forall v d, 1 <= d ->
+  let q := shift_down v d in
+  q * 2 ^ d - 2 ^ (d - 1) <= v < q * 2 ^ d + 2 ^ (d - 1).
+```
+
+```coq
+Theorem the_clamp_acts_at_both_ends :
+  quantized 511 511 = 128 /\ quantized (-511) 511 = -128.
+```
+
+### `proofs/ExactDetSqrt.v`
+
+Adam's `det_sqrt` (`train_lm.py`) scales a float64 v to an integer n,
+takes `isqrt(n)` and scales back. Each of `isqrt`'s two corrections moves
+the float estimate one step toward floor(sqrt n), so any estimate within 2
+of it (any device's) gives floor(sqrt n), with no int64 product past 2^63
+for n < 2^62. For a normal v at least 2^-962, n is (2^52 + M) * 2^8 or
+* 2^9, in [2^60, 2^62), v = n * 2^k exactly with k even, and the root
+s >= 2^30 has s^2 <= n < (s + 1)^2: the result is within 2^-30 relative,
+the docstring's bound. Refutation: an estimate 2 above is still 1 above
+after one correction.
+
+- On the training path: every Adam step. Not modelled: that the
+  truncated float estimate is within 2 of floor(sqrt n), and the float64
+  multiply by 2^(k/2).
+- Theorems and lemmas: 6. Quoted below: 2.
+
+```coq
+Theorem isqrt_is_the_floor_square_root : forall n x0, 0 <= n < 2 ^ 62 -> 0 <= x0 ->
+  Z.abs (x0 - Z.sqrt n) <= 2 ->
+  isqrt n x0 = Z.sqrt n /\ (x0 + 1) * (x0 + 1) < 2 ^ 63.
+```
+
+```coq
+  Theorem det_sqrt_is_within_2_minus_30 : forall x0, 0 <= x0 -> Z.abs (x0 - Z.sqrt n) <= 2 ->
+    let s := isqrt n x0 in
+    s * s <= n < (s + 1) * (s + 1) /\ 2 ^ 30 <= s < 2 ^ 31.
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.
