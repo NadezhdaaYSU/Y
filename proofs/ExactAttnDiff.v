@@ -32,9 +32,12 @@
 
     That `_two_sum` returns RN(a + b) and its exact error (Knuth's TwoSum,
     classical, for float32 without FMA contraction), that `_rint32` is a
-    nearest integer and x - rint(x) is a float32 (so the kernel's d_hi - k1
-    and d_lo - k2 are exact), and that float32 addition is such a rounding
-    (IEEE round to nearest, no overflow below 2^26).
+    nearest integer (the 2^23 trick: `ExactSoftmaxKernel.v`; past 2^23 a
+    float32 is an integer: `ExactRintRemainder.v`), that a float32
+    subtraction with a float32 result is exact (x - rint(x) is a float32:
+    `ExactRintRemainder.v`, so the kernel's d_hi - k1 and d_lo - k2 are
+    exact), and that float32 addition is such a rounding (IEEE round to
+    nearest, no overflow below 2^26).
 
     Checked with Rocq 9.1:  coqc -Q . "" ExactAttnDiff.v  *)
 

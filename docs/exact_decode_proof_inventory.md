@@ -1734,6 +1734,52 @@ hi parts can be off by 1, 2^16 times the guard.
     -1 <= r <= 1.
 ```
 
+### `proofs/ExactQmmEpilogue.v`
+
+qmm's kernels turn a tile's exact integer sum c into `c.to(float32) *
+2^e`, with 2^e from its bits when -126 <= e <= 127, where `exact_product`
+computes float32(c * 2^e). Rounding to 24 significant bits (half to even)
+commutes with a power of two, so for e >= -126 the two are the same value;
+a nonzero c times 2^e is at least 2^-126, never subnormal; the rounded
+value is s 2^t with s <= 2^24, so the multiply has nothing to round; and
+every integer below 2^24 is kept (the precision is 24 bits). Overflow to
+infinity is decided on that same rounded value on both sides.
+Refutations: `shift_round m 0` adds 1 to an odd m, so a shift of 0 must
+be skipped; past e = -126 the subnormal grid breaks the shortcut, which is
+why the kernel takes the float64 product there.
+
+- On the training path on sm_80 or later: every `qmm` and `qmm_sum`
+  output. Not modelled: float32 rounding as 24-bit rounding in the normal
+  range and IEEE overflow, int64 to float32 conversion, the sign.
+- Theorems and lemmas: 9. Quoted below: 1.
+
+```coq
+Theorem the_epilogue_is_the_float32_of_the_product : forall c e, 0 <= c -> -126 <= e ->
+  sig_round (c * 2 ^ (e + 126)) = sig_round c * 2 ^ (e + 126).
+```
+
+### `proofs/ExactRintRemainder.v`
+
+The attention kernel forms d_hi - k1 and d_lo - k2 in float32, k the
+nearest integer from `_rint32`. In units of float32's step, a float32 at
+or past 2^23 is a multiple of the integer step (so `_rint32` may return
+it unchanged), the nearest integer of x >= 0 is >= 0, and for any integer
+k within 1/2 of x the remainder |x - k| has at most 24 significant bits: a
+float32, so the subtraction is exact, as `ExactAttnDiff.v` takes.
+Refutation: against an integer that is not the nearest the remainder can
+need more than 24 bits.
+
+- On the training and decode paths on a GPU: every attention weight's
+  rounding decision. Not modelled: IEEE subtraction returning an exact
+  difference, the overflow range.
+- Theorems and lemmas: 5. Quoted below: 1.
+
+```coq
+Theorem the_remainder_is_a_float32 : forall L s t k, 1 <= L -> 0 <= s < 2 ^ 24 -> 0 <= t ->
+  Z.abs (s * 2 ^ t - k * 2 ^ L) <= 2 ^ (L - 1) ->
+  exists s' t', 0 <= s' < 2 ^ 24 /\ 0 <= t' /\ Z.abs (s * 2 ^ t - k * 2 ^ L) = s' * 2 ^ t'.
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.

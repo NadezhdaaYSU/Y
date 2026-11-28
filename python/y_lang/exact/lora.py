@@ -111,6 +111,8 @@ def mm_y_any(a, b):
 
 # `Y_EXACT_QMM=0` turns off the fused product (`qmm`) for comparisons.
 QMM = os.environ.get("Y_EXACT_QMM", "1") != "0"
+# dx's two products in one kernel (`qmm.qmm_sum`, the same bits).
+QMM_SUM = os.environ.get("Y_EXACT_QMM_SUM", "1") != "0"
 
 
 def default_mm(device):
@@ -289,6 +291,24 @@ def _exact_mm(a, b, grad, grad_bits, bwd_bits, mm, act, bad, qb=None):
     return exact_product(a, b, bits_a, bits_b, mm, False, False, act, None, qb, bad)
 
 
+def _exact_mm_sum(a, qb, c, d, grad_bits, bwd_bits, mm, act, bad):
+    """`_exact_mm(a, qb[0], "a", ..., qb=qb) + _exact_mm(c, d, "a", ...)`,
+    the same checks in the same order; where both products take `qmm`, one
+    kernel (`qmm.qmm_sum`: both exact products, each rounded to float32 as
+    `qmm` rounds it, added in float32) instead of two and an add."""
+    bits_a, bits_b = product_widths(a.shape[-1], "a", grad_bits, bwd_bits)
+    bits_c, bits_d = product_widths(c.shape[-1], "a", grad_bits, bwd_bits)
+    if (QMM_SUM and QMM and mm is mm_y_any and act is torch.float32
+            and bits_a <= 12 and bits_b <= 8 and bits_c <= 12 and bits_d <= 8
+            and max(a.shape[-1], c.shape[-1]) <= _qmm.MAX_K and _qmm.available(a.device)):
+        qa, sa = q8(a, bits=bits_a, bad=bad)
+        qc, sc = q8(c, bits=bits_c, bad=bad)
+        qdv, sd = q8(d, bits=bits_d, bad=bad)
+        return _qmm.qmm_sum(qa, sa, qb[0], qb[1], bits_a, bits_b, qc, sc, qdv, sd, bits_c, bits_d)
+    return (_exact_mm(a, qb[0], "a", grad_bits, bwd_bits, mm, act, bad, qb=qb)
+            + _exact_mm(c, d, "a", grad_bits, bwd_bits, mm, act, bad))
+
+
 def _lora_forward(x, A, B, base, scale, grad_bits, bwd_bits, mm, act):
     """`LoRALinear`'s forward: ((y, x as float32 rows, u = x A^T), check
     conditions, their messages)."""
@@ -314,8 +334,7 @@ def _lora_backward(dy, xf, u, A, B, sw, wk, s0, scale, need_dx, grad_bits, bwd_b
     dx = None
     if need_dx:
         g = dy.reshape(-1, N).to(torch.float32) * sw
-        dx = (_exact_mm(g, wk, "a", grad_bits, bwd_bits, mm, act, bad, qb=(wk, s0))
-              + _exact_mm(du, A.t(), "a", grad_bits, bwd_bits, mm, act, bad))
+        dx = _exact_mm_sum(g, (wk, s0), du, A.t(), grad_bits, bwd_bits, mm, act, bad)
     # In the adapters' type (float64) here, where the cast fuses.
     return (dx, dA.to(A.dtype), dB.to(B.dtype)), [c for c, _ in bad], [m for _, m in bad]
 

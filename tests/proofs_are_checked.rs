@@ -1535,6 +1535,33 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // qmm's float32 epilogue: rounding commutes with the scale, never
+            // subnormal, fits 24 bits, the precision is 24 bits. The
+            // refutations: a shift of 0, and the subnormal grid.
+            "ExactQmmEpilogue.v",
+            &[
+                "Print Assumptions rounding_commutes_with_the_scale",
+                "Print Assumptions the_epilogue_is_the_float32_of_the_product",
+                "Print Assumptions the_product_is_never_subnormal",
+                "Print Assumptions the_rounded_value_fits_24_bits",
+                "Print Assumptions a_24_bit_integer_is_kept",
+                "Print Assumptions r_zero_is_not_a_rounding",
+                "Print Assumptions below_2_126_the_grid_is_fixed",
+            ][..],
+        ),
+        (
+            // x - rint(x) in float32: a float32 past 2^23 is an integer, the
+            // nearest integer of x >= 0 is >= 0, the remainder is a float32.
+            // The refutation: a far integer leaves no float32.
+            "ExactRintRemainder.v",
+            &[
+                "Print Assumptions a_float32_past_2_23_is_an_integer",
+                "Print Assumptions the_nearest_integer_is_not_negative",
+                "Print Assumptions the_remainder_is_a_float32",
+                "Print Assumptions a_far_integer_leaves_no_float32",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

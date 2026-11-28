@@ -26,11 +26,11 @@
 
     ** Not proved here.
 
-    The float32 epilogue's rounding (`c.to(float32) * 2^e`, the field reading
-    of `ExactMlpKernel.the_float32_field_is_normal_exactly_when_ok`), and the
-    int8 dot itself (`Int8GemmExact.v` for Y's; Triton's `tl.dot` is taken
-    as an exact int32 dot product). Tested against `exact_product` bit for
-    bit by python/tests/test_exact_qmm.py.
+    The int8 dot itself (`Int8GemmExact.v` for Y's; Triton's `tl.dot` is
+    taken as an exact int32 dot product). The float32 epilogue's rounding
+    (`c.to(float32) * 2^e`) is `ExactQmmEpilogue.v`, the field reading
+    `ExactMlpKernel.the_float32_field_is_normal_exactly_when_ok`. Tested
+    against `exact_product` bit for bit by python/tests/test_exact_qmm.py.
 
     Checked with Rocq 9.1:  coqc -Q . "" ExactQmmSplit.v  *)
 
