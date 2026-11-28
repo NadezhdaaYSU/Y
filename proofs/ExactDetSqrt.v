@@ -28,10 +28,10 @@
 
     ** Not proved here.
 
-    That the float estimate `torch.sqrt(float64(n))` truncated is within 2
-    of floor(sqrt n) (a correctly rounded sqrt of n rounded to float64 is
-    within 2^-21 of sqrt n for n < 2^62); that s * 2^(k/2) is a float64
-    multiply by a normal power of two (exact).
+    That s * 2^(k/2) is a float64 multiply by a normal power of two
+    (exact). That the float estimate `torch.sqrt(float64(n))` truncated is
+    within 2 of floor(sqrt n) is `ExactSqrtEstimate.v` (within 1, for a
+    conversion and a sqrt each within a relative 2^-50).
 
     Checked with Rocq 9.1:  coqc -Q . "" ExactDetSqrt.v  *)
 

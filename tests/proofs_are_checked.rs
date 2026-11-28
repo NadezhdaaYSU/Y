@@ -1562,6 +1562,17 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // isqrt's float estimate: the error factor within 4 * 2^-50, the
+            // truncated estimate within 1 of floor(sqrt n). The refutation:
+            // a sqrt off by 2^-20 misses by 2047.
+            "ExactSqrtEstimate.v",
+            &[
+                "Print Assumptions the_error_factor_is_within_4_dl",
+                "Print Assumptions the_truncated_estimate_is_within_1",
+                "Print Assumptions a_cruder_sqrt_misses_by_more",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

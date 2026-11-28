@@ -283,8 +283,9 @@ def q8(x: torch.Tensor, dim: int = -1, bits: int = 8, bad=None):
 
 def isqrt(n: torch.Tensor, bad=None) -> torch.Tensor:
     """floor(sqrt(n)) for int64 0 <= n < 2^62: a float estimate (any
-    device's, within 1 of the answer), then integer corrections, so the
-    result is the one integer it must be."""
+    device's, within 1 of the answer for a conversion and a sqrt within 8
+    ulps: proofs/ExactSqrtEstimate.v), then integer corrections, so the
+    result is the one integer it must be (proofs/ExactDetSqrt.v)."""
     refuse(bad, (n < 0) | (n >= 1 << 62), "exact train: isqrt takes 0 <= n < 2^62")
     x = torch.sqrt(n.to(torch.float64)).to(torch.int64)
     for _ in range(2):

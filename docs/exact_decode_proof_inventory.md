@@ -1780,6 +1780,26 @@ Theorem the_remainder_is_a_float32 : forall L s t k, 1 <= L -> 0 <= s < 2 ^ 24 -
   exists s' t', 0 <= s' < 2 ^ 24 /\ 0 <= t' /\ Z.abs (s * 2 ^ t - k * 2 ^ L) = s' * 2 ^ t'.
 ```
 
+### `proofs/ExactSqrtEstimate.v`
+
+`isqrt` starts from `torch.sqrt(n.to(torch.float64)).to(torch.int64)`.
+With the conversion and the square root each off by up to a relative
+2^-50 (8 ulps of float64; torch's CPU float64 sqrt is not always
+correctly rounded), the error factor (1 + d0)(1 + d1)^2 is within 4 * 2^-50
+of 1, and for 0 <= n < 2^62 the truncated estimate is within 1 of
+floor(sqrt n): the docstring's promise, inside the 2 that
+`ExactDetSqrt.v`'s corrections take. Refutation: a square root off by a
+relative 2^-20 can land 2047 past the answer at n = 2^62 - 1.
+
+- On the training path: every Adam step's `det_sqrt`. Not modelled:
+  that torch's float64 conversion and sqrt meet the 2^-50 bound, that
+  `.to(torch.int64)` truncates.
+- Theorems and lemmas: 5. Quoted below: 1.
+
+```coq
+  Theorem the_truncated_estimate_is_within_1 : (Z.sqrt n - 1 <= k <= Z.sqrt n + 1)%Z.
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.
