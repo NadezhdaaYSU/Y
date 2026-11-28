@@ -1473,6 +1473,68 @@ fn content_controls() -> Vec<(&'static str, &'static [&'static str])> {
             ][..],
         ),
         (
+            // The fused draw's int64 sums: every order of the total and of
+            // every running sum is exact. The refutation: 2^35 weights wrap.
+            "ExactDrawSums.v",
+            &[
+                "Print Assumptions every_order_of_the_total_is_exact",
+                "Print Assumptions every_running_sum_is_exact",
+                "Print Assumptions past_2_35_weights_the_sum_wraps",
+            ][..],
+        ),
+        (
+            // The attention softmax kernel: the double float32 logit's error,
+            // the maximum's, the guard's decision, far keys' weight 0, the
+            // budget. The refutation: without the guard a near tie flips.
+            "ExactAttnWeights.v",
+            &[
+                "Print Assumptions the_double_float_logit_is_within_5e_14",
+                "Print Assumptions the_maximum_moves_by_at_most_the_error",
+                "Print Assumptions the_kernel_integer_is_the_rounding",
+                "Print Assumptions far_keys_have_weight_zero",
+                "Print Assumptions the_budget_fits_the_guard",
+                "Print Assumptions without_the_guard_a_near_tie_rounds_the_other_way",
+            ][..],
+        ),
+        (
+            // The attention kernel's pair maximum: the largest hi, then the
+            // largest lo, is the largest value. The refutations: without the
+            // rounding, and with the first key's lo.
+            "ExactAttnPairMax.v",
+            &[
+                "Print Assumptions a_smaller_hi_has_a_value_no_larger",
+                "Print Assumptions the_pair_maximum_is_the_maximum_value",
+                "Print Assumptions without_the_rounding_the_pair_maximum_misses",
+                "Print Assumptions the_low_parts_need_their_own_maximum",
+            ][..],
+        ),
+        (
+            // The attention kernel's row indices: the key scale row and the
+            // mask row are the score row's, every row one query, the offsets
+            // in bounds. The refutation: the other formulas read other rows.
+            "ExactAttnRows.v",
+            &[
+                "Print Assumptions the_key_scale_row_is_the_rows_head",
+                "Print Assumptions the_mask_row_is_the_rows_query",
+                "Print Assumptions every_row_is_one_query",
+                "Print Assumptions the_offsets_stay_in_the_tensors",
+                "Print Assumptions the_int32_rows_stay_below_r",
+                "Print Assumptions the_key_scale_formula_reads_the_wrong_mask_row",
+            ][..],
+        ),
+        (
+            // The attention kernel's float32 difference: within 2^-21 of the
+            // pairs' difference, r in -1 .. 1. The refutation: a plain
+            // subtraction loses 1.
+            "ExactAttnDiff.v",
+            &[
+                "Print Assumptions the_lo_parts_are_at_most_1",
+                "Print Assumptions the_float32_difference_is_within_2_21",
+                "Print Assumptions the_budget_value_holds",
+                "Print Assumptions a_plain_subtraction_would_lose_1",
+            ][..],
+        ),
+        (
             // Generated from python/y_lang/exact by
             // tools/exact_decode_constants.py; the byte comparison is
             // python/tests/test_exact_decode_constants.py.

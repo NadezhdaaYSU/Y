@@ -1618,6 +1618,122 @@ Theorem every_order_gives_the_int32_sum : forall a b t,
   ER.teval (ER.cadd ER.I32) (products a b) t = ER.zsum (products a b).
 ```
 
+### `proofs/ExactDrawSums.v`
+
+The fused draw kernel (`vocab_draw.py`) sums the softmax weights with
+`tl.sum` and `tl.cumsum` in int64. For weights in 0 .. 2^28 and at most 2^34
+of them, every schedule of the total and of every running sum (a prefix) in
+ExactReduce's int64 carrier is the integer sum: the step
+`ExactDrawSearch.v` left as "no overflow". Refutation: 2^35 weights of 2^28
+reach 2^63 and int64's last addition wraps to -2^63.
+
+- On the RL path: every sampled token's block sums. Not modelled:
+  Triton's `tl.sum` and `tl.cumsum` as schedules of int64 additions.
+- Theorems and lemmas: 4. Quoted below: 1.
+
+```coq
+Theorem every_running_sum_is_exact : forall ps n t,
+  Forall weight ps -> Z.of_nat (length ps) <= 2 ^ 34 -> (n <= length ps)%nat ->
+  ER.covers t (length (firstn n ps)) ->
+  ER.teval (ER.cadd ER.I64) (firstn n ps) t = ER.zsum (firstn n ps).
+```
+
+### `proofs/ExactAttnWeights.v`
+
+The attention softmax kernel (`attn_weights_kernel.py`) forms the
+float64 logits L = RN64(RN64(s a) sk) as double float32 pairs, with
+Dekker's product and Fast2Sum (hypotheses, classical), and the standard
+float32 rounding model: the pair is within 5e-14 of s a sk, so within
+2^-20 of the float64 logit for |L| < 2^24. The approximations' maximum is
+within the same error of the float64 maximum. If the computed difference
+K + r is not within the guard 2^-16 of a half-integer, K + step(r) is
+within 1/2 of RN64(M - L): it is the rounding, with no tie possible; and a
+key with K >= 30 * 2^16 + 2 has weight 0 either way. The error budget
+fits the guard four times over. Refutation: without the guard a near tie
+rounds the other way.
+
+- On the training and decode paths on a GPU: every attention weight
+  (the forward and the backward's recomputation). Not modelled: Dekker's
+  product and Fast2Sum themselves, IEEE rounding of each operation (the
+  float32 share F of the difference: `ExactAttnDiff.v`; the pair maximum:
+  `ExactAttnPairMax.v`; tested on ties, near ties and random rows).
+- Theorems and lemmas: 11. Quoted below: 2.
+
+```coq
+  Theorem the_kernel_integer_is_the_rounding :
+    G < Qabs (Qabs r - (1 # 2)) ->
+    Qabs (D64 - inject_Z (K + step r)) < 1 # 2.
+```
+
+```coq
+  Theorem the_double_float_logit_is_within_5e_14 :
+    - ((5 # 100000000000000) * (s * a * sk)) <= l_hi + l_lo - s * a * sk <= (5 # 100000000000000) * (s * a * sk).
+```
+
+### `proofs/ExactAttnPairMax.v`
+
+The attention softmax kernel takes the row maximum of its double
+float32 logits without adding the parts: the largest hi, then the largest
+lo among the keys with that hi. Because each hi is the rounding of hi + lo
+(Fast2Sum), and rounding is monotone, a key with a smaller hi has a value
+no larger, so this pair is the largest value hi + lo and is one key's
+value: the premise `ExactAttnWeights.v`'s maximum theorem takes.
+Refutations: without the rounding, pairs (1, 0) and (0, 5) give 1 below 5;
+the first key's lo instead of the largest misses by 2^-30.
+
+- On the training and decode paths on a GPU: every attention row's
+  maximum. Not modelled: Fast2Sum's exactness, float32 addition as a
+  monotone rounding, `tl.max` returning a largest element.
+- Theorems and lemmas: 4. Quoted below: 1.
+
+```coq
+  Theorem the_pair_maximum_is_the_maximum_value :
+    (forall h l, In (h, l) ps -> h + l <= m_hi + m_lo) /\
+    (exists h l, In (h, l) ps /\ h + l == m_hi + m_lo).
+```
+
+### `proofs/ExactAttnRows.v`
+
+The attention softmax kernel reads, for score row r = (b NH + h) Q + q,
+the key scale row r / Q and the mask row (r / (NH Q)) Q + r mod Q. These
+are b NH + h and b Q + q; every r below B NH Q is one query (b, h, q); the
+element offsets stay inside the three tensors; and both row indices are at
+most r, so no int32 index wraps for R below 2^31. Refutation: r / Q and
+r mod Q read other mask rows.
+
+- On the training and decode paths on a GPU: every load of a score,
+  key scale and mask value. Not modelled: Triton's `//` and `%` on
+  nonnegative int32 as Z.div and Z.modulo, `reshape`'s row order.
+- Theorems and lemmas: 7. Quoted below: 1.
+
+```coq
+  Theorem the_mask_row_is_the_rows_query : forall b h q,
+    0 <= h < NH -> 0 <= q < Q -> mask_row NH Q (row NH Q b h q) = b * Q + q.
+```
+
+### `proofs/ExactAttnDiff.v`
+
+The attention softmax kernel forms M - L from the two pairs as
+_two_sum of the hi parts, the lo parts' difference added to its error,
+two nearest integers k1, k2 and one float32 sum r of the remainders. For
+|hi| < 2^24 (larger logits take float64) and any rounding that is
+monotone, keeps 1 and -1 and has relative error at most 2^-24, the lo
+parts are at most 1, |k1 + k2 + r - (M - L)| <= 7u + 2u^2 < 2^-21 and r
+is in -1 .. 1: the F and r that `ExactAttnWeights.v`'s decision takes,
+with F = 2^-20 holding twice over. Refutation: a plain subtraction of the
+hi parts can be off by 1, 2^16 times the guard.
+
+- On the training and decode paths on a GPU: every attention weight's
+  rounding decision. Not modelled: TwoSum's exactness, `_rint32` as a
+  nearest integer with x - rint(x) a float32, IEEE float32 addition.
+- Theorems and lemmas: 9. Quoted below: 1.
+
+```coq
+  Theorem the_float32_difference_is_within_2_21 :
+    Qabs (inject_Z (k1 + k2) + r - ((m_hi + m_lo) - (l_hi + l_lo))) <= 7 * u + 2 * (u * u) /\
+    -1 <= r <= 1.
+```
+
 ## Still open
 
 - Not modelled: rows with an infinity or a NaN, the prefill as one pass.

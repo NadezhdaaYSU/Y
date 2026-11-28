@@ -53,6 +53,7 @@ import torch
 import transformers.models.qwen2.modeling_qwen2 as qwen2
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from . import attn_weights_kernel as _awk
 from . import model as exact_model
 from . import kv as _kv
 from .kv import (K_PAD, V_LEVELS, V_PAD, fold_scale_into_weights, k_levels_for, pack_k,
@@ -699,24 +700,30 @@ def exact_softmax_weights(qi, sq, ki, sk, sv, k_lv, attention_mask, sc, table):
     # being broadcast into it, so this is one matmul over `nkv` heads.
     qg = qi.reshape(b, nkv, rep * q_len, d).contiguous()
     s_int = torch.matmul(qg, ki.transpose(-1, -2))
-    # Back to float64 for the logit and the exp argument: those are elementwise
-    # over a tensor `rep`x smaller than the KV cache, so the fp64 rate does not
-    # bite, and the softmax argument is where precision actually matters.
-    s_int = s_int.reshape(b, nh, q_len, tk).to(torch.float64)
+    s_int = s_int.reshape(b, nh, q_len, tk)
     # Per-token scales arrive as [b, nkv, T, 1]; the scores want them laid out
     # against the KEY axis, i.e. [b, nh, 1, T].
-    sk = sk.transpose(-1, -2).repeat_interleave(rep, dim=1).to(torch.float64)
+    sk = sk.transpose(-1, -2).repeat_interleave(rep, dim=1)
     sv = sv.transpose(-1, -2).repeat_interleave(rep, dim=1).to(torch.float64)
     # |score| <= d * Q_LEVELS * k_lv, from the two operands' widths.
     # Provable, not sampled - and derived from the widths so it tracks them.
     assert_exact_range(s_int, "integer scores",
                        float(d) * Q_LEVELS * k_lv)
-
-    if attention_mask is not None:
-        mask = attention_mask[:, :, :, :tk]
-        blocked = mask < -1.0
-    else:
-        blocked = torch.zeros_like(s_int, dtype=torch.bool)
+    mask = attention_mask[:, :, :, :tk] if attention_mask is not None else None
+    if _awk.usable(s_int, mask, sk):
+        # The same integers p and l without float64 on the common path: the
+        # logits in double float32, float64 only for a row block near a
+        # rounding tie (attn_weights_kernel; the bits are the lines below's).
+        a = sq * sc * math.log2(math.e) * 65536.0
+        p, l = _awk.weights(s_int, a, sk, mask, table, LN2_Q30, RECIP6_Q32)
+        assert_exact_range(l, "softmax denominator", float(tk) * (1 << 28))
+        return p, l, sv
+    # Back to float64 for the logit and the exp argument: those are elementwise
+    # over a tensor `rep`x smaller than the KV cache, and the softmax argument
+    # is where precision actually matters.
+    s_int = s_int.to(torch.float64)
+    sk = sk.to(torch.float64)
+    blocked = mask < -1.0 if mask is not None else torch.zeros_like(s_int, dtype=torch.bool)
 
     # The score's scale is now per KEY, so it cannot be deferred to a single
     # `kfix` multiply after the max - the logit has to be formed first. This is

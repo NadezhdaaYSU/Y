@@ -35,7 +35,8 @@
     That the kernel's p equal `softmax_ints`' (the same integer and float32
     steps; tested bit for bit by python/tests/test_exact_vocab_draw.py), and
     that `tl.cumsum` and `tl.sum` of int64 are the integer sums (no
-    overflow: p <= 2^28 and the vocabulary below 2^34 entries).
+    overflow for p <= 2^28 and the vocabulary below 2^34 entries:
+    `ExactDrawSums.v`).
 
     Checked with Rocq 9.1:  coqc -Q . "" ExactDrawSearch.v  *)
 
